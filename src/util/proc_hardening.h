@@ -5,6 +5,10 @@
 #ifndef GRIDCOIN_UTIL_PROC_HARDENING_H
 #define GRIDCOIN_UTIL_PROC_HARDENING_H
 
+#include <iosfwd>
+#include <optional>
+#include <string>
+
 //! Default for the -nonewprivs startup option (on).
 static const bool DEFAULT_NO_NEW_PRIVS = true;
 
@@ -22,7 +26,7 @@ static const bool DEFAULT_NO_NEW_PRIVS = true;
 //! \c CapabilityBoundingSet= is the authoritative drop for packaged installs.
 //!
 //! This is defence-in-depth that complements, and is secondary to, the hardened
-//! systemd unit (contrib/init/gridcoinresearchd.service). It is deliberately NOT
+//! systemd unit (contrib/init/gridcoinresearchd.service.in). It is deliberately NOT
 //! a syscall sandbox: an in-process seccomp-bpf filter was considered and
 //! rejected (Bitcoin Core added then removed theirs as unmaintainable; the
 //! declarative systemd SystemCallFilter= is the maintained equivalent).
@@ -30,5 +34,37 @@ static const bool DEFAULT_NO_NEW_PRIVS = true;
 //! No-op on non-Linux platforms. Logs via LogPrintf, so call after
 //! InitLogging(). The caller gates this on the -nonewprivs option.
 void HardenProcess();
+
+//! Linux: prctl(PR_SET_DUMPABLE, 0); records the outcome for LogNonDumpableStatus(). No-op (true) elsewhere.
+//! Call as the first statement of main, before any fork or daemonisation, so other processes of the same user
+//! cannot ptrace the process or read /proc/<pid>/mem, environ or fd, and no core dump is written.
+bool SetProcessNonDumpable();
+
+//! Logs "Process hardening: non-dumpable (core dumps and same-user memory access blocked)" or the failure with
+//! strerror. Call after InitLogging().
+void LogNonDumpableStatus();
+
+//! The TracerPid field of a /proc/<pid>/status stream; nullopt when absent or not a number.
+std::optional<int> ParseTracerPid(std::istream& status);
+
+//! ParseTracerPid of /proc/self/status (Linux); nullopt elsewhere or when unreadable.
+std::optional<int> ReadOwnTracerPid();
+
+//! Whether this platform has the tracer check: whether ReadOwnTracerPid reads anything (Linux).
+bool TracerCheckSupported();
+
+//! The warning to log for the tracer state \p tracer_pid that ReadOwnTracerPid gave: one when the
+//! platform has the check (\p supported) and the read gave nothing, so the check did not run.
+//! nullopt otherwise, a platform without the check included. Pure.
+std::optional<std::string> TracerStateWarning(std::optional<int> tracer_pid, bool supported);
+
+enum class TracerVerdict { Start, StartDumpableForDebugging, Refuse };
+
+//! override set -> StartDumpableForDebugging; tracer_pid > 0 -> Refuse; otherwise Start.
+TracerVerdict DecideTracer(std::optional<int> tracer_pid, bool override_set);
+
+//! Linux: prctl(PR_SET_DUMPABLE, 1), for the -debugallowtracer override. A non-root tracer loses memory access
+//! after the first non-dumpable prctl, so the override has to restore it. No-op (true) elsewhere.
+bool SetProcessDumpableForDebugging();
 
 #endif // GRIDCOIN_UTIL_PROC_HARDENING_H

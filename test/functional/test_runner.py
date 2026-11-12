@@ -160,9 +160,15 @@ BASE_SCRIPTS = [
     # feature_shutdown.py: `stop` must not hang on an in-service RPC connection
     # (issue #3123 -- StopRPCThreads must interrupt a worker parked in recv).
     'feature_shutdown.py',
-    # feature_rpc_bind_v4_conflict.py: an IPv4 RPC listener that cannot bind
-    # (the port already held on 127.0.0.1) is logged, not swallowed.
-    'feature_rpc_bind_v4_conflict.py',
+    # feature_rpc_bind_conflict.py: an RPC loopback address held by another
+    # program disables RPC with a logged error; the node keeps running.
+    'feature_rpc_bind_conflict.py',
+    # feature_notify_fd_inheritance.py: a notify child inherits neither the RPC listener nor an
+    # accepted RPC connection.
+    'feature_notify_fd_inheritance.py',
+    # feature_rpc_bounded_close.py: a client that never reads or closes cannot hold a closed RPC
+    # connection past the graceful close bound.
+    'feature_rpc_bounded_close.py',
     'p2p_version_handshake.py',
     # p2p_version_timedrift.py: the VERSION handshake's 480 s clock-drift gate,
     # including a crafted nTime that overflowed the old abs() check.
@@ -216,8 +222,17 @@ BASE_SCRIPTS = [
     'wallet_splitunspent.py',
     'interface_cli.py',
     # interface_cli_settings.py: the RPC client reads the node's read-write settings
-    # (a changesettings rpcconnect is honoured) but never rewrites the file.
+    # file, ignores its refused keys (connection options included) and never rewrites it.
     'interface_cli_settings.py',
+    # feature_settings_file_refused.py: refused keys in the settings file are ignored at
+    # startup, logged, listed by listsettings, and still erasable with changesettings.
+    'feature_settings_file_refused.py',
+    # interface_cli_listener_check.py: the RPC client identifies the owner of the RPC
+    # listener before it sends credentials; -rpcserviceuser and -rpcskiplistenercheck.
+    'interface_cli_listener_check.py',
+    # interface_cli_stdin.py: the RPC client reads wallet passphrases from standard input
+    # (-stdinwalletpassphrase) and sends one for a single request (-stdinelevate).
+    'interface_cli_stdin.py',
     'mempool_accept.py',
     # mempool_unbroadcast_persist.py: unbroadcast.dat follows the unbroadcast
     # set while the node runs, so a node killed without a shutdown reloads a

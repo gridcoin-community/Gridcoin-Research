@@ -9,6 +9,7 @@
 #include "protocol.h"
 #include <key_io.h>
 #include "wallet/db.h"
+#include <support/cleanse.h>
 #include <util.h>
 #include <util/string.h>
 
@@ -117,7 +118,13 @@ static constexpr size_t MAX_HTTP_HEADER_LINE_BYTES = 8192;
 //! bytes and caps the aggregate independently of how it is divided up.
 static constexpr size_t MAX_HTTP_HEADER_TOTAL_BYTES = 32768;
 
-int ReadHTTPHeaders(std::basic_istream<char>& stream, std::map<std::string, std::string>& mapHeadersRet)
+//! The whitespace trimmed from both ends of a header's name and value.
+static const std::string HTTP_HEADER_WHITESPACE{" \f\n\r\t\v"};
+
+//! ReadHTTPHeaders() reading every line into \p str, a buffer its caller owns
+//! and overwrites, however this returns.
+static int ReadHTTPHeaderLines(std::basic_istream<char>& stream, std::map<std::string, std::string>& mapHeadersRet,
+                               std::string& str)
 {
     int nLen = 0;
     size_t header_count = 0;
@@ -129,8 +136,6 @@ int ReadHTTPHeaders(std::basic_istream<char>& stream, std::map<std::string, std:
     // the client is.
     while (true)
     {
-        std::string str;
-
         if (!ReadLineBounded(stream, str, MAX_HTTP_HEADER_LINE_BYTES, overlong)) {
             // Negative, not a status code: this function returns a CONTENT LENGTH,
             // and the caller rejects a negative one. Returning 400 here would be
@@ -153,10 +158,30 @@ int ReadHTTPHeaders(std::basic_istream<char>& stream, std::map<std::string, std:
             std::string strHeader = str.substr(0, nColon);
             strHeader = TrimString(strHeader);
             strHeader = ToLower(strHeader);
-            std::string strValue = str.substr(nColon+1);
-            strValue = TrimString(strValue);
-            mapHeadersRet[strHeader] = strValue;
-            if (strHeader == "content-length" && !ParseInt32(strValue, &nLen)) {
+
+            // A value may be a secret: the credentials, or the wallet
+            // passphrase a request carries for itself (x-gridcoin-elevate). It
+            // is copied out of the line once, already trimmed, and that copy is
+            // overwritten once the map holds the value, so that no copy of it
+            // is freed unchanged.
+            const std::string::size_type value_begin = str.find_first_not_of(HTTP_HEADER_WHITESPACE, nColon + 1);
+            std::string strValue;
+
+            if (value_begin != std::string::npos) {
+                strValue.assign(str, value_begin, str.find_last_not_of(HTTP_HEADER_WHITESPACE) - value_begin + 1);
+            }
+
+            // A repeated header replaces the value stored for it, which is
+            // overwritten first.
+            std::string& stored = mapHeadersRet[strHeader];
+            if (!stored.empty()) memory_cleanse(&stored[0], stored.size());
+            stored = strValue;
+
+            const bool length_parsed = strHeader != "content-length" || ParseInt32(strValue, &nLen);
+
+            if (!strValue.empty()) memory_cleanse(&strValue[0], strValue.size());
+
+            if (!length_parsed) {
                 // Returning rather than throwing: ServiceConnection has no
                 // try/catch around this call, so an exception here escapes on a
                 // malformed header from an unauthenticated client. Negative
@@ -167,6 +192,24 @@ int ReadHTTPHeaders(std::basic_istream<char>& stream, std::map<std::string, std:
         }
     }
     return nLen;
+}
+
+int ReadHTTPHeaders(std::basic_istream<char>& stream, std::map<std::string, std::string>& mapHeadersRet)
+{
+    // One buffer serves every header line. It is reserved to the line bound,
+    // so reading a line never reallocates it and leaves no part of a line in
+    // freed memory, and all of it is overwritten before it is freed, since a
+    // line may carry a secret (see ReadHTTPHeaderLines()). What the socket's
+    // stream buffered, and the kernel before it, is beyond this function.
+    std::string line;
+    line.reserve(MAX_HTTP_HEADER_LINE_BYTES);
+
+    const int length = ReadHTTPHeaderLines(stream, mapHeadersRet, line);
+
+    line.resize(line.capacity());
+    memory_cleanse(&line[0], line.size());
+
+    return length;
 }
 
 bool ReadHTTPRequestLine(std::basic_istream<char>& stream, int &proto,
@@ -291,9 +334,9 @@ int ReadHTTPMessage(std::basic_istream<char>& stream, std::map<std::string,
     // Read message
     if (nLen > 0)
     {
-        std::vector<char> vch(nLen);
-        stream.read(&vch[0], nLen);
-        strMessageRet = std::string(vch.begin(), vch.end());
+        // Read straight into the caller's string, so no second copy of the body is left behind.
+        strMessageRet.resize(nLen);
+        stream.read(&strMessageRet[0], nLen);
     }
 
     std::string sConHdr = mapHeadersRet["connection"];

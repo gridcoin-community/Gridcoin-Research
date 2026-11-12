@@ -4,7 +4,142 @@
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #include "keystore.h"
+#include "logging.h"
 #include "script.h"
+
+#include <atomic>
+#include <thread>
+
+//! One grant's place on the stack of grants of the thread that took it.
+//!
+//! Held both by the grant and by that thread's stack, and freed by whichever
+//! lets go of it last, so that the stack never points at a grant that has
+//! ended elsewhere: a grant that ends on another thread clears \p live, and
+//! the thread that took it drops the entry when it next looks at its stack.
+//! If that thread ends first, the entry is never freed; it takes a grant ended
+//! on the wrong thread, which is logged as an error, to leave one behind.
+struct ElevationGrantEntry
+{
+    ElevationGrantEntry(const CCryptoKeyStore& store_in, ElevationGrantEntry* previous_in)
+        : store(&store_in)
+        , previous(previous_in)
+        , owner(std::this_thread::get_id())
+    {
+    }
+
+    //! The store the grant names.
+    const CCryptoKeyStore* const store;
+
+    //! The entry below this one on the same thread's stack.
+    ElevationGrantEntry* const previous;
+
+    //! The thread that took the grant, whose stack holds this entry.
+    const std::thread::id owner;
+
+    //! False once the grant has ended, or was withdrawn.
+    std::atomic<bool> live{true};
+
+    //! The grant and the stack.
+    std::atomic<int> holders{2};
+};
+
+namespace {
+
+// The innermost entry on this thread's stack of grants, or nullptr when there
+// is none. A plain pointer, because a thread_local must be trivially
+// destructible (see test/lint/lint-thread-local.sh).
+thread_local ElevationGrantEntry* g_top_entry{nullptr};
+
+// Set by the first grant that ends out of order, so that the report is made
+// once per process.
+std::atomic<bool> g_out_of_order_reported{false};
+
+//! Let go of \p entry for one holder, the last of which frees it.
+void LetGo(ElevationGrantEntry* entry)
+{
+    if (entry->holders.fetch_sub(1) == 1) delete entry;
+}
+
+//! Take the top entry off this thread's stack.
+void PopTop()
+{
+    ElevationGrantEntry* const top = g_top_entry;
+
+    g_top_entry = top->previous;
+    LetGo(top);
+}
+
+//! Take off this thread's stack the entries on top whose grants have ended,
+//! on another thread, so that the innermost grant still live is on top.
+void PopEnded()
+{
+    while (g_top_entry && !g_top_entry->live) {
+        PopTop();
+    }
+}
+
+} // namespace
+
+ElevationGrant::ElevationGrant(const CCryptoKeyStore& store)
+{
+    PopEnded();
+
+    m_entry = new ElevationGrantEntry(store, g_top_entry);
+    g_top_entry = m_entry;
+}
+
+ElevationGrant::~ElevationGrant()
+{
+    // Ended on a thread other than the one that took it. That thread's stack
+    // cannot be reached from here, so the entry is marked ended, and that
+    // thread drops it, and stops counting the grant, when it next looks. The
+    // stack of this thread is left alone.
+    if (m_entry->owner != std::this_thread::get_id()) {
+        m_entry->live = false;
+        LetGo(m_entry);
+
+        LogPrintf("ERROR: %s: an elevation grant ended on a thread other than the one that took it; "
+                  "it no longer counts on either", __func__);
+        return;
+    }
+
+    PopEnded();
+
+    if (g_top_entry == m_entry) {
+        // The innermost grant hands back whatever it displaced, so an inner
+        // grant ending leaves the outer one in force rather than clearing it.
+        m_entry->live = false;
+        PopTop();
+        PopEnded();
+    } else if (m_entry->live) {
+        // Ending out of order. What it displaced may itself have ended, and
+        // restoring it would leave the thread elevated with no grant alive, so
+        // every grant on this thread is withdrawn instead. Their own ends then
+        // find them withdrawn and change nothing.
+        while (g_top_entry) {
+            g_top_entry->live = false;
+            PopTop();
+        }
+
+        if (!g_out_of_order_reported.exchange(true)) {
+            LogPrintf("ERROR: %s: an elevation grant ended out of order; every grant on the thread was withdrawn",
+                      __func__);
+        }
+    }
+
+    LetGo(m_entry);
+}
+
+bool ElevationGrant::IsActiveFor(const CCryptoKeyStore* store)
+{
+    // Without the null test, a thread holding no grant would report one for a
+    // null store.
+    if (store == nullptr) return false;
+
+    PopEnded();
+
+    return g_top_entry != nullptr && g_top_entry->store == store;
+}
 
 bool CKeyStore::GetPubKey(const CKeyID &address, CPubKey &vchPubKeyOut) const
 {
@@ -124,36 +259,9 @@ bool CCryptoKeyStore::Unlock(const CKeyingMaterial& vMasterKeyIn, UnlockScope sc
         if (!SetCrypted())
             return false;
 
-        bool keyPass = false;
-        bool keyFail = false;
-
-        CryptedKeyMap::const_iterator mi = mapCryptedKeys.begin();
-        for (; mi != mapCryptedKeys.end(); ++mi)
-        {
-            const CPubKey &vchPubKey = (*mi).second.first;
-            const std::vector<unsigned char> &vchCryptedSecret = (*mi).second.second;
-            CKey key;
-            if (!DecryptKey(vMasterKeyIn, vchCryptedSecret, vchPubKey, key))
-            {
-                keyFail = true;
-                break;
-            }
-            keyPass = true;
-            if (fDecryptionThoroughlyChecked)
-                break;
-        }
-        if (keyPass && keyFail)
-        {
-            error("%s: The wallet is probably corrupted: Some keys decrypt but not all.", __func__);
-            assert(false);
-        }
-        // div72: The memset below is necessary because of a GCC(seen on 12.1.0) bug where
-        // keyPass and !keyPass can both evaluate to true at the same time when the value
-        // of keyPass is other than 1.
-        static_assert(sizeof(bool) == 1);
-        if (keyPass) std::memset(&keyPass, 1, sizeof(bool));
-        if (keyFail || !keyPass)
+        if (!OpensKeysLocked(vMasterKeyIn))
             return false;
+
         // The key, what it permits, and when it expires, set together under one
         // lock. A reader between two separate writes is the defect this
         // replaces, and the deadline now belongs to this unlock rather than to
@@ -176,44 +284,6 @@ bool CCryptoKeyStore::Unlock(const CKeyingMaterial& vMasterKeyIn, UnlockScope sc
     return true;
 }
 
-bool CCryptoKeyStore::Elevate(const CKeyingMaterial& vMasterKeyIn)
-{
-    if (!IsCrypted())
-        return false;
-
-    {
-        LOCK(cs_KeyStore);
-
-        // There is no unlock to widen, and so no deadline to preserve. The
-        // caller wants Unlock(), which begins one.
-        if (m_unlock_scope == UnlockScope::Locked)
-            return false;
-
-        // The passphrase is what authorises the added permission, and this
-        // comparison is where it is checked: a caller that derived the key from
-        // a wrong passphrase must not widen the scope. A plain compare is
-        // enough here -- Elevate() is protected and the only caller derives the
-        // operand from a passphrase through the KDF, so there is no path that
-        // can feed it chosen bytes and read a timing answer.
-        if (vMasterKeyIn.size() != vMasterKey.size()
-                || std::memcmp(vMasterKeyIn.data(), vMasterKey.data(), vMasterKey.size()) != 0) {
-            return false;
-        }
-
-        // Already as wide as it goes. Nothing changed, so nothing is announced.
-        if (m_unlock_scope == UnlockScope::Full)
-            return true;
-
-        // Scope only. The key stays installed, and the deadline and the epoch
-        // belong to the unlock in progress, which this does not end -- so the
-        // relock armed for it still fires, on time.
-        m_unlock_scope = UnlockScope::Full;
-    }
-
-    NotifyStatusChanged(this);
-    return true;
-}
-
 bool CCryptoKeyStore::AddKeyPubKey(const CKey& key, const CPubKey &pubkey)
 {
     {
@@ -223,6 +293,11 @@ bool CCryptoKeyStore::AddKeyPubKey(const CKey& key, const CPubKey &pubkey)
 
         if (IsLocked())
             return false;
+
+        if (RefusedForStakingOnly()) {
+            LogPrint(BCLog::LogFlags::WALLETDB, "%s: refused, wallet unlocked for staking only", __func__);
+            return false;
+        }
 
         std::vector<unsigned char> vchCryptedSecret;
         CKeyingMaterial vchSecret(key.begin(), key.end());
@@ -248,28 +323,129 @@ bool CCryptoKeyStore::AddCryptedKey(const CPubKey &vchPubKey, const std::vector<
     return true;
 }
 
+bool CCryptoKeyStore::RefusedForStakingOnly() const
+{
+    AssertLockHeld(cs_KeyStore);
+
+    return IsCrypted()
+        && m_unlock_scope == UnlockScope::StakingOnly
+        && !ElevationGrant::IsActiveFor(this);
+}
+
+bool CCryptoKeyStore::DecryptKeyLocked(const CKeyID& address, CKey& keyOut) const
+{
+    AssertLockHeld(cs_KeyStore);
+
+    CryptedKeyMap::const_iterator mi = mapCryptedKeys.find(address);
+    if (mi == mapCryptedKeys.end())
+        return false;
+
+    const CPubKey& vchPubKey = mi->second.first;
+    const std::vector<unsigned char>& vchCryptedSecret = mi->second.second;
+    CKeyingMaterial vchSecret;
+    if (!DecryptSecret(vMasterKey, vchCryptedSecret, vchPubKey.GetHash(), vchSecret))
+        return false;
+    if (vchSecret.size() != 32)
+        return false;
+    keyOut.Set(vchSecret.begin(), vchSecret.end(), vchPubKey.IsCompressed());
+    return keyOut.IsValid();
+}
+
 bool CCryptoKeyStore::GetKey(const CKeyID &address, CKey& keyOut) const
 {
-    {
-        LOCK(cs_KeyStore);
-        if (!IsCrypted())
-            return CBasicKeyStore::GetKey(address, keyOut);
+    LOCK(cs_KeyStore);
+    if (!IsCrypted())
+        return CBasicKeyStore::GetKey(address, keyOut);
 
-        CryptedKeyMap::const_iterator mi = mapCryptedKeys.find(address);
-        if (mi != mapCryptedKeys.end())
-        {
-            const CPubKey& vchPubKey = mi->second.first;
-            const std::vector<unsigned char>& vchCryptedSecret = mi->second.second;
-            CKeyingMaterial vchSecret;
-            if (!DecryptSecret(vMasterKey, vchCryptedSecret, vchPubKey.GetHash(), vchSecret))
-                return false;
-            if (vchSecret.size() != 32)
-                return false;
-            keyOut.Set(vchSecret.begin(), vchSecret.end(), vchPubKey.IsCompressed());
-            return keyOut.IsValid();
-        }
+    if (RefusedForStakingOnly()) {
+        LogPrint(BCLog::LogFlags::WALLETDB, "%s: refused, wallet unlocked for staking only", __func__);
+        return false;
     }
-    return false;
+
+    return DecryptKeyLocked(address, keyOut);
+}
+
+bool CCryptoKeyStore::GetKeyForStaking(const CKeyID& id, CKey& key_out, const StakingKeyAccess& /* access */) const
+{
+    LOCK(cs_KeyStore);
+    if (!IsCrypted())
+        return CBasicKeyStore::GetKey(id, key_out);
+
+    // StakingOnly and Full both admit the staking paths; a locked store admits
+    // nothing. A locked store has no master key, so decryption would fail
+    // anyway; the scope is checked explicitly so the rule does not rest on that.
+    if (m_unlock_scope == UnlockScope::Locked)
+        return false;
+
+    return DecryptKeyLocked(id, key_out);
+}
+
+bool CCryptoKeyStore::OpensKeysLocked(const CKeyingMaterial& master_key) const
+{
+    bool keyPass = false;
+    bool keyFail = false;
+
+    CryptedKeyMap::const_iterator mi = mapCryptedKeys.begin();
+    for (; mi != mapCryptedKeys.end(); ++mi)
+    {
+        const CPubKey &vchPubKey = (*mi).second.first;
+        const std::vector<unsigned char> &vchCryptedSecret = (*mi).second.second;
+        CKey key;
+        if (!DecryptKey(master_key, vchCryptedSecret, vchPubKey, key))
+        {
+            keyFail = true;
+            break;
+        }
+        keyPass = true;
+        if (fDecryptionThoroughlyChecked)
+            break;
+    }
+    if (keyPass && keyFail)
+    {
+        error("%s: The wallet is probably corrupted: Some keys decrypt but not all.", __func__);
+        assert(false); // LINT-OK-ASSERT: moved unchanged from Unlock(); keys that only partly decrypt mean a corrupt wallet
+    }
+    // div72: The memset below is necessary because of a GCC(seen on 12.1.0) bug where
+    // keyPass and !keyPass can both evaluate to true at the same time when the value
+    // of keyPass is other than 1.
+    static_assert(sizeof(bool) == 1);
+    if (keyPass) std::memset(&keyPass, 1, sizeof(bool));
+    return !keyFail && keyPass;
+}
+
+bool CCryptoKeyStore::MasterKeyOpensKeys(const CKeyingMaterial& master_key) const
+{
+    if (!IsCrypted())
+        return false;
+
+    LOCK(cs_KeyStore);
+
+    return OpensKeysLocked(master_key);
+}
+
+bool CCryptoKeyStore::MatchesMasterKey(const CKeyingMaterial& key) const
+{
+    if (!IsCrypted())
+        return false;
+
+    LOCK(cs_KeyStore);
+
+    if (m_unlock_scope == UnlockScope::Locked || vMasterKey.empty())
+        return false;
+
+    // A master key's length is fixed and public, so a length mismatch can be
+    // answered at once without saying anything about the key.
+    if (key.size() != vMasterKey.size())
+        return false;
+
+    // Every byte is examined whatever the earlier ones held, so the time taken
+    // does not depend on where the operands first differ.
+    unsigned char difference{0};
+    for (size_t i = 0; i < vMasterKey.size(); ++i) {
+        difference |= static_cast<unsigned char>(key[i] ^ vMasterKey[i]);
+    }
+
+    return difference == 0;
 }
 
 bool CCryptoKeyStore::GetPubKey(const CKeyID &address, CPubKey& vchPubKeyOut) const
@@ -322,6 +498,11 @@ bool CCryptoKeyStore::EncryptSecretWithMasterKey(const CKeyingMaterial& plaintex
         return false;
     }
 
+    if (RefusedForStakingOnly()) {
+        LogPrint(BCLog::LogFlags::WALLETDB, "%s: refused, wallet unlocked for staking only", __func__);
+        return false;
+    }
+
     return EncryptSecret(vMasterKey, plaintext, iv, ciphertext_out);
 }
 
@@ -331,6 +512,11 @@ bool CCryptoKeyStore::DecryptSecretWithMasterKey(const std::vector<unsigned char
     LOCK(cs_KeyStore);
 
     if (!IsCrypted() || vMasterKey.empty()) {
+        return false;
+    }
+
+    if (RefusedForStakingOnly()) {
+        LogPrint(BCLog::LogFlags::WALLETDB, "%s: refused, wallet unlocked for staking only", __func__);
         return false;
     }
 

@@ -31,8 +31,9 @@
 //! not exercised here.
 //!
 //! The Qt test main selects no chain, so each case selects its own with
-//! SelectParams(). A selection cannot be undone; that is harmless because no
-//! other class in this binary reads Params().
+//! SelectParams(). A selection cannot be undone; that is harmless because every
+//! other class in this binary that reads Params() selects its chain first
+//! (RPCConsoleTests, whose file commands take the data directory).
 //!
 
 #ifdef Q_OS_LINUX
@@ -150,5 +151,43 @@ void AutoStartTests::regtestLeavesTheMainnetLoginItemAlone()
 
     QCOMPARE(AutostartEntries(*m_config_home), QStringList{"gridcoin-mainnet.desktop"});
     QVERIFY(!GUIUtil::GetStartOnSystemStartup());
+#endif
+}
+
+void AutoStartTests::multiprocessLoginItemCarriesMultiprocess()
+{
+#ifndef Q_OS_LINUX
+    QSKIP("The login item is checked end to end on Linux only.");
+#else
+    UseChain(CBaseChainParams::MAIN, MakeDataDir(*m_data_root, "main"));
+
+    // Restore the three options however the case exits.
+    struct ArgsRestore {
+        ~ArgsRestore()
+        {
+            gArgs.ForceSetArg("-multiprocess", "");
+            gArgs.ForceSetArg("-ipcdir", "");
+            gArgs.ForceSetArg("-ipcserviceuser", "");
+        }
+    } restore;
+
+    // Without -multiprocess the login item carries none of the three.
+    gArgs.ForceSetArg("-multiprocess", "0");
+    gArgs.ForceSetArg("-ipcdir", "/run/gridcoinresearchd");
+    gArgs.ForceSetArg("-ipcserviceuser", "gridcoin");
+    QVERIFY(GUIUtil::SetStartOnSystemStartup(true, false));
+    QByteArray entry = ReadEntry(*m_config_home, "gridcoin-mainnet.desktop");
+    QVERIFY(!entry.isEmpty());
+    QVERIFY(!entry.contains(" -multiprocess"));
+    QVERIFY(!entry.contains(" -ipcdir="));
+    QVERIFY(!entry.contains(" -ipcserviceuser="));
+
+    // With it, all three are carried.
+    gArgs.ForceSetArg("-multiprocess", "1");
+    QVERIFY(GUIUtil::SetStartOnSystemStartup(true, false));
+    entry = ReadEntry(*m_config_home, "gridcoin-mainnet.desktop");
+    QVERIFY(entry.contains(" -multiprocess"));
+    QVERIFY(entry.contains(" -ipcdir=/run/gridcoinresearchd"));
+    QVERIFY(entry.contains(" -ipcserviceuser=gridcoin"));
 #endif
 }

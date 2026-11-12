@@ -17,9 +17,13 @@
 //! sequencing startup/teardown.
 //!
 //! Two distinct concepts are tracked:
-//!  - "requested": someone asked the node to stop -- the RPC `stop` command (via
-//!    StartShutdown), SIGTERM, the console control handler, or an init failure.
+//!  - "requested": a shutdown has been asked for -- by someone (the RPC `stop` command via
+//!    StartShutdown, SIGTERM, the console control handler, the service manager, the GUI, the
+//!    stop after wallet encryption) or by an error (an init failure, low disk space).
 //!    The daemon main loop polls ShutdownRequested() and then runs Shutdown().
+//!    StopWasRequested() tells the first from the second: only the callers that carry out
+//!    someone's request mark it, never an error path, so a source left unmarked counts as
+//!    an error.
 //!  - "in progress": Shutdown() has begun tearing the node down; worker threads
 //!    observe ShutdownInProgress() to break their loops.
 
@@ -32,6 +36,19 @@ void SetShutdownRequested();
 
 //! Whether a shutdown has been requested.
 bool ShutdownRequested();
+
+//! Record that the shutdown being requested is a stop someone asked for (not one an error
+//! asked for). Called just before the request itself, by the callers that carry out such a
+//! request. Lock-free, so the POSIX signal handler may call it.
+void MarkStopRequested();
+
+//! Whether a stop someone asked for has been marked. Cleared by AbortShutdown().
+bool StopWasRequested();
+
+//! Clear the request flag and the mark of a requested stop. As upstream's AbortShutdown(): only before anything
+//! waits for a shutdown, or in the unit tests, which request one to check how
+//! code that watches the flag stops and must leave it as they found it.
+void AbortShutdown();
 
 //! Set whether node teardown is in progress. Passed \c true at the top of
 //! Shutdown() (and by the low-disk abort in CheckDiskSpace); reset to \c false

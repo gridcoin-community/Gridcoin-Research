@@ -1445,13 +1445,17 @@ CWalletTx PollBuilder::BuildContractTx(CWallet* const pwallet, const uint32_t& c
     }
 
     // Building the contract signs claims and the transaction with the wallet's
-    // keys, so the wallet must be fully unlocked. One read of the scope answers
-    // both questions.
+    // keys, so the wallet must be fully unlocked, or unlocked for staking only
+    // with a capability scope open on this thread. One read of the scope
+    // answers which refusal applies.
     switch (pwallet->GetUnlockScope()) {
     case UnlockScope::Locked:
         throw VotingError(_("Error: Wallet locked, unable to create transaction."));
     case UnlockScope::StakingOnly:
-        throw VotingError(_("Error: Wallet unlocked for staking only, unable to create transaction."));
+        if (!pwallet->CanUseKeys()) {
+            throw VotingError(_("Error: Wallet unlocked for staking only, unable to create transaction."));
+        }
+        break;
     case UnlockScope::Full:
         break;
     }
@@ -1640,13 +1644,17 @@ CWalletTx VoteBuilder::BuildContractTx(CWallet* const pwallet, const uint32_t& c
     }
 
     // Building the contract signs claims and the transaction with the wallet's
-    // keys, so the wallet must be fully unlocked. One read of the scope answers
-    // both questions.
+    // keys, so the wallet must be fully unlocked, or unlocked for staking only
+    // with a capability scope open on this thread. One read of the scope
+    // answers which refusal applies.
     switch (pwallet->GetUnlockScope()) {
     case UnlockScope::Locked:
         throw VotingError(_("Error: Wallet locked, unable to create transaction."));
     case UnlockScope::StakingOnly:
-        throw VotingError(_("Error: Wallet unlocked for staking only, unable to create transaction."));
+        if (!pwallet->CanUseKeys()) {
+            throw VotingError(_("Error: Wallet unlocked for staking only, unable to create transaction."));
+        }
+        break;
     case UnlockScope::Full:
         break;
     }

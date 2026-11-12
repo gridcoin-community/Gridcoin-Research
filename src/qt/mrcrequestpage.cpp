@@ -365,30 +365,30 @@ void MRCRequestPage::submitMRC()
     // the only sign was a tooltip.
     //
     // A researcher who unlocked for staking is exactly who files these, so
-    // refusing outright would be hostile. The context elevates for this
-    // operation and hands the staking-only scope back when it is released, so
-    // the node keeps staking afterwards. The submit runs on a worker thread, so
-    // the context is handed to the model, which releases it when the submit
-    // ends or when the model is destroyed, even if this page never hears of it.
+    // refusing outright would be hostile. The context begins a Contract
+    // capability for this claim and widens nothing, so the node keeps staking
+    // throughout. The submit runs on a worker thread, so the context is handed
+    // to the model, which releases it when the submit ends or when the model is
+    // destroyed, even if this page never hears of it.
     //
     // MRCModel dereferences its wallet model in its own constructor, so a
     // constructed model always has one.
-    auto unlock = std::make_unique<WalletModel::UnlockContext>(m_wallet_model->requestUnlock());
+    auto unlock = std::make_unique<WalletModel::UnlockContext>(m_wallet_model->requestUnlock(CapabilityKind::Contract));
 
     if (!unlock->isValid()) {
-        // Cancelled or wrong passphrase. The elevation widens the unlock in
-        // place, so nothing was given up on the way to the prompt and a wallet
-        // that was staking is still staking. The fee boost is left alone so a
-        // retry keeps it.
+        // Cancelled or wrong passphrase. Nothing was begun and nothing
+        // changed, so a wallet that was staking is still staking. The fee
+        // boost is left alone so a retry keeps it.
 
         ui->mrcSubmitButton->setToolTip(tr("The wallet must be unlocked to submit a manual "
                                            "research claim."));
         return;
     }
 
-    // Re-sync before submitting. The elevation's status change arrives as a
-    // queued event, and the dialog's own nested event loop may have drained it
-    // or not, so the model's cached lock state is whatever that race left.
+    // Re-sync before submitting. A capability begun on a locked wallet unlocks
+    // it for staking only, and that status change arrives as a queued event,
+    // which the dialog's own nested event loop may have drained or not, so the
+    // model's cached lock state is whatever that race left.
     //
     // Hand it the live status rather than calling refresh(): refresh() READS
     // the cached flag and never writes it. This is the only writer.

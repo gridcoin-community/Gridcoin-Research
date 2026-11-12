@@ -127,6 +127,18 @@ namespace BCLog {
         bool m_log_time_micros = DEFAULT_LOGTIMEMICROS;
         bool m_log_threadnames = DEFAULT_LOGTHREADNAMES;
 
+        //! The multiprocess GUI's mode. Open the log file with BCLog::OpenLogFile(..., secure = true) (anchored at
+        //! m_secure_root when that is set), create and read the log archive with the same checks, and carry on without
+        //! a file when the open is refused (m_file_open_failed). Set before logging starts.
+        bool m_secure_open{false};
+        //! Escape every newline in a message except a final one (see LogEscapeMessage). Set before logging starts.
+        bool m_escape_newlines{false};
+        //! With m_secure_open, a log file or archive under this directory is opened through each of its directory
+        //! components in turn, refusing a symlinked or foreign-owned one. Empty: the path is opened as given.
+        fs::path m_secure_root;
+        //! Set by StartLogging when the log file could not be opened in secure mode. Logging then goes on without a file.
+        bool m_file_open_failed{false};
+
         fs::path m_file_path;
         std::atomic<bool> m_reopen_file{false};
         static boost::gregorian::date PrevArchiveCheckDate;
@@ -175,8 +187,43 @@ namespace BCLog {
         bool WillLogCategory(LogFlags category) const;
 
         bool DefaultShrinkDebugFile() const;
+
+    private:
+        //! Opens m_file_path for the mode, securely and anchored at m_secure_root when m_secure_open is set.
+        FILE* OpenOwnFile(const char* mode) const;
     };
 
+
+    //! Escapes control characters (other than a newline) in a log message. With escape_newlines, every newline except
+    //! a final one is escaped too, so a message cannot start a new line in the log.
+    std::string LogEscapeMessage(const std::string& str, bool escape_newlines = false);
+
+    //! secure == false: fsbridge::fopen(path, mode). secure == true (POSIX): open(path,
+    //! O_CLOEXEC|O_NOFOLLOW|O_NONBLOCK|access-for-mode[|O_CREAT|O_APPEND for "a"; |O_CREAT for "w"], 0600), never
+    //! O_TRUNC at open; then fstat must show S_ISREG, st_uid == geteuid() and st_nlink == 1, else the file is closed
+    //! and nullptr returned; then O_NONBLOCK is cleared, the file is truncated for mode "w", and fdopen is called.
+    //! A symlink, a hard link or a FIFO at the path is refused, and a FIFO does not block the caller. A file that
+    //! already exists keeps its mode; a new file is created 0600. Windows: refuses when fs::symlink_status(path) is
+    //! a symlink or a reparse point, else fsbridge::fopen. Supported modes are "r", "a" and "w".
+    FILE* OpenLogFile(const fs::path& path, const char* mode, bool secure);
+
+    //! Secure open of path (a file below root) through each directory component below root in turn: every one is
+    //! opened with O_DIRECTORY|O_NOFOLLOW and must be owned by the effective user, so a symlinked directory is
+    //! refused. A path not below root, or an empty root, is opened as OpenLogFile(path, mode, true) does.
+    FILE* OpenLogFileUnder(const fs::path& root, const fs::path& path, const char* mode);
+
+#ifndef WIN32
+    //! The same checks as OpenLogFile(.., true), for the entry name in the directory dirfd (AT_FDCWD allowed).
+    FILE* OpenLogFileAt(int dirfd, const char* name, const char* mode);
+
+    //! Opens the directory dir through each component below root as OpenLogFileUnder does. Returns a descriptor, or
+    //! -1 when a component is a symlink, not a directory or not owned by the effective user.
+    int OpenDirectoryUnder(const fs::path& root, const fs::path& dir);
+
+    //! Creates the directory name inside the directory parent (below root), opened as OpenDirectoryUnder does, so a
+    //! link in place of parent or of name is never followed. True when the directory exists afterwards.
+    bool CreateDirectoryUnder(const fs::path& root, const fs::path& parent, const char* name);
+#endif
 } // namespace BCLog
 
 BCLog::Logger& LogInstance();

@@ -12,6 +12,8 @@
 #include <stdint.h>
 #include <string>
 #include <compat.h>
+#include <rpc/server.h>
+#include <util/sock.h>
 
 // MSG_NOSIGNAL does not exist on Darwin or the BSDs -- compat.h only defines a
 // zero fallback under WIN32 -- and those platforms use SO_NOSIGPIPE on the
@@ -352,6 +354,8 @@ public:
 
     virtual void close()
     {
+        // Bounded: a client that stops reading cannot hold the close, or the restart behind it, open.
+        DrainBeforeClose(socket.native_handle(), RPC_GRACEFUL_CLOSE_TIMEOUT);
         _stream.close();
     }
 

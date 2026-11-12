@@ -10,79 +10,17 @@
 #include "rpc/protocol.h"
 #include "rpc/util.h"
 #include "node/ui_interface.h"
+#include "support/cleanse.h"
+#include "util/fsmodes.h"
+#include "wallet/walletdump.h"
 
+#include <cstdio>
+#include <optional>
 #include <stdexcept>
-#include <boost/date_time/posix_time/posix_time.hpp>
-#include <boost/algorithm/string.hpp>
-#include <util/string.h>
 
 using namespace std;
 
 void EnsureWalletIsUnlocked();
-
-namespace bt = boost::posix_time;
-
-// Extended DecodeDumpTime implementation, see this page for details:
-// https://stackoverflow.com/questions/3786201/parsing-of-date-time-from-string-boost
-const std::locale formats[] = {
-    std::locale(std::locale::classic(),new bt::time_input_facet("%Y-%m-%dT%H:%M:%SZ")),
-    std::locale(std::locale::classic(),new bt::time_input_facet("%Y-%m-%d %H:%M:%S")),
-    std::locale(std::locale::classic(),new bt::time_input_facet("%Y/%m/%d %H:%M:%S")),
-    std::locale(std::locale::classic(),new bt::time_input_facet("%d.%m.%Y %H:%M:%S")),
-    std::locale(std::locale::classic(),new bt::time_input_facet("%Y-%m-%d"))
-};
-
-std::time_t pt_to_time_t(const bt::ptime& pt)
-{
-    bt::ptime timet_start(boost::gregorian::date(1970,1,1));
-    bt::time_duration diff = pt - timet_start;
-    return diff.ticks()/bt::time_duration::rep_type::ticks_per_second;
-}
-
-int64_t DecodeDumpTime(const std::string& s)
-{
-    bt::ptime pt;
-
-    for (const auto& format : formats)
-    {
-        std::istringstream is(s);
-        is.imbue(format);
-        is >> pt;
-        if(pt != bt::ptime()) break;
-    }
-
-    return pt_to_time_t(pt);
-}
-
-std::string static EncodeDumpTime(int64_t nTime) {
-    return DateTimeStrFormat("%Y-%m-%dT%H:%M:%SZ", nTime);
-}
-
-std::string static EncodeDumpString(const std::string &str) {
-    std::stringstream ret;
-    for (unsigned char c : str) {
-        if (c <= 32 || c >= 128 || c == '%') {
-            ret << '%' << HexStr({&c, 1});
-        } else {
-            ret << c;
-        }
-    }
-    return ret.str();
-}
-
-std::string DecodeDumpString(const std::string &str) {
-    std::stringstream ret;
-    for (unsigned int pos = 0; pos < str.length(); pos++) {
-        unsigned char c = str[pos];
-        if (c == '%' && pos+2 < str.length()) {
-            c = (((str[pos+1]>>6)*9+((str[pos+1]-'0')&15)) << 4) |
-                ((str[pos+2]>>6)*9+((str[pos+2]-'0')&15));
-            pos += 2;
-        }
-        ret << c;
-    }
-    return ret.str();
-}
 
 class CTxDump
 {
@@ -207,87 +145,7 @@ UniValue importwallet(const UniValue& params)
     if (!file.is_open())
         throw JSONRPCError(RPC_INVALID_PARAMETER, "Cannot open wallet dump file");
 
-    LOCK2(cs_main, pwalletMain->cs_wallet);
-
-    EnsureWalletIsUnlocked();
-
-    int64_t nTimeBegin = pindexBest->nTime;
-
-    bool fGood = true;
-    bool found_hd_seed = false;
-
-    while (file.good()) {
-        std::string line;
-        std::getline(file, line);
-        if (line.empty() || line[0] == '#')
-            continue;
-
-        std::vector<std::string> vstr;
-        vstr = SplitString(line, ' ');
-        if (vstr.size() < 2)
-            continue;
-
-        CKey key = DecodeSecret(vstr[0]);
-        if (!key.IsValid())
-            continue;
-
-        CKeyID keyid = key.GetPubKey().GetID();
-
-        if (pwalletMain->HaveKey(keyid)) {
-            LogPrintf("Skipping import of %s (key already present)", EncodeDestination(keyid));
-            continue;
-        }
-        int64_t nTime = DecodeDumpTime(vstr[1]);
-        std::string strLabel;
-        bool fLabel = true;
-        for (unsigned int nStr = 2; nStr < vstr.size(); nStr++) {
-            if (boost::algorithm::starts_with(vstr[nStr], "#"))
-                break;
-            if (vstr[nStr] == "change=1")
-                fLabel = false;
-            if (vstr[nStr] == "reserve=1")
-                fLabel = false;
-            if (vstr[nStr] == "hdmaster=1") {
-                found_hd_seed = true;
-            }
-            if (boost::algorithm::starts_with(vstr[nStr], "label=")) {
-                strLabel = DecodeDumpString(vstr[nStr].substr(6));
-                fLabel = true;
-            }
-        }
-        LogPrintf("Importing %s...", EncodeDestination(keyid));
-        if (!pwalletMain->AddKey(key)) {
-            fGood = false;
-            continue;
-        }
-        pwalletMain->mapKeyMetadata[keyid].nCreateTime = nTime;
-        if (fLabel)
-            pwalletMain->SetAddressBookName(keyid, strLabel);
-        nTimeBegin = std::min(nTimeBegin, nTime);
-    }
-    file.close();
-
-    CBlockIndex *pindex = pindexBest;
-    while (pindex && pindex->pprev && pindex->nTime > nTimeBegin - 7200)
-        pindex = pindex->pprev;
-
-    if (!pwalletMain->nTimeFirstKey || nTimeBegin < pwalletMain->nTimeFirstKey)
-        pwalletMain->nTimeFirstKey = nTimeBegin;
-
-    LogPrintf("Rescanning last %i blocks", pindexBest->nHeight - pindex->nHeight + 1);
-    pwalletMain->ScanForWalletTransactions(pindex);
-    pwalletMain->ReacceptWalletTransactions();
-    pwalletMain->MarkDirty();
-
-    if (!fGood)
-        throw JSONRPCError(RPC_WALLET_ERROR, "Error adding some keys to wallet");
-
-    if (found_hd_seed) {
-        return "Warning: Encountered and imported inactive HD seed during the import. Use the 'sethdseed false <key>'"
-               "RPC command if you wish to activate it.";
-    }
-
-    return NullUniValue;
+    return ImportWalletFromStream(*pwalletMain, file);
 }
 
 
@@ -352,6 +210,7 @@ static const RPCHelpMan dumpwallet_help{
     "dumpwallet",
     "Dumps all wallet keys in a human-readable format into the specified file.\n"
     "If a path is not specified in the filename, the data directory is used.\n"
+    "The file must not already exist.\n"
     "Requires wallet passphrase to be set with walletpassphrase first if wallet is encrypted.",
     {
         {"filename", RPCArg::Type::STR, RPCArg::Optional::NO, "Filename to dump the wallet to."},
@@ -363,82 +222,138 @@ static const RPCHelpMan dumpwallet_help{
 };
 const RPCHelpMan& dumpwallet_helpman() { return dumpwallet_help; }
 
-UniValue dumpwallet(const UniValue& params)
-{
-    EnsureWalletIsUnlocked();
+namespace {
 
-    fs::path PathForDump = fs::path(params[0].get_str());
+//! The dump file being written. It is closed when it goes out of scope, and removed
+//! then unless Complete() was called, however the writer leaves: a dump with keys
+//! missing must not stay on disk looking complete. Only a regular file is removed. A
+//! symbolic link or a special file at the path is left as it is.
+class DumpFile
+{
+public:
+    DumpFile(std::FILE* file, const fs::path& path) : m_file(file), m_path(path) {}
+
+    ~DumpFile()
+    {
+        if (m_file) std::fclose(m_file);
+        if (m_complete) return;
+
+        // A destructor may not throw, and a file that cannot be removed leaves
+        // nothing better to do here.
+        try {
+            if (fs::is_regular_file(fs::symlink_status(m_path))) fs::remove(m_path);
+        } catch (const std::exception&) {
+        }
+    }
+
+    DumpFile(const DumpFile&) = delete;
+    DumpFile& operator=(const DumpFile&) = delete;
+
+    //! Writes \p text. Once a write has failed nothing more is written.
+    void Write(const std::string& text)
+    {
+        if (m_ok && !text.empty()) m_ok = std::fwrite(text.data(), 1, text.size(), m_file) == text.size();
+    }
+
+    //! Flushes and closes the file. False when that, or a write before it, failed.
+    bool Close()
+    {
+        const bool closed = std::fclose(m_file) == 0;
+        m_file = nullptr;
+        return m_ok && closed;
+    }
+
+    void Complete() { m_complete = true; }
+
+private:
+    std::FILE* m_file;
+    const fs::path m_path;
+    bool m_ok{true};
+    bool m_complete{false};
+};
+
+} // namespace
+
+void WriteWalletDump(CWallet& wallet, const std::string& filename)
+{
+    fs::path PathForDump = fs::path(filename);
     fs::path DefaultPathDataDir = GetDataDir();
 
     // If provided filename does not have a path, then append parent path, otherwise leave alone.
     if (PathForDump.parent_path().empty())
         PathForDump = DefaultPathDataDir / PathForDump;
 
-    fsbridge::ofstream file;
-    file.open(PathForDump);
-    if (!file.is_open())
+    // Nothing at the path is written over: a bare name lands in the data
+    // directory, among the node's own files. A symbolic link counts, also one
+    // that leads nowhere. A path that cannot be examined is refused too, with
+    // the reason it could not be.
+    const std::string taken_text = "File already exists at location. Please delete or rename old file first.";
+    boost::system::error_code ec;
+    if (fs::symlink_status(PathForDump, ec).type() != fs::file_not_found) {
+        if (ec) {
+            throw JSONRPCError(RPC_INVALID_PARAMETER, strprintf("Cannot check the destination %s: %s",
+                                                                PathForDump.string(), ec.message()));
+        }
+        throw JSONRPCError(RPC_INVALID_PARAMETER, taken_text);
+    }
+
+    // The keys are plaintext, so the file is created exclusively and owner-only
+    // from creation. A name taken since the check above, by a link too, is refused
+    // in the same step that would create the file, so nothing there is opened,
+    // followed or truncated.
+    bool taken = false;
+    std::optional<std::string> not_owner_only;
+    std::string error;
+    std::FILE* const created = fsmodes::CreateNewOwnerOnlyFile(PathForDump, taken, not_owner_only, error);
+    if (!created) {
+        if (taken) throw JSONRPCError(RPC_INVALID_PARAMETER, taken_text);
+        LogPrintf("dumpwallet: %s", error);
         throw JSONRPCError(RPC_INVALID_PARAMETER, "Cannot open wallet dump file");
-
-    std::map<CKeyID, int64_t> mapKeyBirth;
-
-    std::set<CKeyID> setKeyPool;
-
-    LOCK2(cs_main, pwalletMain->cs_wallet);
-
-    pwalletMain->GetKeyBirthTimes(mapKeyBirth);
-
-    pwalletMain->GetAllReserveKeys(setKeyPool);
-
-    // sort time/key pairs
-    std::vector<std::pair<int64_t, CKeyID> > vKeyBirth;
-    for (std::map<CKeyID, int64_t>::const_iterator it = mapKeyBirth.begin(); it != mapKeyBirth.end(); it++) {
-        vKeyBirth.push_back(std::make_pair(it->second, it->first));
     }
-    mapKeyBirth.clear();
-    std::sort(vKeyBirth.begin(), vKeyBirth.end());
+    if (not_owner_only) {
+        LogPrintf("WARNING: dumpwallet: %s is not owner-only (%s); other users of this computer may be able to read "
+                  "it",
+                  PathForDump.string(), *not_owner_only);
+    }
 
-    // produce output
-    file << strprintf("# Wallet dump created by Gridcoin %s\n", FormatFullVersion());
-    file << strprintf("# * Created on %s\n", EncodeDumpTime(GetTime()));
-    file << strprintf("# * Best block at time of backup was %i (%s),\n", nBestHeight, hashBestChain.ToString());
-    file << strprintf("#   mined on %s\n", EncodeDumpTime(pindexBest->nTime));
-    file << "\n";
+    DumpFile file(created, PathForDump);
 
-    // add the base58check encoded extended master if the wallet uses HD
-    CKeyID masterKeyID = pwalletMain->GetHDChain().masterKeyID;
-    if (!masterKeyID.IsNull())
-    {
-        CKey key;
-        if (pwalletMain->GetKey(masterKeyID, key))
-        {
-            CExtKey masterKey;
-            masterKey.SetSeed(key);
+    // Held across the generator's calls, as across the whole dump before it, so
+    // the file is one picture of the wallet.
+    LOCK2(cs_main, wallet.cs_wallet);
 
-            file << "# extended private masterkey: " << EncodeExtKey(masterKey) << "\n\n";
+    WalletDumpGenerator generator(wallet);
+
+    // Room for a whole chunk and a line past it up front, so the buffer does
+    // not grow, which would leave a copy of the keys in it behind. A line
+    // longer than that is appended to an empty buffer, which copies nothing.
+    std::string lines;
+    lines.reserve(64 * 1024 + 4096);
+    try {
+        for (bool more = true; more;) {
+            more = generator.Next(lines, 64 * 1024);
+            file.Write(lines);
+            memory_cleanse(lines.data(), lines.size());
+            lines.clear();
         }
+    } catch (...) {
+        if (!lines.empty()) memory_cleanse(lines.data(), lines.size());
+        throw;
     }
-    for (std::vector<std::pair<int64_t, CKeyID> >::const_iterator it = vKeyBirth.begin(); it != vKeyBirth.end(); it++) {
-        const CKeyID &keyid = it->second;
-        std::string strTime = EncodeDumpTime(it->first);
-        std::string strAddr = EncodeDestination(keyid);
+    // The close flushes what is still buffered. A write that failed leaves a
+    // dump with its end cut off, which DumpFile takes away.
+    if (!file.Close()) {
+        throw JSONRPCError(RPC_WALLET_ERROR, "dumpwallet: cannot write the dump file");
+    }
 
-        CKey key;
-        if (pwalletMain->GetKey(keyid, key)) {
-            file << strprintf("%s %s ", EncodeSecret(key), strTime);
-            if (pwalletMain->mapAddressBook.count(keyid)) {
-                file << strprintf("label=%s", EncodeDumpString(pwalletMain->mapAddressBook[keyid].name));
-            } else if (keyid == masterKeyID) {
-                file << "hdmaster=1";
-            } else if (setKeyPool.count(keyid)) {
-                file << "reserve=1";
-            } else {
-                file << "change=1";
-            }
-            file << strprintf(" # addr=%s%s\n", strAddr, (pwalletMain->mapKeyMetadata[keyid].hdKeypath.size() > 0 ? " hdkeypath="+pwalletMain->mapKeyMetadata[keyid].hdKeypath : ""));
-        }
-    }
-    file << "\n";
-    file << "# End of dump\n";
-    file.close();
+    file.Complete();
+}
+
+UniValue dumpwallet(const UniValue& params)
+{
+    EnsureWalletIsUnlocked();
+
+    WriteWalletDump(*pwalletMain, params[0].get_str());
+
     return NullUniValue;
 }

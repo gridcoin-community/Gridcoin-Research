@@ -27,6 +27,7 @@ private slots:
 
     void regtestCreatesNoLoginItem();
     void regtestLeavesTheMainnetLoginItemAlone();
+    void multiprocessLoginItemCarriesMultiprocess();
 
 private:
     std::unique_ptr<QTemporaryDir> m_config_home;

@@ -150,7 +150,7 @@ To run it, start the daemon first and then attach the GUI; the GUI does not spaw
 ```
 
 The daemon logs the peer-credential mechanism in force at startup; on FreeBSD it reads
-`getpeereid (connections from another OS user are refused)`.
+`getpeereid (this OS user; with -ipcattachgroup also a non-root peer whose primary group is that group)`.
 
 **Build:**
 Use `sysctl` to automatically detect core count for parallel compilation. Pay attention to memory usage. General 1 GB per core is required, so if you have a smaller amount of memory, you may want to substitute your RAM in GB - 1 GB as the number of CPUs.

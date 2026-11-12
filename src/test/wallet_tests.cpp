@@ -1,10 +1,14 @@
 #include "random.h"
 #include "scheduler.h"
+#include <atomic>
+#include <chrono>
+#include <future>
 #include <thread>
 #include <memory>
 #include <boost/test/unit_test.hpp>
 
 #include "gridcoin/mnemonics.h"
+#include "gridcoin/researcher.h"
 #include "gridcoin/contract/contract.h"
 #include "gridcoin/contract/message.h"
 #include "gridcoin/sidestake.h"
@@ -12,6 +16,7 @@
 #include "gridcoin/voting/builders.h"
 #include "gridcoin/voting/poll.h"
 #include "init.h"
+#include "interfaces/wallet.h"
 #include "wallet/wallet.h"
 #include "net_processing.h"
 #include "wallet/walletdb.h"
@@ -20,6 +25,8 @@
 #include "rpc/server.h"
 #include "txdb.h"
 #include "script/sign.h"
+#include "test/mock_wallet_db.h"
+#include "test/staking_test_peers.h"
 #include "test/state_guard.h"
 #include "rpc/blockchain.h"
 #include "txmempool.h"
@@ -44,6 +51,12 @@ using namespace std;
 std::vector<std::unique_ptr<CWalletTx>> wtxn;
 
 typedef set<pair<const CWalletTx*,unsigned int> > CoinSet;
+
+// The key pool's top-up thread, which walletpassphrase starts. Defined in
+// wallet/rpcwallet.cpp, which declares it for itself; no header carries it.
+extern void ThreadTopUpKeyPool(void* parg);
+
+using grc_test::MockWalletDbScope;
 
 BOOST_AUTO_TEST_SUITE(wallet_tests)
 
@@ -924,7 +937,9 @@ BOOST_AUTO_TEST_CASE(importprivkey_requires_an_unlocked_wallet)
 //! building. A staking-only wallet must return before that, so the caller's
 //! sentinel survives; a fully unlocked one must get past the check and clobber
 //! it, even though this coinless wallet then fails to fund. Asserting only the
-//! bool would prove nothing, since both cases return false.
+//! bool would prove nothing, since both cases return false. The automated beacon
+//! renewal's access gets past the check on the staking-only wallet in the same
+//! way.
 //!
 //! This is the regression test for a graphical send while unlocked for staking
 //! only: that path reaches the wallet through interfaces::Wallet, which had no
@@ -965,6 +980,18 @@ BOOST_AUTO_TEST_CASE(the_transaction_builder_refuses_a_staking_only_wallet)
         int64_t fee = sentinel;
         BOOST_CHECK(!staking.CreateTransaction(recipients, wtx, reservekey, fee));
         BOOST_CHECK_EQUAL(fee, sentinel); // returned before building
+    }
+
+    {
+        BOOST_REQUIRE(staking.IsUnlockedForStakingOnly());
+
+        const StakingKeyAccess renewal_access = StakingKeyAccessTestPeer::Make();
+        CWalletTx wtx;
+        CReserveKey reservekey(&staking);
+        int64_t fee = sentinel;
+        BOOST_CHECK(!staking.CreateTransaction(recipients, wtx, reservekey, fee, /*coinControl=*/nullptr,
+                                               /*change_back_to_input_address=*/false, &renewal_access));
+        BOOST_CHECK(fee != sentinel);
     }
 
     {
@@ -1182,63 +1209,22 @@ BOOST_AUTO_TEST_CASE(a_contract_send_held_off_by_a_narrowing_refuses_on_its_own_
 
     BOOST_CHECK_EQUAL(result, _("Error: Wallet unlocked for staking only, unable to create transaction."));
 
-    // The automated beacon renewal's exemption still passes the check: it goes
-    // on to the balance check, which the empty wallet fails.
+    // The automated beacon renewal's access still passes the check: it goes on
+    // to the balance check, which the empty wallet fails.
     {
+        const StakingKeyAccess renewal_access = StakingKeyAccessTestPeer::Make();
         LOCK(cs_main);
-        BOOST_CHECK_EQUAL(GRC::SendContract(make_contract(), /*permitted_while_staking_only=*/true).second,
+        BOOST_CHECK_EQUAL(GRC::SendContract(make_contract(), &renewal_access).second,
                           _("Balance too low to create a contract."));
     }
 
     staking.Lock();
 }
 
-//! Stand up a running scheduler for the duration of a case and put the previous
-//! one back however the case exits, so a failed assertion cannot strand the
-//! rest of the binary without one.
-//!
-//! The handle is published as soon as the object exists and does NOT wait for
-//! the service thread to enter serviceQueue. It does not need to: arming asks
-//! only whether the scheduler has been told to stop, so a task enqueued before
-//! the thread comes up is run when it gets there. Waiting on
-//! AreThreadsServicingQueue() here would be the racy version of this.
-//!
-//! Declare it AFTER the wallet its tasks touch, so it is destroyed first: its
-//! destructor joins the service thread, which may still be inside a relock. A
-//! case sees the relock through IsLocked(), and LockIfCurrent() locks before it
-//! raises NotifyStatusChanged, so a wallet destroyed first is destroyed under
-//! that call (ThreadSanitizer reported it as a race on the signal's mutex).
-struct SchedulerForThisCase {
-    std::unique_ptr<CScheduler> m_saved;
-    CScheduler* m_saved_handle;
-    std::thread m_service;
-
-    SchedulerForThisCase()
-        : m_saved(std::move(g_scheduler))
-        , m_saved_handle(g_scheduler_handle.load(std::memory_order_acquire))
-    {
-        g_scheduler = std::make_unique<CScheduler>();
-        g_scheduler_handle.store(g_scheduler.get(), std::memory_order_release);
-        m_service = std::thread([] { g_scheduler->serviceQueue(); });
-    }
-
-    ~SchedulerForThisCase()
-    {
-        g_scheduler_handle.store(m_saved_handle, std::memory_order_release);
-        g_scheduler->stop();
-        if (m_service.joinable()) m_service.join();
-        g_scheduler = std::move(m_saved);
-    }
-};
-
-//! Spin until the scheduled relock has run, or give up. The service thread runs
-//! the task, so the wait is for another thread rather than for time.
-static void WaitForRelock(const CWallet& wallet)
-{
-    for (int i = 0; i < 200 && !wallet.IsLocked(); ++i) {
-        UninterruptibleSleep(std::chrono::milliseconds(10));
-    }
-}
+// The scheduler stand-in and the relock wait are shared with capability_tests,
+// in test/staking_test_peers.h.
+using grc_test::SchedulerForThisCase;
+using grc_test::WaitForRelock;
 
 //!
 //! A timed unlock locks itself when its deadline arrives, and a relock armed
@@ -1406,17 +1392,17 @@ BOOST_AUTO_TEST_CASE(a_timed_unlock_whose_relock_cannot_be_armed_locks_the_walle
 }
 
 //!
-//! An elevation WIDENS the unlock in progress; it does not replace it. The
-//! deadline and the relock armed for it both survive, so a wallet unlocked for
-//! a fixed time still locks on time after an action elevates it.
+//! A capability leaves the unlock in progress as it was. The deadline and the
+//! relock armed for it both survive the operation, so a wallet unlocked for a
+//! fixed time still locks on time after a GUI send, vote or claim.
 //!
-//! This is the discriminating case for the relock dance the GUI used to do.
+//! This is the discriminating case for the relock dance the GUI once did.
 //! Locking first and unlocking again threw the deadline away and retired the
 //! armed relock, and the re-unlock carried no duration of its own -- so the
 //! wallet stayed unlocked forever. Under that behaviour the final assertion
 //! fails: nothing is left to lock the wallet.
 //!
-BOOST_AUTO_TEST_CASE(an_elevation_keeps_the_unlock_and_its_relock)
+BOOST_AUTO_TEST_CASE(a_capability_keeps_the_unlock_and_its_relock)
 {
     CWallet wallet;
     SchedulerForThisCase scheduler;
@@ -1428,7 +1414,7 @@ BOOST_AUTO_TEST_CASE(an_elevation_keeps_the_unlock_and_its_relock)
         BOOST_REQUIRE(wallet.AddKey(key));
     }
 
-    const SecureString passphrase("elevation-keeps-deadline");
+    const SecureString passphrase("capability-keeps-deadline");
     BOOST_REQUIRE(wallet.EncryptWallet(passphrase));
     wallet.Lock();
 
@@ -1439,19 +1425,28 @@ BOOST_AUTO_TEST_CASE(an_elevation_keeps_the_unlock_and_its_relock)
     const uint64_t epoch = wallet.GetUnlockEpoch();
     BOOST_REQUIRE(deadline.has_value());
 
-    // Elevate for one operation, as a GUI send, vote or claim does.
-    BOOST_REQUIRE(wallet.ElevateToFull(passphrase));
-    BOOST_CHECK(wallet.GetUnlockScope() == UnlockScope::Full);
+    // One operation's capability, as a GUI send, vote or claim takes.
+    const std::optional<CapabilityId> id = wallet.BeginElevation(passphrase, CapabilityKind::Send);
+    BOOST_REQUIRE(id.has_value());
 
-    // The unlock did not restart. Same deadline, and the same epoch -- so the
-    // relock already armed is still the current one and is still going to fire.
+    // The unlock did not restart or widen. Same scope, same deadline, and the
+    // same epoch -- so the relock already armed is still the current one and is
+    // still going to fire.
+    BOOST_CHECK(wallet.GetUnlockScope() == UnlockScope::StakingOnly);
     BOOST_CHECK(wallet.GetUnlockDeadline() == deadline);
     BOOST_CHECK_EQUAL(wallet.GetUnlockEpoch(), epoch);
 
-    // Hand the elevation back, as ~UnlockContext does.
-    BOOST_REQUIRE(wallet.RestrictToStakingOnly());
+    {
+        CapabilityScope scope(wallet, id, CapabilityKind::Send);
+        BOOST_CHECK(scope.Active());
+        BOOST_CHECK(wallet.CanUseKeys());
+    }
+
+    // Ending it, as ~UnlockContext does, changes nothing either.
+    wallet.EndElevation(*id);
     BOOST_CHECK(wallet.GetUnlockScope() == UnlockScope::StakingOnly);
     BOOST_CHECK(wallet.GetUnlockDeadline() == deadline);
+    BOOST_CHECK_EQUAL(wallet.GetUnlockEpoch(), epoch);
 
     // And it still locks when the unlock the user asked for runs out.
     g_scheduler->MockForward(std::chrono::seconds(61));
@@ -1461,50 +1456,9 @@ BOOST_AUTO_TEST_CASE(an_elevation_keeps_the_unlock_and_its_relock)
 }
 
 //!
-//! An elevation adds permission, so it demands the passphrase, and it needs an
-//! unlock to widen -- on a locked wallet there is nothing to widen and no
-//! deadline to preserve, which is Unlock()'s job.
-//!
-BOOST_AUTO_TEST_CASE(an_elevation_demands_the_passphrase_and_an_unlock_to_widen)
-{
-    CWallet wallet;
-    CKey key;
-    key.MakeNewKey(true);
-    {
-        LOCK(wallet.cs_wallet);
-        BOOST_REQUIRE(wallet.AddKey(key));
-    }
-
-    const SecureString passphrase("elevation-preconditions");
-    BOOST_REQUIRE(wallet.EncryptWallet(passphrase));
-    wallet.Lock();
-
-    // Locked: refused even with the right passphrase.
-    BOOST_CHECK(!wallet.ElevateToFull(passphrase));
-    BOOST_CHECK(wallet.IsLocked());
-
-    BOOST_REQUIRE(wallet.Unlock(passphrase, UnlockScope::StakingOnly));
-
-    // Wrong passphrase widens nothing, and moves nothing.
-    BOOST_CHECK(!wallet.ElevateToFull(SecureString("wrong")));
-    BOOST_CHECK(wallet.GetUnlockScope() == UnlockScope::StakingOnly);
-
-    BOOST_REQUIRE(wallet.ElevateToFull(passphrase));
-    BOOST_CHECK(wallet.GetUnlockScope() == UnlockScope::Full);
-
-    // Already as wide as it goes: a no-op that still succeeds, so a nested
-    // elevation on an already-elevated wallet is not an error.
-    BOOST_CHECK(wallet.ElevateToFull(passphrase));
-    BOOST_CHECK(wallet.GetUnlockScope() == UnlockScope::Full);
-
-    wallet.Lock();
-}
-
-//!
 //! A lock reports the unlock it ended, read under the acquisition that clears
-//! it. This is what lets a caller that has to lock and restore -- the passphrase
-//! change -- put back exactly what was there without a gap the scheduled relock
-//! can land in.
+//! it. This is what lets a caller that has to lock and restore put back exactly
+//! what was there without a gap the scheduled relock can land in.
 //!
 BOOST_AUTO_TEST_CASE(locking_reports_the_unlock_it_ended)
 {
@@ -1540,9 +1494,9 @@ BOOST_AUTO_TEST_CASE(locking_reports_the_unlock_it_ended)
 }
 
 //!
-//! A passphrase change restores the unlock it interrupted, deadline included,
-//! and re-arms the relock for it. Changing the passphrase must not turn a wallet
-//! unlocked for a minute into one unlocked indefinitely.
+//! A passphrase change leaves the unlock as it was, deadline and relock
+//! included. Changing the passphrase must not turn a wallet unlocked for a
+//! minute into one unlocked indefinitely.
 //!
 BOOST_AUTO_TEST_CASE(a_passphrase_change_keeps_the_unlock_deadline)
 {
@@ -1567,12 +1521,12 @@ BOOST_AUTO_TEST_CASE(a_passphrase_change_keeps_the_unlock_deadline)
 
     BOOST_REQUIRE(wallet.ChangeWalletPassphrase(old_passphrase, new_passphrase));
 
-    // The scope came back, and so did the deadline it was unlocked with.
+    // The scope is as it was, and so is the deadline it was unlocked with.
     BOOST_CHECK(wallet.GetUnlockScope() == UnlockScope::StakingOnly);
     BOOST_REQUIRE(wallet.GetUnlockDeadline().has_value());
     BOOST_CHECK_EQUAL(*wallet.GetUnlockDeadline(), *deadline);
 
-    // And a relock was armed against the restored unlock, so it still expires.
+    // And the relock armed for the unlock still ends it.
     g_scheduler->MockForward(std::chrono::seconds(61));
     WaitForRelock(wallet);
 
@@ -1639,6 +1593,170 @@ BOOST_AUTO_TEST_CASE(a_refused_passphrase_change_keeps_the_old_passphrase)
     BOOST_CHECK(wallet.Unlock(old_passphrase, UnlockScope::Full, std::chrono::seconds(60)));
 
     wallet.Lock();
+}
+
+//!
+//! A wrong old passphrase leaves the unlock exactly as it was: a wallet
+//! unlocked for staking only goes on staking, with the same deadline and the
+//! same relock, and a full unlock stays full.
+//!
+BOOST_AUTO_TEST_CASE(a_wrong_old_passphrase_leaves_the_unlock_as_it_was)
+{
+    CWallet wallet;
+    SchedulerForThisCase scheduler;
+
+    CKey key;
+    key.MakeNewKey(true);
+    {
+        LOCK(wallet.cs_wallet);
+        BOOST_REQUIRE(wallet.AddKey(key));
+    }
+
+    const SecureString old_passphrase("change-wrong-old");
+    const SecureString new_passphrase("change-wrong-new");
+    BOOST_REQUIRE(wallet.EncryptWallet(old_passphrase));
+    wallet.Lock();
+
+    BOOST_REQUIRE(wallet.Unlock(old_passphrase, UnlockScope::StakingOnly, std::chrono::seconds(60)));
+    const std::optional<int64_t> deadline = wallet.GetUnlockDeadline();
+    const uint64_t epoch = wallet.GetUnlockEpoch();
+    BOOST_REQUIRE(deadline.has_value());
+
+    BOOST_CHECK(!wallet.ChangeWalletPassphrase(SecureString("change-wrong-typo"), new_passphrase));
+
+    BOOST_CHECK(wallet.GetUnlockScope() == UnlockScope::StakingOnly);
+    BOOST_CHECK(wallet.GetUnlockDeadline() == deadline);
+    BOOST_CHECK_EQUAL(wallet.GetUnlockEpoch(), epoch);
+
+    // Staking still reaches its key.
+    CKey staking_key;
+    BOOST_CHECK(wallet.GetKeyForStaking(key.GetPubKey().GetID(), staking_key, StakingKeyAccessTestPeer::Make()));
+
+    // And the unlock still ends when it was due to.
+    g_scheduler->MockForward(std::chrono::seconds(61));
+    WaitForRelock(wallet);
+    BOOST_CHECK(wallet.IsLocked());
+
+    // A full unlock stays full.
+    BOOST_REQUIRE(wallet.Unlock(old_passphrase, UnlockScope::Full));
+    BOOST_CHECK(!wallet.ChangeWalletPassphrase(SecureString("change-wrong-typo"), new_passphrase));
+    BOOST_CHECK(wallet.GetUnlockScope() == UnlockScope::Full);
+
+    // The old passphrase is still the one.
+    wallet.Lock();
+    BOOST_CHECK(wallet.Unlock(old_passphrase, UnlockScope::Full));
+    wallet.Lock();
+}
+
+//!
+//! Changing the passphrase of a locked wallet never opens it: no status the
+//! wallet reports while the change runs is a full unlock, and it is locked
+//! when the change returns.
+//!
+BOOST_AUTO_TEST_CASE(a_passphrase_change_never_unlocks_a_locked_wallet_fully)
+{
+    CWallet wallet;
+
+    CKey key;
+    key.MakeNewKey(true);
+    {
+        LOCK(wallet.cs_wallet);
+        BOOST_REQUIRE(wallet.AddKey(key));
+    }
+
+    const SecureString old_passphrase("change-never-full-old");
+    const SecureString new_passphrase("change-never-full-new");
+    BOOST_REQUIRE(wallet.EncryptWallet(old_passphrase));
+    wallet.Lock();
+
+    // Every unlock and lock raises NotifyStatusChanged, after it has set the
+    // scope, so each one the change makes is seen here.
+    std::vector<UnlockScope> reported;
+    const boost::signals2::scoped_connection watch(wallet.NotifyStatusChanged.connect(
+        [&reported](CCryptoKeyStore* store) { reported.push_back(store->GetUnlockScope()); }));
+
+    BOOST_REQUIRE(wallet.ChangeWalletPassphrase(old_passphrase, new_passphrase));
+
+    BOOST_CHECK(wallet.IsLocked());
+    BOOST_CHECK(std::none_of(reported.begin(), reported.end(),
+                             [](UnlockScope scope) { return scope == UnlockScope::Full; }));
+
+    BOOST_CHECK(!wallet.Unlock(old_passphrase, UnlockScope::StakingOnly));
+    BOOST_CHECK(wallet.Unlock(new_passphrase, UnlockScope::StakingOnly));
+    wallet.Lock();
+}
+
+//!
+//! The old passphrase's key is derived without cs_wallet held, as an unlock's
+//! is (capability_tests/unlock_derives_without_holding_cs_wallet), so a change
+//! never stalls block and transaction processing behind a key derivation.
+//!
+BOOST_AUTO_TEST_CASE(a_passphrase_change_derives_without_holding_cs_wallet)
+{
+    grc_test::EncryptedWallet fx;
+    BOOST_REQUIRE(fx.wallet.IsLocked());
+
+    // A derivation of about two seconds on this machine, which no key passes,
+    // so the attempt is refused as soon as its derivation ends.
+    const std::string derivation = fx.MakeEveryDerivationLongAndFutile(std::chrono::seconds{2});
+
+    std::atomic<bool> began{false};
+    std::future<bool> change = std::async(std::launch::async, [&fx, &began] {
+        began = true;
+        return fx.wallet.ChangeWalletPassphrase(SecureString("wrong"), SecureString("change-derives-new"));
+    });
+
+    for (int i = 0; i < 6000 && !began; ++i) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+    BOOST_REQUIRE(began);
+
+    // As in the unlock's case: this thread takes cs_wallet while the attempt is
+    // not yet counted, and holds it. The attempt can then be refused, and so
+    // counted, only if it derives without cs_wallet. It takes cs_wallet briefly
+    // to copy the records when it begins; if this thread took it before that,
+    // nothing is counted while it is held, and the round is given up for
+    // another. A round waits up to two minutes, since CI also runs the suite under
+    // QEMU emulation, many times slower.
+    bool refused_while_held{false};
+    bool waited_for_the_lock{false};
+    // What each round saw, for the failure message.
+    const auto began_at = std::chrono::steady_clock::now();
+    const auto since_began = [&began_at] {
+        return ToString(std::chrono::duration_cast<std::chrono::milliseconds>(
+                                  std::chrono::steady_clock::now() - began_at)
+                                  .count()) +
+               " ms";
+    };
+    std::string rounds;
+
+    for (int round = 0; round < 3 && !refused_while_held; ++round) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+        const auto asked = std::chrono::steady_clock::now();
+        LOCK(fx.wallet.cs_wallet);
+
+        if (std::chrono::steady_clock::now() - asked >= std::chrono::milliseconds(500)) {
+            waited_for_the_lock = true;
+        }
+        rounds += "; round " + ToString(round) + " held cs_wallet at " + since_began() + " with " +
+                  ToString(fx.wallet.FailedUnlockCount()) + " refusals";
+
+        if (fx.wallet.FailedUnlockCount() != 0) break;
+
+        for (int i = 0; i < 12000 && fx.wallet.FailedUnlockCount() == 0; ++i) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        }
+
+        refused_while_held = fx.wallet.FailedUnlockCount() == 1;
+        rounds += ", " + ToString(fx.wallet.FailedUnlockCount()) + " at " + since_began();
+    }
+
+    BOOST_CHECK(!change.get());
+
+    BOOST_CHECK_MESSAGE(refused_while_held, "the refusal was not counted while cs_wallet was held: " << derivation << rounds);
+    BOOST_CHECK(!waited_for_the_lock);
+    BOOST_CHECK(fx.wallet.IsLocked());
 }
 
 //!
@@ -1746,6 +1864,593 @@ BOOST_AUTO_TEST_CASE(dumpprivkey_staking_only_unlock_is_refused_by_the_shared_ch
     locked.Lock();
     BOOST_REQUIRE(locked.Unlock(passphrase, UnlockScope::Full));
     BOOST_CHECK_EQUAL(dumpprivkey(params).get_str(), EncodeSecret(key));
+}
+
+//! \brief An encrypted HD wallet whose key pool lives in the mock database,
+//! left locked and swapped into pwalletMain for its life.
+//!
+//! The pool's target is pinned small, so that a top-up is quick and its size
+//! known. The wallet is file-backed, so its HD chain and key pool are written
+//! and read as on a node, except while it is being encrypted: EncryptWallet
+//! rewrites a file-backed wallet's file, and in the mock environment that
+//! writes a real file into the working directory. The mock environment backs
+//! every wallet file with one shared database, so the scope moves what is there
+//! aside first and puts it back afterwards.
+struct EncryptedHdKeyPoolWallet
+{
+    static inline const SecureString PASSPHRASE{"key-creation-test"};
+    static inline const std::string WALLET_FILE{"wallet_key_creation.dat"};
+    static constexpr unsigned int TARGET{5};
+
+    grc_test::ForcedArgGuard m_target{"keypool", strprintf("%u", TARGET)};
+    MockWalletDbScope m_db{WALLET_FILE};
+    CWallet wallet{WALLET_FILE};
+    grc_test::SwapMainWallet m_swap{&wallet};
+
+    EncryptedHdKeyPoolWallet()
+    {
+        BOOST_REQUIRE(m_db.isolated());
+
+        // A loose key, so that Unlock() has a crypted key to prove the
+        // passphrase on.
+        CKey loose;
+        loose.MakeNewKey(true);
+        {
+            LOCK(wallet.cs_wallet);
+            BOOST_REQUIRE(wallet.AddKey(loose));
+        }
+
+        BOOST_REQUIRE(wallet.SetHDMasterKey(wallet.GenerateNewHDMasterKey()));
+
+        // Encryption replaces the HD seed and refills the pool from the new one
+        // under its own full unlock.
+        wallet.fFileBacked = false;
+        const bool encrypted = wallet.EncryptWallet(PASSPHRASE);
+        wallet.fFileBacked = true;
+        BOOST_REQUIRE(encrypted);
+
+        wallet.Lock();
+        BOOST_REQUIRE(wallet.IsLocked());
+        BOOST_REQUIRE(wallet.IsHDEnabled());
+        BOOST_REQUIRE_EQUAL(PoolSize(), TARGET);
+    }
+
+    ~EncryptedHdKeyPoolWallet()
+    {
+        wallet.Lock();
+    }
+
+    EncryptedHdKeyPoolWallet(const EncryptedHdKeyPoolWallet&) = delete;
+    EncryptedHdKeyPoolWallet& operator=(const EncryptedHdKeyPoolWallet&) = delete;
+
+    void UnlockFor(UnlockScope scope)
+    {
+        wallet.Lock();
+        BOOST_REQUIRE(wallet.Unlock(PASSPHRASE, scope));
+        BOOST_REQUIRE(wallet.GetUnlockScope() == scope);
+    }
+
+    //! Empties the pool, as handing out every key in it would.
+    void DrainPool()
+    {
+        LOCK(wallet.cs_wallet);
+        for (const int64_t index : wallet.setKeyPool) {
+            wallet.KeepKey(index);
+        }
+        wallet.setKeyPool.clear();
+    }
+
+    unsigned int PoolSize()
+    {
+        LOCK(wallet.cs_wallet);
+        return wallet.GetKeyPoolSize();
+    }
+
+    size_t KeyCount() const
+    {
+        std::set<CKeyID> keys;
+        wallet.GetKeys(keys);
+        return keys.size();
+    }
+
+    //! How many keys the HD chain has derived.
+    uint32_t Derived()
+    {
+        LOCK(wallet.cs_wallet);
+        return wallet.GetHDChain().nExternalChainCounter;
+    }
+};
+
+//! Runs the top-up thread's body on a thread of its own, as walletpassphrase
+//! starts it, and reports whether an exception left it. In production that
+//! thread is detached, and an exception leaving it ends the process.
+static bool TopUpThreadLetsAnExceptionOut()
+{
+    bool escaped{false};
+
+    std::thread top_up([&escaped] {
+        try {
+            ThreadTopUpKeyPool(nullptr);
+        } catch (...) {
+            escaped = true;
+        }
+    });
+    top_up.join();
+
+    return escaped;
+}
+
+//! Only an unencrypted or fully unlocked wallet, or one unlocked for staking
+//! with a grant live on the asking thread, may create keys.
+BOOST_AUTO_TEST_CASE(can_create_keys_follows_the_unlock_scope)
+{
+    {
+        CWallet plain;
+        BOOST_CHECK(plain.CanCreateKeys());
+    }
+
+    grc_test::EncryptedWallet fx;
+    BOOST_CHECK(!fx.wallet.CanCreateKeys());
+
+    fx.UnlockFor(UnlockScope::StakingOnly);
+    BOOST_CHECK(!fx.wallet.CanCreateKeys());
+
+    {
+        const ElevationGrant grant = ElevationGrantTestPeer::Make(fx.wallet);
+        BOOST_CHECK(fx.wallet.CanCreateKeys());
+
+        // Boost.Test assertions are not thread-safe, so the other thread only
+        // records what it saw.
+        bool other_thread_may{true};
+        std::thread other([&] { other_thread_may = fx.wallet.CanCreateKeys(); });
+        other.join();
+        BOOST_CHECK(!other_thread_may);
+    }
+
+    BOOST_CHECK(!fx.wallet.CanCreateKeys());
+
+    // A grant outliving the unlock leaves no master key to make a key with.
+    {
+        const ElevationGrant grant = ElevationGrantTestPeer::Make(fx.wallet);
+        fx.wallet.Lock();
+        BOOST_CHECK(!fx.wallet.CanCreateKeys());
+    }
+
+    fx.UnlockFor(UnlockScope::Full);
+    BOOST_CHECK(fx.wallet.CanCreateKeys());
+}
+
+//! A top-up under staking only derives nothing from the HD seed, which that
+//! scope withholds. It reports false, throws nothing, and leaves the wallet as
+//! it was.
+BOOST_AUTO_TEST_CASE(topup_skipped_under_staking_only)
+{
+    EncryptedHdKeyPoolWallet fx;
+    fx.DrainPool();
+    fx.UnlockFor(UnlockScope::StakingOnly);
+
+    const size_t keys_before = fx.KeyCount();
+    const uint32_t derived_before = fx.Derived();
+
+    bool topped_up{true};
+    BOOST_CHECK_NO_THROW(topped_up = fx.wallet.TopUpKeyPool());
+    BOOST_CHECK(!topped_up);
+
+    BOOST_CHECK_EQUAL(fx.PoolSize(), 0U);
+    BOOST_CHECK_EQUAL(fx.KeyCount(), keys_before);
+    BOOST_CHECK_EQUAL(fx.Derived(), derived_before);
+}
+
+//! The same wallet fully unlocked tops its pool up as before.
+BOOST_AUTO_TEST_CASE(topup_runs_under_full)
+{
+    EncryptedHdKeyPoolWallet fx;
+    fx.DrainPool();
+    fx.UnlockFor(UnlockScope::Full);
+
+    const size_t keys_before = fx.KeyCount();
+    const uint32_t derived_before = fx.Derived();
+
+    BOOST_CHECK(fx.wallet.TopUpKeyPool());
+
+    const unsigned int pool = fx.PoolSize();
+    BOOST_CHECK_GE(pool, EncryptedHdKeyPoolWallet::TARGET);
+    BOOST_CHECK_EQUAL(fx.KeyCount(), keys_before + pool);
+    BOOST_CHECK_EQUAL(fx.Derived(), derived_before + pool);
+}
+
+//! The GUI's receive-address draws work without a capability while the pool
+//! has keys, and report an empty pool as a failure, so the GUI can ask for the
+//! passphrase and draw again under a capability that refills it. The address
+//! book's draw used to fall back on the wallet's default key instead, which
+//! handed the user an address they already had as if it were new.
+BOOST_AUTO_TEST_CASE(receive_address_draws_use_the_pool_and_report_it_empty)
+{
+    EncryptedHdKeyPoolWallet fx;
+    fx.UnlockFor(UnlockScope::StakingOnly);
+
+    // The key a reusing draw would fall back on.
+    CKey default_key;
+    default_key.MakeNewKey(true);
+    {
+        LOCK(fx.wallet.cs_wallet);
+        fx.wallet.vchDefaultKey = default_key.GetPubKey();
+    }
+    const std::string default_address = EncodeDestination(default_key.GetPubKey().GetID());
+
+    std::unique_ptr<interfaces::Wallet> wallet = interfaces::MakeWallet(&fx.wallet);
+
+    // From the pool, with no capability and nothing made.
+    const size_t keys_before = fx.KeyCount();
+
+    std::string address;
+    BOOST_REQUIRE(wallet->getNewReceiveAddress(address));
+    BOOST_CHECK(address != default_address);
+    BOOST_CHECK(IsMine(fx.wallet, DecodeDestination(address)) != ISMINE_NO);
+
+    std::string labelled;
+    BOOST_REQUIRE(wallet->getNewReceiveAddressWithLabel("pool", labelled));
+    BOOST_CHECK(labelled != address);
+
+    BOOST_CHECK_EQUAL(fx.PoolSize(), EncryptedHdKeyPoolWallet::TARGET - 2);
+    BOOST_CHECK_EQUAL(fx.KeyCount(), keys_before);
+
+    // Empty: both report it, neither returns the default key, and nothing is
+    // made.
+    fx.DrainPool();
+
+    std::string from_empty;
+    BOOST_CHECK(!wallet->getNewReceiveAddress(from_empty));
+    BOOST_CHECK(from_empty.empty());
+
+    std::string labelled_from_empty;
+    BOOST_CHECK(!wallet->getNewReceiveAddressWithLabel("pool", labelled_from_empty));
+    BOOST_CHECK(labelled_from_empty.empty());
+
+    BOOST_CHECK_EQUAL(fx.PoolSize(), 0U);
+    BOOST_CHECK_EQUAL(fx.KeyCount(), keys_before);
+    BOOST_CHECK(fx.wallet.IsUnlockedForStakingOnly());
+}
+
+//! getwalletinfo and getinfo read the oldest pool key's time, which reserves
+//! a key and so used to top the pool up first. Under staking only with an empty
+//! pool they answer without creating a key or throwing.
+BOOST_AUTO_TEST_CASE(getwalletinfo_path_no_throw_under_staking_only)
+{
+    EncryptedHdKeyPoolWallet fx;
+    fx.DrainPool();
+    fx.UnlockFor(UnlockScope::StakingOnly);
+
+    const size_t keys_before = fx.KeyCount();
+
+    BOOST_CHECK_NO_THROW(fx.wallet.GetOldestKeyPoolTime());
+
+    UniValue info;
+    BOOST_CHECK_NO_THROW(info = getwalletinfo(UniValue(UniValue::VARR)));
+    BOOST_REQUIRE(info.isObject());
+    BOOST_CHECK_EQUAL(find_value(info, "keypoolsize").get_int(), 0);
+
+    BOOST_CHECK_EQUAL(fx.PoolSize(), 0U);
+    BOOST_CHECK_EQUAL(fx.KeyCount(), keys_before);
+}
+
+//! getwalletinfo reports the wallet-wide unlock scope: what the wallet allows
+//! every thread, whatever a capability allows one of them.
+BOOST_AUTO_TEST_CASE(getwalletinfo_reports_scope)
+{
+    const auto reported = [] {
+        const UniValue scope = find_value(getwalletinfo(UniValue(UniValue::VARR)), "unlock_scope");
+
+        return scope.isStr() ? scope.get_str() : std::string("(absent)");
+    };
+
+    {
+        EncryptedHdKeyPoolWallet fx;
+        BOOST_CHECK_EQUAL(reported(), "locked");
+
+        fx.UnlockFor(UnlockScope::StakingOnly);
+        BOOST_CHECK_EQUAL(reported(), "staking_only");
+
+        // A capability open on the asking thread leaves it as it is.
+        const std::optional<CapabilityId> id = fx.wallet.BeginElevation(EncryptedHdKeyPoolWallet::PASSPHRASE,
+                                                                        CapabilityKind::RpcRequest);
+        BOOST_REQUIRE(id.has_value());
+        {
+            CapabilityScope scope(fx.wallet, id, CapabilityKind::RpcRequest);
+            BOOST_REQUIRE(scope.Active());
+            BOOST_CHECK_EQUAL(reported(), "staking_only");
+        }
+        fx.wallet.EndElevation(*id);
+
+        fx.UnlockFor(UnlockScope::Full);
+        BOOST_CHECK_EQUAL(reported(), "full");
+
+        fx.wallet.Lock();
+        BOOST_CHECK_EQUAL(reported(), "locked");
+    }
+
+    // An unencrypted wallet has no unlock to narrow.
+    {
+        const std::string file{"wallet_unlock_scope_plain.dat"};
+        grc_test::ForcedArgGuard target{"keypool", "5"};
+        MockWalletDbScope db{file};
+        BOOST_REQUIRE(db.isolated());
+
+        CWallet plain{file};
+        grc_test::SwapMainWallet swap{&plain};
+        BOOST_REQUIRE(!plain.IsCrypted());
+
+        BOOST_CHECK_EQUAL(reported(), "full");
+    }
+}
+
+//! A draw from an empty pool under staking only fails cleanly at every entry
+//! that would otherwise make the key: no key, no exception.
+BOOST_AUTO_TEST_CASE(getkeyfrompool_empty_under_staking_only_returns_false)
+{
+    EncryptedHdKeyPoolWallet fx;
+    fx.DrainPool();
+    fx.UnlockFor(UnlockScope::StakingOnly);
+
+    const size_t keys_before = fx.KeyCount();
+
+    {
+        LOCK(fx.wallet.cs_wallet);
+        CPubKey key;
+
+        bool got{true};
+        BOOST_CHECK_NO_THROW(got = fx.wallet.GetKeyFromPool(key, /*fAllowReuse=*/false));
+        BOOST_CHECK(!got);
+
+        // Reuse allowed, but there is no default key to reuse.
+        got = true;
+        BOOST_CHECK_NO_THROW(got = fx.wallet.GetKeyFromPool(key, /*fAllowReuse=*/true));
+        BOOST_CHECK(!got);
+
+        // A send's change key is reserved the same way.
+        CReserveKey reserve(&fx.wallet);
+        got = true;
+        BOOST_CHECK_NO_THROW(got = reserve.GetReservedKey(key));
+        BOOST_CHECK(!got);
+    }
+
+    // getnewaddress reports that the pool ran out, as it does on a locked
+    // wallet, rather than failing on the key it could not make.
+    try {
+        getnewaddress(UniValue(UniValue::VARR));
+        BOOST_ERROR("getnewaddress returned a key from an empty pool under staking only");
+    } catch (const UniValue& err) {
+        BOOST_CHECK_EQUAL(find_value(err, "code").get_int(), RPC_WALLET_KEYPOOL_RAN_OUT);
+    } catch (const std::exception& e) {
+        BOOST_ERROR(std::string("getnewaddress threw: ") + e.what());
+    }
+
+    BOOST_CHECK_EQUAL(fx.PoolSize(), 0U);
+    BOOST_CHECK_EQUAL(fx.KeyCount(), keys_before);
+}
+
+//! Under staking only a key the pool already holds is still handed out: that
+//! creates nothing. The pool is below its target, so a draw that topped it up
+//! first would show as keys derived.
+BOOST_AUTO_TEST_CASE(staking_only_draws_from_the_pool_without_creating_keys)
+{
+    EncryptedHdKeyPoolWallet fx;
+    fx.UnlockFor(UnlockScope::StakingOnly);
+
+    // A top-up fills the pool to one past its target.
+    const unsigned int pool_before = fx.PoolSize();
+    BOOST_REQUIRE(pool_before > 0);
+    BOOST_REQUIRE_LT(pool_before, EncryptedHdKeyPoolWallet::TARGET + 1);
+
+    const size_t keys_before = fx.KeyCount();
+    const uint32_t derived_before = fx.Derived();
+
+    {
+        LOCK(fx.wallet.cs_wallet);
+        CPubKey drawn;
+        bool got{false};
+        BOOST_CHECK_NO_THROW(got = fx.wallet.GetKeyFromPool(drawn, /*fAllowReuse=*/false));
+        BOOST_REQUIRE(got);
+        BOOST_CHECK(fx.wallet.HaveKey(drawn.GetID()));
+    }
+
+    BOOST_CHECK_NO_THROW(fx.wallet.GetOldestKeyPoolTime());
+
+    BOOST_CHECK_EQUAL(fx.PoolSize(), pool_before - 1);
+    BOOST_CHECK_EQUAL(fx.KeyCount(), keys_before);
+    BOOST_CHECK_EQUAL(fx.Derived(), derived_before);
+}
+
+//! A grant on this thread is what lets an operation authorised for it create
+//! keys on a wallet unlocked for staking only. The wallet's scope does not
+//! change, and once the grant ends nothing more is made.
+BOOST_AUTO_TEST_CASE(a_grant_lets_the_pool_top_up_under_staking_only)
+{
+    EncryptedHdKeyPoolWallet fx;
+    fx.DrainPool();
+    fx.UnlockFor(UnlockScope::StakingOnly);
+
+    {
+        const ElevationGrant grant = ElevationGrantTestPeer::Make(fx.wallet);
+        BOOST_CHECK(fx.wallet.TopUpKeyPool());
+        BOOST_CHECK_GE(fx.PoolSize(), EncryptedHdKeyPoolWallet::TARGET);
+    }
+
+    BOOST_CHECK(fx.wallet.IsUnlockedForStakingOnly());
+
+    fx.DrainPool();
+    const size_t keys_before = fx.KeyCount();
+
+    bool topped_up{true};
+    BOOST_CHECK_NO_THROW(topped_up = fx.wallet.TopUpKeyPool());
+    BOOST_CHECK(!topped_up);
+    BOOST_CHECK_EQUAL(fx.KeyCount(), keys_before);
+}
+
+//! NewKeyPool replaces the pool only where keys may be created. Where they may
+//! not, it refuses before it retires anything, so a caller that ignores the
+//! result (sethdseed does) cannot leave the wallet with an empty pool. That
+//! covers a grant on a locked wallet, which a capability scope holds once a
+//! timed relock has landed under it.
+BOOST_AUTO_TEST_CASE(new_key_pool_refused_keeps_the_pool)
+{
+    EncryptedHdKeyPoolWallet fx;
+    const size_t keys_before = fx.KeyCount();
+    const uint32_t derived_before = fx.Derived();
+
+    const auto refused_and_kept = [&] {
+        bool replaced{true};
+        BOOST_CHECK_NO_THROW(replaced = fx.wallet.NewKeyPool());
+        BOOST_CHECK(!replaced);
+        BOOST_CHECK_EQUAL(fx.PoolSize(), EncryptedHdKeyPoolWallet::TARGET);
+        BOOST_CHECK_EQUAL(fx.KeyCount(), keys_before);
+        BOOST_CHECK_EQUAL(fx.Derived(), derived_before);
+    };
+
+    BOOST_REQUIRE(fx.wallet.IsLocked());
+    refused_and_kept();
+
+    {
+        const ElevationGrant grant = ElevationGrantTestPeer::Make(fx.wallet);
+        refused_and_kept();
+    }
+
+    fx.UnlockFor(UnlockScope::StakingOnly);
+    refused_and_kept();
+
+    // Fully unlocked, the pool is replaced with new keys.
+    fx.UnlockFor(UnlockScope::Full);
+    BOOST_CHECK(fx.wallet.NewKeyPool());
+    BOOST_CHECK_EQUAL(fx.PoolSize(), EncryptedHdKeyPoolWallet::TARGET);
+    BOOST_CHECK_EQUAL(fx.Derived(), derived_before + EncryptedHdKeyPoolWallet::TARGET);
+}
+
+//! The thread walletpassphrase starts to top the pool up lets no exception
+//! out. After a staking-only unlock it makes nothing and ends cleanly. Fully
+//! unlocked, a wallet whose HD seed is missing cannot make a key and the top-up
+//! throws; the thread catches and logs that.
+BOOST_AUTO_TEST_CASE(the_top_up_thread_lets_no_exception_out)
+{
+    EncryptedHdKeyPoolWallet fx;
+    fx.DrainPool();
+
+    fx.UnlockFor(UnlockScope::StakingOnly);
+    BOOST_CHECK(!TopUpThreadLetsAnExceptionOut());
+    BOOST_CHECK_EQUAL(fx.PoolSize(), 0U);
+
+    fx.UnlockFor(UnlockScope::Full);
+    {
+        LOCK(fx.wallet.cs_wallet);
+
+        CKey absent;
+        absent.MakeNewKey(true);
+        CHDChain orphaned = fx.wallet.GetHDChain();
+        orphaned.masterKeyID = absent.GetPubKey().GetID();
+        BOOST_REQUIRE(fx.wallet.SetHDChain(orphaned, /*memonly=*/true));
+    }
+    BOOST_CHECK_THROW(fx.wallet.TopUpKeyPool(), std::runtime_error);
+
+    BOOST_CHECK(!TopUpThreadLetsAnExceptionOut());
+}
+
+//! How many address book entries carry the label a generated beacon key gets.
+static size_t BeaconLabelCount(CWallet& wallet)
+{
+    LOCK(wallet.cs_wallet);
+
+    size_t count{0};
+    for (const auto& entry : wallet.mapAddressBook) {
+        if (entry.second.name.rfind("Beacon Address for CPID", 0) == 0) ++count;
+    }
+
+    return count;
+}
+
+//! Generating a beacon key while unlocked for staking only is refused. The key
+//! the pool offered goes back to it unspent, and no address book entry claims
+//! it for a beacon that was never advertised.
+BOOST_AUTO_TEST_CASE(generate_beacon_key_refused_under_staking_only_spends_no_pool_key)
+{
+    EncryptedHdKeyPoolWallet fx;
+    fx.UnlockFor(UnlockScope::StakingOnly);
+
+    BOOST_REQUIRE_EQUAL(fx.PoolSize(), EncryptedHdKeyPoolWallet::TARGET);
+    BOOST_REQUIRE_EQUAL(BeaconLabelCount(fx.wallet), 0U);
+
+    const GRC::Cpid cpid = GRC::Cpid::Parse("f5d8234352e5a5ae3915debba7258294");
+
+    LOCK(cs_main);
+    GRC::AdvertiseBeaconResult result = GRC::GenerateBeaconKey(cpid);
+
+    BOOST_CHECK(result.TryPublicKey() == nullptr);
+    BOOST_CHECK(result.Error() == GRC::BeaconError::MISSING_KEY);
+    BOOST_CHECK_EQUAL(fx.PoolSize(), EncryptedHdKeyPoolWallet::TARGET);
+    BOOST_CHECK_EQUAL(BeaconLabelCount(fx.wallet), 0U);
+}
+
+//! Fully unlocked, generating a beacon key keeps one key from the pool and
+//! labels it for the CPID.
+BOOST_AUTO_TEST_CASE(generate_beacon_key_keeps_and_labels_a_key_under_full)
+{
+    EncryptedHdKeyPoolWallet fx;
+    fx.UnlockFor(UnlockScope::Full);
+
+    BOOST_REQUIRE_EQUAL(fx.PoolSize(), EncryptedHdKeyPoolWallet::TARGET);
+
+    const GRC::Cpid cpid = GRC::Cpid::Parse("f5d8234352e5a5ae3915debba7258294");
+
+    LOCK(cs_main);
+    GRC::AdvertiseBeaconResult result = GRC::GenerateBeaconKey(cpid);
+
+    BOOST_REQUIRE(result.TryPublicKey() != nullptr);
+    BOOST_CHECK_EQUAL(BeaconLabelCount(fx.wallet), 1U);
+
+    // The label is on the key that was returned.
+    LOCK(fx.wallet.cs_wallet);
+    const auto it = fx.wallet.mapAddressBook.find(CTxDestination(result.TryPublicKey()->GetID()));
+    BOOST_REQUIRE(it != fx.wallet.mapAddressBook.end());
+    BOOST_CHECK(it->second.name.rfind("Beacon Address for CPID", 0) == 0);
+}
+
+//! While the node syncs, a payment to the default key rotates it to a key from
+//! the pool. Under staking only with an empty pool there is no key to rotate to,
+//! and the transaction is recorded with the default key kept, not failed on the
+//! key that could not be made.
+BOOST_AUTO_TEST_CASE(a_paid_default_key_is_kept_under_staking_only_with_an_empty_pool)
+{
+    EncryptedHdKeyPoolWallet fx;
+    fx.UnlockFor(UnlockScope::Full);
+
+    CPubKey default_key;
+    {
+        LOCK(fx.wallet.cs_wallet);
+        BOOST_REQUIRE(fx.wallet.GetKeyFromPool(default_key, /*fAllowReuse=*/false));
+        BOOST_REQUIRE(fx.wallet.SetDefaultKey(default_key));
+    }
+
+    fx.DrainPool();
+    fx.UnlockFor(UnlockScope::StakingOnly);
+    const size_t keys_before = fx.KeyCount();
+
+    CMutableTransaction mtx;
+    mtx.vin.resize(1);
+    mtx.vin[0].prevout = COutPoint(GetRandHash(), 0);
+    mtx.vout.resize(1);
+    mtx.vout[0].nValue = COIN;
+    mtx.vout[0].scriptPubKey.SetDestination(CTxDestination(default_key.GetID()));
+    const CTransaction tx(mtx);
+
+    {
+        LOCK2(cs_main, fx.wallet.cs_wallet);
+
+        bool synced{false};
+        BOOST_CHECK_NO_THROW(synced = fx.wallet.SyncTransaction(MakeTransactionRef(tx), TxStateInMempool{}));
+        BOOST_CHECK(synced);
+        BOOST_CHECK(fx.wallet.mapWallet.count(tx.GetHash()));
+        BOOST_CHECK(fx.wallet.vchDefaultKey == default_key);
+    }
+
+    BOOST_CHECK_EQUAL(fx.KeyCount(), keys_before);
 }
 
 //! QueueRelay is the decision half of the old RelayWalletTransaction, split out
@@ -4032,84 +4737,6 @@ BOOST_AUTO_TEST_CASE(abandon_transaction_cascades_to_children)
 // mapTxSpends is rebuilt from what the wallet loads, so the abandon cascade
 // reaches descendants after a restart
 // ---------------------------------------------------------------------------
-
-namespace {
-// The mock BDB env backs every wallet file name with one shared in-memory database, so a case
-// that reloads a wallet sees every record any earlier case wrote (and an earlier case's vin-less
-// records make LoadWallet fail). This moves those records aside for the life of the scope and puts
-// them back afterwards, in both directions: the case's own records are deleted again before the
-// put-back. The restore-pin case pins the second direction.
-class MockWalletDbScope : private CDB
-{
-public:
-    explicit MockWalletDbScope(const std::string& file) : CDB(file, "cr+")
-    {
-        BOOST_REQUIRE(bitdb.IsMock());
-        BOOST_REQUIRE(pdb != nullptr);
-
-        BOOST_REQUIRE(Walk(m_saved));
-
-        // From the first del on, nothing below may throw.
-        bool all_deleted = true;
-        for (const CDBEnv::KeyValPair& kv : m_saved) {
-            if (Del(kv) != 0) all_deleted = false;
-        }
-
-        std::vector<CDBEnv::KeyValPair> left;
-        const bool walked = Walk(left);
-        m_isolated = all_deleted && walked && left.empty();
-    }
-
-    ~MockWalletDbScope()
-    {
-        std::vector<CDBEnv::KeyValPair> present;
-        if (!Walk(present)) BOOST_ERROR("MockWalletDbScope: cannot walk the database to restore it");
-        for (const CDBEnv::KeyValPair& kv : present) {
-            if (Del(kv) != 0) BOOST_ERROR("MockWalletDbScope: cannot delete a case record");
-        }
-        for (const CDBEnv::KeyValPair& kv : m_saved) {
-            Dbt k(const_cast<unsigned char*>(kv.first.data()), kv.first.size());
-            Dbt v(const_cast<unsigned char*>(kv.second.data()), kv.second.size());
-            if (pdb->put(nullptr, &k, &v, 0) != 0) BOOST_ERROR("MockWalletDbScope: cannot restore a record");
-        }
-    }
-
-    bool isolated() const { return m_isolated; }
-
-private:
-    // Reads every record; the cursor is closed before returning so the caller may del and put.
-    bool Walk(std::vector<CDBEnv::KeyValPair>& out)
-    {
-        out.clear();
-        Dbc* pcursor = GetCursor();
-        if (!pcursor) return false;
-        bool ok = true;
-        while (true) {
-            CDataStream ss_key(SER_DISK, CLIENT_VERSION);
-            CDataStream ss_value(SER_DISK, CLIENT_VERSION);
-            const int ret = ReadAtCursor(pcursor, ss_key, ss_value, DB_NEXT);
-            if (ret == DB_NOTFOUND) break;
-            if (ret != 0) {
-                ok = false;
-                break;
-            }
-            out.emplace_back(std::vector<unsigned char>{UCharCast(ss_key.data()), UCharCast(ss_key.data()) + ss_key.size()},
-                             std::vector<unsigned char>{UCharCast(ss_value.data()), UCharCast(ss_value.data()) + ss_value.size()});
-        }
-        pcursor->close();
-        return ok;
-    }
-
-    int Del(const CDBEnv::KeyValPair& kv)
-    {
-        Dbt k(const_cast<unsigned char*>(kv.first.data()), kv.first.size());
-        return pdb->del(nullptr, &k, 0);
-    }
-
-    std::vector<CDBEnv::KeyValPair> m_saved;
-    bool m_isolated{false};
-};
-} // namespace
 
 // Passes on the unfixed build too: it pins the guard, not the production change.
 BOOST_AUTO_TEST_CASE(mock_wallet_db_scope_restores_prior_records)

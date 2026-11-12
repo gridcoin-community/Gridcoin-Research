@@ -13,11 +13,15 @@
 #include "editsidestakedialog.h"
 
 #include <QSortFilterProxyModel>
+#include <QAbstractItemDelegate>
 #include <QDir>
 #include <QIntValidator>
 #include <QLocale>
+#include <QMap>
 #include <QMessageBox>
+#include <QSignalBlocker>
 #include <QSystemTrayIcon>
+#include <QVariant>
 
 OptionsDialog::OptionsDialog(QWidget* parent)
     : QDialog(parent)
@@ -234,6 +238,12 @@ void OptionsDialog::setModel(OptionsModel *model)
 
         connect(this, &OptionsDialog::sidestakeAllocationInvalid, this, &OptionsDialog::handleSideStakeAllocationInvalid);
         connect(this, &OptionsDialog::sidestakeDescriptionInvalid, this, &OptionsDialog::handleSideStakeDescriptionInvalid);
+
+        // An edit in the table reaches the model when the delegate commits it.
+        // Connected after the view's own connection, so this runs once the
+        // model has the edit's status.
+        connect(ui->sidestakingTableView->itemDelegate(), &QAbstractItemDelegate::commitData,
+                this, &OptionsDialog::sidestakeTableEditCommitted);
     }
 
     /* update the display unit, to not use the default ("BTC") */
@@ -323,7 +333,10 @@ void OptionsDialog::setSaveButtonState(bool fState)
 
 void OptionsDialog::on_okButton_clicked()
 {
-    refreshSideStakeTableModel();
+    // Stays open when the changes were not saved for want of the passphrase.
+    if (!submitSettings()) {
+        return;
+    }
 
     accept();
 }
@@ -335,9 +348,50 @@ void OptionsDialog::on_cancelButton_clicked()
 
 void OptionsDialog::on_applyButton_clicked()
 {
-    refreshSideStakeTableModel();
+    if (!submitSettings()) {
+        return;
+    }
 
     disableApplyButton();
+}
+
+bool OptionsDialog::submitSettings()
+{
+    if (!model) {
+        return true;
+    }
+
+    // The fields whose change needs the wallet passphrase, as the mapper hands
+    // them to the model.
+    QMap<OptionsModel::OptionID, QVariant> submitted;
+    const auto add = [&](QWidget* widget, OptionsModel::OptionID id) {
+        submitted.insert(id, widget->property(mapper->mappedPropertyName(widget).constData()));
+    };
+    add(ui->mapPortUpnp, OptionsModel::MapPortUPnP);
+    add(ui->connectSocks, OptionsModel::ProxyUse);
+    add(ui->proxyIp, OptionsModel::ProxyIP);
+    add(ui->proxyPort, OptionsModel::ProxyPort);
+    add(ui->enableSideStaking, OptionsModel::EnableSideStaking);
+
+    // Ask before anything is written, so that a cancel saves none of the
+    // submit. What the user gives is held across the submit, and a field the
+    // node refuses during it is not asked for again.
+    if (model->needsSettingsElevation(submitted) && !model->elevateSettingsBeforeChange()) {
+        QMessageBox::warning(this, windowTitle(),
+                             tr("Changing UPnP, the proxy or side staking needs your wallet passphrase. "
+                                "These changes were not saved."),
+                             QMessageBox::Ok, QMessageBox::Ok);
+        return false;
+    }
+
+    if (!mapper->submit()
+        && model->getSideStakeTableModel()->getEditStatus() == SideStakeTableModel::INVALID_ALLOCATION) {
+        emit sidestakeAllocationInvalid();
+    } else {
+        model->getSideStakeTableModel()->refresh();
+    }
+
+    return true;
 }
 
 void OptionsDialog::newSideStakeButton_clicked()
@@ -392,7 +446,43 @@ void OptionsDialog::deleteSideStakeButton_clicked()
         QMessageBox::warning(this, tr("Error"), tr("You can only delete one sidestake at a time."),  QMessageBox::Ok);
     }
 
-    model->getSideStakeTableModel()->removeRows(indexes.at(0).row(), 1);
+    SideStakeTableModel* sidestake_model = model->getSideStakeTableModel();
+
+    if (!sidestake_model->removeRows(indexes.at(0).row(), 1)
+            && sidestake_model->getEditStatus() == SideStakeTableModel::ELEVATION_REQUIRED) {
+        handleSideStakeElevationRequired();
+    }
+}
+
+void OptionsDialog::sidestakeTableEditCommitted()
+{
+    if (!model || model->getSideStakeTableModel()->getEditStatus() != SideStakeTableModel::ELEVATION_REQUIRED) {
+        return;
+    }
+
+    // Shown once the editor has closed. A message box over the open editor
+    // would take its focus, and the delegate would commit the edit again. A
+    // second refused commit before it shows is the same edit, so it is not
+    // queued again.
+    if (m_sidestake_elevation_report_queued) {
+        return;
+    }
+
+    m_sidestake_elevation_report_queued = true;
+    QMetaObject::invokeMethod(this, &OptionsDialog::handleSideStakeElevationRequired, Qt::QueuedConnection);
+}
+
+void OptionsDialog::handleSideStakeElevationRequired()
+{
+    m_sidestake_elevation_report_queued = false;
+
+    // Refetch first, which also clears the status, so the edit shows as it is
+    // stored and is reported once.
+    model->getSideStakeTableModel()->refresh();
+
+    QMessageBox::warning(this, windowTitle(),
+                         tr("Changing side stakes needs your wallet passphrase. The change was not saved."),
+                         QMessageBox::Ok, QMessageBox::Ok);
 }
 
 void OptionsDialog::showRestartWarning_Proxy()
@@ -563,12 +653,19 @@ void OptionsDialog::handlePollExpireNotifyValid(QValidatedLineEdit *object, bool
 
 void OptionsDialog::refreshSideStakeTableModel()
 {
-    if (!mapper->submit()
-        && model->getSideStakeTableModel()->getEditStatus() == SideStakeTableModel::INVALID_ALLOCATION) {
-        emit sidestakeAllocationInvalid();
-    } else {
-        model->getSideStakeTableModel()->refresh();
+    if (submitSettings()) {
+        return;
     }
+
+    // The toggle was not saved. Show side staking as stored again, without
+    // the box submitting once more, and the side-stake buttons to match.
+    {
+        const QSignalBlocker blocker(ui->enableSideStaking);
+        ui->enableSideStaking->setChecked(
+            model->data(model->index(OptionsModel::EnableSideStaking), Qt::EditRole).toBool());
+    }
+
+    hideSideStakeEdit();
 }
 
 bool OptionsDialog::eventFilter(QObject *object, QEvent *event)

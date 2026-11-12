@@ -93,8 +93,15 @@
 
 #include <boost/algorithm/string/join.hpp>
 #include "util.h"
+#include "interfaces/file_transfer.h"
+#include "interfaces/node.h"
+#include "qt/filetransferdialog.h"
 
-extern std::string FromQString(QString qs);
+#include <algorithm>
+#include <memory>
+#include <string>
+#include <utility>
+#include <vector>
 
 BitcoinGUI::BitcoinGUI(QWidget* parent)
         : QMainWindow(parent)
@@ -293,12 +300,6 @@ BitcoinGUI::~BitcoinGUI()
 #endif
 }
 
-std::string FromQString(QString qs)
-{
-    std::string sOut = qs.toUtf8().constData();
-    return sOut;
-}
-
 void BitcoinGUI::setOptionsStyleSheet(QString qssFileName)
 {
     // Applying a stylesheet can be rather expensive on a wallet with many
@@ -491,10 +492,15 @@ void BitcoinGUI::createActions()
     encryptWalletAction = new QAction(tr("&Encrypt Wallet..."), this);
     encryptWalletAction->setToolTip(tr("Encrypt wallet"));
     encryptWalletAction->setCheckable(true);
-    backupWalletAction = new QAction(tr("&Backup Wallet/Config..."), this);
-    backupWalletAction->setToolTip(tr("Backup wallet/config to another location"));
+    backupWalletAction = new QAction(tr("&Back Up Wallet and Settings..."), this);
+    backupWalletAction->setToolTip(tr("Back up the wallet and its settings to another location"));
     changePassphraseAction = new QAction(tr("&Change Passphrase..."), this);
     changePassphraseAction->setToolTip(tr("Change the passphrase used for wallet encryption"));
+    m_autounlock_action = new QAction(tr("&Autounlock for staking..."), this);
+    m_autounlock_action->setToolTip(tr("Store the wallet passphrase so that the Gridcoin core unlocks the wallet "
+                                       "for staking when it starts, or turn that off"));
+    // Shown once the wallet model is set, if the core's store says the platform has one.
+    m_autounlock_action->setVisible(false);
     unlockWalletAction = new QAction(tr("&Unlock Wallet..."), this);
     unlockWalletAction->setToolTip(tr("Unlock wallet"));
     lockWalletAction = new QAction(tr("&Lock Wallet"), this);
@@ -525,6 +531,7 @@ void BitcoinGUI::createActions()
     connect(encryptWalletAction, &QAction::triggered, this, &BitcoinGUI::encryptWallet);
     connect(backupWalletAction, &QAction::triggered, this, &BitcoinGUI::backupWallet);
     connect(changePassphraseAction, &QAction::triggered, this, &BitcoinGUI::changePassphrase);
+    connect(m_autounlock_action, &QAction::triggered, this, &BitcoinGUI::autoUnlock);
     connect(unlockWalletAction, &QAction::triggered, this, &BitcoinGUI::unlockWallet);
     connect(lockWalletAction, &QAction::triggered, this, &BitcoinGUI::lockWallet);
     connect(signMessageAction, &QAction::triggered, this, [this]{ this->gotoSignMessageTab(QString {}); });
@@ -659,6 +666,7 @@ void BitcoinGUI::createMenuBar()
     QMenu *settings = appMenuBar->addMenu(tr("&Settings"));
     settings->addAction(encryptWalletAction);
     settings->addAction(changePassphraseAction);
+    settings->addAction(m_autounlock_action);
 
     settings->addAction(unlockWalletAction);
     settings->addAction(lockWalletAction);
@@ -836,6 +844,7 @@ void BitcoinGUI::showBuildMismatchWarning(const QString& gui_commit, const QStri
 void BitcoinGUI::setIpcConnectionInfo(const GuiIpcInfo& info)
 {
     m_ipc_info = info;
+    rpcConsole->setIpcInfo(info);
 
     // Reset blockchain data cannot work from this process in the split build.
     // resetblockchainClicked() only sets fResetBlockchainRequest and calls
@@ -992,11 +1001,17 @@ void BitcoinGUI::setWalletModel(WalletModel *walletModel)
         receiveCoinsPage->setAddressTableModel(walletModel->getAddressTableModel());
         sendCoinsPage->setModel(walletModel);
         signVerifyMessageDialog->setModel(walletModel);
+        rpcConsole->setWalletModel(walletModel);
         multisignDialog->setModel(walletModel);
         psgtPoolPage->setWalletModel(walletModel);
 
         setEncryptionStatus(walletModel->getEncryptionStatus());
         connect(walletModel, &WalletModel::encryptionStatusChanged, this, &BitcoinGUI::setEncryptionStatus);
+
+        // setIpcConnectionInfo() has run by now.
+        m_autounlock_action->setVisible(AutoUnlockActionVisible(m_ipc_info.active, [walletModel] {
+            return walletModel->getAutoUnlockStatus();
+        }));
 
         // Balloon pop-up for new transactions: driven off the drained wallet-event
         // stream (VIEW_FULL RowsInserted records), not a full-replica model row
@@ -1019,6 +1034,10 @@ void BitcoinGUI::setWalletModel(WalletModel *walletModel)
         // state. Only the two tx-table holders own such views.
         transactionView->setModel(nullptr);
         overviewPage->setWalletModel(nullptr);
+
+        // The console may hold a capability for a command it is running
+        // again; it ends it now, while the model it ends it through lives.
+        rpcConsole->setWalletModel(nullptr);
     }
 }
 
@@ -1201,28 +1220,9 @@ void BitcoinGUI::themeToggled()
 
 void BitcoinGUI::openConfigClicked()
 {
-    boost::filesystem::path pathConfig = GetConfigFile();
-    /* Open gridcoinresearch.conf with the associated application */
-    QString qPathConfig = GUIUtil::boostPathToQString(pathConfig);
-    bool res = QDesktopServices::openUrl(QUrl::fromLocalFile(qPathConfig));
-
-#ifdef Q_OS_WIN
-    // Workaround for Windows specific behaviour
-    if(!res) {
-        res = QProcess::startDetached("C:\\Windows\\system32\\notepad.exe", QStringList{qPathConfig});
-    }
-#endif
-#ifdef Q_OS_MACOS
-    // Workaround for macOS-specific behaviour; see https://github.com/bitcoin/bitcoin/issues/15409
-    if (!res) {
-        res = QProcess::startDetached("/usr/bin/open", QStringList{"-t", qPathConfig});
-    }
-#endif
-
-    if (!res) {
-        error("File Association Error", "Unable to open the config file. Please check your operating system"
-                                        " file associations.", true);
-    }
+    // The core's own config file: the core can run under another account, so
+    // this process's idea of the path is not necessarily the core's.
+    GUIUtil::openCoreFile(m_ipc_info, tr("config file"), m_ipc_info.core_paths.config_file, this);
 }
 
 void BitcoinGUI::researcherClicked()
@@ -1591,6 +1591,8 @@ bool BitcoinGUI::tryQuit()
 }
 
 bool BitcoinGUI::m_quit_requested = false;
+int BitcoinGUI::m_quit_holds = 0;
+bool BitcoinGUI::m_quit_deferred = false;
 
 void BitcoinGUI::requestQuit()
 {
@@ -1602,6 +1604,42 @@ void BitcoinGUI::requestQuit()
     // See the requestQuit() doc and issue #2995.
     m_quit_requested = true;
     QApplication::quit();
+}
+
+void BitcoinGUI::requestQuitForCoreStop()
+{
+    // A message that must stay up until the user closes it holds the quit until
+    // then (QuitHold).
+    if (m_quit_holds > 0) {
+        m_quit_deferred = true;
+        return;
+    }
+
+    requestQuit();
+}
+
+void BitcoinGUI::requestQuitForSessionEnd(interfaces::Node& node, bool multiprocess)
+{
+    if (!multiprocess) {
+        node.startShutdown();
+        return;
+    }
+
+    // Posted, as the node's shutdown would post its quit, rather than made inside
+    // the native event that asked for it.
+    if (QCoreApplication* app = QCoreApplication::instance()) {
+        QMetaObject::invokeMethod(app, [] { requestQuit(); }, Qt::QueuedConnection);
+    }
+}
+
+BitcoinGUI::QuitHold::QuitHold()
+{
+    ++m_quit_holds;
+}
+
+BitcoinGUI::QuitHold::~QuitHold()
+{
+    if (--m_quit_holds == 0 && std::exchange(m_quit_deferred, false)) requestQuit();
 }
 
 void BitcoinGUI::diagnosticsClicked()
@@ -1908,6 +1946,8 @@ void BitcoinGUI::setEncryptionStatus(int status)
         labelEncryptionIcon->setToolTip(tr("Wallet is <b>not encrypted</b>!"));
         encryptWalletAction->setChecked(false);
         changePassphraseAction->setEnabled(false);
+        // Autounlock stores the passphrase of an encrypted wallet.
+        m_autounlock_action->setEnabled(false);
         unlockWalletAction->setVisible(false);
         lockWalletAction->setVisible(false);
         encryptWalletAction->setEnabled(true);
@@ -1932,6 +1972,7 @@ void BitcoinGUI::setEncryptionStatus(int status)
                                                                                                tr("<b>unlocked</b>")));
         encryptWalletAction->setChecked(true);
         changePassphraseAction->setEnabled(true);
+        m_autounlock_action->setEnabled(true);
         unlockWalletAction->setVisible(false);
         unlockWalletAction->setShortcut(QKeySequence());
         lockWalletAction->setVisible(true);
@@ -1944,6 +1985,7 @@ void BitcoinGUI::setEncryptionStatus(int status)
         labelEncryptionIcon->setToolTip(tr("Wallet is <b>encrypted</b> and currently <b>locked</b>"));
         encryptWalletAction->setChecked(true);
         changePassphraseAction->setEnabled(true);
+        m_autounlock_action->setEnabled(true);
         unlockWalletAction->setVisible(true);
         unlockWalletAction->setShortcut(QKeySequence(Qt::ALT | Qt::Key_7));
         lockWalletAction->setVisible(false);
@@ -1969,9 +2011,60 @@ void BitcoinGUI::encryptWallet()
     setEncryptionStatus(walletModel->getEncryptionStatus());
 }
 
+namespace {
+//! One file named twice: the same path as written, or one file under two names.
+bool SameBackupPath(const fs::path& a, const fs::path& b)
+{
+    if (a.lexically_normal() == b.lexically_normal()) return true;
+
+    boost::system::error_code ec;
+    const bool same = fs::equivalent(a, b, ec);
+
+    return same && !ec;
+}
+
+//! Ask where to save one file of a backup, starting at \p suggestion. A destination
+//! the guard refuses (interfaces::CheckDestination), or one already chosen for another
+//! file of this backup, is explained and asked for again. False when the user cancels.
+bool AskBackupDestination(QWidget* parent, const QString& title, QString suggestion, const QString& filter,
+                          const std::vector<fs::path>& core_files, const fs::path& core_datadir,
+                          const std::vector<fs::path>& taken, fs::path& dest)
+{
+    for (;;) {
+        const QString chosen = QFileDialog::getSaveFileName(parent, title, suggestion, filter);
+
+        if (chosen.isEmpty()) return false;
+
+        const fs::path path = GUIUtil::qstringToBoostPath(chosen);
+        std::string error;
+
+        if (!interfaces::CheckDestination(path, core_files, core_datadir, error)) {
+            GUIUtil::MakeCoreFileBox(QMessageBox::Warning, parent, title,
+                                     QObject::tr("The backup cannot be saved there: %1").arg(QString::fromStdString(error)))
+                ->exec();
+        } else if (std::any_of(taken.begin(), taken.end(), [&path](const fs::path& t) { return SameBackupPath(path, t); })) {
+            GUIUtil::MakeCoreFileBox(QMessageBox::Warning, parent, title,
+                                     QObject::tr("%1 is already chosen for another file of this backup.").arg(chosen))
+                ->exec();
+        } else {
+            dest = path;
+            return true;
+        }
+
+        suggestion = chosen;
+    }
+}
+} // namespace
+
 void BitcoinGUI::backupWallet()
 {
     if (!walletModel) return;
+
+    // The core's own paths, as the core sees them, read now: the monolith fills
+    // GuiIpcInfo before its wallet is loaded, so the wallet file is missing there.
+    const interfaces::CorePaths core_paths = clientModel ? clientModel->node().getCorePaths() : m_ipc_info.core_paths;
+    const std::vector<fs::path> core_files = BackupGuardFiles(core_paths);
+    const fs::path core_datadir(core_paths.datadir);
 
     // Pass a full suggested path, not a bare directory. getSaveFileName treats its
     // dir argument as a starting *file* name when the directory does not exist,
@@ -1979,36 +2072,94 @@ void BitcoinGUI::backupWallet()
     // opened pre-filled with the name "Documents". On a native build the
     // directory does exist, so the effect is milder but still wrong: no filename
     // was ever suggested.
-    QString saveDir = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation);
+    const QString saveDir = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation);
 
     // Suggest the names actually in use, taking only the filename component so a
     // configured path cannot leak into the suggestion. boostPathToQString keeps a
     // non-ASCII name, which a wallet or conf file is perfectly entitled to have.
-    const QString wallet_suggestion = GUIUtil::boostPathToQString(
-        fs::path(gArgs.GetArg("-wallet", "wallet.dat")).filename());
-    const QString config_suggestion = GUIUtil::boostPathToQString(
-        fs::path(gArgs.GetArg("-conf", GRIDCOIN_CONF_FILENAME)).filename());
-
     // writableLocation() returns empty when neither XDG_DOCUMENTS_DIR nor HOME is
     // set. Joining onto that would suggest "/wallet.dat" at the filesystem root,
     // so fall back to offering the bare name and letting the dialog choose where
     // to open.
-    const QString wallet_default = saveDir.isEmpty() ? wallet_suggestion : saveDir + "/" + wallet_suggestion;
-    const QString config_default = saveDir.isEmpty() ? config_suggestion : saveDir + "/" + config_suggestion;
+    const auto suggest = [&saveDir](const std::string& core_path, const char* fallback) {
+        const QString name = GUIUtil::boostPathToQString(core_path.empty() ? fs::path(fallback)
+                                                                           : fs::path(core_path).filename());
+        return saveDir.isEmpty() ? name : saveDir + "/" + name;
+    };
 
-    QString walletfilename = QFileDialog::getSaveFileName(
-        this, tr("Backup Wallet"), wallet_default, tr("Wallet Data (*.dat)"));
-    if(!walletfilename.isEmpty()) {
-        if(!walletModel->backupWallet(FromQString(walletfilename))) {
-            QMessageBox::warning(this, tr("Backup Failed"), tr("There was an error trying to save the wallet data to the new location."));
-        }
+    fs::path wallet_dest;
+
+    if (!AskBackupDestination(this, tr("Backup Wallet"), suggest(core_paths.wallet_file, "wallet.dat"),
+                              tr("Wallet Data (*.dat)"), core_files, core_datadir, {}, wallet_dest)) {
+        return;
     }
-    QString configfilename = QFileDialog::getSaveFileName(
-        this, tr("Backup Config"), config_default, tr("Wallet Config (*.conf)"));
-    if(!configfilename.isEmpty()) {
-        if(!walletModel->backupConfigFile(FromQString(configfilename))) {
-            QMessageBox::warning(this, tr("Backup Failed"), tr("There was an error trying to save the config file to the new location."));
+
+    // When the core runs as another account, its configuration file holds the RPC
+    // password and is the administrator's, and the core will not send it
+    // (wallet::ConfigBackupPermitted). The settings file is backed up instead.
+    const bool settings_instead = m_ipc_info.core_other_account;
+    fs::path second_dest;
+
+    if (settings_instead) {
+        QMessageBox::information(this, tr("Backup Settings"),
+                                 tr("The configuration file belongs to the administrator in this mode; the settings "
+                                    "file is backed up instead."));
+
+        if (!AskBackupDestination(this, tr("Backup Settings"),
+                                  suggest(core_paths.settings_file, GRIDCOIN_SETTINGS_FILENAME),
+                                  tr("Wallet Settings (*.json)"), core_files, core_datadir, {wallet_dest}, second_dest)) {
+            return;
         }
+    } else if (!AskBackupDestination(this, tr("Backup Config"), suggest(core_paths.config_file, GRIDCOIN_CONF_FILENAME),
+                                     tr("Wallet Config (*.conf)"), core_files, core_datadir, {wallet_dest},
+                                     second_dest)) {
+        return;
+    }
+
+    const uint8_t items = static_cast<uint8_t>(interfaces::BackupItem::Wallet) |
+                          static_cast<uint8_t>(settings_instead ? interfaces::BackupItem::Settings
+                                                                : interfaces::BackupItem::Config);
+
+    // One prompt at most. A locked wallet, or one unlocked for staking only, asks for
+    // the passphrase and begins a Backup capability; an unencrypted or fully unlocked
+    // one asks nothing and needs none. The core ends the capability before
+    // beginBackup() returns and the source holds none, so the context has nothing
+    // left to end when the backup is over.
+    std::vector<interfaces::BackupEntryResult> results;
+    std::string error;
+    bool begun = false;
+
+    {
+        WalletModel::UnlockContext ctx(walletModel->requestUnlock(CapabilityKind::Backup));
+
+        if (!ctx.isValid()) return;
+
+        // beginBackup() makes the core copy the wallet and the second file before it
+        // returns, which takes as long as the wallet is large. So it runs on the modal
+        // worker under the progress dialog, with the downloads and the source's
+        // destruction after it, and the window stays responsive meanwhile.
+        WalletModel* const model = walletModel;
+
+        begun = RunBackupWithProgress(
+            this, tr("Backup Wallet"),
+            [model, items](std::string& begin_error) { return model->beginBackup(items, begin_error); },
+            {wallet_dest, second_dest}, results, error);
+    }
+
+    // The texts below carry what the core reported (an error, a note, a path), so they are shown as
+    // plain text, never rendered as rich text.
+    if (!begun) {
+        GUIUtil::MakeCoreFileBox(QMessageBox::Warning, this, tr("Backup Failed"), QString::fromStdString(error))->exec();
+        return;
+    }
+
+    bool failed = false;
+    const QString text = BackupResultText(results, failed);
+
+    if (failed) {
+        GUIUtil::MakeCoreFileBox(QMessageBox::Warning, this, tr("Backup Failed"), text)->exec();
+    } else {
+        GUIUtil::MakeCoreFileBox(QMessageBox::Information, this, tr("Backup Wallet"), text)->exec();
     }
 }
 
@@ -2017,6 +2168,65 @@ void BitcoinGUI::changePassphrase()
     AskPassphraseDialog dlg(AskPassphraseDialog::ChangePass, this);
     dlg.setModel(walletModel);
     dlg.exec();
+}
+
+bool BitcoinGUI::AutoUnlockActionVisible(bool multiprocess, const std::function<AutoUnlockStoreStatus()>& status)
+{
+    return multiprocess && status().supported;
+}
+
+void BitcoinGUI::autoUnlock()
+{
+    if (!walletModel) return;
+
+    // Read again now: the file may have been stored or removed since the menu was built.
+    const AutoUnlockStoreStatus status = walletModel->getAutoUnlockStatus();
+    const QString title = tr("Autounlock for staking");
+
+    // A status that could not be read says why in its problem.
+    if (!status.supported) {
+        GUIUtil::MakeCoreFileBox(QMessageBox::Warning, this, title,
+                                 status.problem.empty()
+                                     ? tr("Autounlock setup is not available on this platform.")
+                                     : tr("The autounlock status could not be read: %1")
+                                           .arg(QString::fromStdString(status.problem)))
+            ->exec();
+        return;
+    }
+
+    AskPassphraseDialog::Mode mode = AskPassphraseDialog::SetupAutoUnlock;
+
+    // Already set up: turn it off, or store the passphrase again, as after the core
+    // refused the file it found.
+    if (status.configured) {
+        QString text = tr("Autounlock for staking is set up. The passphrase is stored in %1.")
+                           .arg(QString::fromStdString(status.location));
+
+        if (!status.problem.empty()) {
+            text += "\n\n" + tr("The core would not use it: %1").arg(QString::fromStdString(status.problem));
+        }
+
+        QMessageBox box(QMessageBox::Question, title, text, QMessageBox::Cancel, this);
+        box.setTextFormat(Qt::PlainText);
+        QPushButton* const turn_off = box.addButton(tr("Turn off..."), QMessageBox::DestructiveRole);
+        QPushButton* const store_again = box.addButton(tr("Store again..."), QMessageBox::AcceptRole);
+        box.setDefaultButton(QMessageBox::Cancel);
+        box.exec();
+
+        if (box.clickedButton() == turn_off) {
+            mode = AskPassphraseDialog::ClearAutoUnlock;
+        } else if (box.clickedButton() != store_again) {
+            return;
+        }
+    }
+
+    AskPassphraseDialog dlg(mode, this);
+    dlg.setModel(walletModel);
+    dlg.setAutoUnlockStatus(status);
+    dlg.exec();
+
+    // Turning autounlock off locks the wallet.
+    setEncryptionStatus(walletModel->getEncryptionStatus());
 }
 
 void BitcoinGUI::unlockWallet()
@@ -2033,23 +2243,19 @@ void BitcoinGUI::unlockWallet()
     }
 }
 
-void BitcoinGUI::unlockWalletForOperation(bool elevate)
+void BitcoinGUI::unlockWalletForOperation(CapabilityKind kind)
 {
     if(!walletModel)
         return;
 
-    // Which question to ask is NOT re-derived from the wallet state here. The
-    // model decided it from the read it had already taken, and the unlock can
-    // expire between that read and this one: answering "unlock" then starts a
-    // fresh unlock with no deadline, which the model's UnlockContext would go on
-    // to narrow to staking-only permanently -- silently turning a time-boxed
-    // unlock into an open-ended one.
-    //
-    // Elevate refuses a locked wallet, so if that is what happened the dialog
-    // reports it and the wallet stays locked, which is what the timer decided.
-    AskPassphraseDialog dlg(elevate ? AskPassphraseDialog::Elevate
-                                    : AskPassphraseDialog::Unlock, this);
+    // One question whatever the wallet's state: the passphrase begins a
+    // capability for this operation, on a locked wallet and on one unlocked
+    // for staking alike, and widens nothing. So an unlock that expires while
+    // the prompt is open makes no difference to what is asked. On success the
+    // dialog tells the model, which hands the capability to the operation.
+    AskPassphraseDialog dlg(AskPassphraseDialog::Elevate, this);
     dlg.setModel(walletModel);
+    dlg.setCapabilityKind(kind);
     dlg.exec();
 }
 

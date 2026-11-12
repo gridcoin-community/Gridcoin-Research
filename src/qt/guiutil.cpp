@@ -14,14 +14,19 @@
 // outside lint-qt-includes.sh's forbidden list.
 #include "chainparams.h"
 #include "clientversion.h"
+#include "support/cleanse.h"
 #include "util/strencodings.h" // For SanitizeString (per-node QSettings key).
-#include <algorithm>           // For std::replace.
+#include <algorithm>           // For std::replace and std::max.
 
+#include <QByteArray>
+#include <QSettings>
 #include <QString>
 #include <QDateTime>
 #include <QDoubleValidator>
 #include <QFont>
 #include <QLineEdit>
+#include <QMessageBox>
+#include <QProcess>
 #include <QTextDocument> // For Qt::escape
 #include <QUrlQuery>
 #include <QAbstractItemView>
@@ -288,6 +293,31 @@ QString HtmlEscape(const std::string& str, bool fMultiLine)
     return HtmlEscape(QString::fromStdString(str), fMultiLine);
 }
 
+SecureString SecureStringFromQString(const QString& text)
+{
+    QByteArray utf8 = text.toUtf8();
+
+    // Overwritten however this returns: reserve() throws std::bad_alloc past the
+    // secure pool's limit.
+    struct Utf8Cleanser {
+        QByteArray& bytes;
+        ~Utf8Cleanser()
+        {
+            if (!bytes.isEmpty()) memory_cleanse(bytes.data(), static_cast<size_t>(bytes.size()));
+        }
+    } utf8_cleanser{utf8};
+
+    const size_t size = static_cast<size_t>(utf8.size());
+
+    // The buffer is reserved before the bytes go in, past the inline capacity of
+    // every standard library, so a short text is in secure memory too.
+    SecureString out;
+    out.reserve(std::max<size_t>(size, 100));
+    out.assign(utf8.constData(), size);
+
+    return out;
+}
+
 void copyEntryData(QAbstractItemView *view, int column, int role)
 {
     if(!view || !view->selectionModel())
@@ -447,13 +477,94 @@ bool isObscured(QWidget *w)
         && checkPoint(QPoint(w->width() / 2, w->height() / 2), w));
 }
 
-void openDebugLogfile()
+OpenAction DecideCoreFileOpen(bool core_other_account, const fs::path& path)
 {
-    fs::path pathDebug = GetDataDir() / "debug.log";
+    if (core_other_account) return OpenAction::ShowAdminMessage;
 
-    /* Open debug.log with the associated application */
-    if (fs::exists(pathDebug))
-        QDesktopServices::openUrl(QUrl::fromLocalFile(boostPathToQString(pathDebug)));
+    return fs::exists(path) ? OpenAction::OpenFile : OpenAction::Missing;
+}
+
+QString AdminReadMessage(const QString& what, const QString& reported_path)
+{
+    // The path comes from the core. It is shown on a line of its own and in no
+    // command, and a control character in it is shown as "?", so a core that
+    // reports a crafted path cannot add lines that read as advice or reorder
+    // what is shown: the C0 and C1 controls, the Unicode line and paragraph
+    // separators, and the bidirectional formatting characters.
+    QString path = reported_path;
+    for (QChar& c : path) {
+        const char16_t u = c.unicode();
+        if (u < 0x20 || (u >= 0x7f && u <= 0x9f) || u == 0x2028 || u == 0x2029 || u == 0x200e || u == 0x200f
+            || (u >= 0x202a && u <= 0x202e) || (u >= 0x2066 && u <= 0x2069)) {
+            c = QLatin1Char('?');
+        }
+    }
+
+#ifdef WIN32
+    return QObject::tr("The core runs under the service account, so its %1 is not readable from your account. "
+                       "Open it from an administrator account. It is at:\n%2")
+        .arg(what, path);
+#else
+    return QObject::tr("The core runs under the service account, so its %1 is not readable from your account. "
+                       "Read it as an administrator. It is at:\n%2")
+        .arg(what, path);
+#endif
+}
+
+std::unique_ptr<QMessageBox> MakeCoreFileBox(QMessageBox::Icon icon, QWidget* parent, const QString& title,
+                                             const QString& text)
+{
+    // A path the core reported is shown, so the text is never rendered as rich
+    // text.
+    auto box = std::make_unique<QMessageBox>(icon, title, text, QMessageBox::Ok, parent);
+    box->setTextFormat(Qt::PlainText);
+    return box;
+}
+
+void openCoreFile(const GuiIpcInfo& info, const QString& what, const std::string& path, QWidget* parent)
+{
+    const QString qpath = QString::fromStdString(path);
+
+    switch (DecideCoreFileOpen(info.core_other_account, fs::path(path))) {
+    case OpenAction::ShowAdminMessage:
+        MakeCoreFileBox(QMessageBox::Information, parent, QObject::tr("Core %1").arg(what),
+                        AdminReadMessage(what, qpath))->exec();
+        return;
+    case OpenAction::Missing:
+        MakeCoreFileBox(QMessageBox::Information, parent, QObject::tr("Core %1").arg(what),
+                        QObject::tr("The file %1 does not exist yet.").arg(qpath))->exec();
+        return;
+    case OpenAction::OpenFile:
+        break;
+    }
+
+    // Open the file with the associated application.
+    bool res = QDesktopServices::openUrl(QUrl::fromLocalFile(qpath));
+
+#ifdef Q_OS_WIN
+    // Workaround for Windows specific behaviour
+    if (!res) {
+        res = QProcess::startDetached("C:\\Windows\\system32\\notepad.exe", QStringList{qpath});
+    }
+#endif
+#ifdef Q_OS_MACOS
+    // Workaround for macOS-specific behaviour; see https://github.com/bitcoin/bitcoin/issues/15409
+    if (!res) {
+        res = QProcess::startDetached("/usr/bin/open", QStringList{"-t", qpath});
+    }
+#endif
+
+    if (!res) {
+        LogPrintf("GUI: no application could open a core file; check the operating system file associations");
+        MakeCoreFileBox(QMessageBox::Critical, parent, QObject::tr("File Association Error"),
+                        QObject::tr("Unable to open the %1. Please check your operating system"
+                                    " file associations.").arg(what))->exec();
+    }
+}
+
+void openDebugLogfile(const GuiIpcInfo& info, QWidget* parent)
+{
+    openCoreFile(info, QObject::tr("debug log"), info.core_paths.debug_log, parent);
 }
 
 ToolTipToRichTextFilter::ToolTipToRichTextFilter(int size_threshold, QObject *parent) :
@@ -560,6 +671,21 @@ AutoStartupArguments GetAutoStartupArguments(bool fStartMin = true)
         if (gArgs.GetBoolArg(flag))
         {
             (result.arguments += " ") += flag;
+        }
+    }
+
+    // The login item keeps the multiprocess mode this process runs in, and the
+    // directory and service account it connects to.
+    if (gArgs.GetBoolArg("-multiprocess", false))
+    {
+        result.arguments += " -multiprocess";
+
+        for (const auto& option : { "-ipcdir", "-ipcserviceuser" })
+        {
+            if (gArgs.IsArgSet(option) && !gArgs.IsArgNegated(option))
+            {
+                (((result.arguments += " ") += option) += "=") += gArgs.GetArg(option, "");
+            }
         }
     }
 
@@ -824,6 +950,43 @@ QDateTime StartOfDay(const QDate& date)
 #else
     return QDateTime(date);
 #endif
+}
+
+void ApplyPersistedLaunchMode(QSettings& settings, ArgsManager& args)
+{
+    // Called before the config files are read, so only command-line values are
+    // seen as set. A value the command line sets is remembered for the next
+    // launch from a login item that cannot carry arguments; one it leaves out is
+    // taken from what was remembered.
+    if (args.IsArgSet("-multiprocess")) {
+        settings.setValue("launchMultiprocess", args.GetBoolArg("-multiprocess", false));
+    } else if (settings.contains("launchMultiprocess")) {
+        args.SoftSetBoolArg("-multiprocess", settings.value("launchMultiprocess").toBool());
+    }
+
+    const struct {
+        const char* option;
+        const char* key;
+    } string_options[] = {{"-ipcdir", "launchIpcDir"}, {"-ipcserviceuser", "launchIpcServiceUser"}};
+
+    // A negated value (-noipcdir) or an empty one means the option's default, as
+    // GetConfiguredOption() reads them. It clears what was remembered, and nothing
+    // empty is restored; GetArg() alone would store a negation as "0".
+    for (const auto& entry : string_options) {
+        if (args.IsArgSet(entry.option)) {
+            const std::string value = args.IsArgNegated(entry.option) ? std::string() : args.GetArg(entry.option, "");
+
+            if (value.empty()) {
+                settings.remove(entry.key);
+            } else {
+                settings.setValue(entry.key, QString::fromStdString(value));
+            }
+        } else if (settings.contains(entry.key)) {
+            const std::string value = settings.value(entry.key).toString().toStdString();
+
+            if (!value.empty()) args.SoftSetArg(entry.option, value);
+        }
+    }
 }
 
 } // namespace GUIUtil

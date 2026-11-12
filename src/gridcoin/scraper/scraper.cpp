@@ -5,6 +5,7 @@
 #include "node/ui_interface.h"
 #include "node/shutdown.h"
 #include "random.h"
+#include "rpc/server.h"
 #include "rpc/util.h"
 
 #include "gridcoin/appcache.h"
@@ -21,6 +22,7 @@
 #include "gridcoin/support/block_finder.h"
 #include "gridcoin/support/xml.h"
 #include "consensus/consensus.h"
+#include "util/fsmodes.h"
 
 #include <zlib.h>
 #include <limits>
@@ -964,7 +966,19 @@ public:
                 logfile.open(plogfile, std::ios_base::out | std::ios_base::app);
 
                 if (!logfile.is_open())
+                {
                     LogPrintf("ERROR: ScraperLogger: Failed to open logging file\n");
+                }
+                else
+                {
+                    // The log recreated at its name has the permissions the rotated log had.
+                    const fsmodes::KeepResult kept = fsmodes::KeepPermissions(pfile_temp, plogfile);
+                    if (kept.kind == fsmodes::KeepResult::Kind::NotKept)
+                    {
+                        LogPrintf("WARNING: ScraperLogger: the permissions of %s could not be kept on the new log (%s)",
+                                  pfile_temp.string(), kept.error);
+                    }
+                }
 
                 PrevArchiveCheckDate = ArchiveCheckDate;
             }
@@ -1544,6 +1558,17 @@ AppCacheSectionExt GetExtendedScrapersCache()
     return GRC::GetScraperRegistry().GetScrapersLegacyExt(false);
 }
 
+//! \brief The scraper's token for the staking accessor.
+//!
+//! Defined and used only in this file; test/lint/lint-staking-key-access.py
+//! fails if it appears anywhere else. With it Scraper() reaches the key that
+//! signs the manifests it publishes while the wallet is unlocked for staking
+//! only.
+StakingKeyAccess ScraperStakingKeyAccess()
+{
+    return StakingKeyAccess();
+}
+
 // This is the "main" scraper function.
 // It will be instantiated as a separate thread if -scraper is specified as a startup argument,
 // and operate in a continuous while loop.
@@ -1567,6 +1592,11 @@ void Scraper(bool bSingleShot)
         _log(logattribute::INFO, "Scraper", "Running in single shot mode.");
 
     uint256 nmScraperFileManifestHash;
+
+    // The key that authorizes this node to publish manifests, and signs them, is
+    // reached through the staking accessor, so a scraper whose wallet is unlocked
+    // for staking only can publish.
+    const StakingKeyAccess scraper_access = ScraperStakingKeyAccess();
 
     // The scraper thread loop...
     while (!ShutdownInProgress())
@@ -1664,7 +1694,7 @@ void Scraper(bool bSingleShot)
             _log(logattribute::ERR, "Scraper", "RPC error occurred, check logs");
 
         // This is the section to download statistics. Only do if authorized.
-        else if (IsScraperAuthorized() || IsScraperAuthorizedToBroadcastManifests(AddressOut, KeyOut))
+        else if (IsScraperAuthorized() || IsScraperAuthorizedToBroadcastManifests(AddressOut, KeyOut, &scraper_access))
         {
             // Take a lock on cs_Scraper for the main activity portion of the loop.
             LOCK(cs_Scraper);
@@ -1746,7 +1776,7 @@ void Scraper(bool bSingleShot)
         }
 
         // This is the section to send out manifests. Only do if authorized.
-        if (IsScraperAuthorizedToBroadcastManifests(AddressOut, KeyOut))
+        if (IsScraperAuthorizedToBroadcastManifests(AddressOut, KeyOut, &scraper_access))
         {
             // This will push out a new CScraperManifest if the hash has changed of mScraperFileManifestHash.
             // The idea here is to run the scraper loop a number of times over a period of time approaching
@@ -4692,8 +4722,15 @@ bool IsScraperAuthorized()
     return ALLOW_NONSCRAPER_NODE_STATS_DOWNLOAD;
 }
 
-bool IsScraperAuthorizedToBroadcastManifests(CTxDestination& AddressOut, CKey& KeyOut)
+bool IsScraperAuthorizedToBroadcastManifests(CTxDestination& AddressOut, CKey& KeyOut, const StakingKeyAccess* access)
 {
+    // The scraper thread passes its access and reaches the key while the wallet is
+    // unlocked for staking only. Any other caller passes none and takes the general
+    // route, which on an encrypted wallet needs a full unlock.
+    const auto get_key = [access](const CKeyID& key_id, CKey& key_out) {
+        return access ? pwalletMain->GetKeyForStaking(key_id, key_out, *access)
+                      : pwalletMain->GetKey(key_id, key_out);
+    };
 
     AppCacheSection mScrapers = GetScrapersCache();
 
@@ -4729,14 +4766,14 @@ bool IsScraperAuthorizedToBroadcastManifests(CTxDestination& AddressOut, CKey& K
                 // ... and it exists in the wallet...
                 LOCK(pwalletMain->cs_wallet);
 
-                if (pwalletMain->GetKey(*KeyID, KeyOut))
+                if (get_key(*KeyID, KeyOut))
                 {
                     // ... and the key returned from the wallet is valid and matches the provided public key...
-                    // Invariant: GetKey() succeeds only with a valid key: the wallet checks
-                    // keys when it loads or imports them, and the encrypted store returns
-                    // false for a key that does not decrypt to a valid one. Guards against
-                    // a change to GetKey() that returns an invalid key, with which this
-                    // node would sign manifests.
+                    // Invariant: GetKey() and GetKeyForStaking() succeed only with a valid
+                    // key: the wallet checks keys when it loads or imports them, and the
+                    // encrypted store returns false for a key that does not decrypt to a
+                    // valid one. Guards against a change to either that returns an invalid
+                    // key, with which this node would sign manifests.
                     assert(KeyOut.IsValid());
 
                     _log(logattribute::INFO, "IsScraperAuthorizedToBroadcastManifests",
@@ -4755,8 +4792,9 @@ bool IsScraperAuthorizedToBroadcastManifests(CTxDestination& AddressOut, CKey& K
                 else
                 {
                     _log(logattribute::WARNING, "IsScraperAuthorizedToBroadcastManifests",
-                         "Key not found in the wallet for matching address. Please check that the wallet is unlocked "
-                         "(preferably for staking only).");
+                         "Key not found in the wallet for matching address, or the wallet is locked. The scraper "
+                         "thread needs the wallet unlocked; unlocking for staking only is enough. "
+                         "sendscraperfilemanifest needs the wallet passphrase.");
                 }
             }
         }
@@ -4796,10 +4834,10 @@ bool IsScraperAuthorizedToBroadcastManifests(CTxDestination& AddressOut, CKey& K
                              "(Doublecheck) The address is " + EncodeDestination(address));
 
                         // ... and it exists in the wallet... (It SHOULD here... it came from the map...)
-                        if (pwalletMain->GetKey(*KeyID, KeyOut))
+                        if (get_key(*KeyID, KeyOut))
                         {
                             // ... and the key returned from the wallet is valid ...
-                            // Invariant: as above, GetKey() succeeds only with a valid key.
+                            // Invariant: as above, either route succeeds only with a valid key.
                             assert(KeyOut.IsValid());
 
                             _log(logattribute::INFO, "IsScraperAuthorizedToBroadcastManifests",
@@ -4818,8 +4856,9 @@ bool IsScraperAuthorizedToBroadcastManifests(CTxDestination& AddressOut, CKey& K
                         else
                         {
                             _log(logattribute::WARNING, "IsScraperAuthorizedToBroadcastManifests",
-                                 "Key not found in the wallet for matching address. Please check that the wallet is "
-                                 "unlocked (preferably for staking only).");
+                                 "Key not found in the wallet for matching address, or the wallet is locked. The "
+                                 "scraper thread needs the wallet unlocked; unlocking for staking only is enough. "
+                                 "sendscraperfilemanifest needs the wallet passphrase.");
                         }
                     }
                 }
@@ -6664,10 +6703,15 @@ const RPCHelpMan& sendscraperfilemanifest_helpman() { return sendscraperfilemani
 
 UniValue sendscraperfilemanifest(const UniValue& params)
 {
+    // The scraper thread signs with its staking access, which a request does
+    // not have. On an encrypted wallet the request needs the keys: a full
+    // unlock, or the wallet passphrase sent with it.
+    EnsureWalletIsUnlocked();
+
     CTxDestination AddressOut;
     CKey KeyOut;
     bool ret;
-    if (IsScraperAuthorizedToBroadcastManifests(AddressOut, KeyOut))
+    if (IsScraperAuthorizedToBroadcastManifests(AddressOut, KeyOut, nullptr))
     {
         LOCK2(cs_StructScraperFileManifest, CScraperManifest::cs_mapManifest);
 

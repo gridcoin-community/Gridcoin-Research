@@ -42,6 +42,13 @@ CMAKE_ARCH_FLAGS = \
 	-DZLIB_LIBRARY=/usr/lib/$(DEB_HOST_MULTIARCH)/libz.so
 endif
 
+# The autounlock helper and its units need systemd 251 or later, so the build host's
+# systemd (Build-Depends) decides whether they are built: Ubuntu 22.04 builds without
+# them, and gridcointestnet-service then knows there are none.
+SYSTEMD_MAJOR := $(shell systemctl --version 2>/dev/null | sed -n '1s/^systemd \([0-9]*\).*/\1/p')
+AUTOUNLOCK := $(shell [ "$(SYSTEMD_MAJOR)" -ge 251 ] 2>/dev/null && echo ON || echo OFF)
+UNITDIR := debian/tmp/usr/lib/systemd/system
+
 %:
 	dh $@ --buildsystem=cmake
 
@@ -57,6 +64,8 @@ override_dh_auto_configure:
 		-DUSE_DBUS=ON \
 		-DENABLE_PIE=ON \
 		-DCMAKE_BUILD_TYPE=RelWithDebInfo \
+		-DGRC_UNIT_NETWORK=test \
+		-DINSTALL_SYSTEMD_AUTOUNLOCK=$(AUTOUNLOCK) \
 		$(CMAKE_ARCH_FLAGS)
 
 ifeq ($(DEB_HOST_ARCH),armhf)
@@ -87,8 +96,42 @@ override_dh_install:
 		contrib/completions/bash/gridcoinresearch.bash \
 		> debian/gridcointestnet-qt/usr/share/bash-completion/completions/gridcointestnet
 
+# With autounlock, the helper and its per-user template units go in as files, like the
+# core's template in gridcointestnetd.install: dh_installsystemd skips template units.
+# dh_install takes the last of several command-line paths as the destination
+# directory, so each call names its own.
+execute_after_dh_install:
+ifeq ($(AUTOUNLOCK),ON)
+	dh_install -pgridcointestnetd \
+		usr/lib/systemd/system/gridcointestnet-autounlock@.socket \
+		usr/lib/systemd/system/gridcointestnet-autounlock@.service \
+		usr/lib/systemd/system
+	dh_install -pgridcointestnetd \
+		usr/libexec/gridcointestnet/gridcoin-autounlock-helper \
+		usr/libexec/gridcointestnet
+endif
+
+# The system units are handed to dh_installsystemd as debian/gridcointestnetd.<unit>
+# (listed in debian/clean), so it installs them and writes their maintainer script
+# snippets: not enabled or started on install, and stopped on removal. The core is neither stopped
+# nor restarted by them on an upgrade (--no-stop-on-upgrade): the postinst try-restarts a running
+# one once the switch-over has run, and leaves one whose switch-over failed as it runs.
+execute_before_dh_installsystemd:
+	cp $(UNITDIR)/gridcointestnetd.service debian/gridcointestnetd.gridcointestnetd.service
+ifeq ($(AUTOUNLOCK),ON)
+	cp $(UNITDIR)/gridcointestnet-autounlock.socket debian/gridcointestnetd.gridcointestnet-autounlock.socket
+	cp $(UNITDIR)/gridcointestnet-autounlock.service debian/gridcointestnetd.gridcointestnet-autounlock.service
+endif
+
 override_dh_installsystemd:
-	dh_installsystemd --no-enable --no-start
+	dh_installsystemd -pgridcointestnetd --name=gridcointestnetd --no-enable --no-start --no-stop-on-upgrade
+ifeq ($(AUTOUNLOCK),ON)
+	dh_installsystemd -pgridcointestnetd --name=gridcointestnet-autounlock --no-enable --no-start --restart-after-upgrade
+endif
+
+# The daemon is execute-only (0711), as CMake installs it; dh_fixperms makes it 0755.
+execute_after_dh_fixperms:
+	chmod 0711 debian/gridcointestnetd/usr/bin/gridcointestnetd
 
 # No automatic -dbgsym packages: they clutter the user-facing repo and almost
 # nobody runs gdb against these; insiders rebuild locally with symbols when needed.

@@ -31,10 +31,23 @@ bool Init::isCoreReady() { return true; }
 // empty for the same reason; the serving Init overrides them.
 bool Init::authenticate(const std::string& /*cookie*/) { return false; }
 
+// An Init that does not serve the Windows identity check says so, and the GUI on
+// Windows then refuses it. Only the serving wrapper serves the check.
+AttestChallenge Init::beginAttest() { return AttestChallenge{}; }
+
+bool Init::finishAttest() { return false; }
+
 // Fail closed for the same reason: an Init that does not implement authentication
 // has never authenticated, so the listener's deadline reclaims its connection
-// rather than letting it sit in the single connection slot forever.
+// rather than letting it sit in a connection slot forever.
 bool Init::isAuthenticated() { return false; }
+
+// The monolithic build has no attach slot: its one in-process GUI is always the
+// attached one. Only the serving wrapper (ipc::MakeServeInit) can answer false.
+bool Init::holdsAttachSlot() { return true; }
+
+// Nothing to tear down for an Init that is not served over IPC.
+void Init::connectionClosed() {}
 
 BuildInfo Init::getBuildInfo() { return BuildInfo{}; }
 

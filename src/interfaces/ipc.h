@@ -7,6 +7,7 @@
 
 #include <functional>
 #include <memory>
+#include <stdexcept>
 #include <string>
 #include <typeindex>
 
@@ -25,6 +26,38 @@ class Init;
 //! cannot ride an earlier peer's authenticated session. A connect-only process
 //! (the GUI) never listens and may pass an empty factory.
 using MakeServeInitFn = std::function<std::unique_ptr<Init>(int peer_fd)>;
+
+//! What Ipc::connectAddress learned about the connection it made.
+struct ConnectInfo
+{
+    //! The core runs as another OS account (the -ipcserviceuser account) rather
+    //! than as this process's own.
+    bool server_other_account{false};
+    //! A duplicate of the connected socket, for shutting the connection down
+    //! from another thread; -1 when not provided. The caller owns and closes it.
+    //! Set once the socket is connected and the peer check has passed, before
+    //! the transport's first round trip, and the caller's from then on, whether
+    //! connectAddress returns or throws. Stays -1 when the socket could not be
+    //! duplicated (logged). Not inherited by child processes.
+    int shutdown_fd{-1};
+    //! If set, called on the calling thread with shutdown_fd as soon as it is
+    //! set. connectAddress then still waits for that first round trip (the
+    //! Init.construct bootstrap), which a peer that does not answer never
+    //! completes; shutting the duplicate down from another thread ends the wait.
+    std::function<void(int shutdown_fd)> on_shutdown_fd;
+};
+
+//! Thrown by Ipc::connectAddress when the process listening on the socket fails
+//! the client peer check (ipc::ClientPeerPolicy) or its identity cannot be read,
+//! and on Windows when the endpoint fails the check made before connecting
+//! (ipc::win::CheckServerEndpointBeforeConnect) or the node fails the identity
+//! check after it (ipc::win::RunClientAttestation). The cookie has not been sent
+//! to that process.
+class PeerRefusedError : public std::runtime_error
+{
+public:
+    using std::runtime_error::runtime_error;
+};
 
 //! Interprocess-communication (IPC) helper. Establishes a connection between a
 //! controlling process (the GUI) and a controlled process (the node). When a
@@ -47,8 +80,17 @@ public:
     //! throws on an unexpected error. If \p on_disconnect is set it is invoked
     //! (on the IPC event-loop thread) when the remote drops the connection
     //! unexpectedly — the GUI uses it to quit gracefully when the node exits.
+    //! Before anything is sent, the process at the other end is checked with
+    //! ipc::ClientPeerPolicy. On Windows the endpoint is checked before connecting
+    //! instead, and after the bootstrap round trip the node must pass the identity
+    //! check (ipc::win::RunClientAttestation) before this returns, so the caller's
+    //! first call, which presents the cookie, follows it. A refusal throws
+    //! PeerRefusedError. If \p info is set it is filled once the socket is
+    //! connected and the peer accepted, before the transport's bootstrap round
+    //! trip (see ConnectInfo).
     virtual std::unique_ptr<Init> connectAddress(std::string& address,
-                                                 std::function<void()> on_disconnect = {}) = 0;
+                                                 std::function<void()> on_disconnect = {},
+                                                 ConnectInfo* info = nullptr) = 0;
 
     //! Listen on a socket address, exposing this process's Init interface to
     //! clients. Throws on error (including a live listener already on the path).

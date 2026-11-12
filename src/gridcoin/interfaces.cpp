@@ -3,6 +3,7 @@
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #include "interfaces/staking.h"
+#include "interfaces/connection_scope.h"
 #include "interfaces/mrc.h"
 #include "interfaces/psgt.h"
 #include "interfaces/researcher.h"
@@ -37,9 +38,11 @@
 #include "gridcoin/voting/registry.h"
 #include "gridcoin/voting/result.h"
 #include "interfaces/handler.h"
+#include "interfaces/notification_dispatcher.h"
 #include "key_io.h"
 #include "chain.h"
 #include "net_processing.h"
+#include "node/access_policy.h"
 #include "node/psgt_pool.h"
 #include "node/ui_interface.h"
 #include "psgt.h"
@@ -52,6 +55,7 @@
 #include "util/string.h"
 #include "validation.h"
 #include "version.h"
+#include "wallet/capability.h"
 #include "wallet/wallet.h"
 
 #include <algorithm>
@@ -61,6 +65,7 @@
 #include <limits>
 #include <map>
 #include <memory>
+#include <optional>
 #include <set>
 #include <string>
 #include <utility>
@@ -215,6 +220,26 @@ static_assert(STAKE_WEIGHT_UNITS_PER_COIN == GRC::STAKE_WEIGHT_UNITS_PER_COIN,
 
 namespace {
 
+//! Run \p fn under the capability of \p kind that the client began for
+//! \p wallet (interfaces::Wallet::beginElevation()), and return what it
+//! returns. With no wallet there is nothing to authorise, and \p fn runs as it
+//! is. The scope lives on this thread for the call and ends with it.
+//! \p connection_closed is the check of the connection the caller is served on
+//! (bindConnectionScope): once that has closed, \p fn runs under no capability,
+//! whatever the slot holds. Empty in process.
+template <typename Fn>
+auto RunUnderIpcCapability(CWallet* wallet, const std::function<bool()>& connection_closed, CapabilityKind kind,
+                           Fn&& fn)
+{
+    if (!wallet) {
+        return fn();
+    }
+
+    CapabilityScope scope(*wallet, wallet->IpcCapability(connection_closed), kind);
+
+    return fn();
+}
+
 //! In-process StakingStatus implementation wrapping g_miner_status and the
 //! staking difficulty helpers. The try* variants preserve the GUI's
 //! historical TRY_LOCK(cs_main) semantics: skip the refresh rather than
@@ -273,13 +298,19 @@ public:
     {
         LOCK(cs_main);
 
-        // wallet_locked -> no_sign: a locked wallet cannot sign the trial claim.
-        return GRC::BuildMRCSnapshot(m_wallet, fee_boost, wallet_locked, researcher_eligible);
+        // The trial claim is built unsigned when the wallet cannot use its keys:
+        // when the caller says it is locked, or it is locked, or unlocked for
+        // staking only with no capability scope open on this thread. The
+        // preview needs the fee, not a signature; submit() builds and signs the
+        // claim it sends.
+        const bool can_use_keys = m_wallet->CanUseKeys() && !m_wallet->IsLocked();
+        return GRC::BuildMRCSnapshot(m_wallet, fee_boost, wallet_locked || !can_use_keys, researcher_eligible);
     }
 
     MRCSubmitResult submit(CAmount fee_boost, bool wallet_locked) override
     {
-        return Submit(fee_boost, wallet_locked, nullptr);
+        return RunUnderIpcCapability(m_wallet, m_connection_closed, CapabilityKind::Contract,
+                                     [&] { return SubmitGuarded(fee_boost, wallet_locked, nullptr); });
     }
 
     MRCSubmitResult submitConfirmed(CAmount fee_boost, bool wallet_locked,
@@ -287,7 +318,8 @@ public:
     {
         const std::pair<CAmount, CAmount> terms{confirmed_fee, confirmed_net};
 
-        return Submit(fee_boost, wallet_locked, &terms);
+        return RunUnderIpcCapability(m_wallet, m_connection_closed, CapabilityKind::Contract,
+                                     [&] { return SubmitGuarded(fee_boost, wallet_locked, &terms); });
     }
 
     bool isOutOfSync() override
@@ -300,11 +332,34 @@ public:
 
     std::unique_ptr<Handler> handleMRCChanged(MRCChangedFn fn) override
     {
-        return MakeSignalHandler(uiInterface.MRCChanged_connect(interfaces::GuardNotify(std::move(fn))));
+        return MakeSignalHandler(uiInterface.MRCChanged_connect(interfaces::ForwardNotify(std::move(fn))));
+    }
+
+    void bindConnectionScope(std::shared_ptr<ConnectionScope> scope) override
+    {
+        m_connection_closed = ConnectionClosedCheck(std::move(scope));
     }
 
 private:
-    //! The body of submit() and submitConfirmed(). With \p terms (the confirmed fee
+    //! submit() and submitConfirmed() sign the claim under the client's Contract
+    //! capability, which each opens itself. Nothing may escape to the caller: in
+    //! the single-process build that is the GUI thread, where an exception ends
+    //! the application.
+    MRCSubmitResult SubmitGuarded(CAmount fee_boost, bool wallet_locked, const std::pair<CAmount, CAmount>* terms)
+    {
+        try {
+            return Submit(fee_boost, wallet_locked, terms);
+        } catch (const std::exception& e) {
+            LogPrintf("ERROR: MRC submit: %s", e.what());
+
+            MRCSubmitResult res;
+            res.error = e.what();
+            return res;
+        }
+    }
+
+    //! The body of submit() and submitConfirmed(), without the capability scope and
+    //! the exception boundary. With \p terms (the confirmed fee
     //! and net payout) the rebuilt claim is broadcast only if it still meets them.
     MRCSubmitResult Submit(CAmount fee_boost, bool wallet_locked, const std::pair<CAmount, CAmount>* terms)
     {
@@ -315,11 +370,12 @@ private:
         // The GUI only reaches submit() from the ELIGIBLE state (never locked),
         // but enforce the interface contract here so a future or out-of-process
         // caller cannot broadcast an unsigned claim.
-        // Trust-boundary guard, before any signing work. The GUI asks for an
-        // elevation before submitting (MRCRequestPage::submitMRC), which is the
-        // friendly answer for a researcher who unlocked for staking: the claim
-        // proceeds and the staking-only scope is handed back afterwards. The
-        // node must not rely on the client having done that.
+        // Trust-boundary guard, before any signing work. The GUI begins a
+        // Contract capability before submitting (MRCRequestPage::submitMRC),
+        // which is the friendly answer for a researcher who unlocked for
+        // staking: the claim proceeds under it, and the wallet stays unlocked
+        // for staking only throughout. The node must not rely on the client
+        // having done that.
         //
         // Placed with the other lock check rather than at the send, so a
         // refusal costs nothing: CreateMRC signs the claim, twice on the fee
@@ -328,10 +384,10 @@ private:
         // MRCModel CAN see this state now: WalletModel's status enum carries
         // UnlockedForStakingOnly, and walletStatusChanged() receives it. It
         // deliberately does not treat that as locked, so the submit button
-        // stays enabled and the claim path asks for a temporary elevation
-        // instead of refusing. This refusal is what backstops that -- it is
-        // reached only if the elevation did not happen.
-        if (m_wallet->IsUnlockedForStakingOnly()) {
+        // stays enabled and the claim path asks for the passphrase instead of
+        // refusing. This refusal is what backstops that -- it is reached only
+        // if no Contract capability is open for this call.
+        if (m_wallet->IsUnlockedForStakingOnly() && !m_wallet->CanUseKeys()) {
             res.error = "The wallet is unlocked for staking only. Unlock it fully to submit a "
                         "manual research claim.";
             return res;
@@ -407,6 +463,10 @@ private:
     }
 
     CWallet* m_wallet;
+    //! Whether the IPC connection this is served on has closed
+    //! (bindConnectionScope), asked as the IPC capability is read. Empty in
+    //! process, where there is no connection.
+    std::function<bool()> m_connection_closed{};
 };
 
 //! In-process SideStakeManager over the global sidestake registry (Phase 1d-ii).
@@ -415,6 +475,15 @@ private:
 //! methods, so no GUI code holds a GRC::SideStake or calls GetSideStakeRegistry()
 //! directly. Mutations return the post-mutation local sidestake revision (design
 //! §4.4) for read-your-writes.
+//!
+//! Every mutation changes side stakes, which needs the wallet passphrase. Each
+//! runs under the Settings capability the client began for the wallet, when it
+//! began one and its connection is still open (bindConnectionScope). It
+//! validates first, so an edit that would change nothing (invalid
+//! input, no such entry, the value already set) gets its own answer without the
+//! passphrase. Then, before it changes anything, it answers ELEVATION_REQUIRED
+//! unless the wallet's keys are usable: a capability, a full unlock, or no
+//! encryption.
 class SideStakeManagerImpl : public SideStakeManager
 {
 public:
@@ -453,6 +522,9 @@ public:
                                  double allocation_percent,
                                  const std::string& description) override
     {
+        std::optional<CapabilityScope> scope;
+        if (pwalletMain) scope.emplace(*pwalletMain, pwalletMain->IpcCapability(m_connection_closed), CapabilityKind::Settings);
+
         GRC::SideStakeRegistry& registry = GRC::GetSideStakeRegistry();
 
         const CTxDestination destination = DecodeDestination(address);
@@ -497,6 +569,8 @@ public:
             return Result(SideStakeEditStatus::INVALID_DESCRIPTION);
         }
 
+        if (!HoldsElevation()) return Result(SideStakeEditStatus::ELEVATION_REQUIRED);
+
         registry.NonContractAdd(GRC::LocalSideStake(destination,
                                                     new_allocation,
                                                     sanitized,
@@ -508,6 +582,9 @@ public:
     SideStakeEditResult setAllocation(const std::string& address,
                                       double allocation_percent) override
     {
+        std::optional<CapabilityScope> scope;
+        if (pwalletMain) scope.emplace(*pwalletMain, pwalletMain->IpcCapability(m_connection_closed), CapabilityKind::Settings);
+
         GRC::SideStakeRegistry& registry = GRC::GetSideStakeRegistry();
 
         GRC::SideStake original;
@@ -532,6 +609,8 @@ public:
             return Result(SideStakeEditStatus::INVALID_ALLOCATION);
         }
 
+        if (!HoldsElevation()) return Result(SideStakeEditStatus::ELEVATION_REQUIRED);
+
         // Change only the allocation. Rebuilding the whole entry from `original`
         // and writing it back through NonContractAdd() would carry the description
         // and status from a read taken in an earlier lock scope, so a config reload
@@ -548,6 +627,9 @@ public:
     SideStakeEditResult setDescription(const std::string& address,
                                        const std::string& description) override
     {
+        std::optional<CapabilityScope> scope;
+        if (pwalletMain) scope.emplace(*pwalletMain, pwalletMain->IpcCapability(m_connection_closed), CapabilityKind::Settings);
+
         GRC::SideStakeRegistry& registry = GRC::GetSideStakeRegistry();
 
         GRC::SideStake original;
@@ -564,6 +646,8 @@ public:
             return Result(SideStakeEditStatus::INVALID_DESCRIPTION);
         }
 
+        if (!HoldsElevation()) return Result(SideStakeEditStatus::ELEVATION_REQUIRED);
+
         // Change only the description; see setAllocation for why the surviving
         // fields must not be round-tripped through the earlier read.
         if (!registry.NonContractSetDescription(original.GetDestination(), sanitized)) {
@@ -576,6 +660,9 @@ public:
 
     SideStakeEditResult deleteLocal(const std::string& address) override
     {
+        std::optional<CapabilityScope> scope;
+        if (pwalletMain) scope.emplace(*pwalletMain, pwalletMain->IpcCapability(m_connection_closed), CapabilityKind::Settings);
+
         GRC::SideStakeRegistry& registry = GRC::GetSideStakeRegistry();
 
         GRC::SideStake original;
@@ -584,6 +671,8 @@ public:
         if (!FindLocal(registry, address, original)) {
             return Result(SideStakeEditStatus::INVALID_ADDRESS);
         }
+
+        if (!HoldsElevation()) return Result(SideStakeEditStatus::ELEVATION_REQUIRED);
 
         registry.NonContractDelete(original.GetDestination());
 
@@ -598,15 +687,25 @@ public:
         // emission-time revision could predate the reload. The consumer reads
         // localRevision() itself when handling the notification — see
         // interfaces/sidestake.h.
-        return MakeSignalHandler(uiInterface.RwSettingsUpdated_connect(interfaces::GuardNotify(std::move(fn))));
+        return MakeSignalHandler(uiInterface.RwSettingsUpdated_connect(interfaces::ForwardNotify(std::move(fn))));
     }
 
     std::unique_ptr<Handler> handleMandatorySideStakeChanged(MandatorySideStakeChangedFn fn) override
     {
-        return MakeSignalHandler(uiInterface.MandatorySideStakeChanged_connect(interfaces::GuardNotify(std::move(fn))));
+        return MakeSignalHandler(uiInterface.MandatorySideStakeChanged_connect(interfaces::ForwardNotify(std::move(fn))));
+    }
+
+    void bindConnectionScope(std::shared_ptr<ConnectionScope> scope) override
+    {
+        m_connection_closed = ConnectionClosedCheck(std::move(scope));
     }
 
 private:
+    //! Whether the IPC connection this is served on has closed
+    //! (bindConnectionScope), asked as the IPC capability is read. Empty in
+    //! process, where there is no connection.
+    std::function<bool()> m_connection_closed{};
+
     //! Build a result stamped with the current local sidestake revision.
     static SideStakeEditResult Result(SideStakeEditStatus status, std::string address = {})
     {
@@ -807,7 +906,23 @@ public:
         return latest;
     }
 
+    // The poll and the vote are signed under the client's Contract capability,
+    // and nothing may escape to the caller (the GUI thread, in the
+    // single-process build).
     VotingSubmitResult submitPoll(const PollSubmission& poll) override
+    {
+        return RunUnderIpcCapability(pwalletMain, m_connection_closed, CapabilityKind::Contract, [&] {
+            try {
+                return SubmitPollUnderScope(poll);
+            } catch (const std::exception& e) {
+                LogPrintf("ERROR: poll submission: %s", e.what());
+                return Failed(e.what());
+            }
+        });
+    }
+
+    //! submitPoll() without its capability scope and exception boundary.
+    VotingSubmitResult SubmitPollUnderScope(const PollSubmission& poll)
     {
         // The payload version (and, pre-v3, the forced SURVEY type) depend on the
         // chain height, so they are resolved node-side rather than in the GUI.
@@ -861,6 +976,20 @@ public:
     VotingSubmitResult submitVote(const std::string& poll_txid,
                                   const std::vector<uint8_t>& choice_offsets) override
     {
+        return RunUnderIpcCapability(pwalletMain, m_connection_closed, CapabilityKind::Contract, [&] {
+            try {
+                return SubmitVoteUnderScope(poll_txid, choice_offsets);
+            } catch (const std::exception& e) {
+                LogPrintf("ERROR: vote submission: %s", e.what());
+                return Failed(e.what());
+            }
+        });
+    }
+
+    //! submitVote() without its capability scope and exception boundary.
+    VotingSubmitResult SubmitVoteUnderScope(const std::string& poll_txid,
+                                            const std::vector<uint8_t>& choice_offsets)
+    {
         const uint256 txid = uint256S(poll_txid);
 
         // Look up and read the poll under cs_poll_registry, then copy out the poll
@@ -902,7 +1031,7 @@ public:
 
     std::unique_ptr<Handler> handleNewPollReceived(NewPollReceivedFn fn) override
     {
-        return MakeSignalHandler(uiInterface.NewPollReceived_connect(interfaces::GuardNotify(std::move(fn))));
+        return MakeSignalHandler(uiInterface.NewPollReceived_connect(interfaces::ForwardNotify(std::move(fn))));
     }
 
     std::unique_ptr<Handler> handleNewVoteReceived(NewVoteReceivedFn fn) override
@@ -910,7 +1039,12 @@ public:
         // The core signal carries a uint256; hand the consumer its hex form so no
         // core type crosses the boundary.
         return MakeSignalHandler(uiInterface.NewVoteReceived_connect(
-            interfaces::GuardNotify([fn = std::move(fn)](const uint256& poll_txid) { fn(poll_txid.ToString()); })));
+            interfaces::ForwardNotify([fn = std::move(fn)](const uint256& poll_txid) { fn(poll_txid.ToString()); })));
+    }
+
+    void bindConnectionScope(std::shared_ptr<ConnectionScope> scope) override
+    {
+        m_connection_closed = ConnectionClosedCheck(std::move(scope));
     }
 
 private:
@@ -1005,6 +1139,11 @@ private:
         res.error = std::move(error);
         return res;
     }
+
+    //! Whether the IPC connection this is served on has closed
+    //! (bindConnectionScope), asked as the IPC capability is read. Empty in
+    //! process, where there is no connection.
+    std::function<bool()> m_connection_closed{};
 };
 
 //! Maps a core BeaconError to the interface BeaconStatus. Ported verbatim from
@@ -1326,15 +1465,40 @@ public:
         return false;
     }
 
+    // The beacon methods below sign or make the beacon key under the client's
+    // Contract capability, and nothing may escape to the caller (the GUI
+    // thread, in the single-process build).
     BeaconAdvertiseResult advertiseBeacon() override
     {
-        const GRC::ResearcherPtr researcher = GRC::Researcher::Get();
-        const GRC::AdvertiseBeaconResult result = researcher->AdvertiseBeacon();
+        return RunUnderIpcCapability(m_wallet, m_connection_closed, CapabilityKind::Contract, [&]() -> BeaconAdvertiseResult {
+            try {
+                const GRC::ResearcherPtr researcher = GRC::Researcher::Get();
+                const GRC::AdvertiseBeaconResult result =
+                    researcher->AdvertiseBeacon(/*force=*/false, /*renewal_access=*/nullptr);
 
-        return {MapBeaconError(result.Error())};
+                return {MapBeaconError(result.Error())};
+            } catch (const std::exception& e) {
+                LogPrintf("ERROR: beacon advertisement: %s", e.what());
+                return {BeaconStatus::ERROR_TX_FAILED};
+            }
+        });
     }
 
     std::string generateBeaconKeyForV3() override
+    {
+        return RunUnderIpcCapability(m_wallet, m_connection_closed, CapabilityKind::Contract, [&] {
+            try {
+                return GenerateBeaconKeyForV3UnderScope();
+            } catch (const std::exception& e) {
+                LogPrintf("ERROR: beacon key generation: %s", e.what());
+                return std::string();
+            }
+        });
+    }
+
+    //! generateBeaconKeyForV3() without its capability scope and exception
+    //! boundary.
+    std::string GenerateBeaconKeyForV3UnderScope()
     {
         const GRC::ResearcherPtr researcher = GRC::Researcher::Get();
         const GRC::CpidOption cpid = researcher->Id().TryCpid();
@@ -1365,6 +1529,19 @@ public:
     }
 
     BeaconAdvertiseResult advertiseBeaconV3(const std::string& ownership_proof_xml) override
+    {
+        return RunUnderIpcCapability(m_wallet, m_connection_closed, CapabilityKind::Contract, [&]() -> BeaconAdvertiseResult {
+            try {
+                return AdvertiseBeaconV3UnderScope(ownership_proof_xml);
+            } catch (const std::exception& e) {
+                LogPrintf("ERROR: beacon advertisement: %s", e.what());
+                return {BeaconStatus::ERROR_TX_FAILED};
+            }
+        });
+    }
+
+    //! advertiseBeaconV3() without its capability scope and exception boundary.
+    BeaconAdvertiseResult AdvertiseBeaconV3UnderScope(const std::string& ownership_proof_xml)
     {
         const GRC::ResearcherPtr researcher = GRC::Researcher::Get();
         const GRC::CpidOption cpid = researcher->Id().TryCpid();
@@ -1437,26 +1614,35 @@ public:
 
     std::unique_ptr<Handler> handleResearcherChanged(ResearcherChangedFn fn) override
     {
-        return MakeSignalHandler(uiInterface.ResearcherChanged_connect(interfaces::GuardNotify(std::move(fn))));
+        return MakeSignalHandler(uiInterface.ResearcherChanged_connect(interfaces::ForwardNotify(std::move(fn))));
     }
 
     std::unique_ptr<Handler> handleBeaconChanged(BeaconChangedFn fn) override
     {
-        return MakeSignalHandler(uiInterface.BeaconChanged_connect(interfaces::GuardNotify(std::move(fn))));
+        return MakeSignalHandler(uiInterface.BeaconChanged_connect(interfaces::ForwardNotify(std::move(fn))));
     }
 
     std::unique_ptr<Handler> handleAccrualChanged(AccrualChangedFn fn) override
     {
-        return MakeSignalHandler(uiInterface.AccrualChangedFromStakeOrMRC_connect(interfaces::GuardNotify(std::move(fn))));
+        return MakeSignalHandler(uiInterface.AccrualChangedFromStakeOrMRC_connect(interfaces::ForwardNotify(std::move(fn))));
     }
 
     std::unique_ptr<Handler> handleBlocksChanged(BlocksChangedFn fn) override
     {
-        return MakeSignalHandler(uiInterface.NotifyBlocksChanged_connect(interfaces::GuardNotify(std::move(fn))));
+        return MakeSignalHandler(uiInterface.NotifyBlocksChanged_connect(interfaces::ForwardNotify(std::move(fn))));
+    }
+
+    void bindConnectionScope(std::shared_ptr<ConnectionScope> scope) override
+    {
+        m_connection_closed = ConnectionClosedCheck(std::move(scope));
     }
 
 private:
     CWallet* m_wallet;
+    //! Whether the IPC connection this is served on has closed
+    //! (bindConnectionScope), asked as the IPC capability is read. Empty in
+    //! process, where there is no connection.
+    std::function<bool()> m_connection_closed{};
 
     //! Build the full snapshot with cs_main held. Shared by snapshot() (blocking)
     //! and trySnapshot() (TRY_LOCK). The whole snapshot is built under one cs_main
@@ -1759,13 +1945,31 @@ public:
         if (!TryImageFromHex(image_hex, image)) {
             return PSGTSignStatus::NOT_FOUND;
         }
-        // SignAndAdvancePSGT takes cs_main + the wallet lock internally; the GUI
-        // holds the wallet unlocked (WalletModel::UnlockContext) around this.
-        uint256 tx_hash;
-        const PSGTSignStatus status =
-            MapPSGTSignResult(SignAndAdvancePSGT(image, error, &tx_hash));
-        txid = tx_hash.ToString(); // meaningful only for COMPLETED_AND_BROADCAST
-        return status;
+
+        // Signed under the client's SignPSGT capability; the GUI holds an
+        // UnlockContext for it around this call. Nothing may escape to the
+        // caller (the GUI thread, in the single-process build).
+        return RunUnderIpcCapability(m_wallet, m_connection_closed, CapabilityKind::SignPSGT, [&] {
+            // Refused here as well as at each key, so the caller is told why
+            // rather than finding no signature added.
+            if (m_wallet && !m_wallet->CanUseKeys()) {
+                error = SIGN_REFUSED;
+                return PSGTSignStatus::FAILED;
+            }
+
+            try {
+                // SignAndAdvancePSGT takes cs_main + the wallet lock internally.
+                uint256 tx_hash;
+                const PSGTSignStatus status =
+                    MapPSGTSignResult(SignAndAdvancePSGT(image, error, &tx_hash));
+                txid = tx_hash.ToString(); // meaningful only for COMPLETED_AND_BROADCAST
+                return status;
+            } catch (const std::exception& e) {
+                LogPrintf("ERROR: PSGT pool signing: %s", e.what());
+                error = e.what();
+                return PSGTSignStatus::FAILED;
+            }
+        });
     }
 
     bool removePoolEntry(const std::string& image_hex) override
@@ -1893,13 +2097,39 @@ public:
 
     PSGTSignResult signPSGT(const PSGTBytes& bytes) override
     {
+        // Signed under the client's SignPSGT capability; the GUI holds an
+        // UnlockContext for it around this call. Nothing may escape to the
+        // caller (the GUI thread, in the single-process build).
+        return RunUnderIpcCapability(m_wallet, m_connection_closed, CapabilityKind::SignPSGT, [&] {
+            // Refused here as well as at each key, so the caller is told why
+            // rather than handed back a PSGT with nothing signed.
+            if (!m_wallet->CanUseKeys()) {
+                PSGTSignResult res;
+                res.error = SIGN_REFUSED;
+                return res;
+            }
+
+            try {
+                return SignPSGTUnderScope(bytes);
+            } catch (const std::exception& e) {
+                LogPrintf("ERROR: PSGT signing: %s", e.what());
+
+                PSGTSignResult res;
+                res.error = e.what();
+                return res;
+            }
+        });
+    }
+
+    //! signPSGT() without its capability scope, refusal and exception boundary.
+    PSGTSignResult SignPSGTUnderScope(const PSGTBytes& bytes)
+    {
         PSGTSignResult res;
         PartiallySignedTransaction psgt;
         if (!DecodePSGTBytes(psgt, bytes, res.error)) {
             return res; // ok == false
         }
 
-        // The GUI holds the wallet unlocked (UnlockContext) around this call.
         LOCK2(cs_main, m_wallet->cs_wallet);
 
         // Updater: fill non_witness_utxo + redeem_script (mirrors walletprocesspsgt).
@@ -2121,8 +2351,22 @@ public:
         return WITH_LOCK(m_wallet->cs_wallet, return PSGTKeyHeldBy(*m_wallet, arrangement));
     }
 
+    void bindConnectionScope(std::shared_ptr<ConnectionScope> scope) override
+    {
+        m_connection_closed = ConnectionClosedCheck(std::move(scope));
+    }
+
 private:
     CWallet* m_wallet;
+    //! Whether the IPC connection this is served on has closed
+    //! (bindConnectionScope), asked as the IPC capability is read. Empty in
+    //! process, where there is no connection.
+    std::function<bool()> m_connection_closed{};
+
+    //! Why signPSGT() and signPoolEntry() refuse a wallet that cannot use its
+    //! keys on this call.
+    static constexpr const char* SIGN_REFUSED =
+        "The wallet is locked or unlocked for staking only. Enter the wallet passphrase to sign.";
 
     //! Parse a pool image hex into a CScriptID, rejecting anything that is not a
     //! full 20-byte hash. uint160::SetHex() silently maps malformed input to 0, so

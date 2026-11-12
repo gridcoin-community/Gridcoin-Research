@@ -5,6 +5,10 @@
 #include "addrman_impl.h"
 #include <string>
 #include <boost/test/unit_test.hpp>
+
+#ifndef WIN32
+#include <sys/stat.h>
+#endif
 #include "hash.h"
 #include "serialize.h"
 #include "streams.h"
@@ -18,6 +22,7 @@
 #include "primitives/block.h"
 #include "test/state_guard.h"
 #include "util.h"
+#include "util/system.h"
 #include "util/time.h"
 #include "version.h"
 
@@ -116,6 +121,43 @@ BOOST_AUTO_TEST_CASE(caddrdb_read)
     BOOST_CHECK(addrman2.size() == 3);
 }
 
+
+#ifndef WIN32
+// A ban list and a peers file that are rewritten keep the mode they had, and are created
+// owner-only when they are not there. Production change that would fail this: SerializeFileDB
+// opening its temporary file with the default mode and renaming it over the old file without
+// carrying the old mode.
+BOOST_AUTO_TEST_CASE(addrdb_rewrite_keeps_the_mode_of_the_file)
+{
+    const auto mode_of = [](const fs::path& path) {
+        struct stat st;
+        BOOST_REQUIRE_EQUAL(::stat(path.string().c_str(), &st), 0);
+        return static_cast<unsigned>(st.st_mode & 07777);
+    };
+
+    const fs::path ban_path = GetDataDir() / "keep_banlist.dat";
+    CBanDB ban_db(ban_path);
+    banmap_t bans;
+    fs::remove(ban_path);
+    BOOST_REQUIRE(ban_db.Write(bans));
+    BOOST_CHECK_EQUAL(mode_of(ban_path), 0600U);
+    BOOST_REQUIRE_EQUAL(::chmod(ban_path.string().c_str(), 0640), 0);
+    BOOST_REQUIRE(ban_db.Write(bans));
+    BOOST_CHECK_EQUAL(mode_of(ban_path), 0640U);
+    fs::remove(ban_path);
+
+    CAddrDB addr_db;
+    AddrMan addrman;
+    const fs::path peers_path = GetDataDir() / "peers.dat";
+    fs::remove(peers_path);
+    BOOST_REQUIRE(addr_db.Write(addrman));
+    BOOST_CHECK_EQUAL(mode_of(peers_path), 0600U);
+    BOOST_REQUIRE_EQUAL(::chmod(peers_path.string().c_str(), 0640), 0);
+    BOOST_REQUIRE(addr_db.Write(addrman));
+    BOOST_CHECK_EQUAL(mode_of(peers_path), 0640U);
+    fs::remove(peers_path);
+}
+#endif
 
 BOOST_AUTO_TEST_CASE(caddrdb_read_corrupted)
 {

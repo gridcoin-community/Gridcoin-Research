@@ -3,21 +3,101 @@
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #include "amount.h"
+#include "gridcoin/beacon.h"
 #include "gridcoin/contract/message.h"
 #include "gridcoin/contract/contract.h"
+#include "gridcoin/cpid.h"
 #include "gridcoin/sidestake.h"
+#include "policy/fees.h"
 #include "script.h"
+#include "script/standard.h"
 #include "net_processing.h"
 #include "wallet/wallet.h"
 
 #include "wallet/coincontrol.h"
 #include "txmempool.h"
 
+#include <algorithm>
+#include <vector>
+
 using namespace GRC;
 
 extern CWallet* pwalletMain;
 
 namespace {
+//! The largest signature push a scriptSig carries: a low-S DER signature and its
+//! sighash byte are at most 72 bytes, and the push opcode adds one. CKey signs
+//! low-S only.
+constexpr unsigned int MAX_SIGNATURE_PUSH_SIZE = 73;
+
+//! The serialized size of pushing \p n bytes onto a script.
+unsigned int PushSize(const size_t n)
+{
+    return n + (n < OP_PUSHDATA1 ? 1 : n <= 0xff ? 2 : 3);
+}
+
+//!
+//! \brief The largest scriptSig the wallet's signer writes to spend an output.
+//!
+//! \param script_pub_key The output's script.
+//! \param wallet         Holds the public keys and redeem scripts the scriptSig
+//!                       carries.
+//! \param nested         Whether \p script_pub_key is a pay-to-script-hash
+//!                       output's redeem script, which cannot itself be one.
+//!
+//! \return The size, or nullopt for an output the signer does not write a
+//! standard scriptSig for.
+//!
+std::optional<unsigned int> MaxScriptSigSize(const CScript& script_pub_key, const CWallet& wallet, const bool nested)
+{
+    txnouttype type;
+    std::vector<std::vector<unsigned char>> solutions;
+
+    if (!Solver(script_pub_key, type, solutions)) {
+        return std::nullopt;
+    }
+
+    switch (type) {
+    case TX_PUBKEY:
+        return MAX_SIGNATURE_PUSH_SIZE;
+    case TX_PUBKEYHASH:
+    {
+        CPubKey public_key;
+
+        if (!wallet.GetPubKey(CKeyID(uint160(solutions[0])), public_key)) {
+            return std::nullopt;
+        }
+
+        return MAX_SIGNATURE_PUSH_SIZE + PushSize(public_key.size());
+    }
+    case TX_MULTISIG:
+        // OP_0, then a signature for each key the script requires.
+        return 1 + solutions.front()[0] * MAX_SIGNATURE_PUSH_SIZE;
+    case TX_SCRIPTHASH:
+    {
+        CScript redeem_script;
+
+        if (nested || !wallet.GetCScript(CScriptID(uint160(solutions[0])), redeem_script)) {
+            return std::nullopt;
+        }
+
+        const std::optional<unsigned int> redeem_size = MaxScriptSigSize(redeem_script, wallet, /*nested=*/true);
+
+        if (!redeem_size) {
+            return std::nullopt;
+        }
+
+        // The redeem script's own scriptSig, then the redeem script pushed.
+        return *redeem_size + PushSize(redeem_script.size());
+    }
+    case TX_NONSTANDARD:
+    case TX_NULL_DATA:
+        return std::nullopt;
+    } // no default case, so the compiler can warn about missing cases
+
+    return std::nullopt;
+}
+
 //!
 //! \brief Configure coin control for a transaction to select inputs from the
 //! set of UTXOs associated with the master key address and to send the change
@@ -63,14 +143,15 @@ bool SelectMasterInputOutput(CCoinControl& coin_control) EXCLUSIVE_LOCKS_REQUIRE
 //!
 //! \brief Configure a contract transaction and set up inputs and outputs.
 //!
-//! \param wtx_new     A new transaction with a contract.
-//! \param reserve_key Key reserved for any change.
-//! \param burn_fee    Total burn fee required for contracts in the transaction.
+//! \param wtx_new        A new transaction with a contract.
+//! \param reserve_key    Key reserved for any change.
+//! \param burn_fee       Total burn fee required for contracts in the transaction.
+//! \param renewal_access The automated beacon renewal's access, or nullptr.
 //!
 //! \return \c true if coin selection succeeded.
 //!
 bool CreateContractTx(CWalletTx& wtx_out, CReserveKey& reserve_key, CAmount burn_fee,
-                      bool permitted_while_staking_only) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+                      const StakingKeyAccess* renewal_access) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     CCoinControl coin_control_out;
     CAmount applied_fee_out = 0; // Unused, but the builder can return before seeding it
@@ -123,7 +204,7 @@ bool CreateContractTx(CWalletTx& wtx_out, CReserveKey& reserve_key, CAmount burn
         reserve_key,
         applied_fee_out,
         &coin_control_out, contract_change_to_input_address,
-        permitted_while_staking_only);
+        renewal_access);
 }
 
 //!
@@ -134,7 +215,7 @@ bool CreateContractTx(CWalletTx& wtx_out, CReserveKey& reserve_key, CAmount burn
 //! \return An empty string when successful or a description of the error that
 //! occurred. TODO: Refactor to remove string-based signaling.
 //!
-std::string SendContractTx(CWalletTx& wtx_new, bool permitted_while_staking_only) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+std::string SendContractTx(CWalletTx& wtx_new, const StakingKeyAccess* renewal_access) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     // Declared before the lock below, so the announcement flushes after this
     // function's cs_wallet is released (#3391), as in CWallet::SendMoney.
@@ -160,7 +241,8 @@ std::string SendContractTx(CWalletTx& wtx_new, bool permitted_while_staking_only
     // The builder refuses too, but only as "Transaction creation failed"; this
     // reports why, as CWallet::SendMoney does. Under the lock above, so a
     // narrowing that lands while this send waits for the wallet is seen here.
-    if (pwalletMain->IsUnlockedForStakingOnly() && !permitted_while_staking_only) {
+    // A capability scope open on this thread lets the send through.
+    if (!pwalletMain->CanUseKeys() && !renewal_access) {
         std::string strError = _("Error: Wallet unlocked for staking only, unable to create transaction.");
         LogPrintf("%s: %s", __func__, strError);
         return strError;
@@ -173,13 +255,16 @@ std::string SendContractTx(CWalletTx& wtx_new, bool permitted_while_staking_only
         burn_fee += contract.RequiredBurnAmount();
     }
 
-    if (balance < COIN || balance < burn_fee + nTransactionFee) {
+    // The renewal pays the minimum fee for its size.
+    const CAmount configured_fee = renewal_access ? 0 : nTransactionFee;
+
+    if (balance < COIN || balance < burn_fee + configured_fee) {
         std::string strError = _("Balance too low to create a contract.");
         error("%s: %s", __func__, strError);
         return strError;
     }
 
-    if (!CreateContractTx(wtx_new, reserve_key, burn_fee, permitted_while_staking_only)) {
+    if (!CreateContractTx(wtx_new, reserve_key, burn_fee, renewal_access)) {
         std::string strError = _("Error: Transaction creation failed.");
         error("%s: %s", __func__, strError);
         return strError;
@@ -224,7 +309,8 @@ std::string SendContractTx(CWalletTx& wtx_new, bool permitted_while_staking_only
 // Functions
 // -----------------------------------------------------------------------------
 
-std::pair<CWalletTx, std::string> GRC::SendContract(Contract contract, bool permitted_while_staking_only) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+std::pair<CWalletTx, std::string> GRC::SendContract(Contract contract, const StakingKeyAccess* renewal_access)
+    EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     CMutableTransaction mtx;
     mtx.vContracts.emplace_back(std::move(contract));
@@ -232,16 +318,152 @@ std::pair<CWalletTx, std::string> GRC::SendContract(Contract contract, bool perm
     CWalletTx wtx;
     static_cast<CTransaction&>(wtx) = CTransaction(std::move(mtx));
 
-    return SendContract(std::move(wtx), permitted_while_staking_only);
+    return SendContract(std::move(wtx), renewal_access);
 }
 
-std::pair<CWalletTx, std::string> GRC::SendContract(CWalletTx wtx, bool permitted_while_staking_only) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+std::pair<CWalletTx, std::string> GRC::SendContract(CWalletTx wtx, const StakingKeyAccess* renewal_access)
+    EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     if (wtx.vContracts.empty()) {
         return std::make_pair(std::move(wtx), "Transaction contains no contract.");
     }
 
-    std::string error = SendContractTx(wtx, permitted_while_staking_only);
+    std::string error = SendContractTx(wtx, renewal_access);
 
     return std::make_pair(std::move(wtx), std::move(error));
+}
+
+std::optional<CAmount> GRC::RenewalMinimumFee(const CMutableTransaction& tx, const CWallet& wallet)
+    EXCLUSIVE_LOCKS_REQUIRED(wallet.cs_wallet)
+{
+    AssertLockHeld(wallet.cs_wallet);
+
+    if (tx.vin.empty()) {
+        return std::nullopt;
+    }
+
+    // A copy whose scriptSigs are filler of the largest length each can have,
+    // so one serialization gives the signed size.
+    CMutableTransaction sized(tx);
+
+    for (CTxIn& txin : sized.vin) {
+        const auto prev = wallet.mapWallet.find(txin.prevout.hash);
+
+        if (prev == wallet.mapWallet.end() || txin.prevout.n >= prev->second.vout.size()) {
+            return std::nullopt;
+        }
+
+        const std::optional<unsigned int> script_sig_size = MaxScriptSigSize(
+            prev->second.vout[txin.prevout.n].scriptPubKey, wallet, /*nested=*/false);
+
+        if (!script_sig_size) {
+            return std::nullopt;
+        }
+
+        // Raw filler bytes, not a push, so the scriptSig serializes to exactly
+        // that many bytes of script.
+        txin.scriptSig = CScript();
+        txin.scriptSig.insert(txin.scriptSig.end(), *script_sig_size, 0x00);
+    }
+
+    const CTransaction sized_tx(sized);
+
+    return GetMinFee(sized_tx, 1000, GMF_SEND, ::GetSerializeSize(sized_tx, SER_NETWORK, PROTOCOL_VERSION));
+}
+
+bool GRC::IsRenewalShape(
+    const CMutableTransaction& tx,
+    const Cpid& cpid,
+    const CAmount burn_fee,
+    const CAmount fee,
+    const CWallet& wallet) EXCLUSIVE_LOCKS_REQUIRED(wallet.cs_wallet)
+{
+    AssertLockHeld(wallet.cs_wallet);
+
+    // One contract, a beacon advertisement for the CPID.
+    if (tx.vContracts.size() != 1) {
+        return false;
+    }
+
+    const Contract& contract = tx.vContracts.front();
+
+    if (contract.m_type != ContractType::BEACON
+        || contract.m_action != ContractAction::ADD
+        || contract.m_version < 2
+        || contract.SharePayloadAs<BeaconPayload>()->m_cpid != cpid)
+    {
+        return false;
+    }
+
+    // The burn is the one the contract requires, whatever the caller names.
+    if (burn_fee != contract.RequiredBurnAmount()) {
+        return false;
+    }
+
+    // Only the wallet's own coins in. The scripts they were paid to are the
+    // only places the change may go.
+    CAmount value_in = 0;
+    std::vector<const CScript*> input_scripts;
+
+    for (const CTxIn& txin : tx.vin) {
+        const auto prev = wallet.mapWallet.find(txin.prevout.hash);
+
+        if (prev == wallet.mapWallet.end() || txin.prevout.n >= prev->second.vout.size()) {
+            return false;
+        }
+
+        const CTxOut& spent = prev->second.vout[txin.prevout.n];
+
+        value_in += spent.nValue;
+        input_scripts.push_back(&spent.scriptPubKey);
+
+        if (!MoneyRange(value_in)) {
+            return false;
+        }
+    }
+
+    // The burn, and at most one change output, paid back to the script of a
+    // coin it spends: an input's own address, in the form the coin has, and
+    // one the wallet can spend. Any other of the wallet's addresses is
+    // refused. The builder puts the change at a random position.
+    const CScript burn_script = CScript() << OP_RETURN;
+    bool burn_seen = false;
+    bool change_seen = false;
+    CAmount value_out = 0;
+
+    const auto to_an_input = [&input_scripts](const CScript& script) {
+        return std::any_of(input_scripts.begin(), input_scripts.end(),
+                           [&script](const CScript* input_script) { return *input_script == script; });
+    };
+
+    for (const CTxOut& txout : tx.vout) {
+        if (!MoneyRange(txout.nValue)) {
+            return false;
+        }
+
+        value_out += txout.nValue;
+
+        if (!burn_seen && txout.scriptPubKey == burn_script && txout.nValue == burn_fee) {
+            burn_seen = true;
+            continue;
+        }
+
+        if (!change_seen && txout.nValue > 0 && to_an_input(txout.scriptPubKey)
+            && wallet.IsMine(txout) == ISMINE_SPENDABLE) {
+            change_seen = true;
+            continue;
+        }
+
+        return false;
+    }
+
+    if (!burn_seen || !MoneyRange(value_out)) {
+        return false;
+    }
+
+    // Exactly the fee left over, which is the minimum for the transaction's
+    // size.
+    const std::optional<CAmount> minimum_fee = RenewalMinimumFee(tx, wallet);
+
+    return minimum_fee && fee == *minimum_fee && value_in - value_out == fee;
 }

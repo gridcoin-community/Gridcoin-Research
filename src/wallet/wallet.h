@@ -8,6 +8,9 @@
 
 #include <atomic>
 #include <chrono>
+#include <condition_variable>
+#include <cstdint>
+#include <functional>
 #include <optional>
 #include <stdexcept>
 #include <string>
@@ -28,6 +31,7 @@
 #include "streams.h"
 #include "node/ui_interface.h"
 #include <util/string.h>
+#include "wallet/capability.h"
 #include "wallet/generated_type.h"
 #include "wallet/transaction.h"
 #include "wallet/walletdb.h"
@@ -223,30 +227,6 @@ public:
     //!
     static const CTxDestination MasterAddress(int height);
 
-    //!
-    //! \brief Get the imported master private key used to sign administrative
-    //! contracts.
-    //!
-    //! A master key holder uses the master private key to sign administrative
-    //! contracts, such as project whitelist additions and removals. All nodes
-    //! verify the contracts using the embedded public key that corresponds to
-    //! this private key.
-    //!
-    //! Key holders need to import the private key into the wallet before they
-    //! can sign administrative contracts. The following RPC command imports a
-    //! private key and assigns to it the optional label of "master":
-    //!
-    //!    importprivkey <hex_key_string> master
-    //!
-    //! Note that this private key differs from the wallet keystore's "master"
-    //! key which the wallet uses to encrypt the private keys in storage.
-    //!
-    //! \param height The block height which the master key is valid for.
-    //!
-    //! \return An empty key when no master key imported.
-    //!
-    CKey MasterPrivateKey(int height) const;
-
     void SetNull() EXCLUSIVE_LOCKS_REQUIRED(cs_wallet)
     {
         nWalletVersion = wallet::FEATURE_BASE;
@@ -355,6 +335,185 @@ public:
         return GetUnlockScope() == UnlockScope::StakingOnly;
     }
 
+    //! \brief May a key be created on the calling thread?
+    //!
+    //! A new key is derived from the HD seed or made fresh and written to the
+    //! store, and an unlock for staking only withholds both. True when the
+    //! wallet is unencrypted or fully unlocked, or unlocked for staking only
+    //! with an ElevationGrant for it live on this thread. False when it is
+    //! locked, grant or not: there is no master key to make a key with.
+    //!
+    //! That last case is deliberate, and it is where this differs from
+    //! CanUseKeys(). A grant can outlive the unlock it was taken under, when a
+    //! timed relock lands while a CapabilityScope is open. CanUseKeys() then
+    //! still answers true, which is harmless because reading a key fails
+    //! cleanly with no master key installed. Making one is not, because
+    //! GenerateNewKey() would throw.
+    //!
+    //! The key pool is topped up, and a key made when the pool is empty, only
+    //! while this holds. Drawing a key the pool already holds creates nothing,
+    //! and is allowed whatever the scope.
+    bool CanCreateKeys() const;
+
+    //! \brief May the calling thread use the wallet's private keys now?
+    //!
+    //! True when the wallet-wide unlock is Full (an unencrypted wallet reads
+    //! Full), or when a CapabilityScope for this wallet is active on the
+    //! calling thread. A capability changes nothing wallet-wide, so
+    //! GetUnlockScope() and IsUnlockedForStakingOnly() still report the
+    //! standing unlock, and every other thread is still refused.
+    //!
+    //! This is what a check that means "may this operation sign or spend now"
+    //! asks. It does not tell a locked wallet apart: a scope opened before a
+    //! timed relock keeps answering true after it, while no key is installed.
+    //! A caller that reports locked and staking-only differently tests
+    //! IsLocked() first.
+    bool CanUseKeys() const;
+
+    //! Why a passphrase attempt failed. Defined with Unlock() below.
+    enum class UnlockFailure;
+
+    //! \brief Issue a capability, which authorises one operation of \p kind and
+    //! is proved by the wallet passphrase.
+    //!
+    //! The capability lasts CapabilityTtl(kind) unless EndElevation() ends it
+    //! first. It authorises nothing by itself; a CapabilityScope opened with
+    //! its id on the operation's thread does. By the wallet's state:
+    //!  - unencrypted: an id is issued without a check, so callers need not
+    //!    tell the cases apart. There is nothing to grant.
+    //!  - Full: the passphrase is checked against the installed master key and
+    //!    the unlock is left as it is. It is checked although Full permits
+    //!    everything, because the wallet can be narrowed to staking only while
+    //!    the capability lasts.
+    //!  - StakingOnly: the passphrase is checked the same way. The wallet-wide
+    //!    scope is NOT changed.
+    //!  - Locked: the wallet is unlocked for staking only, timed to relock
+    //!    after the capability's lifetime, and EndElevation() locks it again.
+    //!    Capabilities issued while that unlock lasts rely on it too. It is
+    //!    locked when the last of them ends, or when the relock armed for the
+    //!    capability that made it fires, whichever comes first: a later one's
+    //!    longer lifetime does not move that relock. A capability that outlives
+    //!    the unlock then fails closed, since no key can be read once the
+    //!    wallet is locked.
+    //!
+    //! An encrypted wallet's attempt first waits for its turn, as Unlock()
+    //! does. nullopt for a wrong passphrase. That refusal returns only after
+    //! the FailedPassphraseDelay() for the failures counted so far, slept
+    //! without holding cs_wallet, so the caller must not hold it either. Also
+    //! nullopt, with no delay, when a locked wallet's unlock cannot arm its
+    //! relock, and when the attempt is given up while it waits for its turn
+    //! (AwaitPassphraseTurn()).
+    //!
+    //! \p failure_out, when given, says why none was issued: Passphrase,
+    //! RelockUnavailable, or Abandoned for an attempt given up while it waited,
+    //! which for a caller with no cancel token means a shutdown. None when one
+    //! was issued.
+    std::optional<CapabilityId> BeginElevation(const SecureString& passphrase, CapabilityKind kind,
+                                               UnlockFailure* failure_out = nullptr)
+        LOCKS_EXCLUDED(cs_wallet, m_capability_mutex);
+
+    //! \brief End a capability.
+    //!
+    //! Every CapabilityScope opened with \p id afterwards is inactive; one
+    //! already open finishes its operation. A no-op for an id that is unknown
+    //! or already ended. Takes neither cs_main nor cs_wallet: the record is
+    //! removed under the capability mutex, which is released before a wallet
+    //! the capability unlocked is locked again, and that takes cs_KeyStore
+    //! alone.
+    void EndElevation(CapabilityId id) LOCKS_EXCLUDED(m_capability_mutex);
+
+    //! \brief Issue a capability into the IPC slot.
+    //!
+    //! The IPC server serves one client at a time, so the process keeps one IPC
+    //! capability. Whatever the slot held is ended, whether or not this one is
+    //! issued, and false leaves the slot empty. Otherwise as BeginElevation().
+    //!
+    //! \p connection_closed, here and on EndIpcElevation() and IpcCapability(),
+    //! has no default, so a caller cannot forget it. A caller serving an IPC
+    //! connection passes that connection's check
+    //! (interfaces::ConnectionClosedCheck). A caller with no connection (the
+    //! monolithic build's in-process paths, the slot hook that ends the slot as
+    //! the connection is torn down, tests) passes an empty {} on purpose. It is
+    //! asked under the capability mutex, so it must not lock anything; a
+    //! lock-free read (interfaces::ConnectionScope::closed()) is what it is for.
+    //!
+    //! Here it is asked in the same section that installs the capability. When
+    //! it answers true, the slot is left exactly as it is, the new capability is
+    //! ended once the mutex is released, and false is returned.
+    bool BeginIpcElevation(const SecureString& passphrase, CapabilityKind kind,
+                           const std::function<bool()>& connection_closed)
+        LOCKS_EXCLUDED(cs_wallet, m_capability_mutex);
+
+    //! \brief End the IPC slot's capability, if it holds one, as EndElevation()
+    //! does.
+    //!
+    //! When \p connection_closed answers true, the slot is left alone: it may
+    //! hold the next client's capability by then, and the closed connection's
+    //! own teardown ended what was its. That teardown (the slot hook) therefore
+    //! passes an empty check.
+    void EndIpcElevation(const std::function<bool()>& connection_closed)
+        LOCKS_EXCLUDED(m_capability_mutex);
+
+    //! \brief End capability \p id, which the caller read from the IPC slot,
+    //! and empty the slot only if it still holds \p id.
+    //!
+    //! For an operation that ran under the capability it read from the slot
+    //! (IpcCapability()) and is done with it. A capability begun into the slot
+    //! since, by this client or by the next, is not this operation's and stays
+    //! in the slot. When \p connection_closed answers true the slot is left
+    //! alone, as EndIpcElevation() leaves it. \p id is ended either way, with
+    //! the capability mutex released, as EndElevation() ends it.
+    void EndIpcElevationIf(CapabilityId id, const std::function<bool()>& connection_closed)
+        LOCKS_EXCLUDED(m_capability_mutex);
+
+    //! The capability in the IPC slot, or nullopt when the slot is empty or
+    //! \p connection_closed answers true: an operation for a client whose
+    //! connection has closed runs under no capability, whatever the slot holds.
+    //! nullopt means "no capability": the caller refuses the operation (a
+    //! CapabilityScope opened on it is inactive) and never dereferences it.
+    std::optional<CapabilityId> IpcCapability(const std::function<bool()>& connection_closed) const
+        LOCKS_EXCLUDED(m_capability_mutex);
+
+    //! How RunUnderLiveCapability() ended.
+    enum class CapabilityRun {
+        //! The action ran.
+        Ran,
+
+        //! The capability was not live when the turn came: ended (a passphrase
+        //! change ends every capability), past its deadline, or issued for
+        //! another kind. The action did not run.
+        NotLive,
+
+        //! The wait for the turn was given up, by a shutdown or by the caller
+        //! (PassphraseAttemptCancel). The action did not run.
+        Abandoned,
+    };
+
+    //! \brief Run \p action in a passphrase turn of its own, under capability
+    //! \p id, if it is still live for \p kind.
+    //!
+    //! For an operation that acts on the passphrase the capability was proved
+    //! with, as storing it for autounlock does. A passphrase change takes a turn
+    //! too and ends every capability, so the action either runs before a change,
+    //! which then finds what it did, or does not run at all. A capability looked
+    //! up first and acted on afterwards could act on a passphrase that was
+    //! changed in between.
+    //!
+    //! The turn is waited for as any passphrase attempt's is
+    //! (AwaitPassphraseTurn()), and handed on unused: no passphrase is checked,
+    //! so nothing is counted or delayed. The action runs on the calling thread,
+    //! under a CapabilityScope for \p id, with no lock held, so it may do file
+    //! I/O and encryption. It must make no passphrase attempt of its own: the
+    //! turn that attempt would wait for is the one this holds. The caller must
+    //! hold neither cs_main nor cs_wallet.
+    CapabilityRun RunUnderLiveCapability(CapabilityId id, CapabilityKind kind, const std::function<void()>& action)
+        LOCKS_EXCLUDED(cs_wallet, ::cs_main, m_passphrase_turn_mutex, m_capability_mutex);
+
+    //! How many passphrase attempts have failed in a row, across Unlock(),
+    //! BeginElevation() and ChangeWalletPassphrase(). An accepted passphrase
+    //! resets it to 0.
+    unsigned int FailedUnlockCount() const { return m_failed_unlocks.load(); }
+
     //! \brief Unlock with an explicit scope and an optional duration.
     //!
     //! \p relock_after, when set, is how long this unlock lasts. The deadline
@@ -398,40 +557,34 @@ public:
         //! retiring the relock armed for it and silently giving the wallet a
         //! different lifetime than the first caller was told.
         AlreadyUnlocked,
+
+        //! The attempt was given up while it waited for its turn, because a
+        //! shutdown was requested or its caller cancelled it
+        //! (PassphraseAttemptCancel). The passphrase was not checked.
+        Abandoned,
     };
 
+    //! The attempt first waits for its turn (AwaitPassphraseTurn()), and one
+    //! given up while it waits fails with UnlockFailure::Abandoned. A wrong
+    //! passphrase (UnlockFailure::Passphrase) is counted, and the refusal
+    //! returns only after the FailedPassphraseDelay() for the failures counted
+    //! so far. The key is derived, and every wait slept, without cs_wallet
+    //! held, so the caller must not hold it either. A success resets the count.
     bool Unlock(const SecureString& strWalletPassphrase, UnlockScope scope,
                 std::optional<std::chrono::seconds> relock_after,
-                UnlockFailure* failure_out = nullptr);
+                UnlockFailure* failure_out = nullptr) LOCKS_EXCLUDED(cs_wallet);
 
     //! \brief Unlock with an explicit scope.
     //!
     //! Defaults to Full, which is what an unlock that does not say otherwise has
     //! always meant (walletpassphrase without its third argument). The scope is
     //! installed with the master key, so the wallet is never briefly unlocked
-    //! carrying the previous unlock's restriction.
-    bool Unlock(const SecureString& strWalletPassphrase, UnlockScope scope = UnlockScope::Full);
+    //! carrying the previous unlock's restriction. A wrong passphrase is
+    //! counted and delayed as by the overload above.
+    bool Unlock(const SecureString& strWalletPassphrase, UnlockScope scope = UnlockScope::Full)
+        LOCKS_EXCLUDED(cs_wallet);
 
-    //! \brief Widen an unlock in progress to Full for one operation.
-    //!
-    //! The counterpart of RestrictToStakingOnly(), and what a GUI action that
-    //! needs a full unlock on a staking-only wallet asks for. It re-derives the
-    //! master key from \p strWalletPassphrase and refuses unless that matches
-    //! the key already installed, so it still demands the passphrase.
-    //!
-    //! It does NOT lock and re-unlock. That is what this replaces: locking
-    //! first threw away the unlock's deadline, and the re-unlock that followed
-    //! carried none, so a wallet unlocked by walletpassphrase for a fixed time
-    //! stayed unlocked indefinitely after any GUI action that elevated. It also
-    //! meant a cancelled or mistyped prompt left a staking wallet locked and
-    //! the node no longer staking.
-    //!
-    //! False when the wallet is locked -- there is no unlock to widen, and the
-    //! caller wants Unlock() -- when it is unencrypted, or on a wrong
-    //! passphrase.
-    bool ElevateToFull(const SecureString& strWalletPassphrase);
-
-    //! \brief Hand a scoped elevation back, narrowing the unlock to staking only.
+    //! \brief Narrow a full unlock to staking only, keeping its deadline.
     //!
     //! Takes cs_wallet before narrowing, which is what serialises it against a
     //! spend. CreateTransaction reads the scope inside LOCK2(cs_main,
@@ -444,9 +597,190 @@ public:
     //! and an unencrypted one; do not read false as "it was locked".
     bool RestrictToStakingOnly();
 
-    bool ChangeWalletPassphrase(const SecureString& strOldWalletPassphrase, const SecureString& strNewWalletPassphrase);
+    //! An unlock the user made is left exactly as it was, whether or not the
+    //! change succeeds: a wallet unlocked for staking only stays so, with the
+    //! same deadline and relock, a full unlock stays full, and a locked wallet
+    //! is never opened. The old passphrase is proved against the keys without
+    //! its master key being installed, and every key is derived without
+    //! cs_wallet held.
+    //!
+    //! A wrong old passphrase is counted and delayed as by Unlock(), and the
+    //! caller must not hold cs_wallet. False, with nothing changed, when the
+    //! attempt is given up while it waits for its turn. A successful change
+    //! ends every capability: they were proved with the old passphrase. An
+    //! unlock a capability made on a locked wallet ends with it, as
+    //! EndElevation() would end it, so that wallet is locked again at once.
+    //! It also replaces a stored autounlock passphrase with the new one
+    //! (OnWalletPassphraseChanged()) once cs_wallet is released, which is file
+    //! I/O and encryption, so the caller must not hold cs_main either.
+    //!
+    //! \p failure_out, when given, is Abandoned for an attempt given up while
+    //! it waited, Passphrase for a wrong old passphrase, and None otherwise.
+    bool ChangeWalletPassphrase(const SecureString& strOldWalletPassphrase, const SecureString& strNewWalletPassphrase,
+                                UnlockFailure* failure_out = nullptr) LOCKS_EXCLUDED(cs_wallet, ::cs_main);
+
+    //! Ends every capability issued before it, since those were issued with no
+    //! passphrase to check.
     bool EncryptWallet(const SecureString& strWalletPassphrase);
 
+private:
+    //! One issued capability.
+    struct CapabilityRecord {
+        CapabilityKind kind{CapabilityKind::Send};
+
+        //! When it expires, on the mockable clock CapabilityScope reads.
+        std::chrono::seconds deadline{0};
+
+        //! The epoch of the unlock that ending this capability may lock again.
+        //! That is the unlock it made on a locked wallet, or the one another
+        //! capability made, when that unlock was in progress as it was issued.
+        //! nullopt when the wallet was unlocked by other means, which ending it
+        //! leaves alone.
+        std::optional<uint64_t> relock_epoch;
+    };
+
+    //! Guards the issued capabilities and the IPC slot. A leaf: no other lock
+    //! is taken, and nothing is called out to, while it is held.
+    mutable Mutex m_capability_mutex;
+
+    std::map<CapabilityId, CapabilityRecord> m_capabilities GUARDED_BY(m_capability_mutex);
+    std::optional<CapabilityId> m_ipc_capability GUARDED_BY(m_capability_mutex);
+
+    //! Guards the passphrase attempts' turns. A leaf: no other lock is taken
+    //! while it is held, and nothing is called but the lock-free reads of the
+    //! shutdown flag and of the attempt's cancel token.
+    mutable Mutex m_passphrase_turn_mutex;
+
+    //! Raised whenever a turn ends, so that the attempt now served looks again.
+    std::condition_variable m_passphrase_turn_ended;
+
+    //! Consecutive failed passphrase attempts, across Unlock(),
+    //! BeginElevation() and ChangeWalletPassphrase(). Process-wide in effect:
+    //! there is one wallet. Written under m_passphrase_turn_mutex; atomic so
+    //! that FailedUnlockCount() can read it without the mutex.
+    std::atomic<unsigned int> m_failed_unlocks{0};
+
+    //! Passphrase attempts are served in the order they ask: each takes the
+    //! next ticket, and waits until its ticket is the one served.
+    uint64_t m_next_passphrase_ticket GUARDED_BY(m_passphrase_turn_mutex){0};
+    uint64_t m_served_passphrase_ticket GUARDED_BY(m_passphrase_turn_mutex){0};
+
+    //! Tickets given up before they were served, passed over when they are.
+    std::set<uint64_t> m_abandoned_passphrase_tickets GUARDED_BY(m_passphrase_turn_mutex);
+
+    //! The served attempt checks its passphrase no sooner than this: the end of
+    //! the delay the last refusal earned.
+    std::chrono::steady_clock::time_point m_next_passphrase_check GUARDED_BY(m_passphrase_turn_mutex){};
+
+    //! Whether \p id is issued, for \p kind, and before its deadline. What
+    //! CapabilityScope checks before it grants.
+    bool IsCapabilityLive(CapabilityId id, CapabilityKind kind) const LOCKS_EXCLUDED(m_capability_mutex);
+
+    //! BeginElevation()'s last step: store a capability of \p kind, lasting
+    //! \p ttl, that made the unlock \p made_epoch for itself or matched the
+    //! unlock \p matched_epoch in progress, and return its id. Ones past their
+    //! deadline are dropped meanwhile. For an encrypted wallet it runs while the
+    //! attempt's passphrase turn is held.
+    CapabilityId StoreCapability(CapabilityKind kind, std::chrono::seconds ttl, std::optional<uint64_t> made_epoch,
+                                 std::optional<uint64_t> matched_epoch) LOCKS_EXCLUDED(m_capability_mutex);
+
+    friend class CapabilityScope;
+    friend struct PassphraseTurnTestPeer;
+
+    //! Unlock() without the turn, and without counting or delaying a wrong
+    //! passphrase, reporting the epoch of the unlock it installed through
+    //! \p epoch_out. It takes cs_wallet only to copy the master key records
+    //! and to install the key, never across the derivation, so a caller that
+    //! does not hold cs_wallet keeps it free while the key is derived.
+    bool UnlockWithoutDelay(const SecureString& strWalletPassphrase, UnlockScope scope,
+                            std::optional<std::chrono::seconds> relock_after,
+                            UnlockFailure* failure_out, uint64_t* epoch_out);
+
+    //! Decrypt the master key with \p passphrase into \p master_key_out. False
+    //! when the passphrase decrypts no master key record. The key derivation
+    //! runs without cs_wallet held.
+    bool DecryptMasterKey(const SecureString& passphrase, CKeyingMaterial& master_key_out) const
+        LOCKS_EXCLUDED(cs_wallet);
+
+    //! \brief One passphrase attempt's turn, from AwaitPassphraseTurn().
+    //!
+    //! Held() is false when the attempt was given up while it waited, and it
+    //! must then check no passphrase. Otherwise the attempt reports its check
+    //! with Accepted() or Refused(). A turn that ends without either, because
+    //! the attempt never checked the passphrase or did not get as far as
+    //! saying how the check went, is handed on unused, so the attempts behind
+    //! it are never held up by it.
+    class PassphraseTurn
+    {
+    public:
+        PassphraseTurn(CWallet& wallet, std::optional<uint64_t> ticket) : m_wallet(wallet), m_ticket(ticket) {}
+        ~PassphraseTurn();
+
+        PassphraseTurn(const PassphraseTurn&) = delete;
+        PassphraseTurn& operator=(const PassphraseTurn&) = delete;
+        PassphraseTurn(PassphraseTurn&&) = delete;
+        PassphraseTurn& operator=(PassphraseTurn&&) = delete;
+
+        bool Held() const { return m_ticket.has_value(); }
+
+        //! The passphrase was accepted: the count is reset, and the next
+        //! attempt is checked at once.
+        void Accepted() LOCKS_EXCLUDED(m_wallet.m_passphrase_turn_mutex);
+
+        //! The passphrase was refused. It is counted, every later check waits
+        //! out its FailedPassphraseDelay(), and this returns once that delay
+        //! is over, or sooner when a shutdown is requested or the attempt is
+        //! cancelled (PassphraseAttemptCancel); the attempts behind it wait the
+        //! whole delay all the same. Never call it under cs_wallet.
+        void Refused() LOCKS_EXCLUDED(m_wallet.cs_wallet, m_wallet.m_passphrase_turn_mutex);
+
+    private:
+        CWallet& m_wallet;
+
+        //! The ticket whose turn this is, until the turn ends.
+        std::optional<uint64_t> m_ticket;
+
+        //! End the turn: serve the next ticket, and wake the attempts waiting.
+        void End() LOCKS_EXCLUDED(m_wallet.m_passphrase_turn_mutex);
+    };
+
+    //! \brief Wait for this passphrase attempt's turn.
+    //!
+    //! Attempts are served one at a time, in the order they ask, so callers on
+    //! several threads have their passphrases checked as one caller's would
+    //! be. The attempt served waits out the delay the last refusal earned
+    //! before its passphrase is checked, and no later attempt overtakes it, so
+    //! its wait is bounded by the attempts ahead of it, each at most a check
+    //! and the longest FailedPassphraseDelay(). A passphrase change's turn
+    //! also covers storing the new passphrase for autounlock
+    //! (OnWalletPassphraseChanged()): encryption and file I/O, with up to
+    //! about 3 s of retries when another process holds the file.
+    //!
+    //! The wait ends with no turn held when a shutdown is requested, or when
+    //! the calling thread's attempt is cancelled (PassphraseAttemptCancel). The
+    //! attempt is then given up: its passphrase is not checked, nothing is
+    //! counted, and its place passes to the attempt behind it. Never call it
+    //! under cs_wallet.
+    PassphraseTurn AwaitPassphraseTurn() LOCKS_EXCLUDED(cs_wallet, m_passphrase_turn_mutex);
+
+    //! Serve the ticket after \p ticket, or, when \p ticket is not yet the one
+    //! served, mark it to be passed over when its turn comes.
+    void EndPassphraseTicket(uint64_t ticket) EXCLUSIVE_LOCKS_REQUIRED(m_passphrase_turn_mutex);
+
+    //! ChangeWalletPassphrase() without the turn or the delay. \p
+    //! passphrase_accepted is set once the old passphrase has been checked:
+    //! true when it opened a master key record and that key opens the keys,
+    //! false when it did not. It takes
+    //! cs_wallet only to copy the master key records and to write the new one.
+    //! A change that succeeds ends every capability, and puts in \p
+    //! relock_epochs the epochs of the unlocks they made, for the caller to
+    //! lock once cs_wallet is released.
+    bool ChangeWalletPassphraseWithoutDelay(const SecureString& strOldWalletPassphrase,
+                                            const SecureString& strNewWalletPassphrase,
+                                            std::optional<bool>& passphrase_accepted,
+                                            std::set<uint64_t>& relock_epochs) LOCKS_EXCLUDED(cs_wallet);
+
+public:
     void GetKeyBirthTimes(std::map<CKeyID, int64_t> &mapKeyBirth) const EXCLUSIVE_LOCKS_REQUIRED(cs_main, cs_wallet);
 
 
@@ -594,8 +928,13 @@ private:
 
 public:
     void WalletUpdateSpent(const CTransaction &tx, bool fBlock, CWalletDB* pwalletdb);
-    int ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate = false);
-    int ScanForMRCRequests(CBlockIndex* pindexStart, CBlockIndex* pindexEnd, bool fUpdate = false);
+    //! \p progress_height, when given, is set to the height of each block as the scan
+    //! reaches it (relaxed), for a caller that reports the scan's progress from another
+    //! thread without a lock.
+    int ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate = false,
+                                  std::atomic<int>* progress_height = nullptr);
+    int ScanForMRCRequests(CBlockIndex* pindexStart, CBlockIndex* pindexEnd, bool fUpdate = false,
+                           std::atomic<int>* progress_height = nullptr);
     void ReacceptWalletTransactions();
 
 
@@ -641,27 +980,38 @@ public:
                          std::string& strFailReason, const CCoinControl* coinControl);
     bool CreateTransaction(const std::vector<std::pair<CScript, int64_t>>& vecSend, CWalletTx& wtxNew, CReserveKey& reservekey,
                            int64_t& nFeeRet, int& nChangePosRet, const CCoinControl* coinControl = nullptr,
-                           bool change_back_to_input_address = false, bool permitted_while_staking_only = false,
+                           bool change_back_to_input_address = false, const StakingKeyAccess* renewal_access = nullptr,
                            const std::set<size_t>& subtract_fee_outputs = {});
     bool CreateTransaction(const std::vector<std::pair<CScript, int64_t>>& vecSend, CWalletTx& wtxNew, CReserveKey& reservekey,
                            int64_t& nFeeRet, const CCoinControl* coinControl = nullptr, bool change_back_to_input_address = false,
-                           bool permitted_while_staking_only = false, const std::set<size_t>& subtract_fee_outputs = {});
+                           const StakingKeyAccess* renewal_access = nullptr, const std::set<size_t>& subtract_fee_outputs = {});
     //! nEnforcedMinFee, when nonzero, sets a fee floor above the normal size-based fee
     //! (e.g. splitunspent's per-piece fee). The fee can still rise above it if required.
     //!
     //! Note the asymmetry below is deliberate, not an oversight: only the
-    //! overloads the exempt caller actually uses carry
-    //! permitted_while_staking_only. The setCoins overload without
-    //! nChangePosRet is reached only from consolidateunspent, splitunspent and
-    //! sweepuncoveredcoins, all user-initiated spends that must stay refused
-    //! (each calls EnsureWalletIsUnlocked first, so they are already refused
-    //! before reaching the builder), so giving it the parameter would only
-    //! widen the ways to reach the exemption.
-    //! \p permitted_while_staking_only exempts a caller from the staking-only
-    //! refusal. Exactly one caller passes it: the hourly automated beacon
-    //! renewal job, which runs unattended on exactly the wallets a researcher
-    //! unlocks for staking, and whose refusal would let their beacon expire
-    //! silently at six months.
+    //! overloads the automated renewal actually uses carry renewal_access. The
+    //! setCoins overload without nChangePosRet is reached only from
+    //! consolidateunspent, splitunspent and sweepuncoveredcoins, all
+    //! user-initiated spends that must stay refused (each calls
+    //! EnsureWalletIsUnlocked first, so they are already refused before
+    //! reaching the builder), so giving it the parameter would only widen the
+    //! ways to reach the renewal's build.
+    //!
+    //! \p renewal_access is the automated beacon renewal's, and only
+    //! Researcher::RunRenewBeaconJob() can make one. That job runs hourly on the
+    //! wallets a researcher unlocks for staking, and a refusal would let the
+    //! beacon expire at six months. With it the builder:
+    //!  - builds while the wallet is unlocked for staking only;
+    //!  - pays the minimum fee for the transaction's size. When a pass's fee is
+    //!    above the minimum for the coins it selected, it keeps those coins and
+    //!    pays their minimum;
+    //!  - sends any change back to the address of one of its inputs, so it
+    //!    draws no key from the pool;
+    //!  - checks the built transaction with GRC::IsRenewalShape() before it
+    //!    signs anything, and fails if it is not that shape;
+    //!  - signs through a StakingSigningProvider made with the access.
+    //! Every other caller passes nullptr and is refused while the wallet is
+    //! unlocked for staking only.
     //!
     //! It is NOT "contract transactions are harmless". The GUI contract surface
     //! has no unlock guard of its own and addkey gates only on IsLocked(), so
@@ -675,10 +1025,12 @@ public:
     //! the sender is debited exactly those. Empty, the default, keeps the fee
     //! and burn on top of the outputs. The same asymmetry applies: only the
     //! overloads on the GUI send path carry it, since that is its one caller.
+    //! A non-empty set with \p renewal_access is refused: the renewal's outputs
+    //! and burn are fixed, and GRC::IsRenewalShape() checks them.
     bool CreateTransaction(const std::vector<std::pair<CScript, int64_t>>& vecSend, std::set<std::pair<const CWalletTx*,unsigned int>>& setCoins,
                            CWalletTx& wtxNew, CReserveKey& reservekey, int64_t& nFeeRet, int& nChangePosRet,
                            const CCoinControl* coinControl = nullptr, bool change_back_to_input_address = false,
-                           int64_t nEnforcedMinFee = 0, bool permitted_while_staking_only = false,
+                           int64_t nEnforcedMinFee = 0, const StakingKeyAccess* renewal_access = nullptr,
                            const std::set<size_t>& subtract_fee_outputs = {});
     bool CreateTransaction(const std::vector<std::pair<CScript, int64_t>>& vecSend, std::set<std::pair<const CWalletTx*,unsigned int>>& setCoins,
                            CWalletTx& wtxNew, CReserveKey& reservekey, int64_t& nFeeRet, const CCoinControl* coinControl = nullptr,
@@ -708,7 +1060,8 @@ public:
     bool NewKeyPool();
     bool TopUpKeyPool(unsigned int nSize = 0);
     int64_t AddReserveKey(const CKeyPool& keypool);
-    void ReserveKeyFromKeyPool(int64_t& nIndex, CKeyPool& keypool);
+    //! \p top_up false takes from the pool as it stands, creating no key.
+    void ReserveKeyFromKeyPool(int64_t& nIndex, CKeyPool& keypool, bool top_up = true);
     void KeepKey(int64_t nIndex);
     void ReturnKey(int64_t nIndex);
     bool GetKeyFromPool(CPubKey &key, bool fAllowReuse=true);
@@ -1017,6 +1370,11 @@ public:
 
     void ReturnKey();
     bool GetReservedKey(CPubKey &pubkey);
+    //! Reserve the oldest key in the key pool as the pool stands: no top-up
+    //! first, and no default key when the pool is empty, so no key is created.
+    //! False when the pool is empty. KeepKey() keeps it; ReturnKey(), or the end
+    //! of this object, puts it back in the pool.
+    bool GetReservedKeyWithoutTopUp(CPubKey& pubkey);
     void KeepKey();
 };
 

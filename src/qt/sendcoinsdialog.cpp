@@ -167,6 +167,33 @@ SendCoinsDialog::~SendCoinsDialog()
     delete payAmounts;
 }
 
+QString SendCoinsDialog::FormatSendConfirmation(const QList<SendCoinsRecipient>& recipients,
+                                                CAmount fee_rate_per_kb, const QString& change_address)
+{
+    QStringList formatted;
+    for (const SendCoinsRecipient& rcp : recipients) {
+        QString amountStr = BitcoinUnits::formatWithUnit(BitcoinUnits::BTC, rcp.amount);
+        if (rcp.fSubtractFeeFromAmount)
+        {
+            amountStr += " " + tr("(minus fee)");
+        }
+        formatted.append(tr("<b>%1</b> to %2 (%3)").arg(amountStr,
+              rcp.label.toHtmlEscaped(), rcp.address.toHtmlEscaped()));
+    }
+
+    QString text = tr("Are you sure you want to send %1?").arg(formatted.join(tr(" and ")));
+
+    text += "<br><br>" + tr("Transaction fee: %1 per kB").arg(
+        BitcoinUnits::formatWithUnit(BitcoinUnits::BTC, fee_rate_per_kb));
+
+    if (!change_address.isEmpty())
+    {
+        text += "<br>" + tr("Change to: %1").arg(change_address.toHtmlEscaped());
+    }
+
+    return text;
+}
+
 void SendCoinsDialog::on_sendButton_clicked()
 {
     QList<SendCoinsRecipient> recipients;
@@ -196,41 +223,6 @@ void SendCoinsDialog::on_sendButton_clicked()
         return;
     }
 
-    // Format confirmation message
-    QStringList formatted;
-    for (const SendCoinsRecipient& rcp : recipients) {
-        QString amountStr = BitcoinUnits::formatWithUnit(BitcoinUnits::BTC, rcp.amount);
-        if (rcp.fSubtractFeeFromAmount)
-        {
-            amountStr += " " + tr("(minus fee)");
-        }
-        formatted.append(tr("<b>%1</b> to %2 (%3)").arg(amountStr,
-              rcp.label.toHtmlEscaped(), rcp.address));
-    }
-
-    fNewRecipientAllowed = false;
-
-    QMessageBox::StandardButton retval = QMessageBox::question(this, tr("Confirm send coins"),
-                          tr("Are you sure you want to send %1?").arg(formatted.join(tr(" and "))),
-          QMessageBox::Yes|QMessageBox::Cancel,
-          QMessageBox::Cancel);
-
-    if(retval != QMessageBox::Yes)
-    {
-        fNewRecipientAllowed = true;
-        return;
-    }
-
-    WalletModel::UnlockContext ctx(model->requestUnlock());
-    if(!ctx.isValid())
-    {
-        // Unlock wallet was cancelled
-        fNewRecipientAllowed = true;
-        return;
-    }
-
-    WalletModel::SendCoinsReturn sendstatus;
-
     // The dialog's coin-control selection is already the boundary value type,
     // so pass it straight through when coin-control features are on. dest_change
     // is only ever set to a valid encoded address (see the change handlers), so
@@ -240,6 +232,33 @@ void SendCoinsDialog::on_sendButton_clicked()
     {
         coin_control = *coinControl;
     }
+
+    // Format confirmation message
+    const QString change_address = (coin_control && !coin_control->dest_change.empty())
+        ? QString::fromStdString(coin_control->dest_change) : QString();
+
+    fNewRecipientAllowed = false;
+
+    QMessageBox::StandardButton retval = QMessageBox::question(this, tr("Confirm send coins"),
+                          FormatSendConfirmation(recipients, model->getTransactionFeeRate(), change_address),
+          QMessageBox::Yes|QMessageBox::Cancel,
+          QMessageBox::Cancel);
+
+    if(retval != QMessageBox::Yes)
+    {
+        fNewRecipientAllowed = true;
+        return;
+    }
+
+    WalletModel::UnlockContext ctx(model->requestUnlock(CapabilityKind::Send));
+    if(!ctx.isValid())
+    {
+        // Unlock wallet was cancelled
+        fNewRecipientAllowed = true;
+        return;
+    }
+
+    WalletModel::SendCoinsReturn sendstatus;
 
     // Fee-confirmation loop. When the required fee exceeds both the
     // configured transaction fee and what the user has accepted so far,
@@ -337,8 +356,9 @@ void SendCoinsDialog::on_sendButton_clicked()
         break;
     case WalletModel::WalletUnlockedForStakingOnly:
         QMessageBox::warning(this, tr("Send Coins"),
-            tr("Error: The wallet is unlocked for staking only, so it will not send. "
-               "Lock the wallet and unlock it again without the staking-only option to send."),
+            tr("Error: The wallet is unlocked for staking only, and the passphrase entered for "
+               "this send no longer applies (it lasts five minutes). Send again, and enter the "
+               "passphrase when asked."),
             QMessageBox::Ok, QMessageBox::Ok);
         break;
     case WalletModel::TransactionCommitFailed:

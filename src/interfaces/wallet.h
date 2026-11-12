@@ -7,11 +7,14 @@
 
 #include "interfaces/marshal.h"
 
+#include "interfaces/file_transfer.h" // For FileSource.
 #include "interfaces/handler.h"
 #include "node/ui_interface.h" // For ChangeType.
 #include "primitives/transaction.h" // For COutPoint.
 #include "support/allocators/secure.h" // For SecureString.
 #include "uint256.h"
+#include "wallet/autounlock_setup.h" // For AutoUnlockSetupResult and AutoUnlockStoreStatus.
+#include "wallet/capability.h" // For CapabilityKind and PassphraseAttemptCancel.
 
 #include <cstdint>
 #include <functional>
@@ -27,6 +30,8 @@ class CPubKey;
 class CWallet;
 
 namespace interfaces {
+
+class ConnectionScope;
 
 //! Snapshot of the four GUI-displayed balances, filled atomically under one
 //! lock acquisition (see Wallet::tryGetBalances).
@@ -163,6 +168,8 @@ enum class MessageSignStatus
     OK,
     KeyNotAvailable, //!< No private key for the address in this wallet.
     SigningFailed,   //!< SignCompact failed.
+    Refused,         //!< The wallet cannot use its keys: locked, or unlocked for staking only
+                     //!< with no SignMessage capability for this request.
 };
 
 //! Result of Wallet::verifyMessage (pure crypto, but kept behind the interface
@@ -252,6 +259,10 @@ public:
     //! Immature (newly generated) balance.
     virtual int64_t getImmatureBalance() = 0;
 
+    //! The fee rate per kB a send pays: the configured rate (nTransactionFee),
+    //! or the minimum fee per kB when that is higher.
+    virtual CAmount getTransactionFeeRate() = 0;
+
     //! Fill all four balances in one shot, or return false without blocking
     //! when the core is busy (cs_main/cs_wallet unavailable). The balance
     //! scans are expensive on large wallets, so refresh-path callers must be
@@ -302,6 +313,12 @@ public:
     //! Encrypt the wallet with the given passphrase.
     virtual bool encryptWallet(const SecureString& passphrase) = 0;
 
+    //! After encryptWallet() has encrypted the wallet through this object: the paths of the
+    //! core's automatic wallet backups made before the encryption, which still hold the
+    //! unencrypted keys, in name order (GRC::ListAutomaticWalletBackupsBefore). Empty before
+    //! then. Nothing is deleted.
+    virtual std::vector<std::string> getPreEncryptionBackups() = 0;
+
     //! Lock the wallet. This also clears the staking-only restriction, which
     //! belongs to the unlock rather than outliving it.
     virtual bool lockWallet() = 0;
@@ -309,34 +326,103 @@ public:
     //! Narrow the current unlock to staking only, without a passphrase.
     //!
     //! Narrowing only: it removes permission and never adds it, so it is safe
-    //! to expose. Used to hand back an elevation taken for one operation on a
-    //! wallet the user had left unlocked for staking; locking instead would
-    //! silently stop staking. False when there was nothing to narrow, which
-    //! covers both a locked wallet and an unencrypted one -- do not read false
-    //! as "it was locked".
+    //! to expose. False when there was nothing to narrow, which covers both a
+    //! locked wallet and an unencrypted one -- do not read false as "it was
+    //! locked".
+    //!
+    //! No production callers. It was the other half of elevateWallet(), which
+    //! is retired. Left in place because removing it would leave an ordinal
+    //! hole at @35.
     virtual bool restrictToStakingOnly() = 0;
 
-    //! Widen an unlock in progress to full for one operation, given the
-    //! passphrase. The other half of restrictToStakingOnly(): a GUI action that
-    //! needs a full unlock elevates, acts, and hands the elevation back.
-    //!
-    //! Not a lock followed by an unlock. That threw away the unlock's deadline,
-    //! so a wallet unlocked by walletpassphrase for a fixed time stayed
-    //! unlocked indefinitely afterwards, and it left a staking wallet locked
-    //! when the prompt was cancelled.
-    //!
-    //! False when the wallet is locked -- there is no unlock to widen, and the
-    //! caller wants unlockWallet() -- when it is unencrypted, or on a wrong
-    //! passphrase.
+    //! Always false, and logged. elevateWallet is retired: a client begins a
+    //! capability for each operation with beginElevation() and ends it with
+    //! endElevation(). Kept because wallet.capnp cannot drop a released
+    //! ordinal (@36).
     virtual bool elevateWallet(const SecureString& passphrase) = 0;
+
+    //! Begin a capability for one operation of \p kind, given the passphrase.
+    //!
+    //! The capability is held for this connection: the wallet methods that use
+    //! keys for an operation of that kind (sendCoins for Send, signMessage for
+    //! SignMessage, the PSGT and contract methods for theirs, the console for
+    //! RpcRequest) run under it until endElevation() or its deadline. A locked
+    //! wallet is unlocked for staking only until the capability ends. A second begin replaces the first.
+    //!
+    //! False on a wrong passphrase (after the failed-passphrase delay, so it can
+    //! block for up to 30 s -- never call it on the GUI thread), on a kind
+    //! outside CapabilityKind, or when the wallet cannot be unlocked for it. An
+    //! unencrypted wallet accepts any passphrase.
+    //!
+    //! Served on an IPC connection (bindConnectionScope), it is also false when
+    //! the connection had closed before the capability reached the slot: the
+    //! capability is ended, and the slot, which may hold the next GUI's
+    //! capability by then, is left as it is. A connection that closes after the
+    //! capability reached the slot gets true, and the connection's teardown hook
+    //! ends the capability.
+    //!
+    //! The passphrase first waits its turn behind other passphrase attempts,
+    //! which are served in the order they ask. In the monolithic build a
+    //! PassphraseAttemptCancel on the calling thread gives the attempt up while
+    //! it waits, and this returns false; across IPC the attempt waits in the
+    //! node, where the cancel cannot reach it, and only the node's shutdown or
+    //! the closing of the client's connection (bindConnectionScope) ends the
+    //! wait. An attempt given up so is not checked and not counted.
+    virtual bool beginElevation(const SecureString& passphrase, CapabilityKind kind) = 0;
+
+    //! End the capability beginElevation() began, if one is held. Idempotent.
+    //! An operation already running under it finishes. Once the IPC connection
+    //! the wallet is served on has closed it does nothing: the slot may hold the
+    //! next GUI's capability, and the connection's teardown ended this one's.
+    virtual void endElevation() = 0;
 
     //! Unlock the wallet; on success the staking-only preference is set to
     //! staking_only (a full unlock clears a stale staking-only restriction).
+    //!
+    //! The passphrase waits its turn behind other passphrase attempts, and a
+    //! wrong one is followed by the failed-passphrase delay (up to 30 s), so
+    //! this can block -- never call it on the GUI thread. The wait can be
+    //! given up as beginElevation()'s can.
     virtual bool unlockWallet(const SecureString& passphrase, bool staking_only) = 0;
 
-    //! Change the wallet passphrase (locks the wallet first).
+    //! Change the wallet passphrase. The wallet keeps the unlock the user made,
+    //! whether or not the change succeeds: a wallet unlocked for staking only
+    //! is still unlocked for staking only, with the same relock deadline, a
+    //! full unlock stays full, and a locked wallet stays locked throughout. On
+    //! success every capability begun with the old passphrase ends, and so does
+    //! an unlock a capability made on a locked wallet: that wallet is locked
+    //! again at once.
+    //!
+    //! The old passphrase waits its turn and a wrong one is delayed (up to
+    //! 30 s) as an unlock's is, and the new key is derived several times to
+    //! set its iteration count, so this can block -- never call it on the GUI
+    //! thread. The wait for its turn can be given up as beginElevation()'s can.
     virtual bool changeWalletPassphrase(const SecureString& old_passphrase,
                                         const SecureString& new_passphrase) = 0;
+
+    //! Store the wallet passphrase for staking-only autounlock, once it has been
+    //! checked (SetAutoUnlockSecret()). The passphrase is taken here, not from the
+    //! capability this connection holds: the store needs the passphrase itself.
+    //! The wallet's unlock is left as it was. OkUnverified when the file was
+    //! written but could not be read back to check it; the core checks it when it
+    //! next starts.
+    //!
+    //! The passphrase waits its turn and a wrong one is delayed (up to 30 s), and
+    //! the store does file I/O and encryption, so this can block -- never call it
+    //! on the GUI thread. The wait for its turn can be given up as
+    //! beginElevation()'s can.
+    virtual AutoUnlockSetupResult setAutoUnlockSecret(const SecureString& passphrase) = 0;
+
+    //! Remove the stored autounlock passphrase, once the wallet passphrase has
+    //! been checked, and lock the wallet (ClearAutoUnlockSecret()). Blocks as
+    //! setAutoUnlockSecret() does.
+    virtual AutoUnlockSetupResult clearAutoUnlockSecret(const SecureString& passphrase) = 0;
+
+    //! What the core's autounlock store reports: whether this platform has one,
+    //! whether a passphrase is stored, the scope it is stored in, where, and why
+    //! what is stored would not be used. Not supported on a platform without a
+    //! store. Reads the store's file once, without decrypting it.
+    virtual AutoUnlockStoreStatus getAutoUnlockStatus() = 0;
 
     //! Look up the public key for a key id. Public keys only — the wallet
     //! stays in-node in every build configuration, so this interface never
@@ -380,23 +466,114 @@ public:
     //! and a fee that meanwhile grew past accepted_fee simply returns
     //! FeeConfirmationRequired again, so no fee the user has not accepted is
     //! ever committed.
+    //!
+    //! Runs under the client's Send capability (beginElevation()), which one
+    //! flow holds across these calls. Without it, a wallet unlocked for staking
+    //! only reports WalletUnlockedForStakingOnly.
     virtual SendCoinsResult sendCoins(const std::vector<WalletSendRecipient>& recipients,
                                       const std::optional<WalletCoinControl>& coin_control,
                                       int64_t accepted_fee) = 0;
 
-    //! Back up the wallet .dat file to dest. Returns false on I/O failure.
+    //! Always false, and logged: the core no longer writes to a path the client
+    //! names. A client backs up through beginBackup() and the transfer channel.
+    //! Kept because wallet.capnp cannot drop a released ordinal (@20).
     virtual bool backupWallet(const std::string& dest) = 0;
 
-    //! Back up the active config file to dest. Returns false on I/O failure.
-    //! Paired with backupWallet in the GUI backup action; the config file
-    //! belongs to the same node, so it stays behind the wallet boundary
-    //! rather than requiring a separate node reach for one file copy.
+    //! Always false, and logged, as backupWallet(). Kept for its released
+    //! ordinal (@21).
     virtual bool backupConfigFile(const std::string& dest) = 0;
 
+    //! Snapshot the requested items (a mask of BackupItem) into the core's
+    //! transfer directory and return a source that streams them, one entry per
+    //! requested item in the order wallet, configuration file, settings file.
+    //!
+    //! Runs under the client's Backup capability (beginElevation()) when the
+    //! wallet is encrypted and not fully unlocked; an unencrypted or fully
+    //! unlocked wallet needs none. A capability authorises one operation, so
+    //! the Backup capability this call ran under is ended when it returns,
+    //! whether the snapshots were made or not, and the returned source holds
+    //! none. Only that capability: one begun into the slot while the call ran
+    //! stays there. A refusal before that point (a live transfer, no capability)
+    //! leaves the slot as it was, and so does a call that ran under none: a
+    //! capability of another kind is left for its own operation.
+    //!
+    //! Null, with \p error_out set, while another transfer of this wallet
+    //! interface is live, without the capability, when the wallet is requested
+    //! and is not file-backed, when the transfer directory lacks room, or when a
+    //! snapshot fails. Nothing is left in the transfer directory then. A
+    //! configuration or settings file that does not exist (or -nosettings) gives
+    //! an entry with no file and the note "no configuration file" or "no
+    //! settings file". So does a configuration file requested in a deployment
+    //! where it belongs to another account (wallet::ConfigBackupPermitted), with
+    //! the reason as its note: nothing of it is copied or sent, and the other
+    //! items are backed up.
+    //!
+    //! The source deletes each snapshot once it has streamed it, and every one
+    //! left when it is cancelled or destroyed, or when the IPC connection it was
+    //! served on closes. Another transfer can begin once it is destroyed.
+    virtual std::unique_ptr<FileSource> beginBackup(uint8_t items, std::string& error_out) = 0;
+
+    //! Run a console command that writes a file (a Download row of
+    //! ConsoleFileCommands(): dumpwallet, dumpcontracts) and return a source
+    //! that streams what it writes, for the client to save under the path it
+    //! chose. \p args are the command's console arguments without that path;
+    //! the core puts a value of its own at the row's path_index, so no path
+    //! the client names reaches the core.
+    //!
+    //! dumpwallet runs under the client's FileTransfer capability
+    //! (beginElevation()) when the wallet is encrypted and not fully unlocked;
+    //! an unencrypted or fully unlocked wallet needs none, and a capability of
+    //! another kind the client holds is then left for its own operation.
+    //! dumpcontracts exports public chain data and needs no capability on any
+    //! wallet (the row's needs_passphrase is false): it neither uses nor ends
+    //! one the client holds. dumpwallet's source
+    //! holds the capability, when there is one, while it streams, generates
+    //! the dump under it, and ends it at the dump's end, on cancel, when
+    //! destroyed (taking it out of the slot), or when the connection closes
+    //! (the slot is then left as it is). So the client keeps the capability
+    //! (its UnlockContext) until
+    //! the download has finished: ending it ends the stream. dumpcontracts
+    //! runs here, into the core's transfer directory; the source streams that
+    //! file, with the command's reply as the entry's note, and deletes it as a
+    //! backup's source does.
+    //!
+    //! Null, with \p error_out set: "not a file command" for a method that is
+    //! not a Download row; too few arguments before the file, or more in all
+    //! than the command's RPC takes (the row's max_args); another
+    //! transfer of this wallet interface is live; "Enter the wallet
+    //! passphrase to transfer files." when dumpwallet's wallet may not use its
+    //! keys without the capability; or the command failed. Another transfer can
+    //! begin once the source is destroyed.
+    virtual std::unique_ptr<FileSource> beginConsoleDownload(const std::string& method,
+                                                             const std::vector<std::string>& args,
+                                                             std::string& error_out) = 0;
+
+    //! Begin a console command that reads a file (an Upload row of
+    //! ConsoleFileCommands(): importwallet, parseaccrualsnapshotfile) and
+    //! return a sink for the file's \p size bytes. \p args are as for
+    //! beginConsoleDownload(), and so is the capability it runs under.
+    //! importwallet's upload is held in memory, never on the core's disk, and
+    //! imported at finish() under the capability, when there is one, which
+    //! the sink holds until then and ends when it is done, cancelled or
+    //! destroyed (taking it out of the slot), or when the connection closes
+    //! (the slot is then left as it is).
+    //! parseaccrualsnapshotfile's upload is written to a core temporary file,
+    //! which the command reads at finish() and which is then deleted; this
+    //! call ends the capability before it returns.
+    //!
+    //! Null, with \p error_out set, as beginConsoleDownload() (with "not a
+    //! file command" for a method that is not an Upload row), and also when
+    //! \p size is above the row's max_upload_bytes ("too large") or the
+    //! transfer directory lacks room for a temporary file.
+    virtual std::unique_ptr<FileSink> beginConsoleUpload(const std::string& method,
+                                                         const std::vector<std::string>& args, uint64_t size,
+                                                         std::string& error_out) = 0;
+
     //! Sign message with the private key for address (the "sign message" tool).
-    //! The wallet must already be unlocked (the GUI holds an UnlockContext). On
-    //! OK, signature_out is the base64 signature. The private key never leaves
-    //! the node.
+    //! Runs under the client's SignMessage capability (beginElevation()); the
+    //! GUI holds an UnlockContext for it. Without one, a wallet unlocked for
+    //! staking only reports KeyNotAvailable. On OK, signature_out is the base64
+    //! signature. The private key never leaves the node.
     virtual MessageSignStatus signMessage(const std::string& address, const std::string& message,
                                           std::string& signature_out) = 0;
 
@@ -429,16 +606,20 @@ public:
     //! false return does not necessarily mean the in-memory entry survived.
     virtual bool delAddressBook(const std::string& address) = 0;
 
-    //! Reserve a fresh key from the pool and return its encoded destination. The
-    //! wallet must already be unlocked (the GUI holds an UnlockContext); the key
-    //! never crosses the boundary. Returns false on key-generation failure. Does
-    //! not touch the address book -- the caller labels the address separately.
+    //! Reserve a fresh key from the pool and return its encoded destination; the
+    //! key never crosses the boundary. Under the client's Send capability the
+    //! pool may be refilled; without one, a wallet unlocked for staking only
+    //! draws from the pool as it is. Returns false when no fresh key is
+    //! available -- an empty pool that may not be refilled -- and never falls
+    //! back on a key the wallet has already handed out. Does not touch the
+    //! address book -- the caller labels the address separately.
     virtual bool getNewReceiveAddress(std::string& address_out) = 0;
 
     //! Reserve a fresh (non-reused) key from the pool, set its address-book
     //! label, and return its encoded destination -- the CPubKey stays node-side.
     //! For the researcher pool page, which previously reserved the key and
-    //! encoded the address GUI-side. Returns false on key-generation failure.
+    //! encoded the address GUI-side; under its Contract capability the pool may
+    //! be refilled. Returns false on key-generation failure.
     //! Distinct name (not an overload of getNewReceiveAddress) because the IPC
     //! proxy generator takes a member-function pointer and cannot disambiguate
     //! overloaded names.
@@ -463,11 +644,35 @@ public:
     //! Register a handler for wallet-transaction changes.
     using TransactionChangedFn = std::function<void(const uint256& tx_hash, ChangeType status)>;
     virtual std::unique_ptr<Handler> handleTransactionChanged(TransactionChangedFn fn) = 0;
+
+    //! Bind this wallet to the IPC connection it is served on, so what it starts
+    //! for that connection (transfers, capabilities) can register teardown hooks
+    //! that end it when the connection goes away. The serving Init calls it once,
+    //! before the wallet is handed out. The in-process wallet stores the scope and
+    //! registers nothing itself; wherever it begins, reads or ends the IPC
+    //! capability it asks the scope whether the connection has closed, and
+    //! nothing is called on it when the wallet is destroyed.
+    //!
+    //! LOCAL ONLY: not served over capnp (no ordinal in wallet.capnp), so no peer
+    //! can call it, and the GUI's proxy keeps this default, which does nothing.
+    virtual void bindConnectionScope(std::shared_ptr<ConnectionScope> /*scope*/) {}
 };
 
 //! Return an in-process Wallet interface implementation wrapping the given
 //! wallet, which must outlive the returned object.
 std::unique_ptr<Wallet> MakeWallet(CWallet* wallet);
+
+//! Replace what a served wallet's encryptWallet() calls to stop the core once
+//! the encryption has succeeded (StartShutdown() by default), so a test never
+//! sets the process's real shutdown flag. An empty function restores the default.
+void SetEncryptionShutdownFnForTesting(std::function<void()> fn);
+
+//! Ask the core to stop so the wallet database drops the plaintext residue the
+//! encryption leaves behind, as the RPC encryptwallet does. Runs as a connection
+//! close hook on the IPC event-loop thread and as a scheduler fallback, so it only
+//! requests shutdown: it never blocks, takes a lock or makes an IPC call, and
+//! requesting shutdown twice is harmless.
+void RequestShutdownAfterEncryption();
 
 
 // Marshalability pins (interfaces/marshal.h): each DTO above must stay a
@@ -480,6 +685,7 @@ INTERFACES_ASSERT_MARSHALABLE(WalletCoinControl);
 INTERFACES_ASSERT_MARSHALABLE(CoinControlSummary);
 INTERFACES_ASSERT_MARSHALABLE(WalletSendRecipient);
 INTERFACES_ASSERT_MARSHALABLE(SendCoinsResult);
+INTERFACES_ASSERT_MARSHALABLE(AutoUnlockStoreStatus);
 } // namespace interfaces
 
 #endif // GRIDCOIN_INTERFACES_WALLET_H

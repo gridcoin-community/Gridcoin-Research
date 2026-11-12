@@ -33,9 +33,10 @@ using GuiState = import "gui_state.capnp";
 # generates no override for it on ProxyClient<Init>, so the call resolves to the
 # base default, returns nullptr, and the capability silently does not exist over
 # IPC. The coin channel shipped exactly that way and the multiprocess GUI could
-# not start at all. isAuthenticated is the one deliberate omission (the local
-# listener asks it before authentication); it is recorded in that lint's UNSERVED
-# set with the reason.
+# not start at all. isAuthenticated and connectionClosed are the deliberate
+# omissions (the local listener asks the first before authentication and runs
+# the second at teardown; neither is ever a remote call); they are recorded in
+# that lint's UNSERVED set with the reasons.
 interface Init $Proxy.wrap("interfaces::Init") {
     construct @0 (threadMap :Proxy.ThreadMap) -> (threadMap :Proxy.ThreadMap);
     isCoreReady @1 (context :Proxy.Context) -> (result :Bool);
@@ -43,7 +44,8 @@ interface Init $Proxy.wrap("interfaces::Init") {
     makeStakingStatus @3 (context :Proxy.Context) -> (result :Staking.StakingStatus);
 
     # Connect handshake (doc/multiprocess_design.md section 4.3). authenticate is
-    # the first call; the node serves build/identity info (and the makeX
+    # the first call, after the identity check on Windows (beginAttest and
+    # finishAttest, below); the node serves build/identity info (and the makeX
     # capabilities) only to an authenticated peer.
     authenticate @4 (context :Proxy.Context, cookie :Text) -> (result :Bool);
     getBuildInfo @5 (context :Proxy.Context) -> (result :BuildInfo);
@@ -57,6 +59,21 @@ interface Init $Proxy.wrap("interfaces::Init") {
     makeSideStakeManager @13 (context :Proxy.Context) -> (result :SideStake.SideStakeManager);
     makeWalletCoinSource @14 (context :Proxy.Context) -> (result :WalletCoinSource.WalletCoinSource);
     makeGuiState @15 (context :Proxy.Context) -> (result :GuiState.GuiState);
+
+    # Whether this connection holds the core's one attach slot. False tells an
+    # authenticated second GUI that another is attached; every makeX refuses it.
+    holdsAttachSlot @16 (context :Proxy.Context) -> (result :Bool);
+
+    # The Windows identity check (src/ipc/win_attest.h), served before
+    # authentication: beginAttest names a one-shot pipe and a nonce, the GUI
+    # writes the nonce into the pipe, and finishAttest reads it and decides on
+    # the token that wrote it. A node that requires the check refuses
+    # authenticate until finishAttest has returned true. finishAttest waits for
+    # the nonce and impersonates its writer on the calling thread, so both take
+    # a context, which runs them on the connection's worker thread, never the
+    # event loop.
+    beginAttest @17 (context :Proxy.Context) -> (result :AttestChallenge);
+    finishAttest @18 (context :Proxy.Context) -> (result :Bool);
 }
 
 struct BuildInfo $Proxy.wrap("interfaces::BuildInfo") {
@@ -75,4 +92,10 @@ struct BuildInfo $Proxy.wrap("interfaces::BuildInfo") {
 struct NodeIdentity $Proxy.wrap("interfaces::NodeIdentity") {
     identityToken @0 :Text $Proxy.name("identity_token");
     network @1 :Text;
+}
+
+struct AttestChallenge $Proxy.wrap("interfaces::AttestChallenge") {
+    served @0 :Bool;
+    pipeSuffix @1 :Text $Proxy.name("pipe_suffix");
+    nonceHex @2 :Text $Proxy.name("nonce_hex");
 }

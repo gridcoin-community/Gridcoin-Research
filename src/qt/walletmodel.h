@@ -2,8 +2,9 @@
 #define BITCOIN_QT_WALLETMODEL_H
 
 #include <QObject>
+#include <future>
 #include <map>
-#include <thread>
+#include <memory>
 #include <optional>
 #include <string>
 #include <vector>
@@ -119,8 +120,15 @@ public:
     qint64 getStake() const;
     qint64 getUnconfirmedBalance() const;
     qint64 getImmatureBalance() const;
+    //! The fee rate per kB a send pays (interfaces::Wallet::getTransactionFeeRate).
+    CAmount getTransactionFeeRate() const;
     int getNumTransactions() const;
     EncryptionStatus getEncryptionStatus() const;
+
+    //! What the core's autounlock store reports (interfaces::Wallet::getAutoUnlockStatus).
+    //! Not supported, with the reason as the problem, when the call fails, as it can
+    //! across IPC.
+    AutoUnlockStoreStatus getAutoUnlockStatus() const;
 
     // Check address for validity
     bool validateAddress(const QString &address);
@@ -143,51 +151,80 @@ public:
                               const std::optional<interfaces::WalletCoinControl>& coinControl = std::nullopt,
                               qint64 acceptedFee = 0);
 
-    // Wallet encryption
-    bool setWalletEncrypted(const SecureString& passphrase);
+    // Wallet encryption. On success \p pre_encryption_backups holds the paths of the core's
+    // automatic wallet backups made before the encryption, which still hold the unencrypted
+    // keys (interfaces::Wallet::getPreEncryptionBackups()); empty when there are none or they
+    // could not be had.
+    bool setWalletEncrypted(const SecureString& passphrase, std::vector<std::string>& pre_encryption_backups);
     // Passphrase only needed when unlocking; stakingOnly restricts the
     // unlock to staking (persisted node-side as the unlock preference).
     bool setWalletLocked(bool locked, const SecureString& passPhrase=SecureString(),
                          bool stakingOnly = false);
-    //! Widen an unlock in progress to full, for one operation. What an
-    //! elevation prompt calls instead of locking and unlocking again, so the
-    //! unlock's deadline and the relock armed for it survive it.
-    bool elevateWallet(const SecureString& passPhrase);
-    bool changePassphrase(const SecureString& oldPass, const SecureString& newPass);
 
-    // Back up the wallet .dat / config file to dest (pass-throughs to the
-    // wallet interface, used by the GUI backup action). Return false on
-    // I/O failure.
-    bool backupWallet(const std::string& dest);
-    bool backupConfigFile(const std::string& dest);
+    //! Record that the passphrase prompt raised by requireUnlock() began a
+    //! capability (interfaces::Wallet::beginElevation()), so the requestUnlock()
+    //! waiting on that prompt hands back a context that ends it. GUI thread
+    //! only; the prompt calls it once the check has succeeded.
+    void setElevationBegun() { m_elevation_begun = true; }
 
-    // RAI object for unlocking wallet, returned by requestUnlock()
+    //! A passphrase prompt raised by requestUnlock() is open. A second
+    //! requestUnlock() made meanwhile (from a queued event run inside the
+    //! prompt's event loop) is refused. GUI thread only.
+    bool isUnlockPromptOpen() const { return m_unlock_prompt_open; }
+
+    //! Snapshot the backup items (a mask of interfaces::BackupItem) in the core
+    //! and return a source that streams them: interfaces::Wallet::beginBackup().
+    //! Null, with \p error_out set, when the core refuses. The GUI's backup
+    //! action calls it on the modal GuiIpcWorker, within a Backup context from
+    //! requestUnlock().
+    std::unique_ptr<interfaces::FileSource> beginBackup(uint8_t items, std::string& error_out);
+
+    //! RAII object for one operation's access to the wallet's keys, returned by
+    //! requestUnlock(). While it lives, the interface calls for that operation
+    //! run under the capability it began; it ends that capability when it goes.
     class UnlockContext
     {
     public:
-        UnlockContext(WalletModel *wallet, bool valid, bool relock, bool restore_staking_only = false);
+        UnlockContext(WalletModel *wallet, bool valid, bool end_elevation, uint64_t generation = 0);
         ~UnlockContext();
 
         bool isValid() const { return valid; }
 
-        // Copy operator and constructor transfer the context
+        //! Copying transfers the context: the copy ends the capability, and
+        //! the original no longer does.
         UnlockContext(const UnlockContext& obj) { CopyFrom(obj); }
 
-        // Commented out as we don't use the below form and it triggers an infinite recursion
-        // warning.
-        // UnlockContext& operator=(const UnlockContext& rhs) { CopyFrom(rhs); return *this; }
+        //! Not assignable. Assigning would either leave two owners of one
+        //! capability or end one still in use; a context is only ever handed
+        //! over by construction.
+        UnlockContext& operator=(const UnlockContext&) = delete;
+        UnlockContext& operator=(UnlockContext&&) = delete;
     private:
-        WalletModel *wallet;
-        bool valid;
-        mutable bool relock; // mutable, as it can be set to false by copying
-        //! The wallet was unlocked for staking when this context elevated it,
-        //! so give that scope back on expiry instead of locking.
-        mutable bool restore_staking_only;
+        WalletModel *wallet{nullptr};
+        bool valid{false};
+        //! This context began a capability and ends it when it goes. False for
+        //! a wallet that needed none (unencrypted or fully unlocked) and for a
+        //! context that was copied away. Mutable, as copying clears it.
+        mutable bool end_elevation{false};
+        //! The value of WalletModel::m_elevation_generation when this context's
+        //! capability was begun.
+        uint64_t generation{0};
 
         void CopyFrom(const UnlockContext& rhs);
     };
 
-    UnlockContext requestUnlock();
+    //! Get the wallet's keys for one operation of \p kind.
+    //!
+    //! An unencrypted or fully unlocked wallet needs nothing, and the context
+    //! is valid at once. A locked wallet, or one unlocked for staking only,
+    //! raises requireUnlock(): the user is asked for the passphrase, and a
+    //! capability for \p kind is begun with it. The context ends the capability
+    //! when it goes, unless a later
+    //! requestUnlock() has begun one since, which displaced it. Cancelled or
+    //! refused, the context is invalid and nothing changed. Synchronous: it
+    //! returns once the prompt has closed. While a prompt is open, a further
+    //! call is refused with an invalid context and no prompt.
+    UnlockContext requestUnlock(CapabilityKind kind);
 
     bool getPubKey(const CKeyID &address, CPubKey& vchPubKeyOut) const;
     bool getKeyFromPool(CPubKey& out_public_key, const std::string& label);
@@ -221,11 +258,12 @@ public:
     //! by CoinSelectionModel's fetch/sort paths.
     void drainCoinEventQueue();
 
-    //! Run the coin store's initial wallet scan (reloadAndSnapshot) on a
-    //! one-shot load thread — never the GUI thread: the scan holds
+    //! Run the coin store's initial wallet scan (reloadAndSnapshot) on the
+    //! process's coin-load GuiIpcWorker — never the GUI thread: the scan holds
     //! cs_main + cs_wallet and is O(wallet). Idempotent unless \p force
     //! (the bulk-resync path). Completion is drained and then announced via
-    //! coinSourceLoadFinished().
+    //! coinSourceLoadFinished(); a scan that fails, or finds no worker to run
+    //! on, is announced via coinSourceLoadFailed().
     void ensureCoinSourceLoaded(bool force = false);
 
     //! True once a coin-store scan has completed and been drained. A consumer
@@ -253,9 +291,10 @@ private:
     //! The windowed coin-control boundary (#3183). Not owned (see coinSource()).
     interfaces::WalletCoinSource& m_coin_source;
 
-    //! One-shot coin-store load thread (see ensureCoinSourceLoaded); joined in
-    //! the destructor.
-    std::thread m_coin_load_thread;
+    //! Ready once the latest coin-store scan's job has finished on the worker
+    //! (see ensureCoinSourceLoaded). The destructor waits for it: the job
+    //! reports to this model.
+    std::future<void> m_coin_load_done;
     bool m_coin_load_started = false;
     //! Set on the GUI thread when a completed scan has been drained (see
     //! isCoinSourceLoaded).
@@ -266,6 +305,10 @@ private:
     bool m_coin_reload_pending = false;
     //! Reentrancy guard for drainCoinEventQueue (mirrors m_draining).
     bool m_coin_draining = false;
+
+    //! The coin-store scan has ended, with \p error empty if it succeeded.
+    //! Runs on the GUI thread.
+    void coinSourceLoadEnded(const QString& error);
 
     // Wallet has an options model for wallet-specific options
     // (transaction fee, for example)
@@ -322,6 +365,18 @@ private:
     //! See qt/notificationlifetime.h.
     NotificationLifetime m_notify_lifetime;
 
+    //! Set by setElevationBegun() while requestUnlock() waits on its prompt,
+    //! and read and cleared by it afterwards. GUI thread only.
+    bool m_elevation_begun{false};
+
+    //! requestUnlock() is waiting on its prompt. GUI thread only.
+    bool m_unlock_prompt_open{false};
+
+    //! Counts the capabilities requestUnlock() has begun. The IPC slot holds
+    //! one, the latest; a context whose capability a later one displaced does
+    //! not end the slot's. GUI thread only.
+    uint64_t m_elevation_generation{0};
+
 
 public slots:
     /* Wallet status might have changed */
@@ -367,6 +422,12 @@ signals:
     //! thread; consumers clear their loading state here.
     void coinSourceLoadFinished();
 
+    //! The coin store's wallet scan failed with \p message: in the split
+    //! build, most often because the core dropped the connection. Nothing was
+    //! loaded, coinSourceLoadFinished() is not emitted for it, and the next
+    //! ensureCoinSourceLoaded() scans again. Emitted on the GUI thread.
+    void coinSourceLoadFailed(const QString& message);
+
     // Signal that balance in wallet changed
     void balanceChanged(qint64 balance, qint64 stake, qint64 unconfirmedBalance, qint64 immatureBalance);
 
@@ -379,15 +440,10 @@ signals:
     // Signal emitted when wallet needs to be unlocked
     // It is valid behaviour for listeners to keep the wallet locked after this signal;
     // this means that the unlocking failed or was cancelled.
-    //! Ask the UI for the passphrase so an operation can proceed.
-    //!
-    //! \p elevate says WHICH question, decided here where the wallet state was
-    //! read: true widens an unlock that is already open for staking, false
-    //! unlocks a locked wallet. The receiver must not re-derive it from a second
-    //! status read -- the unlock can expire in between, and answering "unlock"
-    //! then starts a fresh one with no deadline, which this context would go on
-    //! to narrow to staking-only permanently.
-    void requireUnlock(bool elevate);
+    //! Ask the UI for the passphrase so an operation of \p kind can proceed.
+    //! The receiver begins a capability for \p kind with it and, on success,
+    //! calls setElevationBegun() before it returns.
+    void requireUnlock(CapabilityKind kind);
 
     // Asynchronous error notification
     void error(const QString &title, const QString &message, bool modal);

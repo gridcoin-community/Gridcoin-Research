@@ -1,4 +1,5 @@
 #include "walletmodel.h"
+#include "qt/guiipcworker.h"
 #include "qt/guilog.h"
 #include "guiconstants.h"
 #include "optionsmodel.h"
@@ -13,7 +14,11 @@
 #include <QTimer>
 
 #include <cassert>
+#include <exception>
+#include <memory>
 #include <string>
+#include <type_traits>
+#include <utility>
 
 WalletModel::WalletModel(interfaces::Wallet& wallet, interfaces::WalletTxSource& tx_source,
                          interfaces::WalletCoinSource& coin_source,
@@ -68,17 +73,31 @@ WalletModel::WalletModel(interfaces::Wallet& wallet, interfaces::WalletTxSource&
     connect(eventDrainTimer, &QTimer::timeout, this, &WalletModel::drainEventQueue);
     eventDrainTimer->start(MODEL_EVENT_DRAIN_INTERVAL);
 
+    // A core setting or side-stake edit the node refuses for want of the wallet
+    // passphrase asks for it here, as every other operation that needs the keys
+    // does, and the options model sends it again under the Settings capability.
+    optionsModel->setSettingsElevationRequest([this]() -> std::shared_ptr<void> {
+        auto context = std::make_shared<UnlockContext>(requestUnlock(CapabilityKind::Settings));
+        if (!context->isValid()) return nullptr;
+        return context;
+    });
+
     subscribeToCoreSignals();
 }
 
 WalletModel::~WalletModel()
 {
+    // First, because clearing it also ends a Settings capability the options
+    // model may still hold, and ending that needs this model's wallet interface.
+    optionsModel->setSettingsElevationRequest({});
+
     unsubscribeFromCoreSignals();
 
-    // The one-shot coin-store load thread holds only node-side locks; join it
-    // so it never outlives the model that launched it.
-    if (m_coin_load_thread.joinable()) {
-        m_coin_load_thread.join();
+    // A coin-store scan still running reports to this model when it ends, so
+    // wait for it: it never outlives the model that started it. It holds
+    // only node-side locks.
+    if (m_coin_load_done.valid()) {
+        m_coin_load_done.wait();
     }
 }
 
@@ -100,6 +119,11 @@ qint64 WalletModel::getStake() const
 qint64 WalletModel::getImmatureBalance() const
 {
     return m_wallet.getImmatureBalance();
+}
+
+CAmount WalletModel::getTransactionFeeRate() const
+{
+    return m_wallet.getTransactionFeeRate();
 }
 
 int WalletModel::getNumTransactions() const
@@ -184,8 +208,8 @@ void WalletModel::drainEventQueue()
     // walletEventsDrained (each windowed view's getRows)
     // — is a synchronous IPC call that throws std::runtime_error("IPC client
     // method called after disconnect.") once the node process is gone. A drop can
-    // land mid-drain, and a posted BitcoinGUI::requestQuit() (from the IPC
-    // disconnect hook, bitcoin.cpp) cannot preempt a drain already running on this
+    // land mid-drain, and a posted BitcoinGUI::requestQuitForCoreStop() (from the
+    // IPC disconnect hook, bitcoin.cpp) cannot preempt a drain already running on this
     // thread, so an uncaught throw here would escape a Qt slot and abort the GUI.
     // Catch it, stop the periodic drain, and bail; the disconnect hook drives the
     // graceful quit. e.what() is logged so a non-disconnect exception is still
@@ -500,9 +524,34 @@ WalletModel::EncryptionStatus WalletModel::getEncryptionStatus() const
     }
 }
 
-bool WalletModel::setWalletEncrypted(const SecureString& passphrase)
+AutoUnlockStoreStatus WalletModel::getAutoUnlockStatus() const
 {
-    return m_wallet.encryptWallet(passphrase);
+    try {
+        return m_wallet.getAutoUnlockStatus();
+    } catch (const std::exception& e) {
+        LogPrintf("WARN: %s: could not get the autounlock status: %s", __func__, e.what());
+
+        AutoUnlockStoreStatus status;
+        status.problem = e.what();
+        return status;
+    }
+}
+
+bool WalletModel::setWalletEncrypted(const SecureString& passphrase, std::vector<std::string>& pre_encryption_backups)
+{
+    pre_encryption_backups.clear();
+    if (!m_wallet.encryptWallet(passphrase)) return false;
+
+    // The wallet is encrypted now, whatever happens to the list: in the split build the
+    // connection may already be going, and the message after the encryption still has to
+    // say so, with its general warning about earlier backups.
+    try {
+        pre_encryption_backups = m_wallet.getPreEncryptionBackups();
+    } catch (const std::exception& e) {
+        LogPrintf("WARN: %s: could not get the backups made before the encryption: %s", __func__, e.what());
+    }
+
+    return true;
 }
 
 bool WalletModel::setWalletLocked(bool locked, const SecureString &passPhrase, bool stakingOnly)
@@ -521,30 +570,9 @@ bool WalletModel::setWalletLocked(bool locked, const SecureString &passPhrase, b
     }
 }
 
-bool WalletModel::elevateWallet(const SecureString &passPhrase)
+std::unique_ptr<interfaces::FileSource> WalletModel::beginBackup(uint8_t items, std::string& error_out)
 {
-    // Widens the unlock in progress. The key stays installed and the deadline
-    // and the relock armed for it are untouched, so an elevation cannot extend
-    // an unlock the user asked to expire.
-    return m_wallet.elevateWallet(passPhrase);
-}
-
-bool WalletModel::changePassphrase(const SecureString &oldPass, const SecureString &newPass)
-{
-    // The node side locks, rewrites the master key records and restores the
-    // scope and deadline it captured, so a wallet unlocked for staking is still
-    // unlocked for staking, and still expires when it would have.
-    return m_wallet.changeWalletPassphrase(oldPass, newPass);
-}
-
-bool WalletModel::backupWallet(const std::string& dest)
-{
-    return m_wallet.backupWallet(dest);
-}
-
-bool WalletModel::backupConfigFile(const std::string& dest)
-{
-    return m_wallet.backupConfigFile(dest);
+    return m_wallet.beginBackup(items, error_out);
 }
 
 // The tx-table producer-side handlers (NotifyTransactionChanged /
@@ -603,134 +631,110 @@ void WalletModel::unsubscribeFromCoreSignals()
 }
 
 // WalletModel::UnlockContext implementation
-WalletModel::UnlockContext WalletModel::requestUnlock()
+WalletModel::UnlockContext WalletModel::requestUnlock(CapabilityKind kind)
 {
     // One read, and it carries the whole answer.
     const EncryptionStatus initial = getEncryptionStatus();
 
-    // A staking-only unlock is not enough here, so ask for the passphrase and
-    // WIDEN that unlock rather than replacing it. Remember that it WAS
-    // staking-only, because the wallet has to go back to that when this context
-    // expires: with no sticky preference the elevation is full, so without this
-    // the wallet would be left FULLY unlocked after a send, a vote, or even
-    // creating an address.
-    //
-    // This used to relock first, to force a full prompt out of a path that
-    // could only unlock a LOCKED wallet. Two things came of that. The unlock's
-    // deadline went with the key, and the re-unlock carried none, so a wallet
-    // unlocked by walletpassphrase for an hour came back from the prompt
-    // unlocked indefinitely with nothing armed to close it. And a cancelled or
-    // mistyped prompt left the wallet locked -- the key was already gone and
-    // narrowing cannot bring it back -- so a node that had been staking quietly
-    // stopped. Widening in place has neither problem: nothing is given up
-    // before the passphrase is known to be right.
-    const bool was_staking_only = (initial == UnlockedForStakingOnly);
-
-    if (initial == Locked || was_staking_only)
-    {
-        // Request UI to unlock wallet, saying which question to ask. Decided
-        // from THIS read, not from a second one in the receiver.
-        emit requireUnlock(was_staking_only);
+    // Nothing to ask for: an unencrypted wallet has no keys to protect, and a
+    // full unlock is the standing state the user chose, under which every
+    // operation runs as it is.
+    if (initial == Unencrypted || initial == Unlocked) {
+        return UnlockContext(this, true, false);
     }
 
-    // Cancelled, or the wrong passphrase. The test is "fully unlocked", not
-    // "not locked": on the elevation path a refused prompt leaves the wallet
-    // still unlocked for staking, which is exactly the state the caller could
-    // not proceed in. An unencrypted wallet has nothing to unlock, and every
-    // caller may proceed on one.
-    const EncryptionStatus now = getEncryptionStatus();
-    const bool valid = (now == Unencrypted || now == Unlocked);
+    // Locked, or unlocked for staking only. The prompt begins a capability for
+    // this one kind of operation; a locked wallet is unlocked for staking only
+    // until the capability ends. So a cancelled or mistyped prompt changes
+    // nothing, and the deadline of a timed unlock is never touched.
 
-    // Lock on expiry only when this context is what unlocked a LOCKED wallet.
-    // A wallet that was staking is narrowed back instead, never locked.
-    //
-    // The relock armed by an earlier walletpassphrase can come due while the
-    // prompt is open. The dialog runs in Elevate mode for this path, and an
-    // elevation refuses a locked wallet, so that case fails and is reported
-    // rather than quietly becoming a fresh unlock: `valid` is then false and
-    // this context does nothing. Letting it fall back to an ordinary unlock
-    // would start one with no deadline, which the narrowing below would make
-    // permanent -- turning the time-boxed unlock the user asked for into an
-    // open-ended one.
-    return UnlockContext(this, valid, valid && (initial == Locked), was_staking_only);
+    // One prompt at a time. The prompt runs an event loop, and a queued event
+    // run inside it (the console's handling of a finished command) can ask for
+    // another. That one would share m_elevation_begun with this one and could
+    // take its result, and the IPC slot holds one capability, so it is refused.
+    if (m_unlock_prompt_open) {
+        LogPrintf("WARN: %s: refused a passphrase prompt while another is open", __func__);
+        return UnlockContext(this, false, false);
+    }
+
+    // The receiver reports success through setElevationBegun() before it
+    // returns; with no receiver connected, nothing was begun.
+    m_elevation_begun = false;
+
+    {
+        // Cleared however the signal returns.
+        struct PromptOpen {
+            bool& open;
+            explicit PromptOpen(bool& flag) : open(flag) { open = true; }
+            ~PromptOpen() { open = false; }
+        } prompt_open{m_unlock_prompt_open};
+
+        emit requireUnlock(kind);
+    }
+
+    const bool began = std::exchange(m_elevation_begun, false);
+    if (began) ++m_elevation_generation;
+
+    return UnlockContext(this, began, began, m_elevation_generation);
 }
 
-WalletModel::UnlockContext::UnlockContext(WalletModel *wallet, bool valid, bool relock,
-                                         bool restore_staking_only):
+WalletModel::UnlockContext::UnlockContext(WalletModel *wallet, bool valid, bool end_elevation, uint64_t generation):
         wallet(wallet),
         valid(valid),
-        relock(relock),
-        restore_staking_only(restore_staking_only)
+        end_elevation(end_elevation),
+        generation(generation)
 {
 }
 
 WalletModel::UnlockContext::~UnlockContext()
 {
-    if (!valid) return;
+    if (!end_elevation) return;
 
-    // Both arms cross IPC in the split build, and a destructor is implicitly
-    // noexcept: an exception escaping here -- a disconnect mid-call is the
-    // realistic one -- would terminate the GUI outright rather than leave it to
-    // the disconnect handling that already exists. Nothing here can be retried
-    // without the passphrase, so a record of what was left behind is all that
-    // can be owed.
+    // The IPC slot holds one capability, the latest begun. An operation can
+    // outlive its prompt (the MRC page submits on a worker), and once a later
+    // operation has begun its own capability, this one's was ended when it was
+    // displaced: ending the slot now would end the later operation's.
+    if (generation != wallet->m_elevation_generation) return;
+
+    // Ends the capability this context began, exactly once: a copy takes the
+    // duty with it. In the split build the call crosses IPC, and a destructor
+    // is implicitly noexcept, so an exception escaping here -- a disconnect
+    // mid-call is the realistic one -- would terminate the GUI outright. The
+    // node drops the capability with the connection in that case, and it
+    // expires at its deadline in any case.
     try
     {
-        if (restore_staking_only)
-        {
-            // Hand the elevation back rather than locking. Narrowing needs no
-            // passphrase: the master key stays installed and only the permission
-            // is removed.
-            //
-            // Not discarded: in the split build this crosses IPC and can fail,
-            // and a failure leaves the wallet FULLY unlocked, which is the
-            // unsafe direction.
-            //
-            // But false does NOT mean that on its own. It also means there was
-            // nothing to narrow -- a locked wallet or an unencrypted one -- and
-            // the locked case is ordinary here: the timed unlock can simply
-            // have run out while the operation was in progress. Warning on that
-            // would report a wallet left wide open when it had just closed
-            // itself, so read the state and warn only if it really is.
-            if (!wallet->wallet().restrictToStakingOnly()
-                    && wallet->getEncryptionStatus() == Unlocked) {
-                LogPrintf("WARN: %s: could not restore the staking-only scope; the wallet is left "
-                          "fully unlocked", __func__);
-            }
-            return;
-        }
-
-        if (relock)
-        {
-            wallet->setWalletLocked(true);
-        }
+        wallet->wallet().endElevation();
     }
     catch (const std::exception& e)
     {
-        LogPrintf("WARN: %s: could not restore the wallet lock state (%s); it may be left more "
-                  "permissive than it was", __func__, e.what());
+        LogPrintf("WARN: %s: could not end the operation's capability (%s); it ends with the "
+                  "connection or at its deadline", __func__, e.what());
     }
     catch (...)
     {
-        LogPrintf("WARN: %s: could not restore the wallet lock state; it may be left more "
-                  "permissive than it was", __func__);
+        LogPrintf("WARN: %s: could not end the operation's capability; it ends with the "
+                  "connection or at its deadline", __func__);
     }
 }
 
+// Assigning a context would leave two owners of one capability, each ending it
+// when it goes; copying hands the duty over instead (CopyFrom).
+static_assert(!std::is_copy_assignable_v<WalletModel::UnlockContext>);
+static_assert(!std::is_move_assignable_v<WalletModel::UnlockContext>);
+
 void WalletModel::UnlockContext::CopyFrom(const UnlockContext& rhs)
 {
-    // Transfer the context: the old object must do NOTHING on destruction.
-    //
-    // Both flags are cleared, not just relock. If restore_staking_only survived
-    // on the source, its destructor would narrow the scope back to staking-only
-    // while the new owner is still relying on the elevation, and the very
-    // operation that asked for it would then be refused. Every call site
-    // currently constructs directly from the prvalue that requestUnlock returns,
-    // which C++17 elides, so no copy happens today -- but a half-transferred
-    // ownership flag is a trap for the first caller that does copy one.
-    *this = rhs;
-    rhs.relock = false;
-    rhs.restore_staking_only = false;
+    // Transfer the context: the old object must do NOTHING on destruction, or
+    // it would end the capability while the new owner is still relying on it,
+    // and the very operation that asked for it would then be refused. Every
+    // call site currently constructs directly from the prvalue that
+    // requestUnlock returns, which C++17 elides, so no copy happens there --
+    // RPCConsole keeps one on the heap for a command it runs again.
+    wallet = rhs.wallet;
+    valid = rhs.valid;
+    end_elevation = std::exchange(rhs.end_elevation, false);
+    generation = rhs.generation;
 }
 
 bool WalletModel::getPubKey(const CKeyID &address, CPubKey& vchPubKeyOut) const
@@ -799,50 +803,81 @@ void WalletModel::ensureCoinSourceLoaded(bool force)
     if (m_coin_load_started && !force) {
         return;
     }
-    // A load is STILL RUNNING: never join it here. This runs on the GUI thread
-    // and the scan is O(wallet) under cs_main + cs_wallet, so joining would
-    // freeze the UI for the length of a full wallet walk — and the resync flag
-    // that drives the force path fires on ordinary user actions (an
-    // address-book label edit regroups change outputs). Record that another
-    // pass is owed and start it from the completion callback instead; repeated
-    // requests collapse into the single pending flag.
+    // A load is STILL RUNNING: never wait for it here. This runs on the GUI
+    // thread and the scan is O(wallet) under cs_main + cs_wallet, so waiting
+    // would freeze the UI for the length of a full wallet walk — and the
+    // resync flag that drives the force path fires on ordinary user actions
+    // (an address-book label edit regroups change outputs). Record that
+    // another pass is owed and start it from the completion callback instead;
+    // repeated requests collapse into the single pending flag.
     if (m_coin_load_in_flight) {
         m_coin_reload_pending = force;
         return;
     }
-    // Not in flight: the thread has already run its completion callback, so
-    // this join only reaps a finished thread.
-    if (m_coin_load_thread.joinable()) {
-        m_coin_load_thread.join();
-    }
     m_coin_load_started = true;
     m_coin_load_in_flight = true;
 
+    // O(wallet) scan under cs_main + cs_wallet -- the reason this never runs
+    // on the GUI thread. It runs on the coin-load worker, a thread that
+    // outlives the connection to the core: a thread that has made IPC calls
+    // must not exit while its connection may be destroyed (see GuiIpcWorker),
+    // and a disconnect mid-scan ends the call just as the connection is
+    // destroyed. A worker of its own, so a prompt never waits behind a scan.
+    //
+    // The job posts its end back to this model, which outlives it (the
+    // destructor waits for it). Queued to this QObject, so Qt drops it if the
+    // model is gone before it runs. A scan that throws, as one across IPC does
+    // when the core drops the connection, is reported the same way.
     interfaces::WalletCoinSource* source = &m_coin_source;
-    m_coin_load_thread = std::thread([this, source] {
-        // O(wallet) scan under cs_main + cs_wallet -- the reason this runs on
-        // a one-shot thread and never the GUI thread. Completion arrives as
-        // the CoinReset the reload publishes, through the normal drain.
-        source->reloadAndSnapshot();
+    GuiIpcWorker* const worker = GuiIpcWorker::Current(GuiIpcWorker::Role::CoinLoad);
 
-        // Hand completion back to the GUI thread: drain first so the reload's
-        // Reset is APPLIED (the consumers' caches hold the scanned wallet),
-        // then announce. Consumers gate their loading state on this signal —
-        // not on the first Reset they happen to see, which for a cold store is
-        // the registration Reset published against an empty table. Queued to
-        // this QObject, so Qt drops it if the model is gone.
+    m_coin_load_done = worker ? worker->Post([this, source] {
+        QString error;
+
+        try {
+            source->reloadAndSnapshot();
+        } catch (const std::exception& e) {
+            error = QString::fromStdString(e.what());
+            if (error.isEmpty()) error = QStringLiteral("the scan failed");
+        } catch (...) {
+            error = QStringLiteral("the scan failed");
+        }
+
+        QMetaObject::invokeMethod(this, [this, error] { coinSourceLoadEnded(error); }, Qt::QueuedConnection);
+    }) : std::future<void>();
+
+    if (!m_coin_load_done.valid()) {
         QMetaObject::invokeMethod(this, [this] {
-            m_coin_load_in_flight = false;
-            m_coin_load_complete = true;
-            drainCoinEventQueue();
-            emit coinSourceLoadFinished();
-
-            // A resync was requested while this pass was running (the wallet
-            // moved under it): run one more, now that nothing is in flight.
-            if (m_coin_reload_pending) {
-                m_coin_reload_pending = false;
-                ensureCoinSourceLoaded(/*force=*/true);
-            }
+            coinSourceLoadEnded(QStringLiteral("no thread is running to load the coin list"));
         }, Qt::QueuedConnection);
-    });
+    }
+}
+
+void WalletModel::coinSourceLoadEnded(const QString& error)
+{
+    m_coin_load_in_flight = false;
+
+    if (error.isEmpty()) {
+        // Drain first so the reload's Reset is APPLIED (the consumers' caches
+        // hold the scanned wallet), then announce. Consumers gate their
+        // loading state on this signal — not on the first Reset they happen to
+        // see, which for a cold store is the registration Reset published
+        // against an empty table.
+        m_coin_load_complete = true;
+        drainCoinEventQueue();
+        emit coinSourceLoadFinished();
+    } else {
+        // Nothing was loaded. The consumers stay in their loading state, and
+        // the next request scans again.
+        GUILogPrintf("WARN: %s: the coin list could not be loaded: %s", __func__, error.toStdString());
+        m_coin_load_started = false;
+        emit coinSourceLoadFailed(error);
+    }
+
+    // A resync was requested while this pass was running (the wallet moved
+    // under it): run one more, now that nothing is in flight.
+    if (m_coin_reload_pending) {
+        m_coin_reload_pending = false;
+        ensureCoinSourceLoaded(/*force=*/true);
+    }
 }

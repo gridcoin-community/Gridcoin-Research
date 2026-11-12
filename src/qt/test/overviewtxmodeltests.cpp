@@ -42,7 +42,7 @@ void OverviewTxModelTests::transaction_updated_follows_the_applied_rows()
     // judged empty and stays hidden until something else refreshes it.
     qt_test::FakeNode node;
     qt_test::FakeSideStakeManager sidestakes;
-    qt_test::FakeWallet wallet;
+    qt_test::UnencryptedFakeWallet wallet;
     OneBatchTxSource tx_source;
     auto coin_source = interfaces::MakeSyntheticCoinSource(0, 0);
     OptionsModel options(node, sidestakes);

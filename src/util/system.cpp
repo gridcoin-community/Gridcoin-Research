@@ -6,8 +6,10 @@
 #include "node/ui_interface.h"
 #include <util/system.h>
 #include "util/dir_permissions.h"
+#include "util/fsmodes.h"
 #include <util/strencodings.h>
 #include <util/check.h>
+#include <util/refused_setting_keys.h>
 #include <util/string.h>
 
 #include <logging.h>
@@ -45,6 +47,13 @@
 #elif defined(__linux__)
 # include <sys/prctl.h>
 #endif
+
+#ifndef WIN32
+#include <sys/stat.h>
+#endif
+
+#include <cstdio>
+#include <sstream>
 
 #ifdef HAVE_MALLOPT_ARENA_MAX
 #include <malloc.h>
@@ -90,6 +99,13 @@ static bool InterpretBool(const std::string& strValue)
 static std::string SettingName(const std::string& arg)
 {
     return arg.size() > 0 && arg[0] == '-' ? arg.substr(1) : arg;
+}
+
+// The argument name of a settings file key, without its network section.
+static std::string SettingFileKeyName(const std::string& key)
+{
+    const size_t dot = key.find('.');
+    return dot == std::string::npos ? key : key.substr(dot + 1);
 }
 
 /**
@@ -316,6 +332,48 @@ bool ArgsManager::ParseParameters(int argc, const char* const argv[], std::strin
     return true;
 }
 
+bool MatchSettingKeyPattern(std::string_view pattern, std::string_view name)
+{
+    size_t p = 0;
+    size_t n = 0;
+    // The position of the last '*' in the pattern, and the name position it matched from.
+    size_t star = std::string_view::npos;
+    size_t star_name = 0;
+
+    while (n < name.size()) {
+        if (p < pattern.size() && pattern[p] == '*') {
+            star = p++;
+            star_name = n;
+        } else if (p < pattern.size() && pattern[p] == name[n]) {
+            ++p;
+            ++n;
+        } else if (star != std::string_view::npos) {
+            // Let the last '*' take one more character and retry after it.
+            p = star + 1;
+            n = ++star_name;
+        } else {
+            return false;
+        }
+    }
+
+    // Only '*' can remain in the pattern.
+    while (p < pattern.size() && pattern[p] == '*') ++p;
+
+    return p == pattern.size();
+}
+
+bool IsRefusedSettingKey(const std::string& key)
+{
+    const size_t dot = key.find('.');
+    const std::string_view name = std::string_view(key).substr(dot == std::string::npos ? 0 : dot + 1);
+
+    for (const std::string_view pattern : util::REFUSED_SETTING_KEY_PATTERNS) {
+        if (MatchSettingKeyPattern(pattern, name)) return true;
+    }
+
+    return false;
+}
+
 std::optional<unsigned int> ArgsManager::GetArgFlags(const std::string& name) const
 {
     LOCK(cs_args);
@@ -326,6 +384,35 @@ std::optional<unsigned int> ArgsManager::GetArgFlags(const std::string& name) co
         }
     }
     return std::nullopt;
+}
+
+std::map<std::string, unsigned int> ArgsManager::GetRegisteredArgFlags() const
+{
+    LOCK(cs_args);
+    std::map<std::string, unsigned int> flags;
+    for (const auto& arg_map : m_available_args) {
+        for (const auto& arg : arg_map.second) {
+            flags[arg.first] |= arg.second.m_flags;
+        }
+    }
+    return flags;
+}
+
+SettingClass ArgsManager::GetSettingClass(const std::string& key) const
+{
+    // The patterns win over any flag, and strip the section themselves.
+    if (IsRefusedSettingKey(key)) return SettingClass::REFUSE;
+
+    const size_t dot = key.find('.');
+    const std::string name = dot == std::string::npos ? key : key.substr(dot + 1);
+
+    const std::optional<unsigned int> flags = GetArgFlags('-' + name);
+    if (!flags) return SettingClass::ELEVATE;
+
+    if (*flags & COMMAND_LINE_ONLY) return SettingClass::REFUSE;
+    if (*flags & SETTING_FREE) return SettingClass::FREE;
+
+    return SettingClass::ELEVATE;
 }
 
 fs::path ArgsManager::GetBlocksDirPath()
@@ -507,18 +594,35 @@ bool ArgsManager::ReadSettingsFile(std::vector<std::string>* errors)
     }
 
     LOCK(cs_args);
-    m_settings.rw_settings.clear();
+    std::map<std::string, util::SettingsValue> read;
     std::vector<std::string> read_errors;
-    if (!util::ReadSettings(path, m_settings.rw_settings, read_errors)) {
+    if (!util::ReadSettings(path, read, read_errors)) {
         SaveErrors(read_errors, errors);
         return false;
     }
-    for (const auto& setting : m_settings.rw_settings) {
+    m_settings.rw_settings.clear();
+    m_settings.refused_rw_settings.clear();
+    const std::string file = path.filename().string();
+    for (auto& [name, value] : read) {
         std::string section;
-        std::string key = setting.first;
+        std::string key = name;
         (void)InterpretOption(section, key, /* value */ {}); // Split setting key into section and argname
-        if (!GetArgFlags('-' + key)) {
-            LogPrintf("Ignoring unknown rw_settings value %s\n", setting.first);
+        const std::optional<unsigned int> flags = GetArgFlags('-' + key);
+        if (!flags) {
+            LogPrintf("Ignoring unknown rw_settings value %s", name);
+        }
+        const bool command_line_only = flags && (*flags & COMMAND_LINE_ONLY);
+        if (IsRefusedSettingKey(name) || command_line_only) {
+            // An unknown key has had its line above. The config file would not
+            // take it either, so it is not advised there.
+            if (command_line_only) {
+                LogPrintf("ignored %s from %s; it is accepted only on the command line", name, file);
+            } else if (flags) {
+                LogPrintf("ignored %s from %s; set it in gridcoinresearch.conf if you want it", name, file);
+            }
+            m_settings.refused_rw_settings.emplace(name, std::move(value));
+        } else {
+            m_settings.rw_settings.emplace(name, std::move(value));
         }
     }
     return true;
@@ -533,9 +637,33 @@ bool ArgsManager::WriteSettingsFile(std::vector<std::string>* errors) const
 
     LOCK(cs_args);
     std::vector<std::string> write_errors;
-    if (!util::WriteSettings(path_tmp, m_settings.rw_settings, write_errors)) {
+    // Refused values are written back unchanged, so ignoring them at load never deletes them.
+    std::map<std::string, util::SettingsValue> to_write = m_settings.rw_settings;
+    to_write.insert(m_settings.refused_rw_settings.begin(), m_settings.refused_rw_settings.end());
+    // The temporary file is created owner-only and WriteSettings fills it, reopening it by path. It
+    // is then given the permissions of the settings file that it will replace, if there is one, so
+    // a file the operator made wider stays so, and one made read-only does not stop the write.
+    std::string create_error;
+    std::optional<std::string> create_warning;
+    std::FILE* const created = fsmodes::CreateReplacementFile(path, path_tmp, create_error, create_warning,
+                                                              /*binary=*/false, /*keep_now=*/false);
+    if (created == nullptr) {
+        SaveErrors({strprintf("Error: Unable to create settings file %s: %s", path_tmp.string(), create_error)}, errors);
+        return false;
+    }
+    if (create_warning) LogPrintf("WARNING: %s", *create_warning);
+    if (std::fclose(created) != 0) {
+        SaveErrors({strprintf("Error: Unable to create settings file %s", path_tmp.string())}, errors);
+        return false;
+    }
+    if (!util::WriteSettings(path_tmp, to_write, write_errors)) {
         SaveErrors(write_errors, errors);
         return false;
+    }
+    const fsmodes::KeepResult kept = fsmodes::KeepPermissions(path, path_tmp);
+    if (kept.kind == fsmodes::KeepResult::Kind::NotKept) {
+        LogPrintf("WARNING: the permissions of %s could not be kept on the new settings file (%s)",
+                  path.string(), kept.error);
     }
     if (!RenameOver(path_tmp, path)) {
         SaveErrors({strprintf("Failed renaming settings file %s to %s\n", path_tmp.string(), path.string())}, errors);
@@ -553,6 +681,35 @@ std::string ArgsManager::GetArg(const std::string& strArg, const std::string& st
 {
     const util::SettingsValue value = GetSetting(strArg);
     return value.isNull() ? strDefault : value.isFalse() ? "0" : value.isTrue() ? "1" : value.get_str();
+}
+
+std::optional<std::string> ArgsManager::GetConfigFileArg(const std::string& arg) const
+{
+    LOCK(cs_args);
+    // The same resolution as GetSetting, over the configuration file's values alone.
+    util::Settings conf_only;
+    conf_only.ro_config = m_settings.ro_config;
+    const util::SettingsValue value = util::GetSetting(
+        conf_only, m_network, SettingName(arg), !UseDefaultSection(arg), /* get_chain_name= */ false);
+    if (value.isNull() || value.isFalse()) return std::nullopt;
+    return value.isTrue() ? std::string{"1"} : value.get_str();
+}
+
+std::optional<ConfigFileFacts> ArgsManager::GetConfigFileFacts() const
+{
+    LOCK(cs_args);
+    return m_config_file_facts;
+}
+
+bool ArgsManager::ConfigFileUsedIncludes() const
+{
+    LOCK(cs_args);
+    for (const auto& section : m_settings.ro_config) {
+        if (const auto* values = util::FindKey(section.second, "includeconf")) {
+            if (!util::SettingsSpan(*values).empty()) return true;
+        }
+    }
+    return false;
 }
 
 int64_t ArgsManager::GetIntArg(const std::string& strArg, int64_t nDefault) const
@@ -928,6 +1085,12 @@ bool IsConfigFileEmpty()
 
 }
 
+std::string GetConfiguredOption(const std::string& arg)
+{
+    if (gArgs.IsArgNegated(arg)) return {};
+    return gArgs.GetArg(arg, "");
+}
+
 static bool GetConfigOptions(std::istream& stream, const std::string& filepath, std::string& error,
                              std::vector<std::pair<std::string, std::string>>& options, std::list<SectionInfo>& sections)
 {
@@ -987,6 +1150,14 @@ bool ArgsManager::ReadConfigStream(std::istream& stream, const std::string& file
         util::SettingsValue value = InterpretOption(section, key, option.second);
         std::optional<unsigned int> flags = GetArgFlags('-' + key);
         if (flags) {
+            // A command-line-only option is not stored from a config file, and is not an error.
+            if (*flags & COMMAND_LINE_ONLY) {
+                // The daemon reads the configuration file more than once at startup.
+                if (m_logged_command_line_only_keys.insert(key).second) {
+                    LogPrintf("ignored %s from %s; it is accepted only on the command line", key, filepath);
+                }
+                continue;
+            }
             if (!CheckValid(key, value, *flags, error)) {
                 return false;
             }
@@ -1008,12 +1179,96 @@ bool ArgsManager::ReadConfigStream(std::istream& stream, const std::string& file
     return true;
 }
 
+enum class ConfigFileRead { NotOpened, Read, ReadError };
+
+#ifdef WIN32
+//! The path of the open file \p handle as Windows resolves it, links and junctions included
+//! (GetFinalPathNameByHandleW, FILE_NAME_NORMALIZED | VOLUME_NAME_DOS, so with the \\?\ prefix),
+//! or nullopt when it cannot be read.
+static std::optional<fs::path> FinalPathOfOpenFile(HANDLE handle)
+{
+    const DWORD flags = FILE_NAME_NORMALIZED | VOLUME_NAME_DOS;
+    std::wstring name(MAX_PATH, L'\0');
+    DWORD length = ::GetFinalPathNameByHandleW(handle, name.data(), static_cast<DWORD>(name.size()), flags);
+    if (length >= name.size()) {
+        // The size needed, with the terminating null.
+        name.resize(length);
+        length = ::GetFinalPathNameByHandleW(handle, name.data(), static_cast<DWORD>(name.size()), flags);
+    }
+    // On success the length leaves out the terminating null, so it is below the buffer's size.
+    if (length == 0 || length >= name.size()) return std::nullopt;
+    name.resize(length);
+    return fs::path(name);
+}
+#endif
+
+//! The whole configuration file at path, read through one open file. On POSIX the facts recorded
+//! come from fstat on that same open file, so they describe the contents read. The directory is
+//! recorded only while the path, symbolic links resolved, still names the file that is open. On
+//! Windows the file's owner and DACL are read through the open file, and the directory's by the
+//! name of the open file's final path.
+static ConfigFileRead ReadConfigFileContents(const fs::path& path, std::string& text,
+                                             std::optional<ConfigFileFacts>& facts)
+{
+    FILE* file = fsbridge::fopen(path, "r");
+    if (file == nullptr) return ConfigFileRead::NotOpened;
+
+#ifdef WIN32
+    // The handle the C runtime opened with GENERIC_READ, which includes READ_CONTROL.
+    const HANDLE handle = reinterpret_cast<HANDLE>(::_get_osfhandle(::_fileno(file)));
+    try {
+        ConfigFileFacts recorded;
+        recorded.file_acl = util::winacl::ReadAcl(handle, /*kernel_object=*/false);
+        if (const std::optional<fs::path> final_path = FinalPathOfOpenFile(handle)) {
+            try {
+                recorded.dir_acl = util::winacl::ReadAcl(final_path->parent_path());
+            } catch (const std::exception&) {
+                // The directory's list is left out, as on POSIX when its stat fails.
+            }
+        }
+        facts = std::move(recorded);
+    } catch (const std::exception&) {
+        // Nothing is recorded when the file's own list cannot be read, as on POSIX when fstat fails.
+    }
+#else
+    struct stat file_st;
+    if (::fstat(::fileno(file), &file_st) == 0) {
+        ConfigFileFacts recorded;
+        recorded.file.owner = static_cast<uint64_t>(file_st.st_uid);
+        recorded.file.mode = static_cast<uint32_t>(file_st.st_mode);
+        recorded.device = static_cast<uint64_t>(file_st.st_dev);
+        recorded.inode = static_cast<uint64_t>(file_st.st_ino);
+
+        boost::system::error_code ec;
+        const fs::path resolved = fs::canonical(path, ec);
+        struct stat resolved_st;
+        struct stat dir_st;
+        if (!ec && ::stat(resolved.string().c_str(), &resolved_st) == 0 &&
+            resolved_st.st_dev == file_st.st_dev && resolved_st.st_ino == file_st.st_ino &&
+            ::stat(resolved.parent_path().string().c_str(), &dir_st) == 0) {
+            recorded.dir = FileOwnerMode{static_cast<uint64_t>(dir_st.st_uid), static_cast<uint32_t>(dir_st.st_mode)};
+        }
+        facts = recorded;
+    }
+#endif
+
+    char buffer[4096];
+    size_t got;
+    while ((got = std::fread(buffer, 1, sizeof(buffer), file)) > 0) {
+        text.append(buffer, got);
+    }
+    const bool read_error = std::ferror(file) != 0;
+    std::fclose(file);
+    return read_error ? ConfigFileRead::ReadError : ConfigFileRead::Read;
+}
+
 bool ArgsManager::ReadConfigFiles(std::string& error, bool ignore_invalid_keys)
 {
     {
         LOCK(cs_args);
         m_settings.ro_config.clear();
         m_config_sections.clear();
+        m_config_file_facts.reset();
     }
 
     const std::string confPath = GetArg("-conf", GRIDCOIN_CONF_FILENAME);
@@ -1021,18 +1276,29 @@ bool ArgsManager::ReadConfigFiles(std::string& error, bool ignore_invalid_keys)
     fs::path config_file_spec = GetConfigFile(confPath);
     if (config_file_spec.empty()) return false;
 
-    fsbridge::ifstream stream(config_file_spec);
+    std::string config_text;
+    std::optional<ConfigFileFacts> config_facts;
+    const ConfigFileRead read = ReadConfigFileContents(config_file_spec, config_text, config_facts);
 
     // not ok to have a config file specified that cannot be opened
-    if (IsArgSet("-conf") && !stream.good()) {
+    if (IsArgSet("-conf") && read == ConfigFileRead::NotOpened) {
         error = strprintf("specified config file \"%s\" could not be opened.", confPath);
+        return false;
+    }
+    if (read == ConfigFileRead::ReadError) {
+        error = strprintf("config file \"%s\" could not be read.", confPath);
         return false;
     }
 
     // ok to not have a config file
-    if (stream.good()) {
+    if (read == ConfigFileRead::Read) {
+        std::istringstream stream(config_text);
         if (!ReadConfigStream(stream, confPath, error, ignore_invalid_keys)) {
             return false;
+        }
+        {
+            LOCK(cs_args);
+            m_config_file_facts = config_facts;
         }
         // `-includeconf` cannot be included in the command line arguments except
         // as `-noincludeconf` (which indicates that no included conf file should be used).
@@ -1208,7 +1474,9 @@ void ArgsManager::LogArgs() const
         logArgsPrefix("Config file arg:", section.first, section.second);
     }
     for (const auto& setting : m_settings.rw_settings) {
-        LogPrintf("Setting file arg: %s = %s\n", setting.first, setting.second.write());
+        const std::optional<unsigned int> flags = GetArgFlags('-' + SettingFileKeyName(setting.first));
+        LogPrintf("Setting file arg: %s = %s", setting.first,
+                  (flags && (*flags & SENSITIVE)) ? "****" : setting.second.write());
     }
     logArgsPrefix("Command-line arg:", "", m_settings.command_line_options);
 }
@@ -1232,16 +1500,29 @@ UniValue ArgsManager::OutputArgs() const
     // There are no sections for rw_settings and the command line.
     for (const auto& setting : m_settings.rw_settings) {
         UniValue arg(UniValue::VOBJ);
-        std::optional<unsigned int> flags = GetArgFlags('-' + setting.first);
+        std::optional<unsigned int> flags = GetArgFlags('-' + SettingFileKeyName(setting.first));
 
-        arg.pushKV(setting.first, setting.second);
+        arg.pushKV(setting.first, (flags && (*flags & SENSITIVE)) ? UniValue("****") : setting.second);
 
-        arg.pushKV("changeable_without_restart", (bool)(*flags & IMMEDIATE_EFFECT));
+        // An unknown key has no flags and cannot change without a restart.
+        arg.pushKV("changeable_without_restart", flags && (*flags & IMMEDIATE_EFFECT));
 
         settings.push_back(arg);
     }
 
     result.pushKV("setting_file_args", settings);
+
+    // Values in the file that were ignored at load.
+    UniValue ignored(UniValue::VARR);
+    for (const auto& setting : m_settings.refused_rw_settings) {
+        UniValue arg(UniValue::VOBJ);
+        const std::optional<unsigned int> flags = GetArgFlags('-' + SettingFileKeyName(setting.first));
+        // An unregistered refused key has no flags to say it is not sensitive, so it is masked too.
+        const bool sensitive = !flags || (*flags & SENSITIVE);
+        arg.pushKV(setting.first, sensitive ? UniValue("****") : setting.second);
+        ignored.push_back(arg);
+    }
+    result.pushKV("setting_file_args_ignored", ignored);
 
     args_section.clear();
     args_section = OutputArgsSection("none", m_settings.command_line_options);
@@ -1268,6 +1549,7 @@ bool CommitRwSettings(const std::vector<RwSettingUpdate>& changes)
         struct Previous {
             std::string name;
             std::optional<util::SettingsValue> rw;
+            std::optional<util::SettingsValue> refused;
             bool forced_touched{false};
             std::optional<util::SettingsValue> forced;
         };
@@ -1278,6 +1560,8 @@ bool CommitRwSettings(const std::vector<RwSettingUpdate>& changes)
             prev.name = change.name;
             const auto rw_it = settings.rw_settings.find(change.name);
             if (rw_it != settings.rw_settings.end()) prev.rw = rw_it->second;
+            const auto refused_it = settings.refused_rw_settings.find(change.name);
+            if (refused_it != settings.refused_rw_settings.end()) prev.refused = refused_it->second;
             if (change.forced != RwSettingUpdate::Forced::KEEP) {
                 prev.forced_touched = true;
                 const auto forced_it = settings.forced_settings.find(change.name);
@@ -1287,6 +1571,7 @@ bool CommitRwSettings(const std::vector<RwSettingUpdate>& changes)
 
             if (change.value.isNull()) {
                 settings.rw_settings.erase(change.name);
+                settings.refused_rw_settings.erase(change.name);
             } else {
                 settings.rw_settings[change.name] = change.value;
             }
@@ -1311,6 +1596,11 @@ bool CommitRwSettings(const std::vector<RwSettingUpdate>& changes)
                     settings.rw_settings[it->name] = *it->rw;
                 } else {
                     settings.rw_settings.erase(it->name);
+                }
+                if (it->refused) {
+                    settings.refused_rw_settings[it->name] = *it->refused;
+                } else {
+                    settings.refused_rw_settings.erase(it->name);
                 }
                 if (it->forced_touched) {
                     if (it->forced) {

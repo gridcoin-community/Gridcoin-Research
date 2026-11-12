@@ -5,6 +5,7 @@
 #include "logging.h"
 
 #include "aboutdialogtests.h"
+#include "askpassphrasedialogtests.h"
 #include "autostarttests.h"
 #include "bitcoinguitests.h"
 #include "clientmodeltests.h"
@@ -14,14 +15,19 @@
 #include "bitcoinunitstests.h"
 #include "coinselectionmodeltests.h"
 #include "coinselectionviewtests.h"
+#include "coreconnectwaittests.h"
+#include "filetransferdialogtests.h"
+#include "guiipcworkertests.h"
 #include "guiutiltests.h"
 #include "optionsmodeltests.h"
 #include "psgttoastdamptests.h"
 #include "researchermodeltests.h"
 #include "researcherwizardpagetests.h"
 #include "rpcconsoletests.h"
+#include "sendcoinsdialogtests.h"
 #include "sidestakemodeltests.h"
 #include "uritests.h"
+#include "walletmodeltests.h"
 
 #if defined(QT_STATICPLUGIN)
 #include <QtPlugin>
@@ -41,6 +47,10 @@ Q_IMPORT_PLUGIN(QCocoaIntegrationPlugin);
 // This is all you need to run all the tests
 int main(int argc, char *argv[])
 {
+    // A test that crashes must not have QtTest attach a debugger to it or write a core.
+    qputenv("QTEST_DISABLE_STACK_DUMP", "1");
+    qputenv("QTEST_DISABLE_CORE_DUMP", "1");
+
     // CoinSelectionViewTests drives a real QTreeView, which needs a
     // QApplication and a platform plugin. Default to offscreen so the suite
     // still runs headless -- ctest invokes it with no display on every CI
@@ -133,6 +143,30 @@ int main(int argc, char *argv[])
 
     OverviewTxModelTests test18;
     if (QTest::qExec(&test18) != 0)
+        fInvalid = true;
+
+    AskPassphraseDialogTests test19;
+    if (QTest::qExec(&test19) != 0)
+        fInvalid = true;
+
+    SendCoinsDialogTests test20;
+    if (QTest::qExec(&test20) != 0)
+        fInvalid = true;
+
+    CoreConnectWaitTests test21;
+    if (QTest::qExec(&test21) != 0)
+        fInvalid = true;
+
+    FileTransferDialogTests test22;
+    if (QTest::qExec(&test22) != 0)
+        fInvalid = true;
+
+    GuiIpcWorkerTests test23;
+    if (QTest::qExec(&test23) != 0)
+        fInvalid = true;
+
+    WalletModelTests test24;
+    if (QTest::qExec(&test24) != 0)
         fInvalid = true;
 
     return fInvalid;

@@ -51,6 +51,8 @@ add_library(gridcoinqt STATIC
     editaddressdialog.cpp
     editsidestakedialog.cpp
     favoritespage.cpp
+    filetransferdialog.cpp
+    guiipcworker.cpp
     guilog.cpp
     guiutil.cpp
     intro.cpp
@@ -343,7 +345,10 @@ if(UNIX AND NOT APPLE)
     install(DIRECTORY "${CMAKE_SOURCE_DIR}/share/icons" COMPONENT gui
         DESTINATION "${CMAKE_INSTALL_DATADIR}"
     )
-    install(FILES "${CMAKE_SOURCE_DIR}/contrib/gridcoinresearch.desktop" COMPONENT gui
+    # The desktop file, with the launcher actions this build can run.
+    set(GRC_DESKTOP_FILE "${CMAKE_CURRENT_BINARY_DIR}/gridcoinresearch.desktop")
+    include("${CMAKE_SOURCE_DIR}/cmake/desktop_file.cmake")
+    install(FILES "${GRC_DESKTOP_FILE}" COMPONENT gui
         DESTINATION "${CMAKE_INSTALL_DATADIR}/applications"
     )
     install(FILES "${CMAKE_SOURCE_DIR}/doc/gridcoinresearch.1" COMPONENT gui

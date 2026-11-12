@@ -10,6 +10,8 @@
 #include <boost/thread.hpp>
 
 #include <atomic>
+#include <iosfwd>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -42,11 +44,47 @@ void PlantRegtestPremineKey(CWallet* pwallet);
 
 void StartShutdown();
 
+//! Appends a generated rpcuser and rpcpassword, whichever is missing, to the existing
+//! configuration file, when this account owns that file (fsmodes::OwnedByUs), through
+//! fsmodes::AppendToOwnedFile. AppInit2 calls it when an RPC server is being started.
+void AddMissingRpcCredentials();
+//! The configuration file step of AppInit2. With no configuration file that can be read, it
+//! creates the first-run one, exclusively and owner-only, and never over a name that is taken;
+//! a Windows service instead stops, as gridcoin-service.exe writes the service's. An existing
+//! file is cleaned of obsolete keys (GRC::CleanConfig) and given missing RPC credentials
+//! (AddMissingRpcCredentials), both only when this account owns it. False, with \p error the
+//! message, when the start must stop.
+bool PrepareConfigFile(std::string& error);
+//! -reportpermissions: the start's check of the data directory's files (fsmodes::CheckOwnerOnlyModes
+//! over the paths AppInit2 gives it), report-only, for the installers. The paths come from the
+//! command line alone: the data directory (-datadir, or the default, and the network's directory
+//! below it), the configuration file (-conf), the settings file, the wallet (-wallet), the backup
+//! directory (-backupdir) and debug.log (-debuglogfile). No configuration or settings file is read,
+//! and nothing is created or changed: a data directory that does not exist is reported as such.
+//! Writes each finding to \p out with its fix, and true only when there is none.
+bool ReportDataDirPermissions(std::ostream& out);
+//! Installs the SIGTERM and SIGINT handlers that request a shutdown (POSIX; nothing on
+//! Windows, whose console handler AppInit2 installs). The daemon calls it at the top of
+//! main(), so that a stop sent during startup is not lost; AppInit2 calls it again.
+void RegisterShutdownSignalHandlers();
+
 void Shutdown(void* parg);
 bool AppInit2(ThreadHandlerPtr threads);
 void ThreadAppInit2(ThreadHandlerPtr th);
 
 void AddLoggingArgs(ArgsManager& argsman);
+
+//! The options that belong to the GUI process only (the literal list in init.cpp).
+const std::vector<std::string>& GuiOnlyArgs();
+
+//! Removes GuiOnlyArgs() and "-ipclogtrace" from every section of the read-only config layer, so in multiprocess
+//! mode the GUI takes them only from its command line or the GUI settings. Logs once per removed key. Returns the
+//! removed keys, each with its leading '-' and listed once however many sections held it.
+std::vector<std::string> IgnoreGuiOnlyConfigArgs(ArgsManager& args);
+
+//! The message to show when the multiprocess GUI is started with an option it refuses: -resetblockchaindata from
+//! any source (the core does that job). Otherwise nullopt.
+std::optional<std::string> MultiprocessGuiArgError(const ArgsManager& args);
 
 /**
  * Register all arguments with the ArgsManager
@@ -64,6 +102,12 @@ std::string LogSomething();
 //! so a live edit takes effect without a restart in both paths.
 void ApplyRwSettingSideEffect(const std::string& name);
 
+//! Whether a -paytxfee rate read at startup, from the config file, the command
+//! line or gridcoinsettings.json, is high enough to warn about: above
+//! MaxTxFeeRate(), the most settxfee and changesettings accept. The rate is used
+//! as given either way.
+bool PayTxFeeWarnsAtStartup(CAmount rate);
+
 //! Validate, persist to gridcoinsettings.json, set in the running args, and apply
 //! one or more settings given as name/value strings. Two-phase: every setting is
 //! fully validated (name is a known arg; proxy/reservebalance values must parse)
@@ -75,7 +119,14 @@ void ApplyRwSettingSideEffect(const std::string& name);
 //! no_change_out / immediate_out / requires_restart_list_out and
 //! requires_restart_out is set. On failure returns false with error_out set and
 //! invalid_input_out distinguishing a caller/validation error (true; nothing was
-//! changed) from an internal storage error (false). On a storage failure the
+//! changed) from an internal storage error (false).
+//!
+//! Each setting has a class (ArgsManager::GetSettingClass). A Free setting changes
+//! freely. An Elevate setting needs HoldsElevation(): a full unlock, or the
+//! passphrase capability of the request. When it is missing the call fails with
+//! elevation_required_out set (and invalid_input_out false) before anything is
+//! applied. A Refuse setting is refused with a value; an empty value erases it
+//! from the settings file and is reported in no_change_out. On a storage failure the
 //! failing setting is unchanged in the settings file, in memory and in the
 //! running args. Settings processed before it (in name order, not the order
 //! given) stay applied and stored. The rest are not touched. Shared core of the
@@ -86,6 +137,7 @@ bool ChangeSettings(const std::vector<std::pair<std::string, std::string>>& sett
                     std::vector<std::string>& immediate_out,
                     std::vector<std::string>& requires_restart_list_out,
                     bool& invalid_input_out,
+                    bool& elevation_required_out,
                     std::string& error_out);
 
 extern bool fResetBlockchainRequest;

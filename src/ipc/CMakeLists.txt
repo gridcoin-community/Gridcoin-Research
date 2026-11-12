@@ -36,10 +36,24 @@ add_library(gridcoin_ipc STATIC EXCLUDE_FROM_ALL
     interfaces.cpp
     handshake.cpp
     peercred.cpp
+    # The Windows endpoint's access lists and the GUI's check before it connects;
+    # its rules are pure and build everywhere.
+    win_endpoint.cpp
+    # The named pipe that identifies a Windows peer; its token classifier and
+    # name checks are pure and build everywhere.
+    win_attest.cpp
     serve_init.cpp
     connect.cpp
     capnp/protocol.cpp
 )
+
+# The platform backend of the peer-check hooks. The other one would compile to
+# nothing, and Apple's ranlib warns about an archive member with no symbols.
+if(WIN32)
+    target_sources(gridcoin_ipc PRIVATE peercred_win.cpp)
+else()
+    target_sources(gridcoin_ipc PRIVATE peercred_posix.cpp)
+endif()
 
 # handshake.cpp allows __DATE__ and __TIME__ in one line with a #pragma that GCC
 # before 13 ignores in C++ (GCC bug 53431), so for those compilers -Wdate-time is
@@ -52,6 +66,7 @@ target_capnp_sources(gridcoin_ipc ${CMAKE_CURRENT_SOURCE_DIR}
     capnp/handler.capnp
     capnp/staking.capnp
     capnp/node.capnp
+    capnp/file_transfer.capnp
     capnp/wallet.capnp
     capnp/wallet_tx_source.capnp
     capnp/wallet_coin_source.capnp
@@ -93,12 +108,14 @@ target_link_libraries(gridcoin_ipc PUBLIC
 # dependency is self-documenting, and add mswsock (AcceptEx/ConnectEx) for the
 # kj-async Win32 async I/O backend.
 #
-# advapi32 supplies the DACL hardening the transport applies to the datadir,
-# socket and cookie: SetEntriesInAclW, Get/SetNamedSecurityInfoW (process.cpp,
-# via <aclapi.h>) and InitializeSecurityDescriptor / SetSecurityDescriptorDacl
-# (handshake.cpp, via <securitybaseapi.h>). These compile without it -- the
-# headers only declare them -- so the omission surfaces as five undefined
-# __imp_* symbols at final link, long after every object and archive succeeds.
+# advapi32 supplies the security descriptor the transport builds for the cookie:
+# InitializeSecurityDescriptor / SetSecurityDescriptorDacl /
+# SetSecurityDescriptorControl (handshake.cpp, via <securitybaseapi.h>). The
+# owner-only DACLs on the datadir, socket and cookie are applied through
+# util/dir_permissions.cpp and util/win_acl.cpp in gridcoin_util, which links
+# advapi32 itself. These compile without it -- the headers only declare them --
+# so the omission surfaces as undefined __imp_* symbols at final link, long after
+# every object and archive succeeds.
 if(WIN32)
     target_link_libraries(gridcoin_ipc PUBLIC
         ws2_32

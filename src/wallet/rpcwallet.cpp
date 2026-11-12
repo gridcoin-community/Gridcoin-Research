@@ -9,9 +9,11 @@
 #include "version.h"
 #include "txdb.h"
 #include "rpc/server.h"
+#include "rpc/passphrase_params.h"
 #include "rpc/protocol.h"
 #include "rpc/util.h"
 #include "init.h"
+#include "node/shutdown.h"
 #include "miner.h"
 #include "net_processing.h"
 #include "streams.h"
@@ -24,6 +26,7 @@
 #include "policy/fees.h"
 #include "scheduler.h"
 #include "policy/policy.h"
+#include "wallet/autounlock_setup.h"
 #include "wallet/coincontrol.h"
 #include "gridcoin/staking/status.h"
 #include "gridcoin/tx_message.h"
@@ -99,12 +102,19 @@ std::string HelpRequiringPassphrase()
         : "";
 }
 
+void EnsureWalletIsUnlocked(const CWallet& wallet)
+{
+    if (wallet.IsLocked())
+        throw JSONRPCError(RPC_WALLET_UNLOCK_NEEDED, "Error: Please enter the wallet passphrase with walletpassphrase first.");
+    // A capability scope open on this thread, such as one for a request that
+    // carries the passphrase, lets the request through a staking-only unlock.
+    if (!wallet.CanUseKeys())
+        throw JSONRPCError(RPC_WALLET_UNLOCK_NEEDED, "Error: Wallet is unlocked for staking only.");
+}
+
 void EnsureWalletIsUnlocked()
 {
-    if (pwalletMain->IsLocked())
-        throw JSONRPCError(RPC_WALLET_UNLOCK_NEEDED, "Error: Please enter the wallet passphrase with walletpassphrase first.");
-    if (pwalletMain->IsUnlockedForStakingOnly())
-        throw JSONRPCError(RPC_WALLET_UNLOCK_NEEDED, "Error: Wallet is unlocked for staking only.");
+    EnsureWalletIsUnlocked(*pwalletMain);
 }
 
 void WalletTxToJSON(const CWalletTx& wtx, UniValue& entry) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
@@ -247,6 +257,10 @@ static const RPCHelpMan getwalletinfo_help{
             {RPCResult::Type::NUM_TIME, "keypoololdest", "Oldest key in the wallet keypool (unix epoch)."},
             {RPCResult::Type::NUM, "keypoolsize", "Number of keys in the wallet keypool."},
             {RPCResult::Type::NUM_TIME, "unlocked_until", /*optional=*/true, "Time until wallet auto-locks (encrypted wallets only)."},
+            {RPCResult::Type::STR, "unlock_scope", "How far the wallet is unlocked: \"locked\", \"staking_only\" "
+                "(it stakes, and spends or signs only for an operation the wallet passphrase authorises, such "
+                "as a request that carries it) or \"full\". An unencrypted wallet reads \"full\". An operation "
+                "authorised that way does not change it."},
             {RPCResult::Type::STR_HEX, "masterkeyid", /*optional=*/true, "HD master key id (HD wallets only)."},
             {RPCResult::Type::BOOL, "staking", "Whether the staking miner is currently active."},
             {RPCResult::Type::STR, "mining-error", "Most recent staking miner error, if any."},
@@ -273,6 +287,13 @@ UniValue getwalletinfo(const UniValue& params)
 
         if (pwalletMain->IsCrypted())
             res.pushKV("unlocked_until", pwalletMain->GetUnlockDeadline().value_or(0));
+
+        // The wallet-wide scope, which a capability open on this thread does
+        // not change.
+        const UnlockScope scope = pwalletMain->GetUnlockScope();
+        res.pushKV("unlock_scope", scope == UnlockScope::Full          ? "full"
+                                   : scope == UnlockScope::StakingOnly ? "staking_only"
+                                                                       : "locked");
 
         CKeyID masterKeyID = pwalletMain->GetHDChain().masterKeyID;
         if (!masterKeyID.IsNull())
@@ -308,7 +329,7 @@ UniValue getnewpubkey(const UniValue& params)
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
-    if (!pwalletMain->IsLocked())
+    if (pwalletMain->CanCreateKeys())
         pwalletMain->TopUpKeyPool();
 
     // Generate a new key that is added to wallet
@@ -348,7 +369,7 @@ UniValue getnewaddress(const UniValue& params)
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
-    if (!pwalletMain->IsLocked())
+    if (pwalletMain->CanCreateKeys())
         pwalletMain->TopUpKeyPool();
 
     // Generate a new key that is added to wallet
@@ -844,8 +865,9 @@ UniValue sendtoaddress(const UniValue& params)
         }
     }
 
-    if (pwalletMain->IsLocked())
-        throw JSONRPCError(RPC_WALLET_UNLOCK_NEEDED, "Error: Please enter the wallet passphrase with walletpassphrase first.");
+    // Refused for a staking-only unlock too, unless this thread may use the
+    // keys, as sendmany and sendfrom are.
+    EnsureWalletIsUnlocked();
 
     string strError = pwalletMain->SendMoneyToDestination(address, nAmount, wtx, &relay);
     if (!strError.empty())
@@ -3408,7 +3430,16 @@ void ThreadTopUpKeyPool(void* parg)
     // Make this thread recognisable as the key-topping-up thread
     RenameThread("grc-key-top");
 
-    pwalletMain->TopUpKeyPool();
+    // The thread is detached, and an exception leaving it would end the
+    // process. After an unlock for staking only the top-up makes no key and
+    // returns false, which is not an error. This catch is for a wallet that may
+    // make keys and fails to, such as one whose HD seed is missing, or one its
+    // relock locks part way through the top-up.
+    try {
+        pwalletMain->TopUpKeyPool();
+    } catch (const std::exception& e) {
+        LogPrintf("ERROR: %s: the key pool was not topped up: %s", __func__, e.what());
+    }
 }
 
 
@@ -3442,7 +3473,8 @@ static const RPCHelpMan walletpassphrase_help{
 };
 const RPCHelpMan& walletpassphrase_helpman() { return walletpassphrase_help; }
 
-UniValue walletpassphrase(const UniValue& params)
+//! The body of walletpassphrase. params[0] is not read; the passphrase is the SecureString.
+static UniValue WalletPassphraseBody(const SecureString& strWalletPass, const UniValue& params)
 {
     if (!pwalletMain->IsCrypted())
         throw JSONRPCError(RPC_WALLET_WRONG_ENC_STATE, "Error: running with an unencrypted wallet, but walletpassphrase was called.");
@@ -3483,11 +3515,6 @@ UniValue walletpassphrase(const UniValue& params)
                            "unlocked. Try again once the node is running.");
     }
 
-    // Note that the walletpassphrase is stored in params[0] which is not mlock()ed
-    SecureString strWalletPass;
-    strWalletPass.reserve(100);
-    strWalletPass = std::string_view{params[0].get_str()};
-
     // ppcoin: if the user's OS account is compromised, prevent trivial
     // sendmoney. The scope travels with the unlock instead of being written to
     // a global afterwards, so the wallet is never briefly unlocked without it.
@@ -3496,8 +3523,9 @@ UniValue walletpassphrase(const UniValue& params)
         : UnlockScope::Full;
 
     if (strWalletPass.length() > 0) {
-        LOCK2(cs_main, pwalletMain->cs_wallet);
-
+        // No lock is held across the call. Unlock() takes cs_wallet for what
+        // needs it, and a wrong passphrase sleeps before it returns, which must
+        // not happen under cs_main or cs_wallet.
         CWallet::UnlockFailure failure = CWallet::UnlockFailure::None;
 
         if (!pwalletMain->Unlock(strWalletPass, scope, std::chrono::seconds(nSleepTime), &failure)) {
@@ -3512,6 +3540,12 @@ UniValue walletpassphrase(const UniValue& params)
                 throw JSONRPCError(RPC_WALLET_ALREADY_UNLOCKED,
                                    "Error: Wallet is already unlocked, use walletlock first if "
                                    "need to change unlock settings.");
+            }
+
+            // The node began shutting down while the attempt waited its turn.
+            if (failure == CWallet::UnlockFailure::Abandoned) {
+                throw JSONRPCError(RPC_WALLET_ERROR,
+                                   "Error: the node is shutting down; the wallet passphrase was not checked.");
             }
 
             if (failure == CWallet::UnlockFailure::RelockUnavailable) {
@@ -3540,7 +3574,10 @@ UniValue walletpassphrase(const UniValue& params)
         throw JSONRPCError(RPC_INVALID_PARAMETER, "Passphrase cannot be empty.");
     }
 
-    NewThread(ThreadTopUpKeyPool, nullptr);
+    // A staking-only unlock makes no keys, so there is nothing for the thread to do.
+    if (scope == UnlockScope::Full) {
+        NewThread(ThreadTopUpKeyPool, nullptr);
+    }
 
     return NullUniValue;
 }
@@ -3564,25 +3601,30 @@ static const RPCHelpMan walletpassphrasechange_help{
 };
 const RPCHelpMan& walletpassphrasechange_helpman() { return walletpassphrasechange_help; }
 
-UniValue walletpassphrasechange(const UniValue& params)
+//! The body of walletpassphrasechange. params[0] and params[1] are not read.
+static UniValue WalletPassphraseChangeBody(const SecureString& strOldWalletPass,
+                                           const SecureString& strNewWalletPass,
+                                           const UniValue& params)
 {
     if (!pwalletMain->IsCrypted())
         throw JSONRPCError(RPC_WALLET_WRONG_ENC_STATE, "Error: running with an unencrypted wallet, but walletpassphrasechange was called.");
 
-    SecureString strOldWalletPass;
-    strOldWalletPass.reserve(100);
-    strOldWalletPass = std::string_view{params[0].get_str()};
-
-    SecureString strNewWalletPass;
-    strNewWalletPass.reserve(100);
-    strNewWalletPass = std::string_view{params[1].get_str()};
-
     if (strOldWalletPass.length() < 1 || strNewWalletPass.length() < 1)
         throw JSONRPCError(RPC_INVALID_PARAMETER, "Passphrase cannot be empty.");
 
-    LOCK2(cs_main, pwalletMain->cs_wallet);
+    // No lock is held across the call. ChangeWalletPassphrase() takes
+    // cs_wallet itself, and a wrong passphrase waits before it returns, which
+    // must not happen under cs_main or cs_wallet.
+    CWallet::UnlockFailure failure = CWallet::UnlockFailure::None;
 
-    if (!pwalletMain->ChangeWalletPassphrase(strOldWalletPass, strNewWalletPass)) {
+    if (!pwalletMain->ChangeWalletPassphrase(strOldWalletPass, strNewWalletPass, &failure)) {
+        // The node began shutting down while the attempt waited its turn, as
+        // walletpassphrase reports it.
+        if (failure == CWallet::UnlockFailure::Abandoned) {
+            throw JSONRPCError(RPC_WALLET_ERROR,
+                               "Error: the node is shutting down; the wallet passphrase was not checked.");
+        }
+
         // Check if the old passphrase had a null character
         if (strOldWalletPass.find('\0') == std::string::npos) {
             throw JSONRPCError(RPC_WALLET_PASSPHRASE_INCORRECT, "Error: The wallet passphrase entered was incorrect.");
@@ -3596,6 +3638,120 @@ UniValue walletpassphrasechange(const UniValue& params)
     }
 
     return NullUniValue;
+}
+
+static const RPCHelpMan setautounlock_help{
+    "setautounlock",
+    "Stores the wallet passphrase for autounlock, so that the node unlocks the wallet for staking only "
+    "when it starts. The passphrase is checked first, and the wallet's unlock is left as it is. A "
+    "passphrase stored before is replaced. Requires an encrypted wallet, on a platform with a store for "
+    "the passphrase (Windows). "
+    "gridcoinresearchd -stdinwalletpassphrase setautounlock reads the passphrase from standard input, "
+    "so that it is not on the command line.",
+    {
+        {"passphrase", RPCArg::Type::STR, RPCArg::Optional::NO,
+            "The wallet passphrase."},
+    },
+    RPCResult{RPCResult::Type::OBJ, "", "",
+        {
+            {RPCResult::Type::STR, "scope", "Who can decrypt the stored passphrase: \"machine\" when the "
+                                            "node runs as your account, \"service\" when it runs as the "
+                                            "Gridcoin service."},
+            {RPCResult::Type::STR, "location", "Where the passphrase is stored."},
+            {RPCResult::Type::STR, "warning", "Who else can obtain the passphrase in this scope."},
+            {RPCResult::Type::BOOL, "verified", "Whether the stored file was read back and checked. False "
+                                                "when it was written but could not be read back; the node "
+                                                "checks it when it next starts."},
+        }},
+    RPCExamples{
+        HelpExampleCli("-stdinwalletpassphrase setautounlock", "")
+      + HelpExampleRpc("setautounlock", "\"passphrase\"")
+    }
+};
+const RPCHelpMan& setautounlock_helpman() { return setautounlock_help; }
+
+static const RPCHelpMan clearautounlock_help{
+    "clearautounlock",
+    "Turns autounlock off: removes the stored wallet passphrase and locks the wallet. The passphrase is "
+    "checked first; on any error nothing is changed. Removing when nothing is stored succeeds. "
+    "gridcoinresearchd -stdinwalletpassphrase clearautounlock reads the passphrase from standard input, "
+    "so that it is not on the command line.",
+    {
+        {"passphrase", RPCArg::Type::STR, RPCArg::Optional::NO,
+            "The wallet passphrase."},
+    },
+    RPCResult{RPCResult::Type::OBJ, "", "",
+        {
+            {RPCResult::Type::BOOL, "removed", "True: no passphrase is stored any more."},
+            {RPCResult::Type::BOOL, "wallet_locked", "Whether the wallet is locked."},
+        }},
+    RPCExamples{
+        HelpExampleCli("-stdinwalletpassphrase clearautounlock", "")
+      + HelpExampleRpc("clearautounlock", "\"passphrase\"")
+    }
+};
+const RPCHelpMan& clearautounlock_helpman() { return clearautounlock_help; }
+
+//! Throws the RPC error for \p result of autounlock setup, unless it is a success.
+static void ThrowUnlessAutoUnlockDone(const std::string& method, AutoUnlockSetupResult result,
+                                      const std::string& error)
+{
+    switch (result) {
+    case AutoUnlockSetupResult::Ok:
+    case AutoUnlockSetupResult::OkUnverified:
+        return;
+    case AutoUnlockSetupResult::WrongPassphrase:
+        throw JSONRPCError(RPC_WALLET_PASSPHRASE_INCORRECT, "Error: The wallet passphrase entered was incorrect.");
+    case AutoUnlockSetupResult::NotEncrypted:
+        throw JSONRPCError(RPC_WALLET_WRONG_ENC_STATE,
+                           "Error: running with an unencrypted wallet, but " + method + " was called.");
+    case AutoUnlockSetupResult::Unsupported:
+        throw JSONRPCError(RPC_MISC_ERROR, AUTOUNLOCK_UNSUPPORTED_TEXT);
+    case AutoUnlockSetupResult::StoreFailed:
+        throw JSONRPCError(RPC_MISC_ERROR, error);
+    }
+
+    throw JSONRPCError(RPC_MISC_ERROR, error);
+}
+
+//! The body of setautounlock. params[0] is not read.
+static UniValue SetAutoUnlockBody(const SecureString& passphrase, const UniValue& params)
+{
+    if (passphrase.empty()) throw JSONRPCError(RPC_INVALID_PARAMETER, "Passphrase cannot be empty.");
+
+    // No lock is held across the call: a wrong passphrase waits before it returns, and
+    // the store does file I/O and encryption.
+    std::string error;
+    const AutoUnlockSetupResult result = SetAutoUnlockSecret(*pwalletMain, passphrase, error);
+
+    ThrowUnlessAutoUnlockDone("setautounlock", result, error);
+
+    const AutoUnlockStoreStatus status = GetAutoUnlockStatus();
+
+    UniValue ret(UniValue::VOBJ);
+    ret.pushKV("scope", status.scope);
+    ret.pushKV("location", status.location);
+    ret.pushKV("warning", AutoUnlockScopeWarning(status.scope));
+    ret.pushKV("verified", result == AutoUnlockSetupResult::Ok);
+
+    return ret;
+}
+
+//! The body of clearautounlock. params[0] is not read.
+static UniValue ClearAutoUnlockBody(const SecureString& passphrase, const UniValue& params)
+{
+    if (passphrase.empty()) throw JSONRPCError(RPC_INVALID_PARAMETER, "Passphrase cannot be empty.");
+
+    std::string error;
+    const AutoUnlockSetupResult result = ClearAutoUnlockSecret(*pwalletMain, passphrase, error);
+
+    ThrowUnlessAutoUnlockDone("clearautounlock", result, error);
+
+    UniValue ret(UniValue::VOBJ);
+    ret.pushKV("removed", true);
+    ret.pushKV("wallet_locked", pwalletMain->IsLocked());
+
+    return ret;
 }
 
 /** Classify a wallet transaction's TxState into a human-readable name. */
@@ -3902,27 +4058,27 @@ UniValue walletlock(const UniValue& params)
 static const RPCHelpMan encryptwallet_help{
     "encryptwallet",
     "Encrypts the wallet with the given passphrase. "
-    "After encryption, the node will shut down and must be restarted.",
+    "After encryption, the node will shut down and must be restarted. "
+    "Backups made before the encryption still hold the unencrypted keys: the result names "
+    "the automatic ones in the backup directory, and nothing deletes them.",
     {
         {"passphrase", RPCArg::Type::STR, RPCArg::Optional::NO,
             "The passphrase used to encrypt the wallet. Must be non-empty."},
     },
     RPCResult{RPCResult::Type::STR, "message",
-        "Confirmation message; the daemon stops after returning."},
+        "Confirmation message, then a warning that names the automatic wallet backups made before "
+        "the encryption; the daemon stops after returning."},
     RPCExamples{
         HelpExampleCli("encryptwallet", "\"mypassphrase\"") +
         HelpExampleRpc("encryptwallet", "\"mypassphrase\"")},
 };
 const RPCHelpMan& encryptwallet_helpman() { return encryptwallet_help; }
 
-UniValue encryptwallet(const UniValue& params)
+//! The body of encryptwallet. params[0] is not read.
+static UniValue EncryptWalletBody(const SecureString& strWalletPass, const UniValue& params)
 {
     if (pwalletMain->IsCrypted())
         throw JSONRPCError(RPC_WALLET_WRONG_ENC_STATE, "Error: running with an encrypted wallet, but encryptwallet was called.");
-
-    SecureString strWalletPass;
-    strWalletPass.reserve(100);
-    strWalletPass = std::string_view{params[0].get_str()};
 
     if (strWalletPass.length() < 1)
         throw runtime_error(
@@ -3937,8 +4093,90 @@ UniValue encryptwallet(const UniValue& params)
     // BDB seems to have a bad habit of writing old data into
     // slack space in .dat files; that is bad if the old data is
     // unencrypted private keys. So:
+    MarkStopRequested();
     StartShutdown();
-    return "wallet encrypted; Gridcoin server stopping, restart to run with encrypted wallet. The keypool has been flushed and a new HD seed was generated (if you are using HD). You need to make a new backup.";
+
+    // The automatic backups made before the encryption hold the unencrypted keys, and are
+    // named so that the user can delete them by hand; nothing here deletes one. Backup names
+    // carry whole seconds, so one named in the second the encryption finished counts as made
+    // before it.
+    const fs::path backup_dir = GRC::GetBackupPath();
+    const std::vector<fs::path> found = GRC::ListAutomaticWalletBackupsBefore(backup_dir, GetTime() + 1);
+
+    return "wallet encrypted; Gridcoin server stopping, restart to run with encrypted wallet. The keypool has been flushed and a new HD seed was generated (if you are using HD). You need to make a new backup.\n"
+           + GRC::PreEncryptionBackupWarning(backup_dir, found);
+}
+
+std::vector<SecureString> ReadPassphraseParams(const std::string& method, const UniValue& params)
+{
+    const std::vector<int>* indexes = PassphraseParamIndexes(method);
+
+    if (indexes == nullptr) {
+        throw JSONRPCError(RPC_METHOD_NOT_FOUND, "Method not found");
+    }
+
+    // Each passphrase is built in its own reserved secure buffer and moved into the vector, which
+    // is reserved first. Constructing the elements from an initializer list would copy them, and a
+    // short passphrase would then sit in the string's inline storage, which nothing cleanses.
+    std::vector<SecureString> passphrases;
+    passphrases.reserve(indexes->size());
+
+    for (const int index : *indexes) {
+        SecureString passphrase;
+        passphrase.reserve(100);
+        passphrase = std::string_view{params[static_cast<size_t>(index)].get_str()};
+
+        passphrases.push_back(std::move(passphrase));
+    }
+
+    return passphrases;
+}
+
+UniValue ExecutePassphraseCommand(const std::string& method, const std::vector<SecureString>& passphrases, const UniValue& params)
+{
+    const std::vector<int>* indexes = PassphraseParamIndexes(method);
+
+    if (indexes == nullptr) {
+        throw JSONRPCError(RPC_METHOD_NOT_FOUND, "Method not found");
+    }
+
+    if (passphrases.size() != indexes->size()) {
+        throw JSONRPCError(RPC_INVALID_PARAMETER,
+                           strprintf("%s takes %u passphrase%s", method, indexes->size(), indexes->size() == 1 ? "" : "s"));
+    }
+
+    if (method == "walletpassphrase") return WalletPassphraseBody(passphrases[0], params);
+    if (method == "walletpassphrasechange") return WalletPassphraseChangeBody(passphrases[0], passphrases[1], params);
+    if (method == "encryptwallet") return EncryptWalletBody(passphrases[0], params);
+    if (method == "setautounlock") return SetAutoUnlockBody(passphrases[0], params);
+    if (method == "clearautounlock") return ClearAutoUnlockBody(passphrases[0], params);
+
+    throw JSONRPCError(RPC_METHOD_NOT_FOUND, "Method not found");
+}
+
+UniValue walletpassphrase(const UniValue& params)
+{
+    return ExecutePassphraseCommand("walletpassphrase", ReadPassphraseParams("walletpassphrase", params), params);
+}
+
+UniValue walletpassphrasechange(const UniValue& params)
+{
+    return ExecutePassphraseCommand("walletpassphrasechange", ReadPassphraseParams("walletpassphrasechange", params), params);
+}
+
+UniValue encryptwallet(const UniValue& params)
+{
+    return ExecutePassphraseCommand("encryptwallet", ReadPassphraseParams("encryptwallet", params), params);
+}
+
+UniValue setautounlock(const UniValue& params)
+{
+    return ExecutePassphraseCommand("setautounlock", ReadPassphraseParams("setautounlock", params), params);
+}
+
+UniValue clearautounlock(const UniValue& params)
+{
+    return ExecutePassphraseCommand("clearautounlock", ReadPassphraseParams("clearautounlock", params), params);
 }
 
 class DescribeAddressVisitor
@@ -4345,8 +4583,9 @@ const RPCHelpMan& burn_helpman() { return burn_help; }
 
 UniValue burn(const UniValue& params)
 {
-    if (pwalletMain->IsLocked())
-        throw JSONRPCError(RPC_WALLET_UNLOCK_NEEDED, "Error: Please enter the wallet passphrase with walletpassphrase first.");
+    // Refused for a staking-only unlock too, unless this thread may use the
+    // keys.
+    EnsureWalletIsUnlocked();
 
     int64_t nAmount = AmountFromValue(params[0]);
     CScript scriptPubKey;

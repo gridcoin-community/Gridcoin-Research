@@ -12,6 +12,7 @@
 #include "node/shutdown.h"
 #include "util/threadnames.h"
 #include "net.h"
+#include "wallet/transfer_sources.h"
 #include "wallet/walletdb.h"
 #include <key_io.h>
 #include "banman.h"
@@ -28,23 +29,33 @@
 #include "script/interpreter.h"
 #include "gridcoin/gridcoin.h"
 #include "gridcoin/upgrade.h"
+#include "gridcoin/backup.h"
 #include "gridcoin/contract/registry.h"
 #include "miner.h"
 #include "net_processing.h"
 #include "txmempool.h"
 #include "node/blockstorage.h"
+#include "node/access_policy.h"
 #include "node/coherence.h"
 #include "node/mempool_persist.h"
 #include "node/psgt_pool.h"
+#include "policy/fees.h"
 #include <util/check.h>
+#include <util/fsmodes.h>
 #include <util/proc_hardening.h>
+#include <util/sdnotify.h>
 #include <util/strencodings.h>
 #include <util/string.h>
 #include <util/syserror.h>
+#include <util/winservice.h>
 #include "consensus/consensus.h"  // MAX_BLOCK_SIZE_GEN
 
 #include <openssl/crypto.h>
 
+#include <cstdio>
+#include <iostream>
+#include <mutex>
+#include <set>
 #include <thread>
 
 static boost::thread_group threadGroup;
@@ -126,8 +137,53 @@ static const char* GRIDCOIN_PID_FILENAME = "gridcoinresearchd.pid";
 //! one config file or command line can serve both programs without the node warning about, or rejecting, an option
 //! it does not use. They are never node settings, and ChangeSettings refuses to store them.
 static const std::vector<std::string> GUI_ONLY_ARGS{
-    "-autotrustidentity", "-choosedatadir", "-devsyntheticcoins", "-guilogfile", "-lang", "-min", "-nobuildwarn",
-    "-resetguisettings", "-splash", "-style", "-suppressnetworkgraph"};
+    "-autotrustidentity", "-choosedatadir", "-devsyntheticcoins", "-guilogfile", "-ipcserviceuser", "-lang", "-min",
+    "-nobuildwarn", "-resetguisettings", "-splash", "-style", "-suppressnetworkgraph"};
+
+const std::vector<std::string>& GuiOnlyArgs()
+{
+    return GUI_ONLY_ARGS;
+}
+
+//! The config keys IgnoreGuiOnlyConfigArgs has already reported in this process.
+static Mutex g_reported_gui_only_mutex;
+static std::set<std::string> g_reported_gui_only GUARDED_BY(g_reported_gui_only_mutex);
+
+std::vector<std::string> IgnoreGuiOnlyConfigArgs(ArgsManager& args)
+{
+    std::set<std::string> removed;
+
+    args.LockSettings([&](util::Settings& settings) {
+        for (auto& section : settings.ro_config) {
+            for (const std::string& name : GuiOnlyArgs()) {
+                // Keys in the read-only config layer have no leading '-'.
+                if (section.second.erase(name.substr(1)) > 0) removed.insert(name);
+            }
+            if (section.second.erase("ipclogtrace") > 0) removed.insert("-ipclogtrace");
+        }
+    });
+
+    // The caller may run this after each read of the config files; each key is reported once per process.
+    LOCK(g_reported_gui_only_mutex);
+
+    for (const std::string& name : removed) {
+        if (!g_reported_gui_only.insert(name).second) continue;
+        LogPrintf("ignored %s from the config file: in multiprocess mode GUI options come from the command line or "
+                  "the GUI settings\n", name);
+    }
+
+    return std::vector<std::string>(removed.begin(), removed.end());
+}
+
+std::optional<std::string> MultiprocessGuiArgError(const ArgsManager& args)
+{
+    if (args.IsArgSet("-resetblockchaindata")) {
+        return std::string("-resetblockchaindata is not available in the multiprocess GUI. "
+                           "Stop the core and run gridcoinresearchd -resetblockchaindata.");
+    }
+
+    return std::nullopt;
+}
 
 static fs::path GetPidFile(const ArgsManager& args)
 {
@@ -386,6 +442,7 @@ void Shutdown(void* parg)
 #ifndef WIN32
 static void HandleSIGTERM(int)
 {
+    MarkStopRequested();
     SetShutdownRequested();
 }
 
@@ -403,6 +460,13 @@ static void HandleSIGHUP(int)
 #else
 static BOOL WINAPI consoleCtrlHandler(DWORD dwCtrlType)
 {
+    // Windows sends a service CTRL_LOGOFF_EVENT whenever any user signs out. Handled, so that
+    // nothing ends the process, and ignored: the service stops on the service manager's word.
+    if (!util::winsvc::ConsoleEventStopsNode(dwCtrlType, util::winsvc::IsRunningAsWindowsService())) {
+        return TRUE;
+    }
+
+    MarkStopRequested();
     SetShutdownRequested();
     Sleep(INFINITE);
     return true;
@@ -421,6 +485,14 @@ static void registerSignalHandler(int signal, void(*handler)(int))
 }
 #endif
 
+void RegisterShutdownSignalHandlers()
+{
+#ifndef WIN32
+    registerSignalHandler(SIGTERM, HandleSIGTERM);
+    registerSignalHandler(SIGINT, HandleSIGTERM);
+#endif
+}
+
 
 bool static Bind(const CService &addr, bool fError = true) {
     if (IsLimited(addr))
@@ -438,7 +510,7 @@ bool static Bind(const CService &addr, bool fError = true) {
 //!
 //! Base58 is alphanumeric, which matters twice over: the config parser sees no
 //! character it treats specially, and core rejects '#' in an rpcpassword outright
-//! (the autounlock helper documents the same constraint). The encoding is 43-44
+//! (a config line is cut at the first '#'). The encoding is 43-44
 //! characters, so it can never collide with the fixed username either.
 static std::string GenerateRpcPassword()
 {
@@ -446,6 +518,92 @@ static std::string GenerateRpcPassword()
     GetRandBytes(rand_pwd);
 
     return EncodeBase58(rand_pwd);
+}
+
+//! Logs that the RPC credentials are not added to \p config_file, which is not this account's,
+//! and what to do instead. On Windows it names the owner and the fixes: for the service, whose
+//! file belongs to the administrators by design, adding the credentials by hand or rerunning
+//! gridcoin-service.exe install --reconfigure, and otherwise also making the file this
+//! account's (fsmodes::WinNotOwnedText).
+static void LogNotAddingRpcCredentials(const fs::path& config_file)
+{
+#ifndef WIN32
+    LogPrintf("AddMissingRpcCredentials: not adding RPC credentials to %s: it is not owned by this account; the "
+              "package or the administrator provides them",
+              config_file.string());
+#else
+    const bool service = util::winsvc::IsRunningAsWindowsService();
+    LogPrintf("AddMissingRpcCredentials: not adding RPC credentials to %s: %s. %s", config_file.string(),
+              fsmodes::WinNotOwnedText(config_file, service),
+              service ? "Add rpcuser and rpcpassword to the file by hand, or rerun gridcoin-service.exe install "
+                        "--reconfigure as an administrator"
+                      : "Otherwise add rpcuser and rpcpassword to the file by hand");
+#endif
+}
+
+namespace {
+//! The start's check of the files of the data directory \p datadir (fsmodes::CheckOwnerOnlyModes):
+//! the directory itself, the configuration and settings files, the wallet, the backup directory and
+//! \p debuglog, as the arguments name them. Nothing is created or changed.
+std::vector<fsmodes::ModeFinding> CheckDataDirFiles(const fs::path& datadir, const fs::path& debuglog)
+{
+    fs::path settings_path;
+    if (!gArgs.GetSettingsPath(&settings_path, /* temp= */ false)) settings_path.clear();
+    const fs::path wallet_file = datadir / gArgs.GetArg("-wallet", "wallet.dat");
+
+    return fsmodes::CheckOwnerOnlyModes(datadir, GetConfigFile(), settings_path, wallet_file,
+                                        GRC::GetBackupPath(), debuglog);
+}
+} // namespace
+
+bool ReportDataDirPermissions(std::ostream& out)
+{
+    // The network's data directory as GetDataDir() resolves it, worked out first without that
+    // call, which creates a directory that is missing.
+    fs::path datadir;
+    const std::string datadir_arg = gArgs.GetArg("-datadir", "");
+    boost::system::error_code ec;
+    if (datadir_arg.empty()) {
+        datadir = GetDefaultDataDir();
+    } else {
+        datadir = fs::system_complete(datadir_arg, ec);
+        if (ec) datadir = datadir_arg;
+    }
+    datadir /= BaseParams().DataDir();
+
+    // status() sets ec for a path that does not exist too; its type tells that (file_not_found) from
+    // a path it cannot read (status_error), such as one below a directory this account may not search.
+    const fs::file_status status = fs::status(datadir, ec);
+    if (!fs::is_directory(status)) {
+        std::string state = " does not exist";
+        if (status.type() == fs::file_type::status_error) {
+            state = " cannot be read (" + ec.message() + ")";
+        } else if (fs::exists(status)) {
+            state = " is not a directory";
+        }
+        out << "The data directory " << datadir.string() << state << ", so nothing was checked.\n";
+        return false;
+    }
+
+    // It is there, so neither GetDataDir() nor the paths below it create anything.
+    const fs::path resolved = GetDataDir();
+    if (resolved.empty()) {
+        out << "The data directory " << datadir.string() << " cannot be used, so nothing was checked.\n";
+        return false;
+    }
+
+    // debug.log where InitLogging puts it.
+    const std::vector<fsmodes::ModeFinding> findings =
+        CheckDataDirFiles(resolved, AbsPathForConfigVal(gArgs.GetArg("-debuglogfile", DEFAULT_DEBUGLOGFILE)));
+    for (const fsmodes::ModeFinding& finding : findings) {
+        out << finding.message;
+        if (finding.message.empty() || finding.message.back() != '\n') out << '\n';
+    }
+    if (findings.empty()) {
+        out << "No file checked in " << resolved.string() << " gives another account access.\n";
+    }
+
+    return findings.empty();
 }
 
 //! Add generated RPC credentials to an EXISTING configuration file that has none.
@@ -465,21 +623,27 @@ static std::string GenerateRpcPassword()
 //!  - The newbie headless install. Someone hand-writes a config, forgets credentials,
 //!    and ends up with an instance that cannot be controlled at all.
 //!
-//! The expectation for a headless daemon is that it answers RPC on loopback. That is
-//! not merely convention here: the stake-only autounlock helper is pure RPC
-//! (contrib/wallettools/gridcoin_autounlock.py), so an RPC-less daemon silently loses
-//! the one feature the unattended deployment exists for.
+//! The expectation for a headless daemon is that it answers RPC on loopback, so that
+//! the local endpoint is controllable. No autounlock on Linux needs it: the core pulls
+//! the stake-only passphrase from the helper over a socket (-autounlocksocket), and the
+//! Windows scheduled task's autounlock reads its own file (-autounlockblob).
 //!
 //! Scope, deliberately narrow:
 //!  - Only when an RPC server is actually being started. An explicit server=0 is a real
-//!    choice and is honoured -- the config is not touched (and autounlock will not work,
-//!    which is documented).
+//!    choice and is honoured -- the config is not touched (the Windows Core-Stop task,
+//!    which stops the core over RPC, then cannot).
+//!  - Only into a file this account owns (fsmodes::OwnedByUs: owned by the effective user,
+//!    and not a symbolic link; on Windows, owned by the process's token user, and not a
+//!    reparse point). A conf owned by root, by the administrators or by another account --
+//!    the different-account service, whose package or administrator writes the credentials
+//!    -- is left alone, with one log line, and StartRPCThreads then names the file and
+//!    what it needs (MissingRpcPasswordMessage).
 //!  - Only ever APPENDS. Nothing already in the file is rewritten or removed. A missing
 //!    rpcpassword is an absence rather than a decision -- no interface ever offered the
 //!    user a way to choose it -- which is what separates this from the data directory
 //!    ACL rule, where widening the permissions IS a deliberate act we must not undo.
 //!  - Each key independently: a user who set rpcuser but no password keeps their name.
-static void AddMissingRpcCredentials()
+void AddMissingRpcCredentials()
 {
     const bool need_user = gArgs.GetArg("-rpcuser", "").empty();
     const bool need_password = gArgs.GetArg("-rpcpassword", "").empty();
@@ -487,6 +651,11 @@ static void AddMissingRpcCredentials()
     if (!need_password && !need_user) return;
 
     const fs::path config_file = GetConfigFile();
+
+    if (!fsmodes::OwnedByUs(config_file)) {
+        LogNotAddingRpcCredentials(config_file);
+        return;
+    }
 
     // Warn rather than re-tighten. We are adding a secret to a file the operator already
     // owns, and this branch's rule is that permissions the user set are left as the user
@@ -503,27 +672,37 @@ static void AddMissingRpcCredentials()
     }
 #endif
 
-    {
-        fsbridge::ofstream config(config_file, std::ios_base::app);
+    // Lead with a newline: an existing file need not end with one, and silently gluing
+    // rpcuser= onto the tail of somebody's last directive would corrupt their config.
+    std::string credentials = "\n"
+                              "# Generated because an RPC server is being started without credentials, which\n"
+                              "# the daemon refuses to do. Without these it would not start at all. Change\n"
+                              "# them if you like; do not leave rpcpassword empty or equal to rpcuser.\n";
 
-        if (!config.good()) {
-            // Not fatal here: fall through to StartRPCThreads, which already fails with a
-            // clear message telling the operator exactly what to put in the file. This is
-            // no worse than the behaviour before this function existed.
-            LogPrintf("WARNING: %s: could not open %s to add the missing RPC credentials",
-                      __func__, config_file.string());
-            return;
-        }
+    if (need_user) credentials += "rpcuser=gridcoinrpc\n";
+    if (need_password) credentials += "rpcpassword=" + GenerateRpcPassword() + "\n";
 
-        // Lead with a newline: an existing file need not end with one, and silently gluing
-        // rpcuser= onto the tail of somebody's last directive would corrupt their config.
-        config << "\n"
-               << "# Generated because an RPC server is being started without credentials, which\n"
-               << "# the daemon refuses to do. Without these it would not start at all. Change\n"
-               << "# them if you like; do not leave rpcpassword empty or equal to rpcuser.\n";
+    // The file is opened without following a link and checked again on the open descriptor
+    // (on Windows, the handle), so one swapped for a link or for another account's file since
+    // OwnedByUs() looked is not written.
+    const fsmodes::AppendResult appended = fsmodes::AppendToOwnedFile(config_file, credentials);
 
-        if (need_user) config << "rpcuser=gridcoinrpc\n";
-        if (need_password) config << "rpcpassword=" << GenerateRpcPassword() << "\n";
+    if (appended.status == fsmodes::AppendStatus::NotOwned) {
+        LogNotAddingRpcCredentials(config_file);
+        return;
+    }
+    if (appended.status == fsmodes::AppendStatus::OpenFailed) {
+        // Not fatal here: fall through to StartRPCThreads, which already fails with a
+        // clear message telling the operator exactly what to put in the file. This is
+        // no worse than the behaviour before this function existed.
+        LogPrintf("WARNING: %s: could not open %s to add the missing RPC credentials",
+                  __func__, config_file.string());
+        return;
+    }
+    if (appended.status == fsmodes::AppendStatus::WriteFailed) {
+        LogPrintf("WARNING: %s: could not write the missing RPC credentials to %s: %s",
+                  __func__, config_file.string(), appended.error);
+        return;
     }
 
     // Re-read so THIS start works rather than only the next one -- the whole point is that
@@ -540,7 +719,8 @@ static void AddMissingRpcCredentials()
               __func__, config_file.string());
 }
 
-//! Write the first-run configuration file, including RPC credentials.
+//! Write the first-run configuration file, including RPC credentials. Returns whether it
+//! created the file.
 //!
 //! The credentials are not optional garnish. gridcoinresearchd soft-sets
 //! -server (gridcoinresearchd.cpp), so StartRPCThreads() runs on every daemon
@@ -552,39 +732,26 @@ static void AddMissingRpcCredentials()
 //! a service manager (Windows scheduled task, systemd unit), where no GUI has run
 //! and no human is present to edit a config mid-boot.
 //!
-//! The generated password is what the error message itself recommends: a random
-//! 256-bit value, base58-encoded, with a fixed username that differs from it.
+//! The generated password is a random 256-bit value, base58-encoded, with a fixed
+//! username that differs from it.
 //! Nobody needs to memorise it -- it exists so the local RPC endpoint is not
-//! open, and the autounlock helper reads it from this file.
+//! open, and local RPC clients read it from this file.
 //!
-//! The file is created owner-only where the platform expresses that as a mode.
-//! On Windows it inherits the data directory's owner+SYSTEM DACL (see
-//! util::CreateOwnerOnlyDirectory), which is applied at creation and inheritable.
-static void CreateNewConfigFile()
+//! The file is created exclusively and owner-only from creation
+//! (fsmodes::CreateNewOwnerOnlyFile): mode 0600 whatever the umask, or on Windows the
+//! owner-only access list rather than the one it would inherit. A name that is taken, by a
+//! file that could not be read or by a link, whether or not it leads anywhere, is left as
+//! it is: nothing there is followed, truncated or written.
+static bool CreateNewConfigFile()
 {
-    fsbridge::ofstream myConfig;
-    myConfig.open(GetConfigFile());
+    const fs::path config_file = GetConfigFile();
 
-    // Narrow the file BEFORE the password is written, not after: between creation
-    // and a trailing chmod the file would briefly sit at whatever the umask allows,
-    // and on a data directory the operator had previously widened that window is
-    // readable. On Windows there is no meaningful chmod, but the file inherits the
-    // data directory's owner+SYSTEM DACL from creation (util::CreateOwnerOnlyDirectory
-    // applies it inheritable), which closes the same window by a different route.
-#ifndef WIN32
-    if (::chmod(GetConfigFile().string().c_str(), 0600) != 0) {
-        LogPrintf("WARNING: %s: could not restrict %s to owner-only (errno %d); it will contain "
-                  "the generated RPC password", __func__, GetConfigFile().string(), errno);
-    }
-#endif
-
-    myConfig
-        << "# RPC credentials, generated on first run. The local RPC interface is\n"
-        << "# credential-protected even though it listens on localhost only; the\n"
-        << "# daemon will not start without them. Change them if you like, but do\n"
-        << "# not leave rpcpassword empty or equal to rpcuser.\n"
-        << "rpcuser=gridcoinrpc\n"
-        << "rpcpassword=" << GenerateRpcPassword() << "\n";
+    std::string text = "# RPC credentials, generated on first run. The local RPC interface is\n"
+                       "# credential-protected even though it listens on localhost only; the\n"
+                       "# daemon will not start without them. Change them if you like, but do\n"
+                       "# not leave rpcpassword empty or equal to rpcuser.\n"
+                       "rpcuser=gridcoinrpc\n"
+                       "rpcpassword=" + GenerateRpcPassword() + "\n";
 
     // Bootstrap peers for the public networks, and only for those.
     //
@@ -603,15 +770,89 @@ static void CreateNewConfigFile()
     // The credentials above are still written on every network: the daemon soft-sets
     // -server and StartRPCThreads refuses to start without them.
     if (!Params().IsMockableChain()) {
-        myConfig
-            << "\n"
-            << "addnode=addnode-us-central.cycy.me\n"
-            << "addnode=ec2-3-81-39-58.compute-1.amazonaws.com\n"
-            << "addnode=gridcoin.network\n"
-            << "addnode=seeds.gridcoin.ifoggz-network.xyz\n"
-            << "addnode=seed.gridcoin.pl\n"
-            << "addnode=www.grcpool.com\n";
+        text += "\n"
+                "addnode=addnode-us-central.cycy.me\n"
+                "addnode=ec2-3-81-39-58.compute-1.amazonaws.com\n"
+                "addnode=gridcoin.network\n"
+                "addnode=seeds.gridcoin.ifoggz-network.xyz\n"
+                "addnode=seed.gridcoin.pl\n"
+                "addnode=www.grcpool.com\n";
     }
+
+    bool taken = false;
+    std::optional<std::string> not_owner_only;
+    std::string error;
+    std::FILE* const file = fsmodes::CreateNewOwnerOnlyFile(config_file, taken, not_owner_only, error);
+
+    if (file == nullptr) {
+        if (taken) {
+            LogPrintf("WARNING: %s: not creating the configuration file %s: the name is taken, by a link or by a "
+                      "file this process cannot read, and nothing there is written over",
+                      __func__, config_file.string());
+        } else {
+            LogPrintf("WARNING: %s: could not create the configuration file %s: %s", __func__, config_file.string(),
+                      error);
+        }
+        return false;
+    }
+
+    if (not_owner_only) {
+        LogPrintf("WARNING: %s: %s is not owner-only (%s); it holds the generated RPC password", __func__,
+                  config_file.string(), *not_owner_only);
+    }
+
+    const bool written = std::fwrite(text.data(), 1, text.size(), file) == text.size();
+    const bool closed = std::fclose(file) == 0;
+
+    if (!written || !closed) {
+        // The file was created above, so removing it takes nothing of anyone's, and the next
+        // start creates it again.
+        boost::system::error_code ec;
+        fs::remove(config_file, ec);
+        LogPrintf("WARNING: %s: could not write the configuration file %s", __func__, config_file.string());
+        return false;
+    }
+
+    return true;
+}
+
+bool PrepareConfigFile(std::string& error)
+{
+    error.clear();
+
+    if (IsConfigFileEmpty())
+    {
+        // The service's configuration file is gridcoin-service.exe's, owned by the
+        // administrators. The service never writes one of its own.
+        if (util::winsvc::IsRunningAsWindowsService()) {
+            error = strprintf("The configuration file %s does not exist or cannot be read. %s",
+                              GetConfigFile().string(), util::winsvc::SERVICE_CONF_SETUP);
+            return false;
+        }
+
+        if (CreateNewConfigFile()) {
+            std::string error_msg;
+
+            if (!gArgs.ReadConfigFiles(error_msg, true)) {
+                LogPrintf("WARNING: %s: created %s but could not read it: %s", __func__, GetConfigFile().string(),
+                          error_msg);
+            }
+        }
+    } else {
+        if (!GRC::CleanConfig()) {
+            InitWarning("Failed to clean obsolete config keys.");
+        }
+
+        // An existing config predating first-run credential generation, or a hand-written
+        // one, otherwise leaves a daemon that cannot start. Only when an RPC server is
+        // actually being started; -server is soft-set by gridcoinresearchd before AppInit2
+        // runs, so it is already known here, and an explicit server=0 is honoured.
+        if (gArgs.GetBoolArg("-server", false)) {
+            AddMissingRpcCredentials();
+        }
+    }
+
+    return true;
 }
 
 void AddLoggingArgs(ArgsManager& argsman)
@@ -624,38 +865,39 @@ void AddLoggingArgs(ArgsManager& argsman)
     argsman.AddArg("-debug=<category>", "Output debugging information (default: -nodebug, supplying <category> is optional). "
                                         "If <category> is not supplied or if <category> = 1, output all debugging information. <category> can be: "
                    + ListLogCategories() + ". This option can be specified multiple times to output multiple categories.",
-                   ArgsManager::ALLOW_ANY, OptionsCategory::DEBUG_TEST);
+                   ArgsManager::ALLOW_ANY | ArgsManager::SETTING_FREE, OptionsCategory::DEBUG_TEST);
     argsman.AddArg("-debugexclude=<category>", strprintf("Exclude debugging information for a category. Can be used in"
                                                          " conjunction with -debug=1 to output debug logs for all categories"
                                                          " except the specified category. This option can be specified"
                                                          " multiple times to exclude multiple categories."),
-                   ArgsManager::ALLOW_ANY, OptionsCategory::DEBUG_TEST);
+                   ArgsManager::ALLOW_ANY | ArgsManager::SETTING_FREE, OptionsCategory::DEBUG_TEST);
     argsman.AddArg("-logtimestamps", strprintf("Prepend debug output with timestamp (default: %u)", DEFAULT_LOGTIMESTAMPS),
-                   ArgsManager::ALLOW_ANY, OptionsCategory::DEBUG_TEST);
+                   ArgsManager::ALLOW_ANY | ArgsManager::SETTING_FREE, OptionsCategory::DEBUG_TEST);
     argsman.AddArg("-logthreadnames", strprintf("Prepend debug output with name of the originating thread (default: %u)", DEFAULT_LOGTHREADNAMES),
-                   ArgsManager::ALLOW_ANY, OptionsCategory::DEBUG_TEST);
+                   ArgsManager::ALLOW_ANY | ArgsManager::SETTING_FREE, OptionsCategory::DEBUG_TEST);
     argsman.AddArg("-logtimemicros", strprintf("Add microsecond precision to debug timestamps (default: %u)",
                                                DEFAULT_LOGTIMEMICROS),
-                   ArgsManager::ALLOW_ANY | ArgsManager::DEBUG_ONLY, OptionsCategory::DEBUG_TEST);
+                   ArgsManager::ALLOW_ANY | ArgsManager::DEBUG_ONLY | ArgsManager::SETTING_FREE,
+                   OptionsCategory::DEBUG_TEST);
     argsman.AddArg("-logips", strprintf("Include IP addresses in debug output (default: %u)", DEFAULT_LOGIPS),
-                   ArgsManager::ALLOW_ANY, OptionsCategory::DEBUG_TEST);
+                   ArgsManager::ALLOW_ANY | ArgsManager::SETTING_FREE, OptionsCategory::DEBUG_TEST);
     argsman.AddArg("-printtoconsole", "Send trace/debug info to console (default: 0) )",
-                   ArgsManager::ALLOW_ANY, OptionsCategory::DEBUG_TEST);
+                   ArgsManager::ALLOW_ANY | ArgsManager::SETTING_FREE, OptionsCategory::DEBUG_TEST);
     argsman.AddArg("-printtodebugger", "Send trace/debug info to debugger (default: 0)",
-                   ArgsManager::ALLOW_ANY, OptionsCategory::DEBUG_TEST);
+                   ArgsManager::ALLOW_ANY | ArgsManager::SETTING_FREE, OptionsCategory::DEBUG_TEST);
     argsman.AddArg("-shrinkdebugfile", "Shrink debug.log file on client startup (default: 1 when no -debug)",
-                   ArgsManager::ALLOW_ANY, OptionsCategory::DEBUG_TEST);
+                   ArgsManager::ALLOW_ANY | ArgsManager::SETTING_FREE, OptionsCategory::DEBUG_TEST);
     argsman.AddArg("-logarchivedaily", "Archive log file to compressed archive daily (default: 1)",
-                   ArgsManager::ALLOW_ANY, OptionsCategory::DEBUG_TEST);
+                   ArgsManager::ALLOW_ANY | ArgsManager::SETTING_FREE, OptionsCategory::DEBUG_TEST);
     argsman.AddArg("-deleteoldlogarchives", "Delete oldest log archive files in excess of -logarchiveretainnumfiles "
                                             "setting",
-                   ArgsManager::ALLOW_ANY, OptionsCategory::DEBUG_TEST);
+                   ArgsManager::ALLOW_ANY | ArgsManager::SETTING_FREE, OptionsCategory::DEBUG_TEST);
     argsman.AddArg("-logarchiveretainnumfiles=<num>", "Specify number of compressed log archive files to retain"
                                                       " (default: 30)",
-                   ArgsManager::ALLOW_ANY, OptionsCategory::DEBUG_TEST);
+                   ArgsManager::ALLOW_ANY | ArgsManager::SETTING_FREE, OptionsCategory::DEBUG_TEST);
     argsman.AddArg("-org=<string>", "Set organization name for identification (default: not set). Required for use "
                                     "on testnet. Do not set this for a wallet on mainnet.",
-                   ArgsManager::ALLOW_ANY, OptionsCategory::DEBUG_TEST);
+                   ArgsManager::ALLOW_ANY | ArgsManager::SETTING_FREE, OptionsCategory::DEBUG_TEST);
 }
 
 void SetupServerArgs()
@@ -681,6 +923,12 @@ void SetupServerArgs()
     // Listed Options
     // General
     argsman.AddArg("-version", "Print version and exit", ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
+    argsman.AddArg("-reportpermissions", "Report the files of the data directory whose permissions give other "
+                   "accounts access, each with the command that removes that access, and exit: 0 when there is "
+                   "none, 1 otherwise. Reads only the command line (-datadir, -testnet, -conf, -wallet, "
+                   "-backupdir, -debuglogfile, -settings), starts no node, and creates and changes nothing. "
+                   "Command line only.",
+                   ArgsManager::ALLOW_BOOL | ArgsManager::COMMAND_LINE_ONLY, OptionsCategory::OPTIONS);
     // TODO: Read-only config file?
     argsman.AddArg("-conf=<file>", strprintf("Specify path to read-only configuration file. Relative paths will be prefixed"
                                              " by datadir location. (default: %s)", GRIDCOIN_CONF_FILENAME),
@@ -696,65 +944,73 @@ void SetupServerArgs()
                                             "(e.g. via a setuid binary). Best-effort defence-in-depth; ignored on "
                                             "other platforms (default: %u)", DEFAULT_NO_NEW_PRIVS),
                    ArgsManager::ALLOW_BOOL, OptionsCategory::OPTIONS);
+    argsman.AddArg("-debugallowtracer", "Developers only: start under a debugger or tracer and leave the process "
+                   "dumpable so the debugger can read it. Never use with a wallet you care about.",
+                   ArgsManager::ALLOW_BOOL | ArgsManager::DEBUG_ONLY | ArgsManager::COMMAND_LINE_ONLY,
+                   OptionsCategory::DEBUG_TEST);
     argsman.AddArg("-wallet=<dir>", "Specify wallet file (within data directory)",
                    ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
     argsman.AddArg("-dbcache=<n>", strprintf("Set database cache size in megabytes (%d to %d, default: %d)",
                                              nMinDbCache, nMaxDbCache, nDefaultDbCache),
-                   ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
+                   ArgsManager::ALLOW_ANY | ArgsManager::SETTING_FREE, OptionsCategory::OPTIONS);
     argsman.AddArg("-txindexdbcache=<n>", strprintf("Set txindex (leveldb) database cache size in megabytes "
                                                     "(%d to %d, default: %d)",
                                                     nMinDbCache, nMaxTxIndexCache, nDefaultDbCache),
-                   ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
+                   ArgsManager::ALLOW_ANY | ArgsManager::SETTING_FREE, OptionsCategory::OPTIONS);
     argsman.AddArg("-dblogsize=<n>", "Set database disk log size in megabytes (default: 100)",
-                   ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
+                   ArgsManager::ALLOW_ANY | ArgsManager::SETTING_FREE, OptionsCategory::OPTIONS);
     argsman.AddArg("-synctime", "Sync time with other nodes (default: 1). Disabling this is strongly discouraged, even if"
                                 " this computer syncs with NTP: with -synctime=0 this node uses only its own clock, does"
                                 " not correct an error in it, and while it stakes shows a warning that it has no network"
                                 " time quorum.",
-                   ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
+                   ArgsManager::ALLOW_ANY | ArgsManager::SETTING_FREE, OptionsCategory::OPTIONS);
     argsman.AddArg("-paytxfee=<amt>", "Fee per KB to add to transactions you send",
                    ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
     argsman.AddArg("-mintxfee=<amt>", "Minimum fee rate, per KB, a transaction must pay to be included in a block this node stakes (default: 0.001 GRC). Does not affect transactions you send; use -paytxfee for that.",
-                   ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
+                   ArgsManager::ALLOW_ANY | ArgsManager::SETTING_FREE, OptionsCategory::OPTIONS);
     argsman.AddArg("-mininput=<amt>", "When creating transactions, ignore inputs with value less than this (default: 0.01)",
-                   ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
+                   ArgsManager::ALLOW_ANY | ArgsManager::SETTING_FREE, OptionsCategory::OPTIONS);
     argsman.AddArg("-testnet", "Use the test network", ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
 #if HAVE_SYSTEM
     argsman.AddArg("-blocknotify=<cmd>", "Execute command when the best block changes (%s in cmd is replaced by block hash)",
-                   ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
+                   ArgsManager::ALLOW_ANY | ArgsManager::SENSITIVE, OptionsCategory::OPTIONS);
     argsman.AddArg("-walletnotify=<cmd>", "Execute command when a wallet transaction changes (%s in cmd is replaced by TxID)",
-                   ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
+                   ArgsManager::ALLOW_ANY | ArgsManager::SENSITIVE, OptionsCategory::OPTIONS);
     argsman.AddArg("-projectnotify=<cmd>", "Execute command when a project is added to or removed from the whitelist, or "
                                            "an existing project's status changes",
-                   ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
+                   ArgsManager::ALLOW_ANY | ArgsManager::SENSITIVE, OptionsCategory::OPTIONS);
     argsman.AddArg("-pollnotify=<cmd>", "Execute command when a poll is added/deleted/expiring (%s1 in cmd is replaced by poll id,"
                                         "%s2 is replaced by status: added, deleted, expiration warning)",
-                   ArgsManager::ALLOW_ANY | ArgsManager::IMMEDIATE_EFFECT, OptionsCategory::OPTIONS);
+                   ArgsManager::ALLOW_ANY | ArgsManager::IMMEDIATE_EFFECT | ArgsManager::SENSITIVE,
+                   OptionsCategory::OPTIONS);
     argsman.AddArg("-pollexpirewarningtime=<hours>", "Hours before poll expiration to execute notification command. Default is "
                                                      "7 days (168 hours)",
-                   ArgsManager::ALLOW_ANY | ArgsManager::IMMEDIATE_EFFECT, OptionsCategory::OPTIONS);
+                   ArgsManager::ALLOW_ANY | ArgsManager::IMMEDIATE_EFFECT | ArgsManager::SETTING_FREE,
+                   OptionsCategory::OPTIONS);
     argsman.AddArg("-psgtnotify=<cmd>", "Execute command when the PSGT pool changes (%s1 in cmd is replaced by the multisig "
                                         "image hash, %s2 by the event: added, updated, expired, completed, "
                                         "conflict-mempool, conflict-block, removed; %s3 by the unsigned transaction id)",
-                   ArgsManager::ALLOW_ANY | ArgsManager::IMMEDIATE_EFFECT, OptionsCategory::OPTIONS);
+                   ArgsManager::ALLOW_ANY | ArgsManager::IMMEDIATE_EFFECT | ArgsManager::SENSITIVE,
+                   OptionsCategory::OPTIONS);
 #endif
     argsman.AddArg("-confchange", "Require confirmations for change (default: 0)",
-                   ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
+                   ArgsManager::ALLOW_ANY | ArgsManager::SETTING_FREE, OptionsCategory::OPTIONS);
     argsman.AddArg("-enforcecanonical", "Enforce transaction scripts to use canonical PUSH operators (default: 1)",
-                   ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
+                   ArgsManager::ALLOW_ANY | ArgsManager::SETTING_FREE, OptionsCategory::OPTIONS);
 #if HAVE_SYSTEM
     argsman.AddArg("-alertnotify=<cmd>", "Execute command when a relevant alert is received or we see a really long fork"
                                          " (%s in cmd is replaced by message)",
-                   ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
+                   ArgsManager::ALLOW_ANY | ArgsManager::SENSITIVE, OptionsCategory::OPTIONS);
 #endif
     argsman.AddArg("-blockminsize=<n>", "Set minimum block size in bytes (default: 0)",
-                   ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
+                   ArgsManager::ALLOW_ANY | ArgsManager::SETTING_FREE, OptionsCategory::OPTIONS);
     argsman.AddArg("-blockmaxsize=<n>", strprintf("Set maximum block size in bytes (default: %u)", MAX_BLOCK_SIZE_GEN/2),
-                   ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
+                   ArgsManager::ALLOW_ANY | ArgsManager::SETTING_FREE, OptionsCategory::OPTIONS);
     argsman.AddArg("-disableupdatecheck", "Optional: Disable update checks by wallet",
-                   ArgsManager::ALLOW_ANY | ArgsManager::IMMEDIATE_EFFECT, OptionsCategory::OPTIONS);
+                   ArgsManager::ALLOW_ANY | ArgsManager::IMMEDIATE_EFFECT | ArgsManager::SETTING_FREE,
+                   OptionsCategory::OPTIONS);
     argsman.AddArg("-updatecheckinterval=<n>", "Optional: Check for updates every <n> hours (default: 120, minimum: 1)",
-                   ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
+                   ArgsManager::ALLOW_ANY | ArgsManager::SETTING_FREE, OptionsCategory::OPTIONS);
     argsman.AddArg("-updatecheckurl=<url>", "Optional: URL for the update version checks (ex: "
                                             "https://sub.domain.com/location/latest",
                    ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
@@ -768,31 +1024,33 @@ void SetupServerArgs()
     argsman.AddArg("-reindex", "Rebuild chain state and block index from the blk*.dat files on disk",
                    ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
     argsman.AddArg("-checkblocks=<n>", "How many blocks to verify at startup, counting back from the tip (default: 1000, 0 = none)",
-                   ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
+                   ArgsManager::ALLOW_ANY | ArgsManager::SETTING_FREE, OptionsCategory::OPTIONS);
     argsman.AddArg("-checklevel=<n>", "How thorough the startup block verification is (0-7, default: 1)",
-                   ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
+                   ArgsManager::ALLOW_ANY | ArgsManager::SETTING_FREE, OptionsCategory::OPTIONS);
     argsman.AddArg("-settings=<file>", strprintf("Specify path to dynamic settings data file. Can be disabled with"
                                                  " -nosettings. File is written at runtime and not meant to be edited by"
                                                  " users (use %s instead for custom settings). Relative paths will be"
                                                  " prefixed by datadir location. (default: %s)",
                                                  GRIDCOIN_CONF_FILENAME, GRIDCOIN_SETTINGS_FILENAME),
                    ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
-    argsman.AddArg("-startupnotify=<cmd>", "Execute command on startup.", ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
+    argsman.AddArg("-startupnotify=<cmd>", "Execute command on startup.", ArgsManager::ALLOW_ANY | ArgsManager::SENSITIVE,
+                   OptionsCategory::OPTIONS);
     argsman.AddArg("-shutdownnotify=<cmd>", "Execute command immediately before beginning shutdown. The need for shutdown may be urgent,"
                                                 " so be careful not to delay it long (if the command doesn't require interaction with the"
                                                 " server, consider having it fork into the background).",
-                    ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
+                    ArgsManager::ALLOW_ANY | ArgsManager::SENSITIVE, OptionsCategory::OPTIONS);
 
 
     // Staking
     argsman.AddArg("-enablesidestaking", "Enable side staking functionality (default: 0)",
                    ArgsManager::ALLOW_ANY | ArgsManager::IMMEDIATE_EFFECT, OptionsCategory::STAKING);
     argsman.AddArg("-staking", "Allow wallet to stake if conditions to stake are met (default: 1)",
-                   ArgsManager::ALLOW_ANY | ArgsManager::IMMEDIATE_EFFECT, OptionsCategory::STAKING);
+                   ArgsManager::ALLOW_ANY | ArgsManager::IMMEDIATE_EFFECT | ArgsManager::SETTING_FREE,
+                   OptionsCategory::STAKING);
     argsman.AddArg("-showorphans", "Include stale (orphaned) coinstake transactions in the transaction list",
-                   ArgsManager::ALLOW_ANY, OptionsCategory::WALLET);
+                   ArgsManager::ALLOW_ANY | ArgsManager::SETTING_FREE, OptionsCategory::WALLET);
     argsman.AddArg("-minersleep=<n>", "Milliseconds the staking loop sleeps between rounds (default: 8000)",
-                   ArgsManager::ALLOW_ANY, OptionsCategory::STAKING);
+                   ArgsManager::ALLOW_ANY | ArgsManager::SETTING_FREE, OptionsCategory::STAKING);
     argsman.AddArg("-sidestake=<address,percent>", "Sidestake destination and allocation entry. There can be as many "
                                                    "specified as desired. Only six per stake can be sent. If more than "
                                                    "six are specified. Six are randomly chosen for each stake. Only active "
@@ -820,50 +1078,67 @@ void SetupServerArgs()
                    ArgsManager::ALLOW_ANY | ArgsManager::IMMEDIATE_EFFECT, OptionsCategory::STAKING);
     argsman.AddArg("-enablestakesplit", "Enable unspent output spitting when staking to optimize staking efficiency "
                                         "(default: 0",
-                   ArgsManager::ALLOW_ANY | ArgsManager::IMMEDIATE_EFFECT, OptionsCategory::STAKING);
+                   ArgsManager::ALLOW_ANY | ArgsManager::IMMEDIATE_EFFECT | ArgsManager::SETTING_FREE,
+                   OptionsCategory::STAKING);
     argsman.AddArg("-stakingefficiency=<percent>", "Specify target staking efficiency for stake splitting (default: 90, "
                                                    "clamped to [75, 98])",
-                   ArgsManager::ALLOW_ANY | ArgsManager::IMMEDIATE_EFFECT, OptionsCategory::STAKING);
+                   ArgsManager::ALLOW_ANY | ArgsManager::IMMEDIATE_EFFECT | ArgsManager::SETTING_FREE,
+                   OptionsCategory::STAKING);
     argsman.AddArg("-minstakesplitvalue=<n>", strprintf("Specify minimum output value for post split output when stake "
                                                         "splitting (default: %" PRId64 "GRC)", MIN_STAKE_SPLIT_VALUE_GRC),
-                   ArgsManager::ALLOW_ANY | ArgsManager::IMMEDIATE_EFFECT, OptionsCategory::STAKING);
+                   ArgsManager::ALLOW_ANY | ArgsManager::IMMEDIATE_EFFECT | ArgsManager::SETTING_FREE,
+                   OptionsCategory::STAKING);
     argsman.AddArg("-reservebalance=<amt>", "Keep <amt> GRC unspent and unstaked (reserve). Applied live when changed.",
-                   ArgsManager::ALLOW_ANY | ArgsManager::IMMEDIATE_EFFECT, OptionsCategory::STAKING);
+                   ArgsManager::ALLOW_ANY | ArgsManager::IMMEDIATE_EFFECT | ArgsManager::SETTING_FREE,
+                   OptionsCategory::STAKING);
 
     // Scraper
     argsman.AddArg("-scraper", "Activate scraper for statistics downloads. This will only work if the node has a wallet "
                                "key that is authorized by the network (default: 0).",
-                   ArgsManager::ALLOW_ANY, OptionsCategory::SCRAPER);
+                   ArgsManager::ALLOW_ANY | ArgsManager::SETTING_FREE, OptionsCategory::SCRAPER);
     argsman.AddArg("-explorer", "Activate extended statistics file retention for the scraper. This will only work if the"
                                 "node is authorized for scraping and the scraper is activated (default: 0)",
-                   ArgsManager::ALLOW_ANY, OptionsCategory::SCRAPER);
+                   ArgsManager::ALLOW_ANY | ArgsManager::SETTING_FREE, OptionsCategory::SCRAPER);
     argsman.AddArg("-scraperkey=<address>", "Manually specify scraper public key in address form. This is not necessary "
                                             "and will not work if the private key is not present in the scraper wallet file.",
-                   ArgsManager::ALLOW_ANY, OptionsCategory::SCRAPER);
+                   ArgsManager::ALLOW_ANY | ArgsManager::SETTING_FREE, OptionsCategory::SCRAPER);
 
     // Researcher
     argsman.AddArg("-email=<email>", "Email address to use for CPID detection. Must match your BOINC account email",
-                   ArgsManager::ALLOW_ANY, OptionsCategory::RESEARCHER);
+                   ArgsManager::ALLOW_ANY | ArgsManager::SETTING_FREE, OptionsCategory::RESEARCHER);
     argsman.AddArg("-boincdatadir=<path>", "Path to the BOINC data directory for CPID detection when the BOINC client uses"
                                            " a non-default directory",
                    ArgsManager::ALLOW_ANY, OptionsCategory::RESEARCHER);
     argsman.AddArg("-forcecpid=<cpid>", "Override automatic CPID detection with the specified CPID",
-                   ArgsManager::ALLOW_ANY, OptionsCategory::RESEARCHER);
+                   ArgsManager::ALLOW_ANY | ArgsManager::SETTING_FREE, OptionsCategory::RESEARCHER);
     argsman.AddArg("-investor", "Disable CPID detection and do not participate in the research reward system (deprecated - "
                                 "replaced by -noncruncher).",
-                   ArgsManager::ALLOW_ANY, OptionsCategory::RESEARCHER);
+                   ArgsManager::ALLOW_ANY | ArgsManager::SETTING_FREE, OptionsCategory::RESEARCHER);
     argsman.AddArg("-noncruncher", "Disable CPID detection and do not participate in the research reward system",
-                   ArgsManager::ALLOW_ANY, OptionsCategory::RESEARCHER);
+                   ArgsManager::ALLOW_ANY | ArgsManager::SETTING_FREE, OptionsCategory::RESEARCHER);
     argsman.AddArg("-pooloperator", "Skip pool CPID checks for staking nodes run by pool administrators",
-                   ArgsManager::ALLOW_ANY, OptionsCategory::RESEARCHER);
+                   ArgsManager::ALLOW_ANY | ArgsManager::SETTING_FREE, OptionsCategory::RESEARCHER);
 
     // Wallet
     argsman.AddArg("-keypool=<n>", strprintf("Set key pool size to <n> (default: %u for HD, %u for pre-HD wallets)", DEFAULT_KEYPOOL_SIZE, DEFAULT_KEYPOOL_SIZE_PRE_HD),
-                   ArgsManager::ALLOW_ANY, OptionsCategory::WALLET);
+                   ArgsManager::ALLOW_ANY | ArgsManager::SETTING_FREE, OptionsCategory::WALLET);
     argsman.AddArg("-rescan", "Rescan the block chain for missing wallet transactions",
                    ArgsManager::ALLOW_ANY, OptionsCategory::WALLET);
     argsman.AddArg("-rescanmrcrequests", "Rescan the block chain for missing mrc request transactions",
                    ArgsManager::ALLOW_ANY, OptionsCategory::WALLET);
+#ifdef __linux__
+    argsman.AddArg("-autounlocksocket=<path>", "Linux service units only: fetch the stake-only autounlock passphrase from "
+                   "this socket after the wallet loads. Command line only.",
+                   ArgsManager::ALLOW_ANY | ArgsManager::COMMAND_LINE_ONLY, OptionsCategory::WALLET);
+#endif
+#ifdef WIN32
+    // AddArg takes the name up to the first '=', so the [=<path>] form would register
+    // "-autounlockblob[". The help says the value may be left out.
+    argsman.AddArg("-autounlockblob=<path>", "Unlock the wallet for staking only at startup from a DPAPI-protected "
+                   "passphrase file (default <datadir>\\autounlock\\passphrase.dpapi when given without a value). "
+                   "Command line only.",
+                   ArgsManager::ALLOW_ANY | ArgsManager::COMMAND_LINE_ONLY, OptionsCategory::WALLET);
+#endif
     argsman.AddArg("-salvagewallet", "Attempt to recover private keys from a corrupt wallet.dat",
                    ArgsManager::ALLOW_ANY, OptionsCategory::WALLET);
     argsman.AddArg("-zapwallettxes", "Delete all wallet transactions and only recover those parts of the blockchain through"
@@ -873,7 +1148,8 @@ void SetupServerArgs()
                    strprintf("Cap on how far backward the Phase 2 startup chain-coherence walk will go "
                              "before giving up and requiring -reindex (default: %d). See issue #2865.",
                              GRC::DEFAULT_COHERENCE_WALK_MAX),
-                   ArgsManager::ALLOW_ANY | ArgsManager::DEBUG_ONLY, OptionsCategory::DEBUG_TEST);
+                   ArgsManager::ALLOW_ANY | ArgsManager::DEBUG_ONLY | ArgsManager::SETTING_FREE,
+                   OptionsCategory::DEBUG_TEST);
     argsman.AddArg("-walletbackupinterval=<n>", "DEPRECATED: Optional: Create a wallet backup every <n> blocks. Zero"
                                                 " disables backups",
                    ArgsManager::ALLOW_ANY, OptionsCategory::WALLET);
@@ -893,22 +1169,24 @@ void SetupServerArgs()
                                                   "and the other setting -walletbackupretainnumfiles.",
                    ArgsManager::ALLOW_ANY, OptionsCategory::WALLET);
     argsman.AddArg("-enableaccounts", "DEPRECATED: Enable accounting functionality (default: 0)",
-                   ArgsManager::ALLOW_ANY, OptionsCategory::WALLET);
+                   ArgsManager::ALLOW_ANY | ArgsManager::SETTING_FREE, OptionsCategory::WALLET);
     argsman.AddArg("-maxsigcachesize=<n>", strprintf("Set maximum size for signature cache, in entries "
                                                      "(default: %d, maximum: %d)",
                                                      DEFAULT_MAX_SIG_CACHE_SIZE, MAX_SIG_CACHE_ENTRIES),
-                   ArgsManager::ALLOW_ANY, OptionsCategory::WALLET);
+                   ArgsManager::ALLOW_ANY | ArgsManager::SETTING_FREE, OptionsCategory::WALLET);
     argsman.AddArg("-contractchangetoinputaddress", "Change from a contract transaction is returned to an input address "
                                                     "rather than creating a new change address (default: 0)",
-                   ArgsManager::ALLOW_ANY | ArgsManager::IMMEDIATE_EFFECT, OptionsCategory::WALLET);
+                   ArgsManager::ALLOW_ANY | ArgsManager::IMMEDIATE_EFFECT | ArgsManager::SETTING_FREE,
+                   OptionsCategory::WALLET);
 
     // Connections
     argsman.AddArg("-timeout=<n>", "Specify connection timeout in milliseconds (default: 5000)",
-                   ArgsManager::ALLOW_ANY, OptionsCategory::CONNECTION);
+                   ArgsManager::ALLOW_ANY | ArgsManager::SETTING_FREE, OptionsCategory::CONNECTION);
     argsman.AddArg("-peertimeout=<n>", "Specify p2p connection timeout in seconds. This option determines the amount of time"
                                        " a peer may be inactive before the connection to it is dropped. (minimum: 1, default:"
                                        " 45)",
-                   ArgsManager::ALLOW_ANY | ArgsManager::DEBUG_ONLY, OptionsCategory::CONNECTION);
+                   ArgsManager::ALLOW_ANY | ArgsManager::DEBUG_ONLY | ArgsManager::SETTING_FREE,
+                   OptionsCategory::CONNECTION);
     argsman.AddArg("-proxy=<ip:port>", "Connect through SOCKS5 proxy", ArgsManager::ALLOW_ANY | ArgsManager::IMMEDIATE_EFFECT, OptionsCategory::CONNECTION);
     argsman.AddArg("-tor=<ip:port>", "Use proxy to reach Tor onion services (default: same as -proxy)",
                    ArgsManager::ALLOW_ANY, OptionsCategory::CONNECTION);
@@ -916,24 +1194,24 @@ void SetupServerArgs()
                    ArgsManager::ALLOW_ANY, OptionsCategory::CONNECTION);
     argsman.AddArg("-addrlifespan=<n>", "Maximum age in days of the peer addresses returned in response to a getaddr "
                                         "message; older addresses are withheld (default: 7)",
-                   ArgsManager::ALLOW_ANY, OptionsCategory::CONNECTION);
+                   ArgsManager::ALLOW_ANY | ArgsManager::SETTING_FREE, OptionsCategory::CONNECTION);
     argsman.AddArg("-port=<port>", "Listen for connections on <port> (default: 32749 or testnet: 32748)",
-                   ArgsManager::ALLOW_ANY, OptionsCategory::CONNECTION);
+                   ArgsManager::ALLOW_ANY | ArgsManager::SETTING_FREE, OptionsCategory::CONNECTION);
     argsman.AddArg("-maxconnections=<n>", "Maintain at most <n> connections to peers (default: 125, upper limit of 950)",
-                   ArgsManager::ALLOW_ANY, OptionsCategory::CONNECTION);
+                   ArgsManager::ALLOW_ANY | ArgsManager::SETTING_FREE, OptionsCategory::CONNECTION);
     argsman.AddArg("-maxoutboundconnections=<n>", "Maximum number of outbound connections (default: 8)",
-                   ArgsManager::ALLOW_ANY, OptionsCategory::CONNECTION);
+                   ArgsManager::ALLOW_ANY | ArgsManager::SETTING_FREE, OptionsCategory::CONNECTION);
     argsman.AddArg("-maxmempool=<n>", "Keep the transaction memory pool below <n> megabytes (default: 300)",
-                   ArgsManager::ALLOW_ANY, OptionsCategory::NODE_RELAY);
+                   ArgsManager::ALLOW_ANY | ArgsManager::SETTING_FREE, OptionsCategory::NODE_RELAY);
     argsman.AddArg("-persistmempool", "Whether to keep this node's own unbroadcast transactions on "
                    "disk as they change and reload them on startup so they survive a restart (default: 1)",
-                   ArgsManager::ALLOW_ANY, OptionsCategory::NODE_RELAY);
+                   ArgsManager::ALLOW_ANY | ArgsManager::SETTING_FREE, OptionsCategory::NODE_RELAY);
     argsman.AddArg("-addnode=<ip>", "Add a node to connect to and attempt to keep the connection open",
-                   ArgsManager::ALLOW_ANY, OptionsCategory::CONNECTION);
+                   ArgsManager::ALLOW_ANY | ArgsManager::SETTING_FREE, OptionsCategory::CONNECTION);
     argsman.AddArg("-connect=<ip>", "Connect only to the specified node(s)",
-                   ArgsManager::ALLOW_ANY, OptionsCategory::CONNECTION);
+                   ArgsManager::ALLOW_ANY | ArgsManager::SETTING_FREE, OptionsCategory::CONNECTION);
     argsman.AddArg("-seednode=<ip>", "Connect to a node to retrieve peer addresses, and disconnect",
-                   ArgsManager::ALLOW_ANY, OptionsCategory::CONNECTION);
+                   ArgsManager::ALLOW_ANY | ArgsManager::SETTING_FREE, OptionsCategory::CONNECTION);
     argsman.AddArg("-externalip=<ip>", "Specify your own public address",
                    ArgsManager::ALLOW_ANY, OptionsCategory::CONNECTION);
     argsman.AddArg("-onlynet=<net>", "Make outgoing connections only through network <net> (IPv4, IPv6 or Tor). "
@@ -949,14 +1227,14 @@ void SetupServerArgs()
     argsman.AddArg("-dnsseed", "Find peers using DNS lookup (default: 1)",
                    ArgsManager::ALLOW_BOOL, OptionsCategory::CONNECTION);
     argsman.AddArg("-banscore=<n>", "Threshold for disconnecting misbehaving peers (default: 100)",
-                   ArgsManager::ALLOW_ANY, OptionsCategory::CONNECTION);
+                   ArgsManager::ALLOW_ANY | ArgsManager::SETTING_FREE, OptionsCategory::CONNECTION);
     argsman.AddArg("-bantime=<n>", strprintf("Default duration (in seconds) of manually configured bans (default: %u)",
                                              DEFAULT_MISBEHAVING_BANTIME),
-                   ArgsManager::ALLOW_ANY, OptionsCategory::CONNECTION);
+                   ArgsManager::ALLOW_ANY | ArgsManager::SETTING_FREE, OptionsCategory::CONNECTION);
     argsman.AddArg("-maxreceivebuffer=<n>", "Maximum per-connection receive buffer, <n>*1000 bytes (default: 5000)",
-                   ArgsManager::ALLOW_ANY, OptionsCategory::CONNECTION);
+                   ArgsManager::ALLOW_ANY | ArgsManager::SETTING_FREE, OptionsCategory::CONNECTION);
     argsman.AddArg("-maxsendbuffer=<n>", "Maximum per-connection send buffer, <n>*1000 bytes (default: 1000)",
-                   ArgsManager::ALLOW_ANY, OptionsCategory::CONNECTION);
+                   ArgsManager::ALLOW_ANY | ArgsManager::SETTING_FREE, OptionsCategory::CONNECTION);
 #ifdef USE_UPNP
 #if USE_UPNP
     argsman.AddArg("-upnp", "Use UPnP to map the listening port. Ignored when not listening, "
@@ -976,9 +1254,18 @@ void SetupServerArgs()
                    ArgsManager::ALLOW_ANY, OptionsCategory::RPC);
     argsman.AddArg("-multiprocess",
                    "Run in multiprocess mode (RFC #2937): the daemon also listens on an AF_UNIX "
-                   "socket in the data directory and serves the GUI over IPC; the GUI (started "
+                   "socket in the IPC directory (-ipcdir, default the data directory) and serves the GUI over IPC; the GUI (started "
                    "separately with -multiprocess) connects to it instead of running core in-process. "
                    "Default: off (monolithic).",
+                   ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
+    argsman.AddArg("-ipcdir=<dir>",
+                   "Directory for the IPC socket and cookie (default: the data directory). Relative "
+                   "paths are resolved against the data directory.",
+                   ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
+    argsman.AddArg("-ipcattachgroup=<group>",
+                   "Also admit IPC clients in this group (the different-account service). Needs -ipcdir, set to "
+                   "a directory other than the data directory: the group is given access to the IPC directory. "
+                   "Unset: only this process's own user.",
                    ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
     argsman.AddArg("-ipclogtrace",
                    "Log the full request and response payload of every IPC call. This includes "
@@ -1012,6 +1299,27 @@ void SetupServerArgs()
                    ArgsManager::ALLOW_ANY, OptionsCategory::RPC);
     argsman.AddArg("-rpcconnect=<ip>", "Send commands to node running on <ip> (default: 127.0.0.1)",
                    ArgsManager::ALLOW_ANY, OptionsCategory::RPC);
+    argsman.AddArg("-rpcserviceuser=<user>", "RPC client: also accept an RPC listener owned by <user>. Honoured only "
+                   "from a configuration file owned by root (Windows: SYSTEM or Administrators) that nobody else "
+                   "can write; for administering the system service.",
+                   ArgsManager::ALLOW_ANY, OptionsCategory::RPC);
+    argsman.AddArg("-rpcskiplistenercheck", "RPC client: send requests without identifying the owner of the RPC listener "
+                   "(not recommended: what the client sends, credentials included, then goes to whatever "
+                   "program holds the RPC address).",
+                   ArgsManager::ALLOW_BOOL | ArgsManager::COMMAND_LINE_ONLY, OptionsCategory::RPC);
+    argsman.AddArg("-stdinwalletpassphrase", "RPC client: read the wallet passphrase(s) of walletpassphrase, "
+                   "walletpassphrasechange, encryptwallet, setautounlock or clearautounlock from standard input, "
+                   "one line each, instead of the command line. A UTF-8 byte-order mark at the start of the input is "
+                   "ignored.",
+                   ArgsManager::ALLOW_BOOL | ArgsManager::COMMAND_LINE_ONLY, OptionsCategory::RPC);
+    argsman.AddArg("-stdinelevate", "RPC client: read the wallet passphrase from standard input (one line) and send "
+                   "it with the request, so this one command may use the wallet's keys while the wallet stays "
+                   "unlocked for staking only. A UTF-8 byte-order mark at the start of the input is ignored.",
+                   ArgsManager::ALLOW_BOOL | ArgsManager::COMMAND_LINE_ONLY, OptionsCategory::RPC);
+    argsman.AddArg("-stdin", "RPC client: read the remaining parameters from standard input, one per line until the "
+                   "end of the input, after any passphrase lines. For key material such as a private key or a seed "
+                   "phrase, which other users can read on the command line.",
+                   ArgsManager::ALLOW_BOOL | ArgsManager::COMMAND_LINE_ONLY, OptionsCategory::RPC);
     argsman.AddArg("-rpcthreads=<n>", "Set the number of threads to service RPC calls (default: 4)",
                    ArgsManager::ALLOW_ANY, OptionsCategory::RPC);
     argsman.AddArg("-rpcservertimeout=<n>", strprintf("Close an RPC connection that has been idle "
@@ -1029,6 +1337,20 @@ void SetupServerArgs()
 #else
     hidden_args.emplace_back("-daemon");
     hidden_args.emplace_back("-daemonwait");
+#endif
+
+#ifdef WIN32
+    // gridcoinresearchd reads it from the command line before the arguments are parsed
+    // (util::winsvc::HasServiceFlag), so that it reaches the service manager in time. It is
+    // registered so that the parse accepts it.
+    argsman.AddArg("-service", "Run as the Windows service that gridcoin-service.exe install sets up. Only the service "
+                   "control manager starts the core this way. Command line only.",
+                   ArgsManager::ALLOW_BOOL | ArgsManager::COMMAND_LINE_ONLY, OptionsCategory::OPTIONS);
+    argsman.AddArg("-allowunsafeimagedir", "Developers only: with -service or -multiprocess, start even when an account "
+                   "other than the administrators (and, without -service, this one) can change this program or a "
+                   "directory above it, and log a warning instead. Command line only.",
+                   ArgsManager::ALLOW_BOOL | ArgsManager::DEBUG_ONLY | ArgsManager::COMMAND_LINE_ONLY,
+                   OptionsCategory::DEBUG_TEST);
 #endif
 
     // Additional hidden options
@@ -1298,7 +1620,12 @@ void InitLogging()
 
     if (!LogInstance().StartLogging())
     {
-       strprintf("Could not open debug log file %s", LogInstance().m_file_path.string());
+        // Only the secure open (the multiprocess GUI) goes on without a file after a failure; any other failure
+        // leaves logging buffered, as it always has.
+        if (LogInstance().m_file_open_failed) {
+            tfm::format(std::cerr, "Could not open debug log file %s; logging to the file is off.\n",
+                        LogInstance().m_file_path.string());
+        }
     }
 
     if (!LogInstance().m_log_timestamps)
@@ -1318,7 +1645,13 @@ void InitLogging()
     LogPrintf(PACKAGE_NAME " version %s (%s)", FormatFullVersion(), build_type);
 }
 
-
+bool PayTxFeeWarnsAtStartup(CAmount rate)
+{
+    // The highest rate settxfee and changesettings accept. A higher rate from
+    // a file or the command line is still used, so the warning is all that
+    // tells the user.
+    return rate > MaxTxFeeRate();
+}
 
 void ApplyRwSettingSideEffect(const std::string& name)
 {
@@ -1371,6 +1704,7 @@ bool ChangeSettings(const std::vector<std::pair<std::string, std::string>>& sett
                     std::vector<std::string>& immediate_out,
                     std::vector<std::string>& requires_restart_list_out,
                     bool& invalid_input_out,
+                    bool& elevation_required_out,
                     std::string& error_out)
 {
     // Reset all outputs so results are well-defined even if the caller reuses
@@ -1380,6 +1714,7 @@ bool ChangeSettings(const std::vector<std::pair<std::string, std::string>>& sett
     immediate_out.clear();
     requires_restart_list_out.clear();
     error_out.clear();
+    elevation_required_out = false;
     // Phase-1 failures are caller/validation errors; a phase-2 storage failure
     // flips this back to false.
     invalid_input_out = true;
@@ -1411,6 +1746,20 @@ bool ChangeSettings(const std::vector<std::pair<std::string, std::string>>& sett
             return false;
         }
 
+        // A Refuse-class setting cannot be set here at all. An empty value is still accepted
+        // and erases an entry an older build or an edit of the file left in the settings file.
+        // That erase is never a change to the running value, which the file did not supply.
+        const SettingClass setting_class = gArgs.GetSettingClass(name);
+        const bool erase_refused = setting_class == SettingClass::REFUSE && value.empty();
+        if (setting_class == SettingClass::REFUSE && !value.empty()) {
+            if (*flags & ArgsManager::COMMAND_LINE_ONLY) {
+                error_out = "Refused setting: " + name + " can be set only on the command line";
+            } else {
+                error_out = "Refused setting: " + name + " can be set only in gridcoinresearch.conf or on the command line";
+            }
+            return false;
+        }
+
         // Value validation for the push-model network/staking knobs whose bad
         // value would otherwise persist and fail at the next startup (the config
         // consumers assert/InitError on a malformed value). An empty value erases
@@ -1427,6 +1776,17 @@ bool ChangeSettings(const std::vector<std::pair<std::string, std::string>>& sett
                     return false;
                 }
             }
+            if (name == "paytxfee") {
+                int64_t parsed = 0;
+                if (!ParseMoney(value, parsed)) {
+                    error_out = "Invalid paytxfee amount: " + value;
+                    return false;
+                }
+                if (parsed > MaxTxFeeRate()) {
+                    error_out = "paytxfee " + value + " above maximum " + FormatMoney(MaxTxFeeRate());
+                    return false;
+                }
+            }
         }
 
         // GetArg is overloaded; one of these succeeds (matches the changesettings RPC).
@@ -1437,7 +1797,27 @@ bool ChangeSettings(const std::vector<std::pair<std::string, std::string>>& sett
             current_value = ToString(gArgs.GetArg(name, 1));
         }
 
-        const bool value_changed = (current_value != value);
+        // An erase of a setting that is not set changes nothing: the sentinel
+        // default above would otherwise differ from the empty value. A value
+        // forced empty is set, and already reads empty, so erasing it is no
+        // change either and it stays forced.
+        const bool value_changed = !erase_refused && current_value != value
+                                   && (!value.empty() || gArgs.IsArgSet(name));
+
+        // An Elevate-class setting needs the wallet passphrase authority when the running value
+        // changes, or when the stored entry would (a value already in effect from the command line
+        // or the config file is still a new entry in the settings file).
+        if (setting_class == SettingClass::ELEVATE && !HoldsElevation()) {
+            const util::SettingsValue new_entry = value.empty() ? util::SettingsValue() : util::SettingsValue(value);
+            if (value_changed || getRwSetting(name).write() != new_entry.write()) {
+                error_out = "Changing " + name + " needs the wallet passphrase: unlock the wallet fully, "
+                            "or send the passphrase with this request";
+                invalid_input_out = false;
+                elevation_required_out = true;
+                return false;
+            }
+        }
+
         const bool immediate_effect = *flags & ArgsManager::IMMEDIATE_EFFECT;
 
         if (!valid_settings.insert(std::make_pair(
@@ -1617,9 +1997,9 @@ bool AppInit2(ThreadHandlerPtr threads)
     // that debug.log and the settings file -- both created before this point -- are
     // covered too. Setting it here would be too late for them.
 
-    // Clean shutdown on SIGTERM
-    registerSignalHandler(SIGTERM, HandleSIGTERM);
-    registerSignalHandler(SIGINT, HandleSIGTERM);
+    // Clean shutdown on SIGTERM and SIGINT. The daemon has already installed these at the
+    // top of main(); the GUI's in-process core installs them here.
+    RegisterShutdownSignalHandlers();
 
     // Reopen debug.log on SIGHUP
     registerSignalHandler(SIGHUP, HandleSIGHUP);
@@ -1633,35 +2013,9 @@ bool AppInit2(ThreadHandlerPtr threads)
     // ********************************************************* Step 2: parameter interactions
 
 
-    if (IsConfigFileEmpty())
     {
-        try
-        {
-            CreateNewConfigFile();
-
-            std::string error_msg;
-
-            if (!gArgs.ReadConfigFiles(error_msg, true))
-            {
-                throw error_msg;
-            }
-        }
-        catch (const std::exception& e)
-        {
-            LogPrintf("WARNING: failed to create configuration file: %s", e.what());
-        }
-    } else {
-        if (!GRC::CleanConfig()) {
-            InitWarning("Failed to clean obsolete config keys.");
-        }
-
-        // An existing config predating first-run credential generation, or a hand-written
-        // one, otherwise leaves a daemon that cannot start. Only when an RPC server is
-        // actually being started; -server is soft-set by gridcoinresearchd before AppInit2
-        // runs, so it is already known here, and an explicit server=0 is honoured.
-        if (gArgs.GetBoolArg("-server", false)) {
-            AddMissingRpcCredentials();
-        }
+        std::string error;
+        if (!PrepareConfigFile(error)) return InitError(error);
     }
 
     //6-10-2014: R Halford: Updating Boost version to 1.5.5 to prevent sync issues; print the boost version to verify:
@@ -1790,7 +2144,7 @@ bool AppInit2(ThreadHandlerPtr threads)
     {
         if (!ParseMoney(gArgs.GetArg("-paytxfee", ""), nTransactionFee))
             return InitError(strprintf(_("Invalid amount for -paytxfee=<amount>: '%s'"), gArgs.GetArg("-paytxfee", "")));
-        if (nTransactionFee > 0.25 * COIN)
+        if (PayTxFeeWarnsAtStartup(nTransactionFee))
             InitWarning(_("Warning: -paytxfee is set very high! This is the transaction fee you will pay if you send a transaction."));
     }
 
@@ -1987,6 +2341,35 @@ bool AppInit2(ThreadHandlerPtr threads)
     }
     if (!LockDirectory(datadir, ".lock", false)) {
         return InitError(strprintf(_("Cannot obtain a lock on data directory %s. %s is probably already running."), fsbridge::LongPathString(datadir), PACKAGE_NAME));
+    }
+
+    // A core that stopped during a transfer left its snapshots behind. With the
+    // lock held, no transfer of this process has begun yet.
+    wallet::CleanTransferDir();
+
+    // Open the RPC listener now, while this process alone holds the datadir, rather than after
+    // the long initialisation: another local account cannot take the port in the meantime. Until
+    // initialisation finishes the server answers warmup to every method except stop.
+    const bool fStartRPC = gArgs.GetBoolArg("-server", false);
+    LogPrintf("init: -server=%d, %s RPC server", fStartRPC, fStartRPC ? "starting" : "skipping");
+    if (fStartRPC) StartRPCThreads();
+
+    // Existing wallet files and directories are never re-moded here: their permissions (on
+    // Windows, their access lists) belong to the operator, who may have widened them on purpose.
+    // Say which ones give other accounts access, and how to change that.
+    for (const fsmodes::ModeFinding& finding : CheckDataDirFiles(datadir, LogInstance().m_file_path)) {
+        LogPrintf("%s", finding.message);
+    }
+
+    // Automatic backups fail late, in the scheduler, when the backup directory cannot be written.
+    if (GRC::BackupsEnabled()) {
+        const fs::path backup_dir = GRC::GetBackupPath();
+
+        if (const std::optional<std::string> text =
+                fsmodes::BackupDirWarning(backup_dir, fsmodes::CheckBackupDir(backup_dir))) {
+            LogPrintf("WARNING: %s", *text);
+            InitWarning(*text);
+        }
     }
 
 #ifdef WIN32
@@ -2239,6 +2622,13 @@ bool AppInit2(ThreadHandlerPtr threads)
     // existing block data files from blk*.dat to blk*.dat.orig to prepare for reloading index from block data files.
     // This is the first half of reindex. The second half is below in the import blocks section.
     if (gArgs.GetBoolArg("-reindex")) {
+        // A stop requested before the block data files are renamed ends the start here,
+        // so it does not leave a reindex half begun.
+        if (ShutdownRequested()) {
+            LogPrintf("Shutdown requested. Exiting.");
+            return false;
+        }
+
         uiInterface.InitMessage(_("Resetting block chain index to prepare for reindexing..."));
 
         if (!GRC::Upgrade::ResetBlockchainData(false) || !GRC::Upgrade::MoveBlockDataFiles(block_data_files_to_load)) {
@@ -2248,7 +2638,12 @@ bool AppInit2(ThreadHandlerPtr threads)
 
     uiInterface.InitMessage(_("Loading block index..."));
     LogPrintf("Loading block index...");
-    if (!LoadBlockIndex() && !ShutdownRequested())
+    bool block_index_loaded = false;
+    {
+        sdnotify::ScopedStartupHeartbeat heartbeat("Loading block index");
+        block_index_loaded = LoadBlockIndex();
+    }
+    if (!block_index_loaded && !ShutdownRequested())
         return InitError(_("Error loading blkindex.dat"));
 
     // as LoadBlockIndex can take several minutes, it's possible the user
@@ -2371,6 +2766,10 @@ bool AppInit2(ThreadHandlerPtr threads)
     // have not yet loaded their LevelDB state -- this is what lets us
     // safely Reset() the beacon registry without invalidating any in-memory
     // state). See doc/block_corruption_recovery_design.md.
+    // A message of its own, so that this step has its own start timeout extension
+    // rather than what is left of the block index load's.
+    uiInterface.InitMessage(_("Checking block files..."));
+    LogPrintf("Checking block files...");
     {
         LOCK(cs_main);
         if (!GRC::RunStartupCoherenceRecovery()) {
@@ -2494,7 +2893,14 @@ bool AppInit2(ThreadHandlerPtr threads)
 
         int mrc_requests_added = 0;
 
-        pwalletMain->ScanForMRCRequests(pindexMRCRequestRescan, pindexRescan, true);
+        {
+            // The scan's height is its progress: the start timeout is extended while it
+            // advances, with no cap, and no longer once it stalls.
+            std::atomic<int> scanned_height{-1};
+            sdnotify::ScopedStartupHeartbeat heartbeat(
+                "Rescanning", [&scanned_height] { return scanned_height.load(std::memory_order_relaxed); });
+            pwalletMain->ScanForMRCRequests(pindexMRCRequestRescan, pindexRescan, true, &scanned_height);
+        }
 
         LogPrintf("INFO: %u: %i missing MRC request transactions added to wallet.",
                   __func__, mrc_requests_added);
@@ -2505,6 +2911,13 @@ bool AppInit2(ThreadHandlerPtr threads)
         mrc_request_correction_scan_complete = true;
         if (!walletdb.WriteAttribute("mrc_request_correction_scan_complete", mrc_request_correction_scan_complete)) {
             error("%s: Unable to update mrc request correction scan attribute in wallet db.", __func__);
+        }
+
+        // The scan ran to its end and is recorded as done; a stop requested during it
+        // ends the start now rather than after the rest of initialisation.
+        if (ShutdownRequested()) {
+            LogPrintf("Shutdown requested. Exiting.");
+            return false;
         }
     }
 
@@ -2519,9 +2932,24 @@ bool AppInit2(ThreadHandlerPtr threads)
 
         g_timer.GetTimes("rescan start", "init");
 
-        pwalletMain->ScanForWalletTransactions(pindexRescan, true);
+        {
+            // As the MRC request scan above: extended while the scan's height advances.
+            std::atomic<int> scanned_height{-1};
+            sdnotify::ScopedStartupHeartbeat heartbeat(
+                "Rescanning", [&scanned_height] { return scanned_height.load(std::memory_order_relaxed); });
+            pwalletMain->ScanForWalletTransactions(pindexRescan, true, &scanned_height);
+        }
 
         g_timer.GetTimes("rescan complete", "init");
+
+        // As after the block index load: a stop requested during the rescan ends the
+        // start now. The wallet keeps what the scan found; its best block is not moved,
+        // so the next start scans from the same block, as it does after any start that
+        // did not finish.
+        if (ShutdownRequested()) {
+            LogPrintf("Shutdown requested. Exiting.");
+            return false;
+        }
     }
 
     // ********************************************************* Step 9: initialize GRC code
@@ -2555,6 +2983,7 @@ bool AppInit2(ThreadHandlerPtr threads)
             uiInterface.InitMessage(_("Reindexing blockchain from on disk block data files..."));
 
             // The true flag directs LoadBlockchainData to delete the input files after the load is complete.
+            sdnotify::ScopedStartupHeartbeat heartbeat("Importing blocks");
             if (!GRC::Upgrade::LoadBlockchainData(block_data_files_to_load, true, true)) return false;
 
             g_timer.GetTimes("reindex complete", "init");
@@ -2564,6 +2993,7 @@ bool AppInit2(ThreadHandlerPtr threads)
             uiInterface.InitMessage(_("Importing blockchain data file(s)."));
 
             // Step 7 checked the files given by -loadblock and put them in block_data_files_to_load.
+            sdnotify::ScopedStartupHeartbeat heartbeat("Importing blocks");
             if (!GRC::Upgrade::LoadBlockchainData(block_data_files_to_load, false, false)) return false;
 
             g_timer.GetTimes("load blockchain file(s) complete", "init");
@@ -2684,9 +3114,10 @@ bool AppInit2(ThreadHandlerPtr threads)
     // has entered serviceQueue: a task enqueued first is run when it gets there.
     g_scheduler_handle.store(g_scheduler.get(), std::memory_order_release);
 
-    const bool fStartRPC = gArgs.GetBoolArg("-server", false);
-    LogPrintf("init: -server=%d, %s RPC server\n", fStartRPC, fStartRPC ? "starting" : "skipping");
-    if (fStartRPC) StartRPCThreads();
+    // The RPC listener has been open since the datadir lock, answering warmup to everything but
+    // stop. Callers that need the scheduler above (walletpassphrase) are served from here.
+    SetRPCWarmupFinished();
+    LogPrintf("init: RPC server warmup finished");
 
     // ********************************************************* Step 13: finished
 
@@ -2891,12 +3322,12 @@ bool AppInit2(ThreadHandlerPtr threads)
     // scheduler thread is joined (threadGroup.join_all(), see Shutdown()) before
     // g_connman and pwalletMain
     // are torn down, so this can never deref freed state.
-    g_scheduler->scheduleEvery([]{
+    g_scheduler->scheduleEvery(CatchAndLogJob("ResendWalletTransactions", []{
         if (!pwalletMain) return;
         TRY_LOCK(cs_main, locked_main);
         if (!locked_main) return;
         pwalletMain->ResendWalletTransactions();
-    }, std::chrono::seconds{60});
+    }), std::chrono::seconds{60});
 
     GRC::ScheduleBackgroundJobs(*g_scheduler);
 

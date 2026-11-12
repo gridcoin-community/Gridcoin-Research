@@ -1,0 +1,2 @@
+# The configuration directory is owned by root and readable by the service account.
+d @GRC_CONF_DIR@ 0710 root @GRC_ACCOUNT@ -

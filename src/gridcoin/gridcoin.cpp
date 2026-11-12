@@ -18,8 +18,17 @@
 #include "gridcoin/upgrade.h"
 #include "gridcoin/beacon.h"
 #include "init.h"
+#include "util/fsmodes.h"
+#include "util/winservice.h"
 #include "scheduler.h"
 #include "node/ui_interface.h"
+
+#include <cstdio>
+#include <optional>
+
+#ifndef WIN32
+#include <sys/stat.h>
+#endif
 
 using namespace GRC;
 
@@ -588,7 +597,7 @@ void ScheduleBackups(CScheduler& scheduler)
     // a cycle when it encounters lock contention or when a cycle occurs
     // sooner than the requested interval:
     //
-    scheduler.scheduleEvery(RunBackupJob, std::chrono::seconds{GetBackupInterval() / 4});
+    scheduler.scheduleEvery(CatchAndLogJob("RunBackupJob", RunBackupJob), std::chrono::seconds{GetBackupInterval() / 4});
 
     // Run the backup job on start-up in case the wallet started after a
     // long period of downtime. Some usage patterns may cause the wallet
@@ -597,7 +606,7 @@ void ScheduleBackups(CScheduler& scheduler)
     // the wallet contains a stored backup timestamp later than the next
     // scheduled backup interval:
     //
-    scheduler.scheduleFromNow(RunBackupJob, std::chrono::seconds{60});
+    scheduler.scheduleFromNow(CatchAndLogJob("RunBackupJob", RunBackupJob), std::chrono::seconds{60});
 }
 
 //!
@@ -774,7 +783,7 @@ void GRC::ScheduleBackgroundJobs(CScheduler& scheduler)
         LogInstance().archive(false, plogfile_out);
     }, std::chrono::seconds{300});
 
-    scheduler.scheduleEvery(Researcher::RunRenewBeaconJob, std::chrono::hours{1});
+    scheduler.scheduleEvery(CatchAndLogJob("RunRenewBeaconJob", Researcher::RunRenewBeaconJob), std::chrono::hours{1});
 
     ScheduleBackups(scheduler);
     ScheduleUpdateChecks(scheduler);
@@ -786,7 +795,24 @@ void GRC::ScheduleBackgroundJobs(CScheduler& scheduler)
 }
 
 bool GRC::CleanConfig() {
-    fsbridge::ifstream orig_config(GetConfigFile());
+    const fs::path config_file = GetConfigFile();
+
+    // A link at the name is never followed, so it is not even read, and the outcome is the same
+    // whoever made it: Windows follows an administrator's link and may refuse to follow a
+    // standard user's. The core ignores the obsolete keys anyway.
+#ifndef WIN32
+    struct stat st;
+    const bool link = ::lstat(config_file.string().c_str(), &st) == 0 && S_ISLNK(st.st_mode);
+#else
+    const bool link = fsmodes::ReadWinOwnership(config_file).kind == fsmodes::WinOwnership::Kind::Link;
+#endif
+    if (link) {
+        LogPrintf("%s: not checking %s for obsolete keys: it is a link, which is not followed", __func__,
+                  config_file.string());
+        return true;
+    }
+
+    fsbridge::ifstream orig_config(config_file);
     if (!orig_config.good()) {
         return false;
     }
@@ -814,23 +840,69 @@ skip:;
     }
     orig_config.close();
 
-    if (commit) {
-        if (!BackupConfigFile(GetBackupFilename("gridcoinresearch.conf"))) {
-            return error("%s: Config backup failed.", __func__);
-        }
+    if (!commit) return true;
 
-        try {
-            fs::path new_config_path(GetConfigFile().replace_extension("conf~"));
-            fsbridge::ofstream new_config_file(new_config_path);
+    // The core never writes a configuration file that belongs to another account, nor one it
+    // reaches through a link (fsmodes::OwnedByUs). Leaving the obsolete keys is no failure: the
+    // core ignores them.
+    if (!fsmodes::OwnedByUs(config_file)) {
+#ifndef WIN32
+        LogPrintf("%s: not removing obsolete keys from %s: it is not owned by this account", __func__,
+                  config_file.string());
+#else
+        LogPrintf("%s: not removing obsolete keys from %s: %s", __func__, config_file.string(),
+                  fsmodes::WinNotOwnedText(config_file, util::winsvc::IsRunningAsWindowsService()));
+#endif
+        return true;
+    }
 
-            std::ostream_iterator<std::string> out(new_config_file, "\n");
-            std::copy(new_config_lines.begin(), new_config_lines.end(), out);
+    if (!BackupConfigFile(GetBackupFilename("gridcoinresearch.conf"))) {
+        return error("%s: Config backup failed.", __func__);
+    }
 
-            new_config_file.close();
-            fs::rename(new_config_path, GetConfigFile());
-        } catch (const fs::filesystem_error& e) {
-            return error("%s: Error saving config: %s", __func__, e.what());
-        }
+    // The cleaned file holds the RPC password, so it is written under a temporary name that is
+    // created exclusively and owner-only (fsmodes::CreateReplacementFile). Whatever an earlier
+    // run left at that name, a link included, is removed first, never written through.
+    fs::path new_config_path(config_file);
+    new_config_path.replace_extension("conf~");
+
+    boost::system::error_code ec;
+    fs::remove(new_config_path, ec);
+    if (ec) {
+        return error("%s: Error saving config: cannot remove %s: %s", __func__, new_config_path.string(),
+                     ec.message());
+    }
+
+    // Created owner-only, then given the permissions of the conf it will replace, so a conf the
+    // operator made wider stays so.
+    std::optional<std::string> create_warning;
+    std::string create_error;
+    std::FILE* const new_config_file =
+        fsmodes::CreateReplacementFile(config_file, new_config_path, create_error, create_warning);
+    if (new_config_file == nullptr) {
+        return error("%s: Error saving config: %s", __func__, create_error);
+    }
+    if (create_warning) {
+        LogPrintf("WARNING: %s: %s", __func__, *create_warning);
+    }
+
+    bool written = true;
+    for (const std::string& kept : new_config_lines) {
+        written = written && std::fwrite(kept.data(), 1, kept.size(), new_config_file) == kept.size()
+                  && std::fputc('\n', new_config_file) != EOF;
+    }
+    if (std::fclose(new_config_file) != 0) written = false;
+
+    if (!written) {
+        fs::remove(new_config_path, ec);
+        return error("%s: Error saving config: cannot write %s", __func__, new_config_path.string());
+    }
+
+    try {
+        fs::rename(new_config_path, config_file);
+    } catch (const fs::filesystem_error& e) {
+        fs::remove(new_config_path, ec);
+        return error("%s: Error saving config: %s", __func__, e.what());
     }
 
     return true;

@@ -109,9 +109,35 @@ The `deploy` job in `cmake_production.yml` automates the release process.
     3.  **Flattens** them (moves files from subfolders to root).
     4.  Creates a **Draft Release** on GitHub with all binaries attached.
 
-Checksums are not generated. The GitHub release page publishes a SHA-256 digest for every
-attached asset, so a separate `SHA256SUMS.txt` duplicated information the platform already
-provides.
+The job also attaches `SHA256SUMS` to the draft: `sha256sum` over the flattened assets,
+sorted by file name, one `<64 hex>  <name>` line each (LF, base names only). It is not signed; on
+Windows the installer itself carries the signature (next section).
+
+### Windows release signing
+
+On release tags the separate job `windows-sign` runs under the GitHub environment
+`windows-release` (limit it to tags in the environment's deployment branch and tag rules); only that job has
+`id-token: write`. The Windows build job strips the executables and uploads its install tree (`win-pack-tree`);
+`windows-sign` unpacks it, signs, packs with CPack again and uploads `gridcoin-windows-signed`, which the deploy
+job uses in place of the unsigned Windows files. Other runs are unchanged. It signs
+with Microsoft Artifact Signing: `azure/login` with a federated credential, an access token for
+`https://codesigning.azure.net`, then `jsign` (pinned version, SHA-256 checked, the token passed by file and deleted after each call) with the timestamp service
+`http://timestamp.acs.microsoft.com` (RFC 3161). The executables and the elevated scripts are signed before
+packing, the uninstaller through an NSIS `!uninstfinalize` hook (defined only when
+`GRIDCOIN_UNINSTALLER_SIGN_COMMAND` is set, so other builds are unchanged), and the installer last.
+
+The job holds the account's identifiers as plain values in the workflow; they are not secrets, because the login
+is a federated credential that trusts only this repository's `windows-release` environment:
+
+| Value | Meaning |
+|---|---|
+| `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID` | The Entra ID app with the federated credential |
+| `ARTIFACT_SIGNING_REGION` | The region of the account; the endpoint is `<region>.codesigning.azure.net` |
+| `ARTIFACT_SIGNING_ACCOUNT`, `ARTIFACT_SIGNING_PROFILE` | The account and certificate profile; the jsign alias is `<account>/<profile>` |
+
+In another repository the signing steps print a warning and are skipped, and the release keeps the unsigned
+Windows files. See `doc/release-process.md`
+for the one-time setup and for pinning the signer.
 
 -----
 

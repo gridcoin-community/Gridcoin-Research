@@ -12,6 +12,7 @@
 # Dependencies
 # ------------
 # Suppressions in dependencies that are developed outside this repository.
+unsigned-integer-overflow:*/include/boost/interprocess/
 unsigned-integer-overflow:*/include/c++/
 unsigned-integer-overflow:leveldb/
 unsigned-integer-overflow:secp256k1/
@@ -23,6 +24,8 @@ implicit-integer-sign-change:*/qflags.h
 implicit-integer-sign-change:crc32c/
 implicit-integer-sign-change:BytewiseComparatorImpl::FindShortSuccessor
 implicit-integer-sign-change:secp256k1/
+implicit-integer-sign-change:univalue/
+implicit-signed-integer-truncation:*/include/boost/iostreams/
 implicit-signed-integer-truncation:*/include/c++/
 implicit-signed-integer-truncation:leveldb/
 implicit-signed-integer-truncation:secp256k1/

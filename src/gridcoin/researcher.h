@@ -512,7 +512,9 @@ public:
     //! \brief Attempt to renew a beacon automatically if the wallet is unlocked
     //! and funded.
     //!
-    //! This method is executed by the scheduler.
+    //! This method is executed by the scheduler. It is the only caller of
+    //! RenewalStakingKeyAccess(), and passes that access to AdvertiseBeacon(),
+    //! so that the renewal also runs on a wallet unlocked for staking only.
     //!
     static void RunRenewBeaconJob();
 
@@ -733,7 +735,8 @@ public:
     //!  - A beacon for the CPID exists and elapsed the renewal threshold
     //!  - The wallet generated a new beacon key successfully if needed
     //!  - The wallet signed the new beacon payload with its private key
-    //!  - The wallet is fully unlocked
+    //!  - The wallet is fully unlocked, or this is the automated renewal of a
+    //!    beacon (below)
     //!  - The wallet contains a balance sufficient to send a transaction
     //!
     //! The \p force parameter instructs the wallet to generate a new beacon
@@ -744,14 +747,19 @@ public:
     //! \param force Ignore active and pending beacons for the current CPID. A
     //! beacon in the mempool still refuses the advertisement.
     //!
+    //! \param renewal_access The access of the hourly renewal job, which only
+    //! RunRenewBeaconJob() makes. With it, a beacon due for renewal is renewed
+    //! while the wallet is unlocked for staking only, in a fixed shape at the
+    //! minimum fee; see CWallet::CreateTransaction(). With no beacon to renew,
+    //! a new one is advertised the same way, with its key reserved from the key
+    //! pool as the pool stands and kept only once the advertisement is sent; no
+    //! key is created. A forced advertisement does not use it. Every other caller, the advertisebeacon RPC and the GUI among
+    //! them, passes nullptr and is refused as locked on such a wallet.
+    //!
     //! \return A variant that contains the new public key if successful or a
     //! description of the error that occurred.
     //!
-    //! \p automated_renewal marks the unattended hourly renewal job, which is
-    //! the only beacon path permitted to build a transaction while the wallet
-    //! is unlocked for staking only. Every user-initiated advertisement leaves
-    //! it false and is refused on such a wallet.
-    AdvertiseBeaconResult AdvertiseBeacon(const bool force = false, const bool automated_renewal = false);
+    AdvertiseBeaconResult AdvertiseBeacon(const bool force = false, const StakingKeyAccess* renewal_access = nullptr);
 
     //!
     //! \brief Submit a contract to the network to revoke an existing beacon.

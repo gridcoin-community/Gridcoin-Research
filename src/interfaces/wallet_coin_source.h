@@ -51,7 +51,7 @@ public:
     //! Register a per-view cursor with a display mode and sort. Registration
     //! over a not-yet-loaded store is valid and yields empty scopes until
     //! reloadAndSnapshot's Reset arrives — consumers run the initial scan off
-    //! the paint path (typically a one-shot load thread) and render a loading
+    //! the paint path (the GUI's coin-load worker, off the GUI thread) and render a loading
     //! state meanwhile. Re-registering an existing view_id replaces it and
     //! pushes a CoinReset. \p view_id is one of the GRC::VIEW_COIN_*
     //! identifiers; \p sort_column is a GRC::CoinSortColumn.

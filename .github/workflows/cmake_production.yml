@@ -6,9 +6,9 @@ on:
     branches:
       - '**'
     # AND run on release tags (triggers the deploy job)
+    # Every Gridcoin release tag starts with a digit (5.5.2.0, 5.5.1.15-testnet, 6.0.0.0).
     tags:
-      - "v*"
-      - "5.*"
+      - "[0-9]*"
   pull_request:
     branches:
       - '**'
@@ -258,6 +258,26 @@ jobs:
           # Removed -j flag; CTest reads env var
           ctest --test-dir ${{ matrix.build_dir }} --output-on-failure --timeout 1800
 
+      # 8c. Release tags only: strip the Windows executables and hand the install tree to the
+      # windows-sign job, which signs them and packs (CPack must not strip signed files). The
+      # unsigned installer built below stays the artifact when that job signs nothing.
+      - name: Upload Windows Install Tree
+        if: contains(matrix.host, 'mingw') && startsWith(github.ref, 'refs/tags/') && !env.ACT
+        run: |
+          set -euo pipefail
+          ${{ matrix.host }}-strip ${{ matrix.build_dir }}/bin/gridcoinresearch.exe ${{ matrix.build_dir }}/bin/gridcoinresearchd.exe ${{ matrix.build_dir }}/bin/gridcoin-service.exe
+          tar --exclude='*.o' --exclude='*.a' --exclude='${{ matrix.build_dir }}/src/test' \
+              -czf "$RUNNER_TEMP/win-pack-tree.tar.gz" ${{ matrix.build_dir }}
+          ls -la "$RUNNER_TEMP/win-pack-tree.tar.gz"
+
+      - name: Upload Windows Install Tree Artifact
+        if: contains(matrix.host, 'mingw') && startsWith(github.ref, 'refs/tags/') && !env.ACT
+        uses: actions/upload-artifact@v5
+        with:
+          name: win-pack-tree
+          path: ${{ runner.temp }}/win-pack-tree.tar.gz
+          retention-days: 1
+
       # 9. Package
       - name: Create Package
         run: |
@@ -480,6 +500,11 @@ jobs:
         # ran to the six-hour job default on a runner billed at ten times the
         # Linux rate, and produced no usable log when it was finally cancelled.
         timeout-minutes: 45
+        # Boost.Test catches a crash's signal and reports only the case it was
+        # in. With the signal left to the system, macOS writes the symbolicated
+        # report the next step prints.
+        env:
+          BOOST_TEST_CATCH_SYSTEM_ERRORS: "no"
         run: ctest --test-dir build --output-on-failure --timeout 1800
 
       - name: Dump crash reports on test failure
@@ -499,6 +524,24 @@ jobs:
             head -c 20000 "$f"
             echo
           done
+
+      - name: Backtrace a crashing unit test on test failure
+        # The runner may write no crash report at all. lldb runs the unit suite
+        # again, with the signal left to the system, and at a crash prints every
+        # thread's stack; the test_suite log level names the case it was in. The
+        # suite raises SIGPIPE, SIGHUP, SIGXFSZ, SIGUSR2, SIGTERM and SIGINT on
+        # purpose, at which lldb would stop, so they are passed on, set once the
+        # run is at main.
+        if: failure()
+        timeout-minutes: 15
+        env:
+          BOOST_TEST_CATCH_SYSTEM_ERRORS: "no"
+        run: |
+          cd build/src/test
+          lldb --batch -o "breakpoint set -n main" -o run \
+            -o "process handle SIGPIPE SIGHUP SIGXFSZ SIGUSR2 SIGTERM SIGINT -s false -n false -p true" -o continue \
+            -k "thread backtrace all" -k "quit 1" -- ./test_gridcoin --log_level=test_suite \
+            2>&1 | tail -c 200000 || true
 
       # The hardening check's lief has macOS wheels only up to CPython 3.14, and
       # the image's Homebrew python3 can be newer. The check gets its own
@@ -884,8 +927,10 @@ jobs:
 
       - name: Test
         # See the arm64 job: bounded twice so a hang is reported rather than
-        # running to the six-hour job default.
+        # running to the six-hour job default. Crashes reach the system, as there.
         timeout-minutes: 45
+        env:
+          BOOST_TEST_CATCH_SYSTEM_ERRORS: "no"
         run: ctest --test-dir build --output-on-failure --timeout 1800
 
       - name: Dump crash reports on test failure
@@ -905,6 +950,24 @@ jobs:
             head -c 20000 "$f"
             echo
           done
+
+      - name: Backtrace a crashing unit test on test failure
+        # The runner may write no crash report at all. lldb runs the unit suite
+        # again, with the signal left to the system, and at a crash prints every
+        # thread's stack; the test_suite log level names the case it was in. The
+        # suite raises SIGPIPE, SIGHUP, SIGXFSZ, SIGUSR2, SIGTERM and SIGINT on
+        # purpose, at which lldb would stop, so they are passed on, set once the
+        # run is at main.
+        if: failure()
+        timeout-minutes: 15
+        env:
+          BOOST_TEST_CATCH_SYSTEM_ERRORS: "no"
+        run: |
+          cd build/src/test
+          lldb --batch -o "breakpoint set -n main" -o run \
+            -o "process handle SIGPIPE SIGHUP SIGXFSZ SIGUSR2 SIGTERM SIGINT -s false -n false -p true" -o continue \
+            -k "thread backtrace all" -k "quit 1" -- ./test_gridcoin --log_level=test_suite \
+            2>&1 | tail -c 200000 || true
 
       # The hardening check's lief has macOS wheels only up to CPython 3.14, and
       # the image's Homebrew python3 can be newer. The check gets its own
@@ -1533,6 +1596,150 @@ jobs:
   # ----------------------------------------------------------------------
 
   # ----------------------------------------------------------------------
+  # JOB 4b: Sign and pack the Windows release (release tags only)
+  # ----------------------------------------------------------------------
+  # Microsoft Artifact Signing through jsign. The id-token permission and the environment
+  # are confined to this job. The values below are identifiers, not secrets: the login is a
+  # federated credential that trusts only this repository's windows-release environment. In
+  # another repository the signing steps print a warning and are skipped, and the release
+  # keeps the unsigned installer.
+  windows-sign:
+    name: Sign Windows Release
+    needs: [depends-builds]
+    runs-on: ubuntu-24.04
+    if: startsWith(github.ref, 'refs/tags/')
+    environment: windows-release
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      # The Entra ID app gridcoin-release-signing, with its federated credential.
+      AZURE_CLIENT_ID: 6e333f84-7056-45dc-a0f5-4dd51cadd8c6
+      AZURE_TENANT_ID: 4856b0d4-ad23-4215-97f3-0a497e1bf791
+      AZURE_SUBSCRIPTION_ID: 11c5288b-e15a-4209-b8c2-096160b7d0c5
+      # The Artifact Signing account and certificate profile (https://eus.codesigning.azure.net/).
+      ARTIFACT_SIGNING_REGION: eus
+      ARTIFACT_SIGNING_ACCOUNT: gridcoin-signing
+      ARTIFACT_SIGNING_PROFILE: gridcoin-release
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Check Signing Configuration
+        run: |
+          if [ "$GITHUB_REPOSITORY" != "gridcoin-community/Gridcoin-Research" ]; then
+            echo "::warning::Windows signing is skipped: it runs only in gridcoin-community/Gridcoin-Research"
+          else
+            echo "SIGNING=true" >> "$GITHUB_ENV"
+          fi
+
+      - name: Install System Dependencies
+        if: env.SIGNING == 'true'
+        run: |
+          source ./install_dependencies.sh
+          install_deps all false false
+          sudo dpkg --add-architecture i386
+          sudo apt-get update
+          sudo apt-get install -y wine-stable wine64 wine32
+
+      - name: Download Windows Install Tree
+        if: env.SIGNING == 'true'
+        uses: actions/download-artifact@v5
+        with:
+          name: win-pack-tree
+          path: ${{ runner.temp }}/tree
+
+      - name: Unpack Windows Install Tree
+        if: env.SIGNING == 'true'
+        run: tar -xzf "$RUNNER_TEMP/tree/win-pack-tree.tar.gz"
+
+      - name: Azure Login
+        if: env.SIGNING == 'true'
+        uses: azure/login@v2
+        with:
+          client-id: ${{ env.AZURE_CLIENT_ID }}
+          tenant-id: ${{ env.AZURE_TENANT_ID }}
+          subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Prepare Signing Tool
+        if: env.SIGNING == 'true'
+        run: |
+          set -euo pipefail
+          # jsign 7.6. The digest is the one the GitHub release API reports for the asset
+          # (gh api repos/ebourg/jsign/releases/tags/7.6, assets[].digest, 2026-11-06).
+          JSIGN_VERSION=7.6
+          JSIGN_SHA256=6cf58aa080e7ff82656f320cff8d4a3bff30408df8766806dcba3740dd839fa5
+          jar="$RUNNER_TEMP/jsign-$JSIGN_VERSION.jar"
+          curl -fsSL -o "$jar" "https://github.com/ebourg/jsign/releases/download/$JSIGN_VERSION/jsign-$JSIGN_VERSION.jar"
+          echo "$JSIGN_SHA256  $jar" | sha256sum -c -
+          java -version
+
+          # The wrapper below reads the token from a file (jsign: --storepass file:<path>), so it
+          # is never on a command line. The wrapper creates the file and deletes it on every exit.
+          script="$RUNNER_TEMP/grc-sign.sh"
+          cat > "$script" <<SCRIPT
+          #!/bin/bash
+          set -euo pipefail
+          umask 077
+          token_file="\$(mktemp "$RUNNER_TEMP/acs-token.XXXXXX")"
+          trap 'rm -f "\$token_file"' EXIT
+          az account get-access-token --resource https://codesigning.azure.net --query accessToken -o tsv > "\$token_file"
+          java -jar "$jar" --storetype TRUSTEDSIGNING \\
+            --keystore "$ARTIFACT_SIGNING_REGION.codesigning.azure.net" \\
+            --storepass "file:\$token_file" \\
+            --alias "$ARTIFACT_SIGNING_ACCOUNT/$ARTIFACT_SIGNING_PROFILE" \\
+            --tsaurl http://timestamp.acs.microsoft.com --tsmode RFC3161 "\$@"
+          SCRIPT
+          chmod 700 "$script"
+          echo "GRC_SIGN_SCRIPT=$script" >> "$GITHUB_ENV"
+
+      - name: Sign Windows Executables and Scripts
+        if: env.SIGNING == 'true'
+        run: |
+          set -euo pipefail
+          cd build_win64/bin
+          "$GRC_SIGN_SCRIPT" gridcoinresearch.exe gridcoinresearchd.exe gridcoin-service.exe
+          cd "$GITHUB_WORKSPACE/contrib/windows"
+          "$GRC_SIGN_SCRIPT" Install-GridcoinCoreTask.ps1 Uninstall-GridcoinCoreTask.ps1 \
+            Set-GridcoinShutdownFlush.ps1 Start-GridcoinGui.ps1 Update-GridcoinCore.ps1 \
+            Test-GridcoinRelease.ps1 GridcoinCommon.ps1 Invoke-GridcoinInstallStep.ps1
+
+      # The executables were stripped by the build job: CPack must not strip them again, and the
+      # NSIS finalize hook signs the uninstaller (NSIS.template.in, CPackOptions.cmake.in).
+      - name: Create Signed Package
+        if: env.SIGNING == 'true'
+        env:
+          GRIDCOIN_PRESIGNED_BINARIES: "1"
+          GRIDCOIN_UNINSTALLER_SIGN_COMMAND: ${{ env.GRC_SIGN_SCRIPT }}
+        run: |
+          cpack -G NSIS64 --config build_win64/CPackConfig.cmake -B release_packages
+
+      - name: Sign Windows Installer
+        if: env.SIGNING == 'true'
+        run: |
+          set -euo pipefail
+          "$GRC_SIGN_SCRIPT" release_packages/gridcoin-*-win64-setup.exe
+
+      - name: Prepare Signed Artifacts
+        if: env.SIGNING == 'true'
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          INSTALLER=$(find release_packages -maxdepth 1 -name "gridcoin-*-setup.exe" | head -n 1)
+          cp "$INSTALLER" dist/
+          VERSION=$(awk -F '-' '{ print $2 }' <<< "$(basename "$INSTALLER")")
+          cp build_win64/bin/gridcoinresearchd.exe "dist/gridcoinresearchd-${VERSION}-win64.exe"
+          cp build_win64/bin/gridcoinresearch.exe "dist/gridcoinresearch-${VERSION}-win64.exe"
+
+      # Same file names as the unsigned artifact of the build job; the deploy job takes these.
+      - name: Upload Signed Artifacts
+        if: env.SIGNING == 'true' && !env.ACT
+        uses: actions/upload-artifact@v5
+        with:
+          name: gridcoin-windows-signed
+          path: dist/*.exe
+          retention-days: 5
+
+  # ----------------------------------------------------------------------
   # JOB 5: Deploy (GitHub Release)
   # ----------------------------------------------------------------------
   deploy:
@@ -1546,7 +1753,7 @@ jobs:
     # while the ARM64 build happened to finish 17 minutes before it and was included.
     # The docker-* artifacts are deliberately NOT needed: they feed docker-publish and
     # are excluded from the release by the gridcoin-* glob below.
-    needs: [depends-builds, flatpak-build, macos-native-arm64, macos-native-intel]
+    needs: [depends-builds, windows-sign, flatpak-build, macos-native-arm64, macos-native-intel]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/')
     permissions:
@@ -1573,10 +1780,21 @@ jobs:
             exit 1
           fi
           for dir in "${dirs[@]}"; do
+            # The signed Windows files replace the unsigned ones of the build job (same names).
+            if [ "$dir" = "artifacts/gridcoin-x86_64-w64-mingw32/" ] && [ -d artifacts/gridcoin-windows-signed ]; then
+              continue
+            fi
             cp "$dir"* release_assets/
           done
 
+          # The checksum list of the flattened assets, sorted by name, base names only. It is
+          # attached unsigned and lists the signed installer; the installer's Authenticode
+          # signature is what a Windows update trusts (doc/release-process.md).
+          # SHA256SUMS is not itself listed.
           cd release_assets
+          rm -f SHA256SUMS
+          find . -maxdepth 1 -type f -printf '%f\n' | LC_ALL=C sort | xargs -r -d '\n' sha256sum > SHA256SUMS
+          cat SHA256SUMS
           ls -la
 
       - name: Publish Release

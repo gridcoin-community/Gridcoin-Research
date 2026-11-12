@@ -10,10 +10,15 @@
 
 #include "compat.h"
 
+#include <algorithm>
+#include <cerrno>
 #include <vector>
 
 #ifndef WIN32
+#include <fcntl.h>
 #include <poll.h>
+#include <sys/socket.h>
+#include <sys/time.h>
 #endif
 
 Sock::Sock() : m_socket(INVALID_SOCKET) {}
@@ -115,4 +120,152 @@ bool Sock::WaitMany(std::chrono::milliseconds timeout, EventsPerSock& events_per
 
     return true;
 #endif
+}
+
+// Remaining window per platform. Linux and the BSDs (SOCK_CLOEXEC) and Windows
+// (WSA_FLAG_NO_HANDLE_INHERIT) set the flag atomically, so there is none. Where SOCK_CLOEXEC is
+// undefined the flag is set by a following fcntl, so a fork+exec on another thread between socket()
+// and fcntl() can still inherit the descriptor.
+SOCKET CreateCloexecSocket(int domain, int type, int protocol)
+{
+#ifdef WIN32
+    // WSA_FLAG_OVERLAPPED keeps the socket usable with overlapped (IOCP) I/O.
+    return ::WSASocketW(domain, type, protocol, nullptr, 0,
+                        WSA_FLAG_OVERLAPPED | WSA_FLAG_NO_HANDLE_INHERIT);
+#elif defined(SOCK_CLOEXEC)
+    // socket() returns an int, -1 on failure; INVALID_SOCKET is that value as a SOCKET, and
+    // the conversion is spelled out so a sanitizer does not report the sign change.
+    const int fd = ::socket(domain, type | SOCK_CLOEXEC, protocol);
+    return fd == -1 ? INVALID_SOCKET : static_cast<SOCKET>(fd);
+#else
+    const int fd = ::socket(domain, type, protocol);
+    if (fd == -1) return INVALID_SOCKET;
+    const int flags = ::fcntl(fd, F_GETFD);
+    if (flags == -1 || ::fcntl(fd, F_SETFD, flags | FD_CLOEXEC) == -1) {
+        const int saved = errno;
+        ::close(fd);
+        errno = saved;
+        return INVALID_SOCKET;
+    }
+    return static_cast<SOCKET>(fd);
+#endif
+}
+
+// Remaining window per platform. Linux and the BSDs (accept4 with SOCK_CLOEXEC) have none. On macOS
+// the flag is set by an fcntl after accept(), and on Windows by SetHandleInformation after
+// accept(), so a fork+exec or a CreateProcess with handle inheritance on another thread in that
+// interval can still inherit the connection.
+SOCKET AcceptCloexec(SOCKET listen_socket, sockaddr* addr, socklen_t* addr_len)
+{
+#ifdef WIN32
+    SOCKET s = ::accept(listen_socket, addr, addr_len);
+    if (s == INVALID_SOCKET) return INVALID_SOCKET;
+    if (!::SetHandleInformation(reinterpret_cast<HANDLE>(s), HANDLE_FLAG_INHERIT, 0)) {
+        const int saved = ::WSAGetLastError();
+        ::closesocket(s);
+        ::WSASetLastError(saved);
+        return INVALID_SOCKET;
+    }
+    return s;
+#elif defined(__linux__) || defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__) || defined(__DragonFly__)
+    // As in CreateCloexecSocket(): -1 becomes INVALID_SOCKET explicitly. The non-blocking
+    // listener's accept fails with EAGAIN often, so the implicit conversion was reported often.
+    const int fd = ::accept4(listen_socket, addr, addr_len, SOCK_CLOEXEC);
+    return fd == -1 ? INVALID_SOCKET : static_cast<SOCKET>(fd);
+#else
+    const int fd = ::accept(listen_socket, addr, addr_len);
+    if (fd == -1) return INVALID_SOCKET;
+    const int flags = ::fcntl(fd, F_GETFD);
+    if (flags == -1 || ::fcntl(fd, F_SETFD, flags | FD_CLOEXEC) == -1) {
+        const int saved = errno;
+        ::close(fd);
+        errno = saved;
+        return INVALID_SOCKET;
+    }
+    return static_cast<SOCKET>(fd);
+#endif
+}
+
+namespace {
+
+//! Wait until the socket is readable (or has hung up) or timeout_ms passes. Returns a positive value
+//! when ready, 0 on timeout, and a negative value on error (EINTR included on POSIX).
+int WaitReadable(SOCKET s, int timeout_ms)
+{
+#ifdef WIN32
+    fd_set recv_set;
+    FD_ZERO(&recv_set);
+    FD_SET(s, &recv_set);
+    timeval tv;
+    tv.tv_sec = timeout_ms / 1000;
+    tv.tv_usec = (timeout_ms % 1000) * 1000;
+    return ::select(0, &recv_set, nullptr, nullptr, &tv);
+#else
+    pollfd pfd{};
+    pfd.fd = s;
+    pfd.events = POLLIN;
+    return ::poll(&pfd, 1, timeout_ms);
+#endif
+}
+
+} // namespace
+
+void DrainBeforeClose(SOCKET s, std::chrono::milliseconds bound)
+{
+    if (s == INVALID_SOCKET) return;
+
+    const auto deadline = std::chrono::steady_clock::now() + bound;
+
+#ifdef WIN32
+    ::shutdown(s, SD_SEND);
+#else
+    ::shutdown(s, SHUT_WR);
+#endif
+
+    // Waiting is done with poll/select on the remaining time, so the result does not depend on the
+    // socket's blocking mode or on any receive timeout option set on it.
+    bool peer_closed = false;
+    char buf[4096];
+    while (true) {
+        const auto remaining = std::chrono::duration_cast<std::chrono::milliseconds>(
+            deadline - std::chrono::steady_clock::now());
+        if (remaining.count() <= 0) break;
+
+        const int ready = WaitReadable(s, static_cast<int>(std::min<std::chrono::milliseconds::rep>(
+                                              remaining.count(), 1000 * 60 * 60)));
+        if (ready == 0) break;
+        if (ready < 0) {
+#ifdef WIN32
+            break;
+#else
+            if (errno == EINTR) continue;
+            break;
+#endif
+        }
+
+        const int n = ::recv(s, buf, sizeof(buf), 0);
+        if (n == 0) {
+            peer_closed = true;
+            break;
+        }
+        if (n < 0) {
+#ifdef WIN32
+            if (::WSAGetLastError() == WSAEWOULDBLOCK) continue;
+#else
+            if (errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK) continue;
+#endif
+            break;
+        }
+    }
+
+    if (!peer_closed) {
+        linger lg;
+        lg.l_onoff = 1;
+        lg.l_linger = 0;
+#ifdef WIN32
+        ::setsockopt(s, SOL_SOCKET, SO_LINGER, reinterpret_cast<const char*>(&lg), sizeof(lg));
+#else
+        ::setsockopt(s, SOL_SOCKET, SO_LINGER, &lg, sizeof(lg));
+#endif
+    }
 }

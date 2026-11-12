@@ -141,19 +141,29 @@ All consensus rule changes must be gated by block height or version. Mainnet blo
 
 ### RPC Heritage Ledger (adding or changing an RPC)
 
-Every `vRPCCommands[]` row in `src/rpc/server.cpp` carries a **mandatory heritage classification** — the `CRPCCommand` constructor requires it, so a new RPC will not compile without one:
+Every `vRPCCommands[]` row in `src/rpc/server.cpp` carries a **mandatory heritage classification** and a **mandatory access class** — the `CRPCCommand` constructor requires both, so a new RPC will not compile without them:
 
 ```
-{ "name", &impl, cat_x, &help_helpman, heritage_<bucket>, "<fp>" }
+{ "name", &impl, cat_x, &help_helpman, heritage_<bucket>, "<fp>", access_<class> }
 ```
 
 - **Buckets:** `heritage_pure_upstream` (rote port, backport-safe), `heritage_mixed` (upstream analogue with Gridcoin-specific divergence — the "looks portable, isn't" case), `heritage_removed_upstream` (frozen fork, deleted upstream), `heritage_pure_gridcoin` (no upstream analogue). Rule of thumb: a rote GRC substitution stays pure-upstream; any *retained divergence decision* (extra/removed result fields, different args, account/contract entanglement) is mixed.
 - **Fingerprint `<fp>`:** required for the three fingerprinted buckets; `""` for pure-gridcoin. **Never hand-compute it** — run `test/lint/lint-rpc-heritage.py`, which prints the expected value on a mismatch. Use `"manual"` when the output isn't literal-key-trackable (dynamically-keyed object, or a positional array of scalars).
+- **Access class:** `access_read_only` (changes nothing), `access_free` (changes state that neither moves nor redirects value, widens exposure, nor handles keys), `access_elevate` (signs or reveals keys, writes key material, moves or redirects value, widens network exposure, or exports or deletes wallet files; `CRPCTable::execute` refuses it with `RPC_WALLET_UNLOCK_NEEDED` unless the wallet has a full unlock or the request carries the passphrase in `X-Gridcoin-Elevate`), `access_elevate_inband` (the method verifies a passphrase given as its own argument, so the dispatcher does not gate it), `access_elevate_unencrypted` (the method acts only on an unencrypted wallet and refuses an encrypted one itself, so the dispatcher does not gate it) or `access_settings` (`changesettings`, which applies a class per key). The access class does not affect the fingerprint. When unsure, choose `access_elevate`.
 - **Doc:** add a matching row to `doc/rpc-heritage.md` (correct bucket table + fp) and bump the per-bucket tally — the lint checks the doc row-by-row *and* that the tally equals the table.
 - **Drift:** if the lint flags a fingerprint mismatch on an existing RPC you touched, re-confirm the bucket is still correct, then update both the row's `heritage_fp` and the doc row. Full runbook in `doc/developer-notes.md`.
 - **Regtest-only RPCs** gate on `Params().IsMockableChain()` and throw `JSONRPCError(RPC_METHOD_NOT_FOUND, ...)` (maps to HTTP 404, not `std::runtime_error`), matching `generate`/`generatesuperblock`/`stakelimit`.
 
 `test/lint/lint-rpc-heritage.py` (wired into `lint-all.sh`) is the single fingerprint authority — it computes and validates the baselines, so run it after any RPC change.
+
+### Entry-Point Access Classes (adding an RPC, an IPC method or an argument)
+
+`src/rpc/entry_point_classes.json` gives every RPC row and every capnp method (`Interface.method`) a class (`read_only`, `free`, `elevate`, `settings`, `dispatch`, `elevated_handle`, `refuse`) and an effect; `test/lint/lint-entry-point-classes.py` (in `lint-all.sh` and the CTest case `lint_entry_point_classes`) checks it against the code. The class table, the baseline rule and the full checklist are in "Entry-point access classes" in `doc/developer-notes.md`.
+
+- **New RPC row:** `access_<class>` on the row and a matching `"rpc"` entry (`access_elevate_inband` is `elevate` with `"authority": "passphrase_argument"`, `access_elevate_unencrypted` is `elevate` with `"authority": "unencrypted_only"`).
+- **New capnp method:** an `"ipc"` entry; an `elevate` one without an authority names its `"kind"` and opens `CapabilityScope` with `CapabilityKind::<kind>` in the method body (a new interface also needs a line in the lint's `IMPLEMENTATIONS` map).
+- **New argument:** one list of `init_tests`; `ArgsManager::SETTING_FREE` if Free; a Refuse argument (any command, path, URL, RPC/IPC or process-mode option) gets a pattern in `share/gridcoin/refused-setting-keys.txt`, and a `COMMAND_LINE_ONLY` argument must match one.
+- Keep the file as `json.dumps(data, indent=2, sort_keys=True)` plus a newline. When unsure of a class, choose `elevate`.
 
 ## Test Conventions
 

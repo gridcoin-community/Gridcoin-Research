@@ -7,7 +7,7 @@ automation client — in place of the bundled Qt wallet.
 
 It describes the interface **as it exists on this branch** (post the
 identity-handshake work: `NodeIdentity` is `{identity_token, network}`, IPC
-schema major is `4`). It is a companion to, not a replacement for:
+schema major is `5`). It is a companion to, not a replacement for:
 
 - `doc/multiprocess_design.md` — the design of record (rules, decisions, phasing).
 - `doc/multiprocess.md` — how to build, run, and stop the split binaries.
@@ -98,11 +98,22 @@ parent of a custom socket path. An existing directory is left as the operator
 configured it; `ProcessImpl::bind` logs a warning if the socket's directory is
 open to other users.
 
-The node caps the listener at **one simultaneous connection**
-(`mp::ListenConnectionsFactory<messages::Init, interfaces::Init>(...,
-/*max_connections=*/1, ...)` in `src/ipc/capnp/protocol.cpp`). An alternative
-front end must therefore be the *only* client attached; a second connection will
-not be accepted while one is live (see §10).
+The node serves **one GUI at a time**. Every connection of the listener shares
+one attach slot (`ipc::AttachSlot`, `src/ipc/serve_init.h`); the first connection
+to authenticate claims it and holds it until it closes. A second connection that
+authenticates meanwhile can complete the handshake reads and ask
+`Init::holdsAttachSlot()`, which answers `false`, but every `makeX` factory
+refuses it with "another GUI is already attached to this core". The transport
+cap is two simultaneous connections (`mp::ListenConnectionsFactory<messages::Init,
+interfaces::Init>(..., /*max_connections=*/2, ...)` in
+`src/ipc/capnp/protocol.cpp`): the attached GUI and one that is told so. An
+alternative front end must therefore be the *only* client attached (see §10).
+
+When a connection is torn down -- the peer disconnects, the authentication
+deadline drops it, or the node shuts down -- the node runs its teardown
+(`Init::connectionClosed`, local only) on the IPC event-loop thread before the
+listener can serve another connection: the slot holder's wallet capability is
+ended first, then the slot is given back.
 
 ### 2.2 The cookie
 
@@ -133,7 +144,19 @@ full ordered sequence a client must perform:
    (`Ipc::connectAddress("unix", on_disconnect)`). Returns null if the address
    is empty/disabled or (for `"auto"`) if nothing is listening; throws on an
    unexpected socket error.
-4. **`Init::authenticate(cookie)`** — the **first** IPC call. The node compares
+   - **On Windows, the identity check** (`ipc::win::RunClientAttestation`,
+     `src/ipc/win_attest.h`), which `connectAddress` runs before it returns:
+     `Init::beginAttest()` names a one-shot pipe and a nonce; the client opens
+     `\\.\pipe\gridcoin-attest-<suffix>` at the identification level, refuses
+     unless the pipe's owner is the node account it expects, writes the nonce,
+     and calls `Init::finishAttest()`, keeping the pipe open until it answers.
+     The node reads the client's token through the pipe and admits its own
+     account, or a member of the `-ipcattachgroup` group, at Medium integrity
+     only. Until `finishAttest()` has returned `true` on the connection, the
+     node's `authenticate()` compares no cookie and fails, so a client that skips
+     this step can never authenticate there.
+4. **`Init::authenticate(cookie)`** — the first call after the connect (after
+   the identity check on Windows). The node compares
    it constant-time (`ConstantTimeEqual`) against the cookie it wrote. A `false`
    result is a hard fail: **build and identity are never served to an
    unauthenticated peer**, and every other method throws until `authenticate()`
@@ -144,7 +167,11 @@ full ordered sequence a client must perform:
 6. **`Init::getIdentity()`** — the node's `NodeIdentity` (`identity_token`,
    `network`). Steps 5 and 6 are fetched in **one guarded round-trip**.
 7. **Compatibility checks** (all inside one `try`; see §2.5).
-8. **`Init::makeNode()` / `makeWallet()` / …** — proceed to the interface tree.
+8. **`Init::holdsAttachSlot()`** — `false` means another GUI is attached and every
+   factory will be refused (§2.1). `ClientHandshake` asks it after the
+   compatibility checks (a core of another schema may not serve it) and fails
+   with `already_attached` set.
+9. **`Init::makeNode()` / `makeWallet()` / …** — proceed to the interface tree.
 
 Only after a successful handshake may the client call the `makeX` factories.
 The node additionally polls `Init::isCoreReady()` readiness: `authenticate()`
@@ -187,34 +214,62 @@ change — do not silently drop the guard.
 | Condition | Detected by | Severity |
 |---|---|---|
 | Wrong / stale cookie | `authenticate()` returns false | **Hard fail** — "node may have restarted; reconnect" |
+| Windows: node without the identity check | `beginAttest()` throws or answers `served=false` | **Hard fail** before the cookie is sent — "use matching builds" |
+| Windows: identity refused | `finishAttest()` returns false | **Hard fail** — wrong account, not in the attach group, or elevated |
 | `schema_major` mismatch | `remote.schema_major != local.schema_major` | **Hard fail** — incompatible wire format |
 | `protocol_version` mismatch | `remote.protocol_version != local.protocol_version` | **Hard fail** |
 | Client `schema_minor` **>** node's | `local.schema_minor > remote.schema_minor` | **Hard fail** — "update the node" |
 | `network` mismatch | `ident.network != local_network` | **Hard fail** — wrong chain |
+| Another GUI is attached | `holdsAttachSlot()` returns false | **Hard fail** — `already_attached`; "close the other one first" |
 | Node `schema_minor` **>** client's | (soft) | `SoftWarn::GuiOlderMinor` — forward-compatible, log only |
 | `git_commit` mismatch | (soft) | `SoftWarn::GitCommitMismatch` — mixed-build banner |
 | Identity token change | client-side `CheckIdentityBinding` | prompt / rebind / quit |
 | **Daemon vanished mid-handshake** | any IPC call throws | **Hard fail** — `ClientHandshake` catches `std::exception`, clears soft findings, returns `ok=false` with "lost connection …" |
 
 That last row is the critical robustness point: **any IPC call can throw** if the
-daemon disconnects mid-flight. `ClientHandshake` wraps steps 4–7 in one
+daemon disconnects mid-flight. `ClientHandshake` wraps steps 4–8 in one
 `try/catch` so a throw becomes a clean `ok=false` rather than an escaping
 exception. A client must apply the same discipline to *every* later call, not
 just the handshake (§6).
+
+`ConnectToNode` reports each failure as an `ipc::ConnectFailure` whose kind says
+what happened: `NoCookie` (step 2), `NotListening` (no socket file, or one a
+stopped node left; connection refused), `PeerRefused` (the peer check below),
+`AlreadyAttached`, `Timeout`, or `Handshake` (anything else). It bounds the
+round trips, from libmultiprocess's bootstrap call (`Init.construct`, made
+inside `connectAddress`, which a node whose listener has not accepted the
+connection does not answer) to the end of the handshake: a watchdog shuts the
+connection's socket down if the node has not answered within
+`ipc::IPC_CLIENT_HANDSHAKE_TIMEOUT` (30 s), which fails the pending call as a
+disconnect and gives `Timeout`. The `connect()` before it is not bounded: on
+Linux a blocking `connect()` to a listener whose backlog is full waits until the
+node accepts or exits, and only then does the watchdog act (at once, if the
+deadline has passed). `ipc::NextConnectStep` is the retry policy:
+only `NoCookie` and `NotListening`, how a node that is still starting looks, are
+retried, every `IPC_CONNECT_RETRY_INTERVAL` (2 s), until `IPC_CONNECT_WAIT_MAX`
+(300 s) after the first attempt. The bundled GUI runs each attempt off its GUI
+thread and shows a cancellable "Waiting for the Gridcoin core to start..."
+dialog after the first failure it retries, or once an attempt has been waiting
+for 2 s.
 
 > **Peer-credential check.** The peer-identity check in design §4.3 is
 > implemented on both ends, before the cookie is presented. The reference client
 > checks the listening peer inside `Ipc::connectAddress()` (step 3 above) and, if
 > the check fails, refuses to send the cookie, so `ConnectToNode` fails. The node
-> checks each accepted connection and closes it before serving it. Both use
-> `ipc::CheckPeerCredentials` (`src/ipc/peercred.cpp`) and refuse a peer whose OS
-> user differs from their own, or whose user cannot be determined; root is not
-> special-cased. Linux reads `SO_PEERCRED`; macOS and the BSDs use
-> `getpeereid()`. Windows AF_UNIX exposes no peer credentials, so there is no
-> check there; the owner+SYSTEM protected DACL on `node.sock` and `ipc.cookie` is
-> the guard. The daemon logs the mode in force at startup (`IPC: peer-credential
-> enforcement: ...`). Two processes of the same OS user look identical to this
-> check, so the cookie remains the authenticator. `ClientHandshake` itself does
+> checks each accepted connection and closes it before serving it. Both read the
+> peer's identity with `ipc::ReadPeerIdentity` and refuse a peer whose identity
+> cannot be read. The node then applies `ipc::ServerPeerPolicy` (its own OS user,
+> or with `-ipcattachgroup` a non-root peer in that group) and the client
+> `ipc::ClientPeerPolicy` (its own OS user, or with `-ipcserviceuser` that account
+> when the socket's directory is a directory, not a symlink, owned by that account
+> or root and not writable by group or others); see `src/ipc/peercred.h`. Linux
+> reads `SO_PEERCRED`; macOS and the BSDs use `getpeereid()`. Windows AF_UNIX
+> exposes no peer credentials, so there is no check there; the owner+SYSTEM
+> protected DACL on `node.sock` and `ipc.cookie` is the guard, and a different
+> account cannot be configured. The daemon logs the mode in force at startup
+> (`IPC: peer-credential enforcement: ...`). Two processes of the same OS user
+> look identical to this check; the cookie ties the connection to this run of
+> the node. `ClientHandshake` itself does
 > no check (its first call hands the cookie to whatever answered), so a client
 > that does not connect through `Ipc::connectAddress()` (§9) must make the same
 > check on its connected socket before it authenticates.
@@ -227,9 +282,9 @@ Three constants are embedded in **both** binaries and compared during the
 handshake (`ipc/handshake.h`):
 
 ```cpp
-constexpr uint32_t IPC_SCHEMA_MAJOR   = 4;
-constexpr uint32_t IPC_SCHEMA_MINOR   = 2;
-constexpr uint32_t IPC_PROTOCOL_VERSION = 1;
+constexpr uint32_t IPC_SCHEMA_MAJOR   = 5;
+constexpr uint32_t IPC_SCHEMA_MINOR   = 0;
+constexpr uint32_t IPC_PROTOCOL_VERSION = 2;
 ```
 
 **Major 4.** `SendCoinsStatus` gained `WalletUnlockedForStakingOnly`, so a
@@ -278,6 +333,54 @@ companion and mapped no member to it: neither flag ever crossed, and the GUI's
 `hasMagnitude()` was always false. Additive; an older node leaves both false,
 which is what it always sent, and the minor already turns the mismatch into the
 "Update the node" hard fail.
+
+**Major 5.** `Wallet` gained `beginElevation @37 (passphrase, kind)` and
+`endElevation @38`, and every wallet method that uses the keys for the GUI (the
+send, message and PSGT signing, MRC, poll, vote and beacon methods, and the
+console) runs under the capability they hold, one operation kind at a time.
+A capability serves every operation of
+its kind on its connection until the GUI ends it or its deadline passes (from
+two minutes to an hour by kind, CapabilityTtl in src/wallet/capability.cpp); the
+GUI ends each one when the operation that asked for it is done. `elevateWallet @36` stays in the schema,
+because a released ordinal cannot be dropped, but always returns false.
+`RpcConsoleResult` gained `walletUnlockNeeded @2`, `SettingChangeResult` gained
+`elevationRequired @7`, `SideStakeEditStatus` gained `ELEVATION_REQUIRED`,
+`Wallet` gained `getTransactionFeeRate @39`, which the send confirmation reads,
+`Node` gained `executeRpcConsoleSecretCommand @43`, which carries the
+console's wallet passphrases as `SecureString`, `Node` gained
+`getCorePaths @44` with the `CorePaths` struct (data directory, debug log,
+config, settings and wallet file paths as the core sees them), which the
+GUI's "Open debug log" and "Open config" read, and `Init` gained
+`holdsAttachSlot @16`, which tells a second GUI that another is attached.
+`Init` also gained `beginAttest @17` and `finishAttest @18`, the Windows
+identity check, served before authentication (§2.5), with
+`IPC_PROTOCOL_VERSION` 2.
+`Wallet` also gained `beginBackup @40 (items)`, which returns a `FileSource`
+streaming copies the core makes in its own transfer directory under a Backup
+capability; `backupWallet @20` and `backupConfigFile @21` stay in the schema but
+always return false, since the core no longer writes to a path the client names.
+The new `file_transfer.capnp` declares the `FileSource` and `FileSink`
+interfaces. `Wallet` also gained `beginConsoleDownload @41 (method, args)` and
+`beginConsoleUpload @42 (method, args, size)`, which run the console's file
+commands through the transfer channel (under a FileTransfer capability when
+the wallet is encrypted and not fully unlocked, except `dumpcontracts`, which
+exports public chain data and needs none): a
+`FileSource` of what `dumpwallet` or `dumpcontracts` writes, and a `FileSink`
+for what `importwallet` or `parseaccrualsnapshotfile` reads. The core puts its
+own value where the command takes its file. The GUI console runs these four
+commands itself, in both builds, before anything reaches
+`executeRpcConsoleCommand` (which refuses them): the file is on the GUI's side,
+a bare file name is taken in the GUI's own data directory, each command but
+`dumpcontracts` begins a FileTransfer capability of its own when the wallet needs
+one (`dumpcontracts` asks for no passphrase), and every call of
+the transfer runs on the GUI's modal worker. The new methods alone would be
+additive; the major is for the other direction. A GUI and a node of
+different majors disagree on how an operation is authorised, so each such action
+would fail with a message the user cannot act on. A newer GUI against
+an older node gets `UNIMPLEMENTED` for `beginElevation`, so the same actions
+fail. The major turns both pairings into the "use matching builds" refusal at
+connect. Major 5 carries everything major 4 had through minor 2, and the minor
+restarts at 0.
 
 
 Rules a client must honor (from `ClientHandshake` and design §4.2):
@@ -336,7 +439,9 @@ a map, not a field-by-field restatement.
 ### 4.0 Init — `src/interfaces/init.h`, `ipc/capnp/init.capnp`
 
 The per-process bootstrap. Beyond the handshake methods (`authenticate`,
-`getBuildInfo`, `getIdentity`, §2) and `isCoreReady()`, it hands out:
+`getBuildInfo`, `getIdentity`, §2), `isCoreReady()` and `holdsAttachSlot()`
+(`@16`, schema major 5; whether this connection is the attached GUI, §2.1), it
+hands out the factories below, to the attached GUI only:
 
 | Factory | Returns | Notes |
 |---|---|---|
@@ -369,10 +474,18 @@ never wait on a core lock.
 
 Command/action methods: `startShutdown`, `banNode`, `unban`, `disconnectNode`,
 `executeRpcConsoleCommand(method, args) -> RpcConsoleResult` (the whole UniValue
-round trip happens node-side; only formatted text crosses), `listRpcCommands`,
+round trip happens node-side; only formatted text crosses),
+`executeRpcConsoleSecretCommand(method, passphrases, args) -> RpcConsoleResult`,
+`getCorePaths() -> CorePaths`,
+`listRpcCommands`,
 the typed settings getters (`getSettingBool/Int/Str`, `isSettingSet`) and
 `changeSettings(...) -> SettingChangeResult`, plus `checkForLatestUpdate` and
-`runDiagnostics`.
+`runDiagnostics`. The getters answer only for the settings the GUI reads
+(`IsGuiReadableSetting` in `src/node/access_policy.h`); any other name reads as
+unset, with the caller's default. `changeSettings` applies the settings classes
+as the `changesettings` RPC does, and runs under the connection's `Settings`
+capability when one is held (§4.3); an Elevate-class change refused without one
+comes back with `elevation_required` (and `invalid_input`) set.
 
 DTOs: `BannedNode`, `PeerInfo`, `RpcConsoleResult`, `SettingChangeResult`,
 `ScraperConvergenceSnapshot`, `LatestVersionInfo`, `DiagnosticResult` (+ the
@@ -388,7 +501,24 @@ by quitting its own process), `handleNotifyBlocksChanged`,
 
 `executeRpcConsoleCommand` is worth calling out for an automation client: it is
 the full RPC dispatch surface behind one method, so a headless client can drive
-essentially any RPC through `Node` without a separate HTTP-RPC port.
+essentially any RPC through `Node` without a separate HTTP-RPC port. It runs
+under the connection's `RpcRequest` capability when one is held (§4.3). A command
+refused for the wallet's keys (`RPC_WALLET_UNLOCK_NEEDED`) comes back with
+`RpcConsoleResult::wallet_unlock_needed` set; the GUI console then asks for the
+passphrase once, on a wallet unlocked for staking only, and runs the same command
+again under that capability.
+
+The methods with passphrase parameters (`walletpassphrase`,
+`walletpassphrasechange`, `encryptwallet`, `setautounlock`, `clearautounlock`)
+are the exception: `executeRpcConsoleCommand` refuses them before anything runs,
+because there the passphrase would cross as plain text.
+`executeRpcConsoleSecretCommand` runs them, with the passphrases as
+`SecureString` (`List(Data)` on the wire) and the other parameters as text, after
+the same checks the dispatcher makes (the argument count, and the passphrase
+gate, which stops none of them: `encryptwallet` refuses an encrypted wallet
+itself, and the others verify their own passphrase). It never sets `wallet_unlock_needed`: a passphrase method is
+not run again under a capability. `interfaces::RpcConsolePassphraseIndexes(method)`
+names the passphrase positions, locally and with no call to the node.
 
 ### 4.2 StakingStatus — `src/interfaces/staking.h`, `staking.capnp`
 
@@ -404,13 +534,77 @@ The node's single wallet. Balances (`getBalance`, `getStake`,
 state (`getLockState -> WalletLockState`, `isUnlockedForStakingOnly`,
 `getUnlockStakingOnlyFlag`); mutation of lock state (`encryptWallet`,
 `lockWallet`, `unlockWallet`, `changeWalletPassphrase` — all taking a
-`SecureString` passphrase, §7; `elevateWallet`, which also takes one, because it
-widens an unlock already in progress to full for a single operation and so
-GRANTS permission; and `restrictToStakingOnly`, which does NOT, because it only
-narrows an existing unlock to staking-only and so removes permission rather than
-granting it. The last two are a pair: an operation needing a full unlock on a
-staking-only wallet elevates, acts, and hands the elevation back, which leaves
-the unlock's deadline and the relock armed for it untouched).
+`SecureString` passphrase, §7; and `restrictToStakingOnly`, which narrows an
+existing unlock to staking-only without one, and has no production callers).
+After `encryptWallet`, `getPreEncryptionBackups` (schema major 5) returns the
+paths of the core's automatic wallet backups made before the encryption
+(`GRC::ListAutomaticWalletBackupsBefore`), which still hold the unencrypted keys;
+the GUI names them in the message after the encryption, and nothing deletes them.
+
+Autounlock setup: `setAutoUnlockSecret(passphrase)` stores the wallet passphrase
+for staking-only autounlock, and `clearAutoUnlockSecret(passphrase)` removes it
+and locks the wallet. Both take the passphrase with the call rather than from
+the connection's capability, since the store needs the passphrase itself; they
+check it as `beginElevation` does (an `AutoUnlockSetup` capability, the
+failed-passphrase delay for a wrong one), then write or delete the stored
+passphrase in a passphrase turn of their own while that capability is still
+live, so a passphrase change either follows and re-encrypts what was stored or
+came first and nothing is stored. The result is an `AutoUnlockSetupResult`
+crossing as a `UInt8` (`OkUnverified` when the file was written but could not
+be read back; the core checks it at its next start), and a value outside the
+enumeration is refused when the client reads it. `getAutoUnlockStatus` returns
+the `AutoUnlockStatus` struct: whether the platform has a store (Windows), whether
+a passphrase is stored, its scope (`machine` or `service`), where, and why what
+is stored would not be used. The GUI offers Settings -> "Autounlock for staking"
+only in the split build and only when the store is supported.
+
+Per-operation capabilities (schema major 5): `beginElevation(passphrase, kind)`
+verifies the passphrase and begins a capability for one `CapabilityKind`
+(`Send`, `SignMessage`, `SignPSGT`, `Contract`, `RpcRequest`, ...; it crosses as
+a `UInt8`, and a value outside the enumeration is refused when the node reads it,
+which fails the call). The node holds at most one per connection, in the wallet's
+IPC slot; a second begin replaces the first, and `endElevation` ends it. The
+wallet methods that use keys for an operation of that kind run under it:
+`sendCoins` (`Send`), `signMessage` (`SignMessage`), `PSGTPoolContext::signPSGT`
+and `signPoolEntry` (`SignPSGT`), `MRC::submit`, `VotingManager::submitPoll` and
+`submitVote`, and the `ResearcherContext` beacon methods (`Contract`),
+`Node::executeRpcConsoleCommand` (`RpcRequest`), `Node::changeSettings` and
+the four `SideStakeManager` edits (`Settings`), `beginBackup` (`Backup`), and
+`beginConsoleDownload` and `beginConsoleUpload` (`FileTransfer`, which the
+`dumpwallet` source and the `importwallet` sink hold for their run and end at
+its end, on cancel or when destroyed (taking it out of the slot), or when the
+connection closes (the slot is then left as it is); like `beginBackup`, they
+need none on an unencrypted or fully unlocked wallet, and `dumpcontracts`,
+which exports public chain data, needs none on any wallet). A capability applies
+only to the operations of its kind on its connection; a locked wallet is unlocked
+for staking only until the capability ends. A wrong
+passphrase returns false after the failed-passphrase delay (up to 30 s), so a
+client must not call it on its UI thread. Passphrase attempts from every caller
+(`unlockWallet`, `beginElevation`, `changeWalletPassphrase`, and RPC) are
+checked one at a time, in the order they arrive, so a call also waits for the
+attempts ahead of it. An IPC caller cannot give its attempt up from its side;
+the node gives it up, with the passphrase unchecked and nothing counted, when the
+caller's connection closes or the node shuts down. `elevateWallet` always returns false.
+The GUI side is `WalletModel::requestUnlock(CapabilityKind)` and its
+`UnlockContext`, which ends the capability when the operation finishes. If the
+attached GUI goes away instead, the node ends the capability as it tears the
+connection down, before another GUI can attach (§2.1). The interfaces served on a
+connection (the wallet, the node console and settings changes, MRC, voting,
+researcher, PSGT and the side-stake manager) use the capability only while that
+connection is open: once it has closed, a
+`beginElevation` that had not yet reached the slot is refused, their calls run
+under no capability, and their `endElevation` leaves the slot, which may by then
+hold the next GUI's capability, alone. The
+Options dialog asks before a submit that changes UPnP, the proxy or side staking
+(`OptionsModel::needsSettingsElevation`) and holds the capability across the
+submit; declined, it saves nothing of that submit. For any other change the node
+refuses for the passphrase (`SettingChangeResult::elevation_required`), and for
+the side-stake edits (`SideStakeEditStatus::ELEVATION_REQUIRED`), `OptionsModel`
+asks after the refusal, then sends the same change once more. Either way it asks
+at most once per pass of the event loop, so one submit of the Options dialog asks
+once. At the first start of this version, proxy and UPnP values an earlier
+version kept in `Gridcoin-Qt.conf` move to the node once, under a `Settings`
+capability; declined, they are discarded and the discard is logged.
 
 Coin control / send: `getOutputs`, `computeCoinControlSummary(...)
 -> CoinControlSummary` (all fee math runs node-side), `getMaxConsolidationInputs`,
@@ -434,6 +628,112 @@ DTOs: `WalletBalances`, `WalletLockState`, `WalletOutput`, `WalletAddress`,
 
 Bridges: `handleStatusChanged`, `handleAddressBookChanged`,
 `handleTransactionChanged`.
+
+#### 4.3.1 File transfer
+
+A backup and the console's file commands move file contents over the
+connection: the client reads them from a `FileSource` or writes them to a
+`FileSink` (`file_transfer.capnp`, `src/interfaces/file_transfer.h`), and the
+file at the client's end is the client's to open, write and name. Three
+`Wallet` methods begin a transfer and return its handle:
+
+- `beginBackup(items) -> (errorOut, FileSource)`. `items` is a mask of
+  `BackupItem`: `Wallet` = 1, `Config` = 2, `Settings` = 4; 0, or any other bit,
+  is refused. The core copies each requested item into its own transfer
+  directory before the call returns, so the call takes as long as copying the
+  wallet file; make it off the UI thread. The source has one entry per
+  requested item, in the order wallet, configuration file, settings file. It
+  runs under a `Backup` capability when the wallet is encrypted and not fully
+  unlocked, and ends that capability before it returns.
+- `beginConsoleDownload(method, args) -> (errorOut, FileSource)` for
+  `dumpwallet` and `dumpcontracts`. `args` are the console arguments without
+  the file; the core puts its own value where the command takes its file. The
+  source has one entry. `dumpwallet`'s is generated as it is read, so its size
+  is -1 and `sizeHint` is an estimate. `dumpcontracts` runs inside this call,
+  and its entry's note is the command's reply. `dumpwallet` runs under a
+  `FileTransfer` capability when the wallet is encrypted and not fully
+  unlocked; `dumpcontracts` exports public chain data and runs with none on
+  any wallet, leaving a capability the client holds as it is.
+- `beginConsoleUpload(method, args, size) -> (errorOut, FileSink)` for
+  `importwallet` (at most 64 MiB) and `parseaccrualsnapshotfile` (at most
+  256 MiB). `args` are as for the download; `size` is the exact number of bytes
+  the client will send, and a size above the command's cap is refused here
+  ("too large").
+
+A begin that returns no handle sets `errorOut`: a method that is not a file
+command in that direction ("not a file command"), arguments the command does
+not take, a transfer already live on this `Wallet` interface ("a transfer is
+already in progress"), a missing capability, no room in the core's transfer
+directory, or a failure of the copy or the command.
+
+**Reading a `FileSource`.**
+
+1. `entries()` lists the entries: `name`, `size` (bytes, or -1 when the entry
+   is generated as it is read), `sizeHint` (`size_hint` in the C++ struct; a
+   size to check free space against when `size` is -1) and `note`.
+2. An entry with `size` 0 and a non-empty `note` has nothing to send: a
+   configuration or settings file that does not exist, or a configuration file
+   the core does not send in this deployment, with the reason as the note. It
+   is not read; a read of it returns an error chunk with the note. An entry
+   with a note and content, as `dumpcontracts`' is, is read as any other.
+3. `read(entry, maxBytes)` returns the next chunk of that entry: `data`, `eof`
+   and `error`. Reads are sequential and one at a time: each entry from its
+   start to its end, and one entry after another. A read of an entry already
+   sent, or of another entry while one is part-way, is refused, and so is a
+   `maxBytes` of 0. The core returns at most 4 MiB per read
+   (`FILE_TRANSFER_CHUNK_BYTES`) whatever `maxBytes` asks. `eof` comes with the
+   last chunk, which can carry data or none. A chunk with a non-empty `error`
+   ends the download; the bundled GUI then calls `cancel` and discards what it
+   received.
+4. `trailer(entry)`, once that entry has reached `eof`, returns `ok`, `size`
+   and `sha256`, the SHA-256 of the entry's bytes, or `error`. The client
+   compares both with what it received and discards the file when either
+   differs.
+5. The client destroys the source when it is done. The core deletes each copy
+   once it has been sent, and every copy still there when the source is
+   cancelled or destroyed.
+
+**Writing a `FileSink`.**
+
+1. `write(data)` appends bytes; the bundled GUI writes at most 4 MiB at a
+   time. `false` means the sink refused the data and has stopped: a write past
+   the announced size ("the upload is larger than its announced size"), a
+   failure to hold or store the data on the core's side, or a closed
+   connection. `finish` then returns that reason as its `error`, and runs
+   nothing.
+2. `finish(size, sha256)` once every byte has been written. The core checks
+   that `size` equals the announced size and the bytes it received, and
+   refuses a mismatch ("the received data does not match the size and SHA-256
+   the client sent"). It also checks that `sha256` is the SHA-256 of those
+   bytes: `importwallet` refuses a mismatch with the same text, and
+   `parseaccrualsnapshotfile` with "SHA-256 mismatch". Then the command runs:
+   `importwallet` imports from the data, which the core holds in memory;
+   `parseaccrualsnapshotfile` reads it from a core temporary file, which is
+   deleted afterwards. The result has `ok`, `output` (the command's reply) and
+   `error`.
+3. `cancel()` before `finish` stops the upload, and the core discards what it
+   received.
+
+**One transfer at a time, once.** A `Wallet` interface has at most one live
+transfer: from the begin that returned a handle until that handle is destroyed
+(the libmultiprocess client sends `destroy` when the proxy is released). A
+handle serves one transfer. Each entry of a source is sent once, a sink
+finishes once, and once a handle has stopped (`cancel`, a refused write or a
+read error that stops it, `finish` returned, or its connection closed) its
+later `read`, `write` and `finish` calls are refused with the reason it
+stopped, such as "the transfer was cancelled" or "the transfer has finished".
+`entries()` still answers. A `trailer` call is refused as well, except on the
+`dumpwallet` source once its dump has been sent to its end: that source stops
+itself there, and the trailer stays available.
+
+**Bound to its connection.** A handle stops when the connection it was begun
+on closes ("the IPC connection closed"). The `dumpwallet` source and the
+`importwallet` sink hold the `FileTransfer` capability for their run (§4.3) and
+end it when they stop; the other handles hold none.
+
+**Errors.** A refusal is a value: `errorOut` from a begin, `error` in a chunk,
+a trailer or a `finish` result, and `false` from `write`. A lost connection
+surfaces as an exception from the proxy call (§6), which ends the transfer.
 
 ### 4.4 WalletTxSource — `src/interfaces/wallet_tx_source.h`, `wallet_tx_source.capnp`
 
@@ -502,6 +802,11 @@ The unified mandatory + local sidestake table with add/edit/delete commands and 
 versioned-refetch revision (`SideStakeSnapshot::local_revision`, design §4.4).
 `entries`, `localRevision`, `addLocal`, `setAllocation`, `setDescription`,
 `deleteLocal`, `handleRwSettingsUpdated`, `handleMandatorySideStakeChanged`.
+Every edit needs the wallet passphrase: it runs under the connection's `Settings`
+capability (§4.3), or needs a full unlock or an unencrypted wallet, and without
+one answers `ELEVATION_REQUIRED` having changed nothing. An edit that would change
+nothing (invalid input, no such entry, the value already set) gets its own status
+first, without the passphrase.
 
 Served over IPC like the other factories (`Init.makeSideStakeManager @13`). The
 node's implementation reads the node's own sidestake registry, so `entries()`
@@ -667,8 +972,10 @@ type/status rendering is the client's job (only locale-free data crosses).
   There are two client-side hooks:
   - The **`on_disconnect` callback** passed to `connectAddress` /
     `ConnectToNode`, invoked *on the IPC event-loop thread* when the connection
-    drops unexpectedly. The bundled GUI routes it to a graceful quit
-    (`QuitOnDaemonConnectionLost`, `src/qt/bitcoin.cpp`).
+    drops unexpectedly. `ConnectToNode` passes it on only once the handshake has
+    succeeded; a drop before that is the connect failure it returns. The bundled
+    GUI routes it to a graceful quit (`QuitOnDaemonConnectionLost`,
+    `src/qt/bitcoin.cpp`).
   - A **top-level exception guard** around your event loop: the GUI wraps its Qt
     event dispatch (`GridcoinApplication::notify`) to treat the "called after
     disconnect" exception as "node went away" rather than letting it escape (Qt
@@ -702,14 +1009,15 @@ type/status rendering is the client's job (only locale-free data crosses).
   gives you the decision; the persistence and prompt are yours.
 - **Passphrases cross the wire.** `encryptWallet` / `unlockWallet` /
   `changeWalletPassphrase` take a `SecureString`, which travels over the socket
-  to the node (the wallet lives there). It is zeroed on both sides after the call
-  and unlock is time-bounded, but a client author should be aware the secret
+  to the node (the wallet lives there). The node scrubs the bytes it receives; the sender's
+  message buffer is not scrubbed, so a client should hold the passphrase in its own
+  `SecureString`. Unlock is time-bounded. A client author should be aware the secret
   transits the AF_UNIX socket. Keys and signing never cross — only the
   passphrase, and only for these calls.
 - **What the node does *not* protect against.** It does not verify *which*
   process holds the cookie: the peer-credential check (§2.5) refuses a peer
-  running as a different OS user, but it cannot tell two processes of the same
-  user apart, and Windows has no such check. It serves one connection at a time,
+  running as a different OS user (outside the configured attach group), but it
+  cannot tell two processes of the same user apart, and Windows has no such check. It serves one GUI at a time,
   and each accepted connection must authenticate on its own (§10). And identity
   binding, as above, is not enforced node-side at all.
 
@@ -721,14 +1029,18 @@ The smallest sequence to connect, authenticate, and read the balance, using the
 real symbols (C++/libmultiprocess client):
 
 ```cpp
-// 1-3, 4-7. ConnectToNode does the whole handshake: read cookie, connect,
+// 1-3, 4-8. ConnectToNode does the whole handshake: read cookie, connect,
 //    check the peer's OS user, authenticate(cookie), getBuildInfo()/getIdentity(),
-//    compatibility checks. A connect-only client serves no Init of its own.
-std::string err;
+//    compatibility checks, holdsAttachSlot(). A connect-only client serves no
+//    Init of its own.
+ipc::ConnectFailure failure;
 std::optional<ipc::GuiConnection> conn =
-    ipc::ConnectToNode(GetDataDir(), err,
+    ipc::ConnectToNode(ipc::GetIpcDir(), failure,
         /*on_disconnect=*/[]{ /* node went away: quit your loop */ });
-if (!conn) { /* err explains the hard fail */ return; }
+if (!conn) {
+    // failure.message explains it; retry while NextConnectStep says Retry.
+    return;
+}
 
 // 2.4. Identity binding is yours: compare conn->handshake.remote_ident against
 //    what you stored for this datadir.
@@ -796,14 +1108,15 @@ foreign client is a real undertaking:
 
 Reported honestly so nobody designs against a contract that is not there yet:
 
-1. **One client at a time.** The listener is `max_connections=1` and does not
-   accept a second connection while one is being served (`protocol.cpp`).
+1. **One client at a time.** The listener is `max_connections=2` and does not
+   accept a third connection while two are being served (`protocol.cpp`); of
+   those, only the one holding the attach slot is served any factory (§2.1).
    Authentication is per connection: each accepted connection gets a fresh
    `ServeInit` and one `authenticate()` attempt (a wrong cookie leaves it
    permanently unauthenticated), and it is dropped if it has not authenticated
-   within `ipc::IPC_AUTH_DEADLINE`, 30 s (`serve_init.h`; enforced by the
-   listener in `protocol.cpp`). An alt front end must be the sole client, and
-   must authenticate promptly after connecting.
+   and claimed the slot within `ipc::IPC_AUTH_DEADLINE`, 30 s (`serve_init.h`;
+   enforced by the listener in `protocol.cpp`). An alt front end must be the sole
+   client, and must authenticate promptly after connecting.
 2. **Versioned-refetch is only partly realized.** Design §4.4 describes every
    void signal growing a `registry_version` parameter. In practice no
    notification carries one. Outside the windowed channels, only local

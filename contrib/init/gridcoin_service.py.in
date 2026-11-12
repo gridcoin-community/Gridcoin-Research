@@ -1,0 +1,3414 @@
+#!@GRC_UNIT_PYTHON3@ -I
+# Copyright (c) 2026 The Gridcoin developers
+# Distributed under the MIT software license, see the accompanying
+# file COPYING or https://opensource.org/licenses/mit-license.php.
+"""Set up the Gridcoin core's units, and move a wallet into and out of the service account.
+
+Run as root. Commands:
+  enable-user <user>       write the drop-in for <daemon>@<user>.service and start it
+  disable-user <user>      stop the unit and remove the drop-ins
+  autounlock enable|disable (<user> | --system)
+  enable <user>            move the user's wallet into the service account and start <daemon>.service
+  disable <user>           move it back to the user and stop <daemon>.service
+  switch-over (--state=FILE | --scan)
+                           move the services of the units this release replaces to the new ones
+
+The per-user core runs with the user's own account, groups and home, as if the user
+had started the daemon by hand; enable-user does not touch the user's configuration
+file or RPC credentials. enable and disable copy the datadir to fresh files, each side
+read or written as its own account, and quarantine the configuration files instead of
+carrying them across. Python 3 standard library only.
+"""
+
+import argparse
+import contextlib
+import dataclasses
+import datetime
+import errno
+import fcntl
+import grp
+import json
+import os
+import posixpath
+import pwd
+import re
+import shlex
+import shutil
+import subprocess
+import stat
+import struct
+import sys
+import tarfile
+import time
+
+CONFIG = {"bindir": "@GRC_BINDIR@", "default_network": "@GRC_UNIT_NETWORK@", "python3": "@GRC_UNIT_PYTHON3@",
+          "libexec_subdir_main": "@GRC_LIBEXEC_SUBDIR_MAIN@", "libexec_subdir_test": "@GRC_LIBEXEC_SUBDIR_TEST@",
+          "refused_keys_main": "@GRC_REFUSED_KEYS_FILE_MAIN@", "refused_keys_test": "@GRC_REFUSED_KEYS_FILE_TEST@",
+          "autounlock_units": "@GRC_AUTOUNLOCK_UNITS@", "unitdir": "@GRC_SYSTEMD_UNITDIR_FULL@"}
+
+EXIT_USAGE = 64
+DROPIN_MAIN = "50-gridcoin-service.conf"
+DROPIN_AUTOUNLOCK = "60-gridcoin-autounlock.conf"
+# The system helper's drop-in that keeps loading the credential the old autounlock unit used.
+DROPIN_EXISTING_CREDENTIAL = "50-existing-credential.conf"
+# What the switch-over renames a drop-in of the old per-user unit to: systemd reads only *.conf.
+DISABLED_SUFFIX = ".disabled-by-gridcoin-switchover"
+# The entries of the switch-over state file the package's preinst writes, one per line: these
+# three with a user name, and the system ones alone.
+STATE_USER_KINDS = ("autounlock", "core", "core-active")
+SYSTEM_AUTOUNLOCK = "system-autounlock"
+SYSTEM_CORE = "system-core"
+STATE_SYSTEM_KINDS = (SYSTEM_CORE, SYSTEM_AUTOUNLOCK)
+# What a drop-in or copy written for the old forking units sets that the notify units cannot keep:
+# the command line, the process type and pid file, notify access, and the account.
+OLD_UNIT_KEYS = ("ExecStart", "Type", "PIDFile", "NotifyAccess", "User", "Group")
+# What sets up the system service's mounts, or the mounts it waits for: a file that sets any of
+# these decides what the paths on its command line lead to. (section, key).
+MOUNT_KEYS = (("Service", "BindPaths"), ("Service", "BindReadOnlyPaths"), ("Service", "RootDirectory"),
+              ("Service", "RootImage"), ("Service", "TemporaryFileSystem"), ("Service", "MountImages"),
+              ("Service", "ExtensionDirectories"), ("Unit", "RequiresMountsFor"))
+# What a drop-in for every per-user instance may not set: the instance's account is its name.
+TEMPLATE_REFUSED_KEYS = ("ExecStart", "Type", "PIDFile", "NotifyAccess", "User")
+# The words of an old per-user command line the new one carries or replaces; any other is lost.
+OLD_COMMAND_WORDS = ("-daemon", "-daemonwait", "-nodaemon", "-nodaemonwait", "-multiprocess")
+OLD_COMMAND_PREFIXES = ("-daemon=", "-daemonwait=", "-pid=", "-datadir=")
+# A name made only of dots is refused: "." and ".." name directories. So is one made only of
+# digits, which systemd takes in User=%i as a numeric ID, and one that starts with "-", which a
+# command line takes as an option. Matched with fullmatch and \Z, so a trailing newline is
+# refused too.
+USER_RE = re.compile(r"(?!\.+\Z)(?![0-9]+\Z)[A-Za-z0-9._][A-Za-z0-9._-]*\Z")
+UNSAFE_PATH_RE = re.compile(r"[\s\"'\\$%;]")
+ROOT_EQUIVALENT_GROUPS = ("docker", "lxd", "incus", "libvirt", "disk", "wheel", "sudo", "adm", "systemd-journal")
+
+# The datadir's top-level entries that are never copied: the running core's lock, socket
+# and cookie belong to whichever core runs there.
+SKIP_TOP = {".lock", "node.sock", "ipc.cookie"}
+# The top-level files that can name commands, files or credentials. They are copied to a
+# root-only quarantine, never across; a sanitised gridcoinsettings.json is.
+QUARANTINE_TOP = {"gridcoinresearch.conf", "gridcoinsettings.json", "DB_CONFIG"}
+CONF_NAME = "gridcoinresearch.conf"
+SETTINGS_NAME = "gridcoinsettings.json"
+# The basename of the core's dated copies of those two files, GetBackupFilename's
+# "<name>-<time>[-<suffix>]" with FormatISO8601DateTimeDashSep's time. They are quarantined
+# like the files themselves, wherever they are in the datadir: -backupdir can put them anywhere.
+CONFIG_BACKUP_RE = re.compile(r"(gridcoinresearch\.conf|gridcoinsettings\.json)-"
+                              r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}-[0-9]{2}-[0-9]{2}Z(-.*)?", re.S)
+# The core's default datadir under the home directory (GetDefaultDataDir on Linux).
+DATADIR_NAME = ".GridcoinResearch"
+# The policy hook of Debian's maintainer scripts and its exit status for "do not act".
+POLICY_RC_D = "/usr/sbin/policy-rc.d"
+POLICY_REFUSED = 101
+STASH_INFIX = ".in-service-"
+TERMINATE_WAIT_SECONDS = 30
+# /proc/self/loginuid of a process outside any login session.
+UNSET_LOGIN_UID = 4294967295
+# The quarantined files are read whole; nothing that size is a real configuration file.
+MAX_CONFIG_BYTES = 16 * 1024 * 1024
+# The core's MAX_JSON_DEPTH (src/univalue/lib/univalue_read.cpp): it does not load a settings
+# file nested deeper.
+MAX_JSON_DEPTH = 512
+# The grammar build-aux/cmake/refusedkeys2header.cmake enforces on the pattern file.
+PATTERN_RE = re.compile(r"[a-z0-9_*-]+\Z")
+
+# Every open below a directory a user or the service account can write uses these: the
+# last component is never followed, and a FIFO cannot block the open.
+DIR_FLAGS = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC
+FILE_FLAGS = os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC
+NEW_FILE_FLAGS = os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC
+
+
+# Fixed search path for every command the tool runs, whatever the caller's PATH.
+SAFE_ENV = {"PATH": "/usr/bin:/bin"}
+
+
+class UserError(Exception):
+    pass
+
+
+class StepError(Exception):
+    pass
+
+
+class TreeError(Exception):
+    """A path that may not be copied: not a regular file or a directory, or a name that may not
+    be created."""
+
+
+class CopyError(Exception):
+    pass
+
+
+class DirtyCopyError(CopyError):
+    """A failed copy whose target still holds entries this run created."""
+
+
+@dataclasses.dataclass(frozen=True)
+class Network:
+    daemon: str
+    net_arg: str
+    account: str
+    attach_group: str
+    conf_dir: str
+    state: str
+    autounlock: str
+    cred_prefix: str
+    subdir: str
+    refused_keys: str
+
+    @property
+    def tool_name(self):
+        return self.account + "-service"
+
+    @property
+    def testnet(self):
+        return self.net_arg == "-testnet"
+
+
+# subdir is the helper's directory under libexec, and refused_keys the Refuse class pattern
+# file, as CMake installs them.
+NETWORKS = {
+    "main": Network("gridcoinresearchd", "", "gridcoin", "gridcoin-gui", "/etc/gridcoin",
+                    "gridcoinresearchd", "gridcoin-autounlock", "gridcoinresearch", CONFIG["libexec_subdir_main"],
+                    CONFIG["refused_keys_main"]),
+    "test": Network("gridcointestnetd", "-testnet", "gridcointestnet", "gridcointestnet-gui", "/etc/gridcoin-testnet",
+                    "gridcointestnetd", "gridcointestnet-autounlock", "gridcointestnet",
+                    CONFIG["libexec_subdir_test"], CONFIG["refused_keys_test"]),
+}
+
+
+@dataclasses.dataclass
+class Paths:
+    etc_systemd: str = "/etc/systemd/system"
+    credstore: str = "/etc/credstore.encrypted"
+    var_lib: str = "/var/lib"
+    tool_state: str = "/var/lib/gridcoin-service"
+    login_defs: str = "/etc/login.defs"
+    # The per-user units this release replaces ran -datadir=/home/%i/.GridcoinResearch.
+    old_unit_home: str = "/home"
+    # What the system unit's sandbox hides from the core (ProtectHome=yes, PrivateTmp=).
+    unit_hidden: tuple = ("/home", "/root", "/run/user", "/tmp", "/var/tmp")
+    # Where this build installs the units.
+    packaged_units: str = CONFIG["unitdir"]
+
+
+class Host:
+    """Real host access. Tests use a fake with the same methods."""
+
+    def systemctl(self, *args):
+        return subprocess.call(["systemctl", *args], env=SAFE_ENV)
+
+    def is_enabled(self, unit):
+        """Whether systemctl is-enabled says "enabled". Its exit status is 0 for static, alias,
+        indirect, generated and other states too, so the output decides."""
+        proc = subprocess.run(["systemctl", "is-enabled", unit], env=SAFE_ENV, stdout=subprocess.PIPE,
+                              stderr=subprocess.DEVNULL, encoding="utf8", errors="replace", check=False)
+        return proc.stdout.strip() == "enabled"
+
+    def is_active(self, unit):
+        return subprocess.call(["systemctl", "is-active", "--quiet", unit], env=SAFE_ENV) == 0
+
+    def unit_files(self, unit):
+        """What systemd loads unit from, as systemctl show reports it: (FragmentPath, DropInPaths
+        as a list, whether NeedDaemonReload is yes)."""
+        proc = subprocess.run(["systemctl", "show", "-p", "FragmentPath,DropInPaths,NeedDaemonReload", unit],
+                              env=SAFE_ENV, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, encoding="utf8",
+                              errors="replace", check=False)
+        if proc.returncode != 0:
+            raise StepError("step 'systemctl show %s' failed with exit status %s" % (unit, proc.returncode))
+        props = {}
+        for line in proc.stdout.splitlines():
+            key, sep, value = line.partition("=")
+            if sep:
+                props[key] = value
+        return (props.get("FragmentPath", ""), props.get("DropInPaths", "").split(),
+                props.get("NeedDaemonReload") == "yes")
+
+    def run_by_package(self):
+        """Whether a package's maintainer script runs this (dpkg sets DPKG_MAINTSCRIPT_PACKAGE). The
+        package restarts the system service itself after the switch-over."""
+        return bool(os.environ.get("DPKG_MAINTSCRIPT_PACKAGE"))
+
+    def policy_status(self, unit, action):
+        """The exit status of /usr/sbin/policy-rc.d for the action on the unit, as deb-systemd-invoke
+        asks it; None where it is not asked: a run by hand, or no executable policy-rc.d. Only a run
+        from a maintainer script (see run_by_package) is bound by it; an administrator's is not."""
+        if not self.run_by_package() or not os.access(POLICY_RC_D, os.X_OK) or os.path.isdir(POLICY_RC_D):
+            return None
+        return subprocess.call([POLICY_RC_D, unit, action], env=SAFE_ENV)
+
+    def active_units(self, pattern):
+        """The names of the active units that match the glob pattern."""
+        proc = subprocess.run(["systemctl", "list-units", "--state=active", "--plain", "--no-legend", pattern],
+                              env=SAFE_ENV, stdout=subprocess.PIPE, encoding="utf8", errors="replace", check=False)
+        if proc.returncode != 0:
+            raise StepError("step 'systemctl list-units %s' failed with exit status %s" % (pattern, proc.returncode))
+        return [line.split()[0] for line in proc.stdout.splitlines() if line.split()]
+
+    def getpwnam(self, name):
+        return pwd.getpwnam(name)
+
+    def user_groups(self, name):
+        pw = pwd.getpwnam(name)
+        names = {g.gr_name for g in grp.getgrall() if name in g.gr_mem}
+        try:
+            names.add(grp.getgrgid(pw.pw_gid).gr_name)
+        except KeyError:
+            pass
+        return sorted(names)
+
+    def is_root(self):
+        return os.geteuid() == 0
+
+    def user_processes(self, uid):
+        """The pids of the processes with uid as their real, effective, saved or filesystem uid,
+        apart from this command's own process tree."""
+        table = {}
+        for name in os.listdir("/proc"):
+            if not name.isdigit():
+                continue
+            fields = {}
+            try:
+                with open("/proc/%s/status" % name, "rb") as f:
+                    for line in f:
+                        key, _, value = line.partition(b":")
+                        if key in (b"PPid", b"Uid"):
+                            fields[key] = value.split()
+                table[int(name)] = (int(fields[b"PPid"][0]), [int(u) for u in fields[b"Uid"]])
+            except (OSError, KeyError, IndexError, ValueError):
+                # The process ended meanwhile.
+                continue
+        return foreign_processes(table, uid, os.getpid())
+
+    def login_uid(self):
+        texts = []
+        for path in ("/proc/self/loginuid", "/proc/self/cgroup"):
+            try:
+                with open(path, encoding="utf8", errors="replace") as f:
+                    texts.append(f.read())
+            except OSError:
+                texts.append("")
+        return parse_login_uid(texts[0], os.environ.get("SUDO_UID"), texts[1])
+
+    def terminate_user(self, name):
+        # loginctl reports its own failure (no session, say); the caller then waits for the
+        # processes to end and refuses if they do not.
+        subprocess.call(["loginctl", "terminate-user", name], env=SAFE_ENV)
+
+    def add_to_group(self, user, group):
+        rc = subprocess.call(["gpasswd", "-a", user, group], env=SAFE_ENV, stdout=subprocess.DEVNULL)
+        if rc != 0:
+            raise StepError("step 'gpasswd -a %s %s' failed with exit status %s" % (user, group, rc))
+
+    def remove_from_group(self, user, group):
+        try:
+            members = grp.getgrnam(group).gr_mem
+        except KeyError:
+            return
+        if user not in members:
+            return
+        rc = subprocess.call(["gpasswd", "-d", user, group], env=SAFE_ENV, stdout=subprocess.DEVNULL)
+        if rc != 0:
+            raise StepError("step 'gpasswd -d %s %s' failed with exit status %s" % (user, group, rc))
+
+    def sleep(self, seconds):
+        time.sleep(seconds)
+
+    def monotonic(self):
+        return time.monotonic()
+
+    def utcnow(self):
+        return datetime.datetime.now(datetime.timezone.utc)
+
+    # The three steps of drop_privileges. Each reads its result back, and a uid change must
+    # not be reversible.
+    def setgroups(self, groups):
+        os.setgroups(groups)
+        if sorted(os.getgroups()) != sorted(groups):
+            raise StepError("setgroups(%s) did not take effect" % list(groups))
+
+    def setgid(self, gid):
+        os.setgid(gid)
+        if os.getresgid() != (gid, gid, gid):
+            raise StepError("setgid(%d) did not take effect" % gid)
+
+    def setuid(self, uid):
+        os.setuid(uid)
+        if os.getresuid() != (uid, uid, uid):
+            raise StepError("setuid(%d) did not take effect" % uid)
+        if uid != 0:
+            try:
+                os.setuid(0)
+            except PermissionError:
+                return
+            raise StepError("setuid(%d) could be undone; refusing" % uid)
+
+
+def foreign_processes(table, uid, self_pid):
+    """The pids in table ({pid: (ppid, uids)}) that have uid among their uids, leaving out
+    self_pid's own tree: itself, its ancestors (sudo keeps the caller's uid as its real uid) and
+    its descendants."""
+    def chain(pid):
+        seen = []
+        while pid in table and pid not in seen:
+            seen.append(pid)
+            pid = table[pid][0]
+        return seen
+
+    ancestors = set(chain(self_pid))
+    return sorted(pid for pid, (_, uids) in table.items()
+                  if uid in uids and pid not in ancestors and self_pid not in chain(pid))
+
+
+def parse_login_uid(loginuid_text, sudo_uid, cgroup_text=""):
+    """The uid whose login this command runs in: /proc/self/loginuid; SUDO_UID when that is unset;
+    and when neither says, the user-<uid>.slice of /proc/self/cgroup. None when nothing says."""
+    text = loginuid_text.strip()
+    if text.isdigit() and int(text) != UNSET_LOGIN_UID:
+        return int(text)
+    if sudo_uid is not None and sudo_uid.isdigit():
+        return int(sudo_uid)
+    match = re.search(r"/user-([0-9]+)\.slice(?:/|$)", cgroup_text, re.M)
+    return int(match.group(1)) if match else None
+
+
+def refuse_own_login(host, pw):
+    """A run from the user's own login cannot work: the user's processes include this command's
+    own session, and ending the user's sessions would end this command."""
+    if host.login_uid() == pw.pw_uid:
+        raise UserError("this command runs in %s's own login; run this from another account's login (a root "
+                        "console, ssh as root, or another administrator)" % pw.pw_name)
+
+
+def uid_min(paths):
+    try:
+        with open(paths.login_defs, encoding="utf8") as f:
+            for line in f:
+                fields = line.split()
+                if len(fields) == 2 and fields[0] == "UID_MIN" and fields[1].isdigit():
+                    return int(fields[1])
+    except OSError:
+        pass
+    return 1000
+
+
+def validate_name(name):
+    if not USER_RE.fullmatch(name):
+        raise UserError("invalid user name '%s'" % name)
+
+
+def validate_user(name, host, paths):
+    validate_name(name)
+    try:
+        pw = host.getpwnam(name)
+    except KeyError:
+        raise UserError("unknown user '%s'" % name) from None
+    if pw.pw_uid == 0:
+        raise UserError("refusing uid 0")
+    if pw.pw_gid == 0:
+        raise UserError("'%s' has gid 0 (root's group) as its primary group; refusing" % name)
+    if pw.pw_uid < uid_min(paths):
+        raise UserError("'%s' is a system account (uid %d below UID_MIN)" % (name, pw.pw_uid))
+    return pw
+
+
+def resolve_datadir(pw, override, name="--datadir"):
+    """Return the validated explicit data directory, or None to use the core's default. name is
+    what the messages call it."""
+    if override is None:
+        return None
+    if not os.path.isabs(override):
+        raise UserError("%s must be an absolute path" % name)
+    if UNSAFE_PATH_RE.search(override):
+        raise UserError("%s may not contain whitespace, quotes, backslash, $, %% or ;" % name)
+    path = ""
+    for part in override.split("/"):
+        if part == "":
+            continue
+        if part in (".", ".."):
+            raise UserError("%s may not contain '.' or '..' components" % name)
+        path += "/" + part
+        if os.path.islink(path):
+            raise UserError("%s has a symlink component: %s" % (name, path))
+    if not os.path.isdir(override):
+        raise UserError("%s is not an existing directory" % name)
+    if os.stat(override).st_uid != pw.pw_uid:
+        raise UserError("%s is not owned by %s" % (name, pw.pw_name))
+    return override
+
+
+def header(net):
+    return "# Written by %s; rerun the tool instead of editing\n" % net.tool_name
+
+
+def render_user_dropin(net, datadir):
+    parts = [os.path.join(CONFIG["bindir"], net.daemon), net.net_arg, "-nodaemon", "-nodaemonwait", "-multiprocess"]
+    if datadir is not None:
+        parts.append("-datadir=" + datadir)
+    parts.append("$GRIDCOIN_AUTOUNLOCK_ARGS")
+    # An empty net_arg leaves two spaces, as in the system unit.
+    exec_start = " ".join(parts)
+    return (header(net) + "[Service]\n"
+            "ExecStart=\n"
+            "ExecStart=" + exec_start + "\n"
+            "Environment=GRIDCOIN_AUTOUNLOCK_ARGS=\n"
+            "RestartPreventExitStatus=\n")
+
+
+def autounlock_target(net, user):
+    if user is None:
+        return net.daemon + ".service", net.autounlock + ".socket", "/run/%s/%s.sock" % (net.autounlock, net.account)
+    return ("%s@%s.service" % (net.daemon, user), "%s@%s.socket" % (net.autounlock, user),
+            "/run/%s/%s.sock" % (net.autounlock, user))
+
+
+def autounlock_units_installed():
+    """Whether this build installed the autounlock helper and its units (systemd 251 or later)."""
+    return CONFIG["autounlock_units"] == "yes"
+
+
+NO_AUTOUNLOCK_UNITS = "this build has no autounlock units (they need systemd 251 or later)"
+
+
+def core_units(net, user):
+    """The core unit and, when this build has them, its helper socket: what is disabled together."""
+    unit, socket_unit, _ = autounlock_target(net, user)
+    return [unit, socket_unit] if autounlock_units_installed() else [unit]
+
+
+def are_disabled(units):
+    return "%s %s disabled" % (" and ".join(units), "are" if len(units) > 1 else "is")
+
+
+def render_autounlock_dropin(net, user):
+    _, socket_unit, sock_path = autounlock_target(net, user)
+    return (header(net) + "[Unit]\n"
+            "Wants=" + socket_unit + "\n"
+            "After=" + socket_unit + "\n"
+            "[Service]\n"
+            "Environment=GRIDCOIN_AUTOUNLOCK_ARGS=-autounlocksocket=" + sock_path + "\n")
+
+
+def dropin_dir(paths, unit):
+    return os.path.join(paths.etc_systemd, unit + ".d")
+
+
+def owned_by_root(st):
+    # A non-root run exists only in tests, where the temporary tree belongs to the caller.
+    return st.st_uid in (0, os.geteuid())
+
+
+def check_dropin_dir(directory):
+    """Return whether the drop-in directory exists. One that exists must be a directory owned
+    by root, not a symlink, before anything is written into it or removed from it."""
+    try:
+        st = os.lstat(directory)
+    except FileNotFoundError:
+        return False
+    if not stat.S_ISDIR(st.st_mode) or not owned_by_root(st):
+        raise UserError("%s exists but is not a directory owned by root; refusing" % directory)
+    return True
+
+
+def sync_directory(path):
+    """Put the entries of the directory at path on disk. An empty path, as os.path.dirname gives for
+    a bare file name, is the current directory."""
+    fd = os.open(path or ".", os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC)
+    try:
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+
+
+def ensure_dropin_dir(directory):
+    if not check_dropin_dir(directory):
+        os.mkdir(directory, 0o755)
+        sync_directory(os.path.dirname(directory))
+
+
+def write_dropin(paths, unit, filename, text):
+    directory = dropin_dir(paths, unit)
+    ensure_dropin_dir(directory)
+    final = os.path.join(directory, filename)
+    temp = os.path.join(directory, ".%s.%d.tmp" % (filename, os.getpid()))
+    fd = os.open(temp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o644)
+    try:
+        with os.fdopen(fd, "w", encoding="utf8") as f:
+            f.write(text)
+            os.fchmod(f.fileno(), 0o644)
+            if os.geteuid() == 0:
+                os.fchown(f.fileno(), 0, 0)
+            f.flush()
+            os.fsync(f.fileno())
+        os.rename(temp, final)
+        sync_directory(directory)
+    except BaseException:
+        if os.path.exists(temp):
+            os.unlink(temp)
+        raise
+
+
+def remove_dropin(paths, unit, filename):
+    directory = dropin_dir(paths, unit)
+    if not check_dropin_dir(directory):
+        return
+    try:
+        os.unlink(os.path.join(directory, filename))
+    except FileNotFoundError:
+        return
+    try:
+        os.rmdir(directory)
+    except OSError:
+        pass
+
+
+def credential_path(paths, net, user):
+    """The credential the helper unit loads (LoadCredentialEncrypted=), the only one the tool accepts."""
+    if user is not None:
+        return os.path.join(paths.credstore, "%s-%s.wallet-passphrase" % (net.cred_prefix, user))
+    return os.path.join(paths.credstore, net.cred_prefix + ".wallet-passphrase")
+
+
+def legacy_credential_path(net):
+    """Where the system service's credential was kept before. The helper loads it only through the
+    switch-over's existing-credential drop-in."""
+    return os.path.join(net.conf_dir, "wallet-passphrase.cred")
+
+
+def existing_credential_dropin(paths, net):
+    return os.path.join(dropin_dir(paths, net.autounlock + ".service"), DROPIN_EXISTING_CREDENTIAL)
+
+
+def render_existing_credential_dropin(net):
+    # The same credential ID as the unit's own line: systemd 251 and later let the later line for
+    # an ID replace the earlier one.
+    return (header(net) + "# The helper loads the credential from where the autounlock unit before it kept it.\n"
+            "[Service]\n"
+            "LoadCredentialEncrypted=wallet-passphrase:" + legacy_credential_path(net) + "\n")
+
+
+def loaded_credential_path(paths, net, user):
+    """The credential the helper loads now: the unit's own, or for the system helper the old one
+    while the existing-credential drop-in points it there."""
+    if user is None and os.path.lexists(existing_credential_dropin(paths, net)):
+        return legacy_credential_path(net)
+    return credential_path(paths, net, user)
+
+
+def check_credential(paths, net, user):
+    """Refuse when the credential the helper loads is absent; warn when it is not root's own 0600
+    file. Returns its path."""
+    cred = loaded_credential_path(paths, net, user)
+    try:
+        st = os.stat(cred)
+    except OSError:
+        legacy = legacy_credential_path(net)
+        if cred == legacy:
+            raise UserError("no credential at %s, where %s points the helper; put it back, or remove that drop-in "
+                            "to use %s" % (cred, existing_credential_dropin(paths, net),
+                                           credential_path(paths, net, None))) from None
+        if user is None and os.path.exists(legacy):
+            raise UserError("no credential at %s, the only place the helper loads it from; %s is not used. "
+                            "Move it there (owned by root, mode 0600) and run this again" % (cred, legacy)) from None
+        raise UserError("no credential at %s; create it first" % cred) from None
+    if st.st_uid != 0 or (st.st_mode & 0o777) != 0o600:
+        print("warning: %s is not owned by root with mode 0600" % cred)
+    return cred
+
+
+def try_restart(host, unit):
+    """Restart the unit if it runs, without waiting. From a maintainer script this honours
+    policy-rc.d as deb-systemd-invoke does: status 101 means do not act. Returns whether it ran."""
+    if host.policy_status(unit, "try-restart") == POLICY_REFUSED:
+        print("%s returned %d, not running 'try-restart %s'" % (POLICY_RC_D, POLICY_REFUSED, unit), file=sys.stderr)
+        return False
+    step(host, "try-restart", "--no-block", unit)
+    return True
+
+
+def step(host, *args, state="drop-ins already written are kept"):
+    """Run a systemctl step. A failure names the state it leaves, or, with state None, leaves that
+    to the caller's Progress."""
+    rc = host.systemctl(*args)
+    if rc != 0:
+        message = "step 'systemctl %s' failed with exit status %s" % (" ".join(args), rc)
+        raise StepError(message if state is None else "%s; %s" % (message, state))
+
+
+def cmd_enable_user(args, net, host, paths):
+    pw = validate_user(args.user, host, paths)
+    datadir = resolve_datadir(pw, args.datadir)
+    if host.is_enabled(net.daemon + ".service"):
+        raise UserError("%s.service is enabled and conflicts with the per-user unit; disable it first" % net.daemon)
+    unit = "%s@%s.service" % (net.daemon, args.user)
+    write_dropin(paths, unit, DROPIN_MAIN, render_user_dropin(net, datadir))
+    step(host, "daemon-reload")
+    step(host, "enable", "--now", unit)
+    risky = [g for g in host.user_groups(args.user) if g in ROOT_EQUIVALENT_GROUPS]
+    if risky:
+        print("warning: %s is in groups that are equivalent to root on this machine: %s.\n"
+              "The per-user core runs with the user's account and groups; this mode is a convenience\n"
+              "(staking, autounlock), not extra isolation. For isolation use `%s enable %s`."
+              % (args.user, ", ".join(risky), net.tool_name, args.user))
+    return 0
+
+
+def cmd_disable_user(args, net, host, paths):
+    validate_name(args.user)
+    unit = "%s@%s.service" % (net.daemon, args.user)
+    units = core_units(net, args.user)
+    # Cleanup continues past a failed disable so the drop-ins of a vanished unit can still go.
+    rc = host.systemctl("disable", "--now", *units)
+    remove_dropin(paths, unit, DROPIN_MAIN)
+    remove_dropin(paths, unit, DROPIN_AUTOUNLOCK)
+    step(host, "daemon-reload")
+    if rc != 0:
+        raise StepError("step 'systemctl disable --now %s' failed with exit status %s; the drop-ins were removed"
+                        % (" ".join(units), rc))
+    return 0
+
+
+def packaged_unit_paths(paths, name):
+    """Where the package installs the unit file name: paths.packaged_units and, without a merged
+    /usr, /lib/systemd/system too, where dh_installsystemd (compat 13) may put it."""
+    packaged_dirs = [paths.packaged_units]
+    if paths.packaged_units.startswith("/usr/lib/"):
+        packaged_dirs.append("/lib/" + paths.packaged_units[len("/usr/lib/"):])
+    return [os.path.join(directory, name) for directory in packaged_dirs]
+
+
+def refuse_unpackaged_core_unit(net, user, host, paths):
+    """Refuse autounlock for a core unit that systemd loads other than as packaged, as systemctl show
+    reports it: the helper serves the unit's main process, which is the core only then. The unit's
+    file must be the packaged one (the template, for a user's instance), and no drop-in but this
+    tool's own core drop-in may set TEMPLATE_REFUSED_KEYS. What systemd reports is of its last
+    daemon-reload, so files changed since then are refused too."""
+    unit, _, _ = autounlock_target(net, user)
+    fragment, dropins, need_reload = host.unit_files(unit)
+    if need_reload:
+        raise UserError("the files of %s changed since systemd last read them; run systemctl daemon-reload, then "
+                        "rerun" % unit)
+    name = "%s@.service" % net.daemon if user is not None else net.daemon + ".service"
+    packaged = packaged_unit_paths(paths, name)
+    if not fragment or os.path.realpath(fragment) not in [os.path.realpath(path) for path in packaged]:
+        raise UserError("systemd loads %s from %s, not from %s, so its main process need not be the core that "
+                        "autounlock is for; remove that file, run systemctl daemon-reload, then rerun"
+                        % (unit, fragment or "no file", " or ".join(packaged)))
+    own = os.path.realpath(os.path.join(dropin_dir(paths, unit), DROPIN_MAIN))
+    for path in dropins:
+        if os.path.realpath(path) == own:
+            continue
+        keys = set_keys(read_dropin_text(path) if os.path.exists(path) else None, TEMPLATE_REFUSED_KEYS)
+        if keys:
+            raise UserError("%s sets %s for %s, so its main process need not be the core that autounlock is for; "
+                            "move it aside, run systemctl daemon-reload, then rerun"
+                            % (path, ", ".join(key + "=" for key in keys), unit))
+
+
+def enable_autounlock(net, user, host, paths, restart=True):
+    """autounlock enable, after the checks: the core's drop-in, the helper socket, and, with
+    restart, a restart of a running core so that it pulls the passphrase."""
+    unit, socket_unit, _ = autounlock_target(net, user)
+    write_dropin(paths, unit, DROPIN_AUTOUNLOCK, render_autounlock_dropin(net, user))
+    step(host, "daemon-reload")
+    step(host, "enable", "--now", socket_unit)
+    if restart and host.is_active(unit):
+        step(host, "restart", "--no-block", unit)
+
+
+def cmd_autounlock(args, net, host, paths):
+    user = None if args.system else args.user
+    if args.action == "enable" and not autounlock_units_installed():
+        raise UserError("%s, so autounlock cannot be enabled" % NO_AUTOUNLOCK_UNITS)
+    if user is not None:
+        if args.action == "enable":
+            validate_user(user, host, paths)
+        else:
+            validate_name(user)
+    unit, socket_unit, _ = autounlock_target(net, user)
+    if args.action == "enable":
+        refuse_unpackaged_core_unit(net, user, host, paths)
+        check_credential(paths, net, user)
+        enable_autounlock(net, user, host, paths)
+    else:
+        # Without the units there is no socket to disable; a drop-in left behind still goes.
+        rc = host.systemctl("disable", "--now", socket_unit) if autounlock_units_installed() else 0
+        remove_dropin(paths, unit, DROPIN_AUTOUNLOCK)
+        step(host, "daemon-reload")
+        if rc != 0:
+            raise StepError("step 'systemctl disable --now %s' failed with exit status %s; the drop-in was removed"
+                            % (socket_unit, rc))
+        if host.is_active(unit):
+            step(host, "restart", "--no-block", unit)
+        print("The credential file remains until you remove it: %s" % loaded_credential_path(paths, net, user))
+    return 0
+
+
+def shown(name):
+    """A user-chosen name as printed: as it is when printable, else quoted with escapes."""
+    return name if name.isprintable() else repr(name)
+
+
+def load_refused_patterns(path):
+    """Read the Refuse class patterns with the rules build-aux/cmake/refusedkeys2header.cmake
+    applies when it compiles the same file into the core: '\\r' removed, blank and '#' lines
+    skipped, every other line in the grammar, at least one pattern."""
+    try:
+        with open(path, encoding="utf8") as f:
+            text = f.read()
+    except (OSError, UnicodeError) as e:
+        raise UserError("cannot read the refused setting key patterns: %s" % e) from None
+    patterns = []
+    for number, line in enumerate(text.replace("\r", "").split("\n"), start=1):
+        if line == "" or line.startswith("#"):
+            continue
+        if not PATTERN_RE.fullmatch(line):
+            raise UserError("%s:%d: line is outside the pattern grammar ^[a-z0-9_*-]+$" % (path, number))
+        patterns.append(line)
+    if not patterns:
+        raise UserError("%s: no patterns" % path)
+    return patterns
+
+
+def match_setting_key_pattern(pattern, name):
+    """MatchSettingKeyPattern in src/util/system.cpp, step for step: '*' matches any run of
+    characters, every other character itself, against the whole name."""
+    p = 0
+    n = 0
+    # The position of the last '*' in the pattern, and the name position it matched from.
+    star = None
+    star_name = 0
+    while n < len(name):
+        if p < len(pattern) and pattern[p] == "*":
+            star = p
+            p += 1
+            star_name = n
+        elif p < len(pattern) and pattern[p] == name[n]:
+            p += 1
+            n += 1
+        elif star is not None:
+            # Let the last '*' take one more character and retry after it.
+            p = star + 1
+            star_name += 1
+            n = star_name
+        else:
+            return False
+    # Only '*' can remain in the pattern.
+    while p < len(pattern) and pattern[p] == "*":
+        p += 1
+    return p == len(pattern)
+
+
+def matches_any(name, patterns):
+    return any(match_setting_key_pattern(pattern, name) for pattern in patterns)
+
+
+def is_refused_key(key, patterns):
+    """IsRefusedSettingKey in src/util/system.cpp: everything up to the first '.' (a section) is
+    dropped, a leading "no" is kept ("noncruncher" is a name of its own)."""
+    return matches_any(key[key.find(".") + 1:], patterns)
+
+
+def refused_as_read(name, patterns):
+    """Whether the core refuses name, or the name it reads it as: the section up to the first
+    '.' and then a leading "no" removed, as InterpretOption removes them."""
+    key = name[name.find(".") + 1:]
+    return is_refused_key(name, patterns) or (key.startswith("no") and matches_any(key[2:], patterns))
+
+
+def json_depth(value):
+    """The deepest nesting of objects and arrays in value, the outermost counting 1, as UniValue
+    counts it."""
+    depth = 0
+    pending = [(value, 1)]
+    while pending:
+        item, level = pending.pop()
+        if isinstance(item, dict):
+            children = item.values()
+        elif isinstance(item, list):
+            children = item
+        else:
+            continue
+        depth = max(depth, level)
+        pending.extend((child, level + 1) for child in children)
+    return depth
+
+
+def sanitize_settings(text, patterns):
+    """Drop from a gridcoinsettings.json text the keys the core refuses. ReadSettingsFile in
+    src/util/system.cpp refuses a key when IsRefusedSettingKey holds for it as written, or when
+    the key, read through InterpretOption (section and a leading "no" removed), is a
+    COMMAND_LINE_ONLY option. The tool has no flags, so for that second arm it tests the patterns,
+    which cover every COMMAND_LINE_ONLY option (init_tests.cpp checks it). That also drops the
+    "no" form of a refused key that is not COMMAND_LINE_ONLY, which the core would keep and never
+    use. Raises ValueError, or RecursionError, where the core's ReadSettings fails (not JSON, not
+    an object, a duplicate key, nesting deeper than MAX_JSON_DEPTH) and for a number Python reads
+    as infinite, which cannot be written back as JSON. Returns (text, removed keys)."""
+    def unique_pairs(pairs):
+        obj = {}
+        for key, value in pairs:
+            if key in obj:
+                raise ValueError("duplicate key %s" % shown(key))
+            obj[key] = value
+        return obj
+
+    def no_constant(name):
+        raise ValueError("%s is not JSON" % name)
+
+    settings = json.loads(text, object_pairs_hook=unique_pairs, parse_constant=no_constant)
+    if not isinstance(settings, dict):
+        raise ValueError("not a JSON object")
+    if json_depth(settings) > MAX_JSON_DEPTH:
+        raise ValueError("nested deeper than %d levels" % MAX_JSON_DEPTH)
+    removed = [key for key in settings if refused_as_read(key, patterns)]
+    dropped = set(removed)
+    kept = {key: value for key, value in settings.items() if key not in dropped}
+    return json.dumps(kept, indent=4, allow_nan=False) + "\n", removed
+
+
+def sanitize_conf(text, patterns):
+    """Drop from a gridcoinresearch.conf text the lines that set a refused key. Lines are read as
+    GetConfigOptions in src/util/system.cpp reads them (cut at '#', trimmed, "<section>." put in
+    front after a [section] line) and names as InterpretOption reads them (a section up to the
+    first '.', then a leading "no" negates): a line goes when the name as written or the name it
+    negates is refused. A line the core rejects (no '=', or a leading '-') goes too, reported by
+    its number only, as it may hold a secret. Returns (text, removed keys)."""
+    kept = []
+    removed = []
+    prefix = ""
+    for number, line in enumerate(text.split("\n"), start=1):
+        body = line.split("#", 1)[0].strip(" \t\r\n")
+        if body == "":
+            kept.append(line)
+        elif body.startswith("[") and body.endswith("]"):
+            prefix = body[1:-1] + "."
+            kept.append(line)
+        elif body.startswith("-") or "=" not in body:
+            removed.append("line %d (not a setting)" % number)
+        else:
+            name = prefix + body.split("=", 1)[0].strip(" \t\r\n")
+            if refused_as_read(name, patterns):
+                removed.append(name)
+            else:
+                kept.append(line)
+    return "\n".join(kept), removed
+
+
+def interpret_bool(value):
+    """InterpretBool in src/util/system.cpp: empty is true; otherwise the value as ParseInt32 reads
+    it (an optional sign and digits, within int32; 0 when it does not parse) is true when not 0."""
+    if value == "":
+        return True
+    if re.fullmatch(r"[+-]?[0-9]+", value) and -2 ** 31 <= int(value) < 2 ** 31:
+        return int(value) != 0
+    return False
+
+
+def conf_selects_testnet(text):
+    """Whether a conf selects a network other than mainnet in its top level, before any [section]
+    line, as the core reads it: lines as GetConfigOptions reads them, testnet=<v> as InterpretBool(v)
+    and notestnet=<v> as its negation (InterpretOption), the last such line winning, regtest=<v> and
+    noregtest=<v> read the same way, and chain=<v>, the first one winning as for any other setting
+    of the file, for any network but main (GetChainName; the core refuses to start when more than
+    one of them selects a network)."""
+    selected = False
+    regtest = False
+    chain = None
+    for line in text.split("\n"):
+        body = line.split("#", 1)[0].strip(" \t\r\n")
+        if body.startswith("[") and body.endswith("]"):
+            break
+        if "=" not in body:
+            continue
+        name, value = (part.strip(" \t\r\n") for part in body.split("=", 1))
+        if name == "testnet":
+            selected = interpret_bool(value)
+        elif name == "notestnet":
+            selected = not interpret_bool(value)
+        elif name == "regtest":
+            regtest = interpret_bool(value)
+        elif name == "noregtest":
+            regtest = not interpret_bool(value)
+        elif name == "chain" and chain is None:
+            chain = value
+    return selected or regtest or (chain is not None and chain != "main")
+
+
+def conf_datadir(text):
+    """The datadir= a conf sets in its top level, before any [section] line, the first one winning,
+    as the core reads its configuration file; None when it sets none."""
+    for line in text.split("\n"):
+        body = line.split("#", 1)[0].strip(" \t\r\n")
+        if body.startswith("[") and body.endswith("]"):
+            break
+        if "=" not in body:
+            continue
+        name, value = (part.strip(" \t\r\n") for part in body.split("=", 1))
+        if name == "datadir":
+            return value
+    return None
+
+
+def conf_includes_files(text):
+    """Whether a conf has an includeconf= line, in any section, a network prefix or a leading dash
+    included: the files it names are not read here."""
+    for line in text.split("\n"):
+        body = line.split("#", 1)[0].strip(" \t\r\n")
+        if "=" in body and body.split("=", 1)[0].strip(" \t\r\n").rsplit(".", 1)[-1].lstrip("-") == "includeconf":
+            return True
+    return False
+
+
+def list_dir(dir_fd):
+    """The entries of the open directory dir_fd, read through a new open file description of it.
+    os.listdir on a description that listed before can miss entries made since: btrfs lists up to
+    where the directory stood when the description was last rewound."""
+    fd = os.open(".", DIR_FLAGS, dir_fd=dir_fd)
+    try:
+        return os.listdir(fd)
+    finally:
+        os.close(fd)
+
+
+def list_entries(dir_fd, display):
+    """list_dir for a walk: a directory that can be read but not searched, or not listed at all,
+    raises TreeError naming it."""
+    try:
+        return list_dir(dir_fd)
+    except OSError as e:
+        raise TreeError("%r: %s" % (display, e.strerror)) from None
+
+
+def open_dir(name, dir_fd=None, uids=None, display=None):
+    """Open a directory without following a symlink in its last component, and check with fstat
+    that it is a directory owned by one of uids (any owner when None). FileNotFoundError passes
+    through for the caller to word."""
+    display = name if display is None else display
+    try:
+        fd = os.open(name, DIR_FLAGS, dir_fd=dir_fd)
+    except FileNotFoundError:
+        raise
+    except OSError as e:
+        raise UserError("%s: %s (a symlink is not followed); refusing" % (display, e.strerror)) from None
+    st = os.fstat(fd)
+    if not stat.S_ISDIR(st.st_mode):
+        os.close(fd)
+        raise UserError("%s is not a directory; refusing" % display)
+    if uids is not None and st.st_uid not in uids:
+        os.close(fd)
+        raise UserError("%s is owned by uid %d, not %s; refusing"
+                        % (display, st.st_uid, " or ".join(str(uid) for uid in uids)))
+    return fd
+
+
+def create_dir(name, dir_fd, display, owner=None):
+    """Create the directory name in dir_fd, 0700, for owner (a passwd entry; this process when
+    None). It must not exist yet, and what is then opened must be the new, empty directory: one
+    swapped in meanwhile is refused before any fchown or use."""
+    try:
+        os.mkdir(name, 0o700, dir_fd=dir_fd)
+    except FileExistsError:
+        raise UserError("%s exists already; refusing" % display) from None
+    fd = open_dir(name, dir_fd=dir_fd, uids=(os.geteuid(),), display=display)
+    st = os.fstat(fd)
+    # A new directory has two links, or one on filesystems that do not count a directory's
+    # links (btrfs), and no entries.
+    if st.st_nlink > 2 or list_dir(fd):
+        os.close(fd)
+        raise UserError("%s was replaced while it was created; refusing" % display)
+    if owner is not None and os.geteuid() == 0:
+        os.fchown(fd, owner.pw_uid, owner.pw_gid)
+    os.fchmod(fd, 0o700)
+    # Its entry in dir_fd is on disk before anything is put in it.
+    os.fsync(dir_fd)
+    return fd
+
+
+def make_dir(name, dir_fd, display, owner=None, existing_uids=None):
+    """Open the directory name in dir_fd, or create it with create_dir when it is missing. One
+    that exists must be owned by one of existing_uids (owner's uid when None)."""
+    uid = os.geteuid() if owner is None else owner.pw_uid
+    try:
+        return open_dir(name, dir_fd=dir_fd, uids=existing_uids or (uid,), display=display)
+    except FileNotFoundError:
+        return create_dir(name, dir_fd, display, owner)
+
+
+def open_entry(dir_fd, name, display, dev=None):
+    """Open name in dir_fd when it is a directory or a regular file, on the filesystem dev when
+    given. It is checked with lstat first, so nothing else is ever opened (a FIFO would block, a
+    device could act, a mount is not walked), then opened without following a symlink and checked
+    with fstat to be the same inode. Returns (fd, stat)."""
+    try:
+        st = os.stat(name, dir_fd=dir_fd, follow_symlinks=False)
+    except OSError as e:
+        raise TreeError("%r: %s" % (display, e.strerror)) from None
+    if dev is not None and st.st_dev != dev:
+        raise TreeError("%r is on another filesystem (a mount point); refusing" % display)
+    if stat.S_ISDIR(st.st_mode):
+        flags = DIR_FLAGS
+    elif stat.S_ISREG(st.st_mode):
+        flags = FILE_FLAGS
+    else:
+        raise TreeError("%r is not a regular file or a directory" % display)
+    try:
+        fd = os.open(name, flags, dir_fd=dir_fd)
+    except OSError as e:
+        raise TreeError("%r: %s" % (display, e.strerror)) from None
+    fst = os.fstat(fd)
+    if (fst.st_dev, fst.st_ino, stat.S_IFMT(fst.st_mode)) != (st.st_dev, st.st_ino, stat.S_IFMT(st.st_mode)):
+        os.close(fd)
+        raise TreeError("%r changed while it was read" % display)
+    return fd, fst
+
+
+def stream_dir(tar, dir_fd, prefix, exclude_top, dev):
+    for name in sorted(list_entries(dir_fd, prefix.rstrip("/") or ".")):
+        if not prefix and name in exclude_top:
+            continue
+        rel = prefix + name
+        if CONFIG_BACKUP_RE.fullmatch(name):
+            continue
+        fd, st = open_entry(dir_fd, name, rel, dev)
+        try:
+            info = tarfile.TarInfo(rel)
+            info.mtime = int(st.st_mtime)
+            if stat.S_ISDIR(st.st_mode):
+                info.type = tarfile.DIRTYPE
+                info.mode = 0o700
+                tar.addfile(info)
+                stream_dir(tar, fd, rel + "/", exclude_top, dev)
+            else:
+                # A member built here, not by gettarinfo, so a hard link is sent as a file of its own.
+                info.mode = 0o600
+                info.size = st.st_size
+                with os.fdopen(fd, "rb", closefd=False) as f:
+                    tar.addfile(info, f)
+        finally:
+            os.close(fd)
+
+
+def stream_tree(src_dir, out, exclude_top):
+    """Write the directories and regular files below src_dir (a path, or an open directory fd) to
+    out as a tar stream, leaving out the top-level names in exclude_top and the core's backups of
+    its conf and settings, at any depth (quarantine_files takes those). Each entry is opened
+    without following a symlink and checked with fstat; anything else, at any depth, raises
+    TreeError naming its path relative to src_dir, as does an entry on another filesystem."""
+    top = open_dir(src_dir) if isinstance(src_dir, str) else src_dir
+    try:
+        with tarfile.open(fileobj=out, mode="w|", format=tarfile.PAX_FORMAT) as tar:
+            stream_dir(tar, top, "", exclude_top, os.fstat(top).st_dev)
+    finally:
+        if isinstance(src_dir, str):
+            os.close(top)
+
+
+def check_member(member):
+    """Return (parent, base) of a member extract_stream may create, or raise TreeError."""
+    name = member.name
+    if not (member.isdir() or member.isfile()):
+        raise TreeError("%r: only directories and regular files are copied" % name)
+    if "\0" in name or any(part in ("", ".", "..") for part in name.split("/")) or posixpath.normpath(name) != name:
+        raise TreeError("%r: not a plain relative name" % name)
+    return posixpath.split(name)
+
+
+def extract_stream(inp, dst_dir, created=None):
+    """Create below dst_dir (a path, or an open directory fd) the directories and regular files of
+    the tar stream inp, as new inodes: files 0600 and directories 0700, each created exclusively
+    and without following a symlink, inside a directory the same stream created. A member of any
+    other type, or with an absolute or unnormalised name, raises TreeError. Each top-level name is
+    appended to created (a list) just before its entry is made, and removed again if that fails,
+    so the names are known after a failure too. Each file is synced once written, and each
+    directory, dst_dir included, once the stream is done, so the copy is on disk before its source
+    can be removed.
+    Returns the number of file bytes written."""
+    top = open_dir(dst_dir) if isinstance(dst_dir, str) else dst_dir
+    dirs = {"": top}
+    written = 0
+    try:
+        with tarfile.open(fileobj=inp, mode="r|") as tar:
+            for member in tar:
+                parent, base = check_member(member)
+                parent_fd = dirs.get(parent)
+                if parent_fd is None:
+                    raise TreeError("%r: its directory is not earlier in the stream" % member.name)
+                # A top-level name is recorded before its entry exists, so that a writer killed in
+                # between leaves nothing its cleanup does not know of; a create that fails takes
+                # the name off again.
+                record = not parent and created is not None
+                if record:
+                    created.append(base)
+                try:
+                    if member.isdir():
+                        os.mkdir(base, 0o700, dir_fd=parent_fd)
+                    else:
+                        fd = os.open(base, NEW_FILE_FLAGS, 0o600, dir_fd=parent_fd)
+                except BaseException:
+                    if record:
+                        created.remove(base)
+                    raise
+                if member.isdir():
+                    dirs[member.name] = open_dir(base, dir_fd=parent_fd, display=member.name)
+                    continue
+                with os.fdopen(fd, "wb") as f:
+                    data = tar.extractfile(member)
+                    while True:
+                        chunk = data.read(1 << 20)
+                        if not chunk:
+                            break
+                        f.write(chunk)
+                        written += len(chunk)
+                    f.flush()
+                    os.fsync(f.fileno())
+        # Read to the end, so the writing side never blocks on its padding; only zeros may follow.
+        while True:
+            chunk = inp.read(1 << 16)
+            if not chunk:
+                break
+            if chunk.count(0) != len(chunk):
+                raise TreeError("data after the end of the archive")
+        for fd in dirs.values():
+            os.fsync(fd)
+    finally:
+        for name, fd in dirs.items():
+            if name:
+                os.close(fd)
+        if isinstance(dst_dir, str):
+            os.close(top)
+    return written
+
+
+def drop_privileges(host, pw):
+    """Become pw: no supplementary groups, then its group, then its user. The order matters, as
+    the groups can no longer change once the uid has. The host checks each step. A copy never
+    runs as uid or gid 0."""
+    if pw.pw_uid == 0 or pw.pw_gid == 0:
+        raise StepError("refusing to run as %s (uid %d, gid %d)" % (shown(pw.pw_name), pw.pw_uid, pw.pw_gid))
+    host.setgroups([])
+    host.setgid(pw.pw_gid)
+    host.setuid(pw.pw_uid)
+
+
+def close_inherited_fds(keep):
+    """Close every descriptor above stderr except those in keep (in a fork child)."""
+    for name in os.listdir("/proc/self/fd"):
+        fd = int(name)
+        if fd > 2 and fd not in keep:
+            try:
+                os.close(fd)
+            except OSError:
+                # The descriptor of the listing itself, closed already.
+                pass
+
+
+def start_child(host, pw, body, keep):
+    """Fork a child that keeps only the descriptors in keep, becomes pw when this process is
+    root, runs body() and reports its result or its exception. Returns (pid, report fd)."""
+    report_r, report_w = os.pipe()
+    pid = os.fork()
+    if pid == 0:
+        code = 70
+        try:
+            try:
+                close_inherited_fds(set(keep) | {report_w})
+                if os.geteuid() == 0:
+                    drop_privileges(host, pw)
+                os.umask(0o077)
+                report = {"ok": True, "value": body()}
+                code = 0
+            except BaseException as e:
+                report = {"ok": False, "error": type(e).__name__, "message": str(e)}
+            data = json.dumps(report).encode("ascii")
+            while data:
+                data = data[os.write(report_w, data):]
+        finally:
+            os._exit(code)
+    os.close(report_w)
+    return pid, report_r
+
+
+def finish_child(pid, report_fd):
+    """Wait for a start_child child and return its report; a child that left none failed."""
+    with os.fdopen(report_fd, "rb") as f:
+        data = f.read()
+    _, status = os.waitpid(pid, 0)
+    try:
+        report = json.loads(data.decode("ascii"))
+    except ValueError:
+        report = None
+    if not isinstance(report, dict) or (report.get("ok") and status != 0):
+        return {"ok": False, "error": "ChildError", "message": "a child process ended with wait status %d" % status}
+    return report
+
+
+def child_error(report):
+    if report["error"] == "TreeError":
+        return TreeError(report["message"])
+    if report["error"] == "DirtyCopyError":
+        return DirtyCopyError(report["message"])
+    return CopyError("%s: %s" % (report["error"], report["message"]))
+
+
+def run_as(host, pw, body, keep):
+    report = finish_child(*start_child(host, pw, body, keep))
+    if not report["ok"]:
+        raise child_error(report)
+    return report["value"]
+
+
+def remove_entries(dir_fd, names):
+    """Remove the named entries of dir_fd, directories with all they hold. Only ever runs in a
+    child: it changes the working directory, so that shutil.rmtree works relative to dir_fd on any
+    Python 3 (its dir_fd argument needs 3.11), and relies on rmtree's symlink-safe
+    implementation."""
+    if not shutil.rmtree.avoids_symlink_attacks:
+        raise CopyError("shutil.rmtree can follow symlinks on this platform; nothing was removed")
+    os.fchdir(dir_fd)
+    for name in names:
+        try:
+            st = os.lstat(name)
+        except FileNotFoundError:
+            continue
+        if stat.S_ISDIR(st.st_mode):
+            shutil.rmtree(name)
+        else:
+            os.unlink(name)
+
+
+def empty_dir(dir_fd, keep):
+    """Remove every entry of dir_fd not named in keep (in a child, as remove_entries)."""
+    remove_entries(dir_fd, [name for name in list_dir(dir_fd) if name not in keep])
+
+
+class CreatedNames(list):
+    """The top-level names a writer created. Each change is also written, as it comes, to
+    record_fd (one JSON ["+" or "-", name] per line), so the parent knows the names should the
+    writer die without a report."""
+
+    def __init__(self, record_fd):
+        super().__init__()
+        self.record_fd = record_fd
+
+    def write(self, change, name):
+        data = (json.dumps([change, name]) + "\n").encode("ascii")
+        while data:
+            data = data[os.write(self.record_fd, data):]
+
+    def append(self, name):
+        super().append(name)
+        self.write("+", name)
+
+    def remove(self, name):
+        super().remove(name)
+        self.write("-", name)
+
+
+def recorded_names(record_fd):
+    """The names a dead writer had recorded and not taken off again; a line cut short by its death
+    is skipped."""
+    data = os.pread(record_fd, os.fstat(record_fd).st_size, 0)
+    names = []
+    for line in data.split(b"\n"):
+        try:
+            change, name = json.loads(line.decode("ascii"))
+        except (ValueError, TypeError):
+            continue
+        if change == "+":
+            names.append(name)
+        elif change == "-" and name in names:
+            names.remove(name)
+    return names
+
+
+def stream_to_fd(src_fd, data_fd, exclude_top):
+    with os.fdopen(data_fd, "wb") as out:
+        stream_tree(src_fd, out, exclude_top)
+
+
+def remove_created(dst_fd, created, failure):
+    """Remove what a failed writer created. If that fails too, raise DirtyCopyError naming what may
+    be left, so that nobody is told nothing was copied."""
+    try:
+        remove_entries(dst_fd, created)
+    except BaseException as e:
+        raise DirtyCopyError("%s; removing what this run had created failed (%s), so some of these may be left: %s"
+                             % (failure, e, ", ".join(shown(name) for name in created))) from None
+
+
+def extract_committed(data_fd, dst_fd, commit_fd, record_fd):
+    """The writer child: extract, then keep the result only once the parent confirms the reader
+    finished cleanly. Otherwise remove what this run created, and nothing else."""
+    created = CreatedNames(record_fd)
+    try:
+        with os.fdopen(data_fd, "rb") as inp:
+            written = extract_stream(inp, dst_fd, created)
+        committed = os.read(commit_fd, 1) == b"c"
+    except BaseException as e:
+        remove_created(dst_fd, created, e)
+        raise
+    if not committed:
+        failure = CopyError("the reading side did not finish; nothing was kept")
+        remove_created(dst_fd, created, failure)
+        raise failure
+    return written
+
+
+def copy_as(src, dst, src_user, dst_user, exclude_top, host):
+    """Copy the tree src into the directory dst (each a path or an open directory fd) as fresh
+    files. A reader child streams src as src_user and a writer child extracts into dst as dst_user,
+    with a pipe between them; each takes on its user only when this process is root. The writer
+    keeps what it wrote only once the reader has finished cleanly, and otherwise removes every
+    entry it added. Should the writer die without a report, a cleanup child, as dst_user, removes
+    the entries it recorded. A failure of either side raises TreeError or CopyError."""
+    src_pw = host.getpwnam(src_user)
+    dst_pw = host.getpwnam(dst_user)
+    with contextlib.ExitStack() as stack:
+        if isinstance(src, str):
+            src = open_dir(src)
+            stack.callback(os.close, src)
+        if isinstance(dst, str):
+            dst = open_dir(dst)
+            stack.callback(os.close, dst)
+        data_r, data_w = os.pipe()
+        commit_r, commit_w = os.pipe()
+        record_fd = os.memfd_create("gridcoin-service-created", os.MFD_CLOEXEC)
+        stack.callback(os.close, record_fd)
+        pending = [data_r, data_w, commit_r, commit_w]
+        try:
+            reader = start_child(host, src_pw, lambda: stream_to_fd(src, data_w, exclude_top), (src, data_w))
+            writer = start_child(host, dst_pw, lambda: extract_committed(data_r, dst, commit_r, record_fd),
+                                 (dst, data_r, commit_r, record_fd))
+            for fd in (data_r, data_w, commit_r):
+                pending.remove(fd)
+                os.close(fd)
+            reader_report = finish_child(*reader)
+            if reader_report["ok"]:
+                try:
+                    os.write(commit_w, b"c")
+                except BrokenPipeError:
+                    # The writer has failed already; its report says why.
+                    pass
+            pending.remove(commit_w)
+            os.close(commit_w)
+            writer_report = finish_child(*writer)
+            if writer_report.get("error") == "ChildError":
+                # The writer died without a report, so it removed nothing: remove what it recorded.
+                names = recorded_names(record_fd)
+                cleanup = finish_child(*start_child(host, dst_pw, lambda: remove_entries(dst, names), (dst,)))
+                if cleanup["ok"]:
+                    error, outcome = "CopyError", "the %d entries it had created were removed" % len(names)
+                else:
+                    error = "DirtyCopyError"
+                    outcome = ("removing the entries it had created failed (%s), so some of these may be left: %s"
+                               % (cleanup["message"], ", ".join(shown(name) for name in names)))
+                writer_report = {"ok": False, "error": error,
+                                 "message": "the writing side ended without a report (%s); %s"
+                                            % (writer_report["message"], outcome)}
+        finally:
+            for fd in pending:
+                os.close(fd)
+    if writer_report.get("error") == "DirtyCopyError":
+        # What is left in the target matters most; a reader's own failure comes first in the line.
+        if not reader_report["ok"] and reader_report["error"] != "BrokenPipeError":
+            raise DirtyCopyError("%s; %s" % (child_error(reader_report), writer_report["message"]))
+        raise child_error(writer_report)
+    if not reader_report["ok"]:
+        # A reader cut off by a failed writer reports a broken pipe; the writer's error is the cause.
+        if reader_report["error"] == "BrokenPipeError" and not writer_report["ok"]:
+            raise child_error(writer_report)
+        raise child_error(reader_report)
+    if not writer_report["ok"]:
+        raise child_error(writer_report)
+
+
+def write_file_as(dir_fd, name, data, pw, host):
+    """Create name in dir_fd as pw (when root), as write_new_file does."""
+    run_as(host, pw, lambda: write_new_file(dir_fd, name, data), (dir_fd,))
+
+
+def write_new_file(dir_fd, name, data):
+    """Create name in dir_fd: 0600, exclusively, without following a symlink. The file, and then its
+    entry in dir_fd, are on disk when this returns, before anything it stands in for is removed."""
+    with os.fdopen(os.open(name, NEW_FILE_FLAGS, 0o600, dir_fd=dir_fd), "wb") as f:
+        f.write(data)
+        f.flush()
+        os.fsync(f.fileno())
+    os.fsync(dir_fd)
+
+
+def hold_datadir_lock(path, owner_uid):
+    """Take the core's lock on the datadir path (a path, or an open directory fd): a write lock on
+    its .lock, opened read-write without following a symlink and never created, which must be a
+    regular file with one link, owned by owner_uid (the side's own account). Returns the
+    descriptor that holds the lock until it is closed, or None when there is no .lock. Raises
+    UserError when another process holds the lock."""
+    flags = os.O_RDWR | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC
+    try:
+        if isinstance(path, int):
+            fd = os.open(".lock", flags, dir_fd=path)
+        else:
+            fd = os.open(os.path.join(path, ".lock"), flags)
+    except FileNotFoundError:
+        return None
+    except OSError as e:
+        raise UserError("cannot open the datadir lock .lock: %s (a symlink is not followed)" % e.strerror) from None
+    try:
+        st = os.fstat(fd)
+        if not stat.S_ISREG(st.st_mode):
+            raise UserError("the datadir lock .lock is not a regular file; refusing")
+        if st.st_uid != owner_uid:
+            raise UserError("the datadir lock .lock is owned by uid %d, not %d; refusing" % (st.st_uid, owner_uid))
+        if st.st_nlink != 1:
+            raise UserError("the datadir lock .lock has %d links; refusing" % st.st_nlink)
+        # An open file description lock, so that closing some other descriptor of the file in this
+        # process does not release it, as it would a traditional fcntl lock. Linux makes the two
+        # kinds conflict, so it excludes the core's F_SETLK in FileLock::TryLock, and the reverse.
+        # struct flock: l_type, l_whence, l_start, l_len, l_pid (0 for this kind of lock), padded
+        # with zeros to 64 bytes, more than any ABI's struct flock, so the kernel never reads past
+        # what was passed.
+        request = struct.pack("hhqqi", fcntl.F_WRLCK, os.SEEK_SET, 0, 0, 0).ljust(64, b"\0")
+        try:
+            fcntl.fcntl(fd, fcntl.F_OFD_SETLK, request)
+        except (BlockingIOError, PermissionError):
+            raise UserError("the datadir is in use: another process holds its .lock; stop it first") from None
+    except BaseException:
+        os.close(fd)
+        raise
+    return fd
+
+
+def stamp(host):
+    return host.utcnow().strftime("%Y%m%dT%H%M%SZ")
+
+
+def is_testnet_entry(name):
+    """The testnet datadir and its stashes, which live inside the mainnet datadir."""
+    return name == "testnet" or name.startswith("testnet" + STASH_INFIX)
+
+
+def stash_source(parent_fd, name, src_fd, stash_name, keep, display, copies=None, copy_owner=None, made=None):
+    """Move the entries of src_fd (the directory name in parent_fd), except those in keep, into a
+    new directory stash_name in parent_fd, root's and 0700, and write copies ({name: bytes}) there
+    owned by copy_owner (a passwd entry), like the entries moved in. The new directory's
+    (st_dev, st_ino) is appended to made (a list) as soon as it exists. All of it goes through
+    parent_fd, which was opened without following a symlink."""
+    stash_fd = create_dir(stash_name, parent_fd, display)
+    if made is not None:
+        st = os.fstat(stash_fd)
+        made.append((st.st_dev, st.st_ino))
+    try:
+        # root:root, whatever group a setgid parent would hand down.
+        if os.geteuid() == 0:
+            os.fchown(stash_fd, 0, 0)
+        for entry in sorted(list_dir(src_fd)):
+            if entry not in keep:
+                os.rename(entry, entry, src_dir_fd=src_fd, dst_dir_fd=stash_fd)
+        for entry, data in (copies or {}).items():
+            with os.fdopen(os.open(entry, NEW_FILE_FLAGS, 0o600, dir_fd=stash_fd), "wb") as f:
+                if os.geteuid() == 0 and copy_owner is not None:
+                    os.fchown(f.fileno(), copy_owner.pw_uid, copy_owner.pw_gid)
+                f.write(data)
+                f.flush()
+                os.fsync(f.fileno())
+        # What moved, and the copies, are on disk in the stash, and gone from the source, before
+        # the owner record names the stash.
+        os.fsync(stash_fd)
+        os.fsync(src_fd)
+    finally:
+        os.close(stash_fd)
+
+
+def remove_if_empty(parent_fd, name, src_fd):
+    """Remove the directory name in parent_fd once stash_source has emptied it: only that
+    directory, should the name have been replaced meanwhile."""
+    if not list_dir(src_fd):
+        if os.path.samestat(os.stat(name, dir_fd=parent_fd, follow_symlinks=False), os.fstat(src_fd)):
+            os.rmdir(name, dir_fd=parent_fd)
+
+
+def unstash(parent_fd, stash_name, display, src_fd, copied_names, identity):
+    """Move the entries of the stash this run made (identity: its (st_dev, st_ino)) back into
+    src_fd and remove it; the copies stash_source wrote are deleted, not moved. An entry src_fd
+    holds again by now is left in the stash."""
+    stash_fd = open_dir(stash_name, dir_fd=parent_fd, uids=(os.geteuid(),), display=display)
+    left = []
+    try:
+        st = os.fstat(stash_fd)
+        if (st.st_dev, st.st_ino) != identity:
+            raise UserError("%s is not the directory this run made" % display)
+        in_source = set(list_dir(src_fd))
+        for entry in sorted(list_dir(stash_fd)):
+            if entry in copied_names:
+                os.unlink(entry, dir_fd=stash_fd)
+            elif entry in in_source:
+                left.append(entry)
+            else:
+                os.rename(entry, entry, src_dir_fd=stash_fd, dst_dir_fd=src_fd)
+    finally:
+        os.close(stash_fd)
+    if left:
+        raise UserError("the source holds %s again, so the stash's copies stay" % ", ".join(shown(n) for n in left))
+    os.rmdir(stash_name, dir_fd=parent_fd)
+
+
+def roll_back_enable(host, acct, s_fd, s_display, s_parent_fd, stash_name, stash_display, stash_made, copied_names,
+                     state_fd, network, record_display, t_fd, t_display):
+    """Undo what enable did after the copy: the owner record, the stash and the copy itself, which
+    is removed as the account. Returns the state line: what was undone, or the steps that are left
+    to do by hand. An interrupt stops the rollback, and every step not done is listed."""
+    def remove_record():
+        if network + ".owner" in list_dir(state_fd):
+            os.unlink(network + ".owner", dir_fd=state_fd)
+
+    steps = [("remove %s" % record_display, remove_record)]
+    if stash_made:
+        steps.append(("move every entry of %s back into %s and remove %s" % (stash_display, s_display, stash_display),
+                      lambda: unstash(s_parent_fd, stash_name, stash_display, s_fd, copied_names, stash_made[0])))
+    steps.append(("empty %s (find %s -mindepth 1 -delete)" % (t_display, t_display),
+                  lambda: run_as(host, acct, lambda: empty_dir(t_fd, set()), (t_fd,))))
+    manual = []
+    interrupted = False
+    for text, action in steps:
+        if interrupted:
+            manual.append(text)
+            continue
+        try:
+            action()
+        except KeyboardInterrupt:
+            interrupted = True
+            manual.append(text)
+        except Exception as e:
+            manual.append("%s (%s)" % (text, e))
+    if interrupted:
+        return "rolling back was interrupted; to finish by hand: " + "; ".join(manual)
+    if manual:
+        return "rolling back did not finish; to finish by hand: " + "; ".join(manual)
+    return "the switch was rolled back: %s holds the source again and %s is empty" % (s_display, t_display)
+
+
+def open_tool_state(paths):
+    """The tool's own state directory, root's (/var/lib/gridcoin-service, from tmpfiles.d)."""
+    if not os.path.isdir(paths.tool_state):
+        os.makedirs(paths.tool_state, 0o700, exist_ok=True)
+        sync_directory(os.path.dirname(paths.tool_state))
+    return open_dir(paths.tool_state, uids=(os.geteuid(),))
+
+
+def owner_record_path(paths, network):
+    return os.path.join(paths.tool_state, network + ".owner")
+
+
+def read_owner_record(state_fd, paths, network):
+    """The record enable left for this network: {"uid", "user", "stash"}, or None when there is
+    none. One that is not root's own 0600 regular file, or not in that form, is refused."""
+    name = network + ".owner"
+    display = owner_record_path(paths, network)
+    if name not in list_dir(state_fd):
+        return None
+    fd, st = open_entry(state_fd, name, display)
+    try:
+        if not stat.S_ISREG(st.st_mode) or st.st_uid != os.geteuid() or st.st_mode & 0o077:
+            raise UserError("%s is not a record this tool wrote (root's own, mode 0600); refusing" % display)
+        with os.fdopen(fd, "rb", closefd=False) as f:
+            data = f.read(MAX_CONFIG_BYTES + 1)
+    finally:
+        os.close(fd)
+    try:
+        record = json.loads(data.decode("utf8"))
+    except ValueError:
+        record = None
+    if (not isinstance(record, dict) or not isinstance(record.get("uid"), int)
+            or not isinstance(record.get("user"), str) or not isinstance(record.get("stash"), str)):
+        raise UserError("%s is not a record this tool wrote; refusing" % display)
+    return record
+
+
+def write_owner_record(state_fd, network, pw, stash_display):
+    """Record, root-only, whose wallet enable moved into this network's service and where the
+    source went, so that only disable for that user takes it out again."""
+    record = {"uid": pw.pw_uid, "user": pw.pw_name, "stash": stash_display}
+    write_new_file(state_fd, network + ".owner", (json.dumps(record) + "\n").encode("utf8"))
+
+
+def open_quarantine(state_fd, paths, user, network, host):
+    """Create <tool_state>/quarantine/<user>-<network>-<UTC time>/, root's and 0700. Returns
+    (fd, path)."""
+    root_fd = make_dir("quarantine", state_fd, os.path.join(paths.tool_state, "quarantine"))
+    try:
+        name = "%s-%s-%s" % (user, network, stamp(host))
+        display = os.path.join(paths.tool_state, "quarantine", name)
+        fd = create_dir(name, root_fd, display)
+    finally:
+        os.close(root_fd)
+    return fd, display
+
+
+def read_owned_file(dir_fd, name, owner_uids, display):
+    """Read name in dir_fd as root. It must be a regular file owned by one of owner_uids, so root
+    reads nothing those owners could not (a hard link to another account's file is refused), and
+    on dir_fd's filesystem."""
+    fd, st = open_entry(dir_fd, name, display, os.fstat(dir_fd).st_dev)
+    try:
+        if not stat.S_ISREG(st.st_mode) or st.st_uid not in owner_uids:
+            raise TreeError("%r is not a regular file owned by uid %s; refusing"
+                            % (display, " or ".join(str(uid) for uid in owner_uids)))
+        with os.fdopen(fd, "rb", closefd=False) as f:
+            data = f.read(MAX_CONFIG_BYTES + 1)
+    finally:
+        os.close(fd)
+    if len(data) > MAX_CONFIG_BYTES:
+        raise TreeError("%r is larger than %d bytes; refusing" % (display, MAX_CONFIG_BYTES))
+    return data
+
+
+def quarantine_files(src_fd, src_display, owner_uid, q_fd, exclude_top=frozenset()):
+    """Copy the QUARANTINE_TOP files of src_fd, and the core's backups of them anywhere below it
+    apart from the top-level names in exclude_top, into q_fd, the backups at the same relative
+    paths. Directories are walked without following a symlink, and one on another filesystem is
+    refused before anything in it is read. Returns the top-level files' contents by name, and the
+    backups' relative paths."""
+    found = {}
+    for name in sorted(QUARANTINE_TOP & set(list_dir(src_fd))):
+        found[name] = read_owned_file(src_fd, name, (owner_uid,), os.path.join(src_display, name))
+        write_new_file(q_fd, name, found[name])
+    backups = []
+    dev = os.fstat(src_fd).st_dev
+
+    def walk(dir_fd, prefix, q_parent):
+        for name in sorted(list_entries(dir_fd, prefix.rstrip("/") or ".")):
+            rel = prefix + name
+            if not prefix and name in exclude_top:
+                continue
+            if CONFIG_BACKUP_RE.fullmatch(name):
+                data = read_owned_file(dir_fd, name, (owner_uid,), os.path.join(src_display, rel))
+                write_new_file(q_parent(), name, data)
+                backups.append(rel)
+                continue
+            if not stat.S_ISDIR(os.stat(name, dir_fd=dir_fd, follow_symlinks=False).st_mode):
+                continue
+            fd, _ = open_entry(dir_fd, name, rel, dev)
+            q_fds = []
+
+            def q_child(parent=q_parent, child=name):
+                # The quarantine's copy of this directory, made when its first backup is found.
+                if not q_fds:
+                    q_fds.append(make_dir(child, parent(), child))
+                return q_fds[0]
+
+            try:
+                walk(fd, rel + "/", q_child)
+            finally:
+                os.close(fd)
+                for q in q_fds:
+                    os.close(q)
+
+    walk(src_fd, "", lambda: q_fd)
+    return found, backups
+
+
+def sanitize_quarantined(found, patterns, q_fd, src_display):
+    """Sanitise what quarantine_files found, before anything is copied: a settings file the core
+    would not load refuses the command. The sanitised conf goes next to the quarantined one, for
+    root's review. Returns (sanitised settings text or None, report lines naming keys only)."""
+    lines = []
+    settings_text = None
+    if SETTINGS_NAME in found:
+        display = os.path.join(src_display, SETTINGS_NAME)
+        try:
+            settings_text, removed = sanitize_settings(found[SETTINGS_NAME].decode("utf8"), patterns)
+        except UnicodeDecodeError:
+            # Its message would quote a byte of the file.
+            raise UserError("%s is not UTF-8, so the core cannot load it; fix or remove it, then rerun"
+                            % display) from None
+        except (ValueError, RecursionError) as e:
+            raise UserError("%s cannot be loaded as the core loads it (%s); fix or remove it, then rerun"
+                            % (display, e)) from None
+        if removed:
+            lines.append("Removed from %s: %s" % (SETTINGS_NAME, ", ".join(shown(k) for k in removed)))
+        carried = list(json.loads(settings_text))
+        if carried:
+            # The tool cannot see the core's flags, so it names every carried key; the ones that
+            # need elevation (proxy, connect, addnode and the like) are among them.
+            lines.append("Carried over in %s, for review: %s" % (SETTINGS_NAME, ", ".join(shown(k) for k in carried)))
+    if CONF_NAME in found:
+        text, removed = sanitize_conf(found[CONF_NAME].decode("utf8", "surrogateescape"), patterns)
+        write_new_file(q_fd, CONF_NAME + ".sanitized", text.encode("utf8", "surrogateescape"))
+        if removed:
+            lines.append("Left out of %s.sanitized: %s" % (CONF_NAME, ", ".join(shown(k) for k in removed)))
+    return settings_text, lines
+
+
+def report_quarantine(found, backups, q_display, lines):
+    names = sorted(found)
+    if backups:
+        names.append("%d backups of them" % len(backups))
+    if names:
+        print("Quarantined %s in %s (root only); review before using any of it." % (", ".join(names), q_display))
+    for line in lines:
+        print(line)
+
+
+def service_account(net, host, paths):
+    """The network's service account, which must be a system account: not uid 0, below UID_MIN
+    (login.defs, or 1000), and not in group 0."""
+    try:
+        acct = host.getpwnam(net.account)
+    except KeyError:
+        raise UserError("the service account %s does not exist; is the package installed?" % net.account) from None
+    limit = uid_min(paths)
+    if acct.pw_uid == 0 or acct.pw_uid >= limit:
+        raise UserError("the service account %s has uid %d; it must be a system account (uid 1 to %d)"
+                        % (net.account, acct.pw_uid, limit - 1))
+    if acct.pw_gid == 0:
+        raise UserError("the service account %s has gid 0 (root's group) as its primary group; refusing"
+                        % net.account)
+    return acct
+
+
+def open_home(pw):
+    """The user's home directory from the passwd entry, opened without following a symlink."""
+    try:
+        return open_dir(pw.pw_dir, uids=(pw.pw_uid,), display="home directory " + pw.pw_dir)
+    except FileNotFoundError:
+        raise UserError("home directory %s does not exist" % pw.pw_dir) from None
+
+
+def open_user_dir(dir_fd, name, pw, display):
+    try:
+        return open_dir(name, dir_fd=dir_fd, uids=(pw.pw_uid,), display=display)
+    except FileNotFoundError:
+        raise UserError("%s does not exist" % display) from None
+
+
+def service_dir_display(paths, net):
+    return os.path.join(paths.var_lib, net.state, *(["testnet"] if net.testnet else []))
+
+
+def open_service_dir(paths, net, acct, create):
+    """Open the service datadir, /var/lib/<state> (testnet: its testnet/), owned by the account
+    or root; with create, make what is missing for the account. FileNotFoundError when it is
+    missing otherwise. /var/lib is root's; below it nothing is followed. Returns (fd, path)."""
+    path = paths.var_lib
+    fd = os.open(path, os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC)
+    try:
+        for part in [net.state] + (["testnet"] if net.testnet else []):
+            path = os.path.join(path, part)
+            if create:
+                next_fd = make_dir(part, fd, path, owner=acct, existing_uids=(acct.pw_uid, 0))
+            else:
+                next_fd = open_dir(part, dir_fd=fd, uids=(acct.pw_uid, 0), display=path)
+            os.close(fd)
+            fd = next_fd
+    except BaseException:
+        os.close(fd)
+        raise
+    return fd, path
+
+
+def end_user_processes(host, pw, terminate):
+    """Refuse while the user has processes; with terminate, end the user's sessions and wait up to
+    TERMINATE_WAIT_SECONDS for the processes to go."""
+    def listed(pids):
+        return ", ".join(str(pid) for pid in pids[:5]) + (", ..." if len(pids) > 5 else "")
+
+    pids = host.user_processes(pw.pw_uid)
+    if not pids:
+        return
+    if not terminate:
+        raise UserError("%s has running processes (%s); have them log out, or rerun with --terminate-sessions"
+                        % (pw.pw_name, listed(pids)))
+    host.terminate_user(pw.pw_name)
+    deadline = host.monotonic() + TERMINATE_WAIT_SECONDS
+    while True:
+        pids = host.user_processes(pw.pw_uid)
+        if not pids:
+            return
+        if host.monotonic() >= deadline:
+            raise UserError("%s still has running processes (%s) %d s after their sessions were ended; refusing"
+                            % (pw.pw_name, listed(pids), TERMINATE_WAIT_SECONDS))
+        host.sleep(1)
+
+
+def refuse_other_network_core(host, network, user):
+    """Both networks' per-user cores use the same datadir root and conf, so the other network's
+    must not run during a switch. The tool never stops it itself."""
+    other = NETWORKS["test" if network == "main" else "main"]
+    unit = "%s@%s.service" % (other.daemon, user)
+    if host.is_active(unit):
+        raise UserError("%s is running and shares %s's datadir and conf; stop it first with: systemctl stop %s"
+                        % (unit, user, unit))
+
+
+def refuse_system_unit_datadir(paths, net, command_name):
+    """enable and disable move wallets in and out of /var/lib/<state> only, so the system service
+    must run on it: the command line it runs (a copy of the unit, its drop-ins, the switch-over's
+    included) must give that -datadir, a trailing slash allowed. Without an ExecStart= of those, the
+    packaged unit's own runs."""
+    unit = net.daemon + ".service"
+    copy, masked, _ = system_core_overrides(net, paths)
+    command = system_command(net, paths, copy, masked)
+    if command is None:
+        return
+    path, value = command
+    datadir = None
+    for word in command_words(value, path)[1:]:
+        if core_option(word).startswith("-datadir="):
+            datadir = core_option(word)[len("-datadir="):]
+    _, default_datadir = system_defaults(net)
+    if datadir is not None and normalize_path(datadir) == default_datadir:
+        return
+    # Without -datadir the core started from its default, which a datadir= in its conf may have changed.
+    runs_on = ("runs on %s" % datadir if datadir is not None
+               else "probably runs on the core's default datadir under its account's home")
+    if command_name == "enable":
+        advice = ("enable moves the user's wallet into %s, which the service does not run on; to run it there, "
+                  "change that ExecStart= to -datadir=%s first, or keep the service as it is"
+                  % (default_datadir, default_datadir))
+    else:
+        advice = ("disable moves the wallet in %s back to its user, and the service does not run on that; change "
+                  "that ExecStart= back to -datadir=%s, then rerun disable" % (default_datadir, default_datadir))
+    raise UserError("%s %s, from the ExecStart= in %s; %s" % (unit, runs_on, path, advice))
+
+
+def refuse_user_unit_datadir(paths, net, user, d_display):
+    """enable moves only the default datadir, so the per-user unit must not name another one. A
+    -datadir that names the default itself, as the switch-over keeps the released unit's, is the
+    directory enable moves."""
+    unit = "%s@%s.service" % (net.daemon, user)
+    directory = dropin_dir(paths, unit)
+    if not check_dropin_dir(directory):
+        return
+    path = os.path.join(directory, DROPIN_MAIN)
+    try:
+        with open(path, encoding="utf8") as f:
+            text = f.read()
+    except FileNotFoundError:
+        return
+    except UnicodeDecodeError:
+        raise UserError("%s is not UTF-8, so its -datadir cannot be checked; refusing" % path) from None
+    except OSError as e:
+        raise UserError("cannot read %s: %s; refusing" % (path, e.strerror)) from None
+    for line in text.split("\n"):
+        if not line.startswith("ExecStart="):
+            continue
+        # Each word as systemd and the core read it: quoted or not, with one dash or two.
+        for word in command_words(line[len("ExecStart="):], path)[1:]:
+            if not core_option(word).startswith("-datadir="):
+                continue
+            given = core_option(word)[len("-datadir="):]
+            if os.path.realpath(given) == os.path.realpath(d_display):
+                continue
+            raise UserError("%s gives %s a -datadir of its own, but enable moves only %s; move that wallet there "
+                            "first, then rerun enable-user without --datadir" % (path, unit, d_display))
+
+
+class Progress:
+    """What a switch has left behind so far: the state line any failure of it ends with."""
+
+    def __init__(self):
+        self.state = "nothing was changed"
+
+
+class StateError(StepError):
+    """A failure whose message already ends with the state the command left."""
+
+
+def report_state(command):
+    """Run command(progress). Any failure, foreseen or not, ends with the state it left."""
+    progress = Progress()
+    try:
+        return command(progress)
+    except StateError:
+        raise
+    except (UserError, StepError, TreeError, CopyError, OSError) as e:
+        raise StateError("%s; %s" % (e, progress.state)) from None
+    except KeyboardInterrupt:
+        raise StateError("interrupted; %s" % progress.state) from None
+    except Exception as e:
+        raise StateError("unexpected %s (%s); %s" % (type(e).__name__, e, progress.state)) from None
+
+
+def decision_names(names):
+    """The names step 1 decides from: testnet's entries and the quarantined files. SKIP_TOP is not
+    among them: a core's own stop, which step 2 waits for, removes ipc.cookie and may touch .lock
+    or node.sock."""
+    return {name for name in names if is_testnet_entry(name) or name in QUARANTINE_TOP}
+
+
+def refuse_changed_listing(dir_fd, names, display):
+    """The decisions of step 1 rest on its listing; the user could change it until the lock."""
+    now = decision_names(list_dir(dir_fd))
+    names = decision_names(names)
+    if now != names:
+        changes = (["added " + shown(n) for n in sorted(now - names)]
+                   + ["removed " + shown(n) for n in sorted(names - now)])
+        raise UserError("%s changed after it was checked (%s); rerun once nothing else uses it"
+                        % (display, ", ".join(changes)))
+
+
+def take_lock(fd, display, owner_uid):
+    try:
+        return hold_datadir_lock(fd, owner_uid)
+    except UserError as e:
+        raise UserError("%s: %s" % (display, e)) from None
+
+
+def copy_tree(src_fd, dst_fd, src_user, dst_user, exclude, host, src_display):
+    try:
+        copy_as(src_fd, dst_fd, src_user, dst_user, exclude, host)
+    except TreeError as e:
+        raise TreeError("in %s: %s" % (src_display, e)) from None
+
+
+def cmd_enable(args, net, host, paths):
+    return report_state(lambda progress: enable(args, net, host, paths, progress))
+
+
+def enable(args, net, host, paths, progress):
+    pw = validate_user(args.user, host, paths)
+    refuse_own_login(host, pw)
+    acct = service_account(net, host, paths)
+    patterns = load_refused_patterns(net.refused_keys)
+    with contextlib.ExitStack() as stack:
+        def keep(fd):
+            stack.callback(os.close, fd)
+            return fd
+
+        # 1. The source S (the user's datadir; testnet: its testnet/) and the target T, the
+        # service datadir, which must be empty. Nothing is changed before this passes.
+        home_fd = keep(open_home(pw))
+        d_display = os.path.join(pw.pw_dir, DATADIR_NAME)
+        d_fd = keep(open_user_dir(home_fd, DATADIR_NAME, pw, d_display))
+        if net.testnet:
+            s_parent_fd, s_name, s_display = d_fd, "testnet", os.path.join(d_display, "testnet")
+            s_fd = keep(open_user_dir(d_fd, s_name, pw, s_display))
+        else:
+            s_parent_fd, s_name, s_display, s_fd = home_fd, DATADIR_NAME, d_display, d_fd
+        # The stash is a rename next to S, which cannot cross a mount point.
+        if os.fstat(s_fd).st_dev != os.fstat(s_parent_fd).st_dev:
+            raise UserError("%s is a mount point; move its contents to a plain directory first" % s_display)
+        state_fd = keep(open_tool_state(paths))
+        record = read_owner_record(state_fd, paths, args.network)
+        if record is not None:
+            raise UserError("%s records a wallet moved into the service for %s; run disable for that user first, "
+                            "or remove the record if the service datadir holds no wallet"
+                            % (owner_record_path(paths, args.network), shown(record["user"])))
+        try:
+            t_check_fd, t_display = open_service_dir(paths, net, acct, create=False)
+        except FileNotFoundError:
+            pass
+        else:
+            keep(t_check_fd)
+            if list_dir(t_check_fd):
+                raise UserError("%s exists and is not empty; refusing" % t_display)
+        refuse_user_unit_datadir(paths, net, pw.pw_name, d_display)
+        refuse_system_unit_datadir(paths, net, "enable")
+        names = list_dir(d_fd)
+        # On mainnet the source is the datadir itself: the recheck compares against this listing.
+        s_names = set(list_dir(s_fd)) if net.testnet else set(names)
+        testnet_entries = set() if net.testnet else {n for n in names if is_testnet_entry(n)}
+        # The conf at the datadir root is read by both networks: beside testnet's datadir it stays.
+        shared_conf = bool(testnet_entries) and CONF_NAME in names
+        if not net.testnet and CONF_NAME in names:
+            conf_display = os.path.join(d_display, CONF_NAME)
+            conf = read_owned_file(d_fd, CONF_NAME, (pw.pw_uid,), conf_display)
+            conf_text = conf.decode("utf8", "surrogateescape")
+            if conf_includes_files(conf_text):
+                raise UserError("%s includes other files (includeconf=), so which network this user's node runs "
+                                "cannot be told from it alone; move their settings into it, then rerun" % conf_display)
+            if conf_selects_testnet(conf_text):
+                raise UserError("%s selects another network than mainnet (testnet=, regtest= or chain=), so this "
+                                "user's node runs testnet or regtest; for a testnet node use --network=test"
+                                % conf_display)
+            other = conf_datadir(conf_text)
+            if other is not None and os.path.normpath(other) != os.path.normpath(d_display):
+                raise UserError("%s sets datadir=%s, so this user's node keeps its data there, not in %s, which is "
+                                "all enable moves; refusing" % (conf_display, shown(other), d_display))
+        # All enable moves is that directory, so the wallet must be in it.
+        if "wallet.dat" not in s_names:
+            raise UserError("%s holds no wallet.dat, so this user's node does not keep its wallet there (a -datadir, "
+                            "datadir= or wallet= elsewhere, say); enable moves only that directory, so there is "
+                            "nothing to move" % s_display)
+        refuse_other_network_core(host, args.network, pw.pw_name)
+
+        # 2. Stop both cores that could use either datadir. From here on every failure says what
+        # it left behind.
+        progress.state = "nothing was copied"
+        unit = "%s@%s.service" % (net.daemon, pw.pw_name)
+        step(host, "disable", "--now", *core_units(net, pw.pw_name), state=None)
+        progress.state = "%s is disabled and stopped; nothing was copied" % unit
+        step(host, "stop", net.daemon + ".service", state=None)
+        progress.state = "%s is disabled and %s.service stopped; nothing was copied" % (unit, net.daemon)
+
+        # 3. The user's own processes, a plain GUI among them.
+        end_user_processes(host, pw, args.terminate_sessions)
+
+        # 4. Hold the source's lock for the rest of the command, and check that what step 1
+        # decided from still holds.
+        lock_fd = take_lock(s_fd, s_display, pw.pw_uid)
+        if lock_fd is not None:
+            keep(lock_fd)
+        refuse_changed_listing(s_fd, s_names, s_display)
+
+        # 5. Copy to fresh files, with the configuration files quarantined and sanitised first.
+        t_fd, t_display = open_service_dir(paths, net, acct, create=True)
+        keep(t_fd)
+        if list_dir(t_fd):
+            raise UserError("%s exists and is not empty; refusing" % t_display)
+        if os.geteuid() == 0 and os.fstat(t_fd).st_uid != acct.pw_uid:
+            os.fchown(t_fd, acct.pw_uid, acct.pw_gid)
+            os.fchmod(t_fd, 0o700)
+        q_fd, q_display = open_quarantine(state_fd, paths, pw.pw_name, args.network, host)
+        keep(q_fd)
+        found, backups = quarantine_files(s_fd, s_display, pw.pw_uid, q_fd, testnet_entries)
+        if set(found) != QUARANTINE_TOP & s_names:
+            raise UserError("%s changed while it was read; rerun once nothing else uses it" % s_display)
+        settings_text, lines = sanitize_quarantined(found, patterns, q_fd, s_display)
+        stopped = progress.state
+        empty_t = "empty %s (find %s -mindepth 1 -delete)" % (t_display, t_display)
+        units = "%s is disabled and %s.service stopped" % (unit, net.daemon)
+        # Until copy_tree returns, an interrupt can leave the writer's files behind, so the state
+        # says that; a failure the writer cleaned up after says nothing was copied.
+        progress.state = ("%s may hold part or all of this copy: %s before rerunning; the source is untouched in %s, "
+                          "%s" % (t_display, empty_t, s_display, units))
+        try:
+            copy_tree(s_fd, t_fd, pw.pw_name, net.account, SKIP_TOP | QUARANTINE_TOP | testnet_entries, host,
+                      s_display)
+        except DirtyCopyError:
+            progress.state = ("%s still holds part of this copy: %s before rerunning; the source is untouched, %s"
+                              % (t_display, empty_t, units))
+            raise
+        except (UserError, StepError, TreeError, CopyError, OSError):
+            progress.state = stopped
+            raise
+        progress.state = ("%s holds the copy and the source is untouched in %s: %s before rerunning; %s"
+                          % (t_display, s_display, empty_t, units))
+        # 6. Stash the source where only root can reach it, so no second core can stake it, and
+        # record whose wallet the service now runs. From the copy until that record is written any
+        # failure rolls the switch back, the copy included, so the service datadir is never left
+        # full without a record.
+        stash_name = s_name + STASH_INFIX + stamp(host)
+        stash_display = os.path.join(os.path.dirname(s_display), stash_name)
+        keep_in_source = testnet_entries | ({CONF_NAME} if shared_conf else set())
+        copied_names = {CONF_NAME} if shared_conf else set()
+        record_display = owner_record_path(paths, args.network)
+        stash_made = []
+        try:
+            if settings_text is not None:
+                write_file_as(t_fd, SETTINGS_NAME, settings_text.encode("utf8"), acct, host)
+            report_quarantine(found, backups, q_display, lines)
+            progress.state = ("the source may be split between %s and %s: move the stash's entries back into %s and "
+                              "remove the stash; %s holds the copy: %s; %s"
+                              % (s_display, stash_display, s_display, t_display, empty_t, units))
+            stash_source(s_parent_fd, s_name, s_fd, stash_name, keep_in_source, stash_display,
+                         copies={CONF_NAME: found[CONF_NAME]} if shared_conf else None, copy_owner=pw, made=stash_made)
+            write_owner_record(state_fd, args.network, pw, stash_display)
+        except BaseException:
+            progress.state = "%s; %s" % (
+                roll_back_enable(host, acct, s_fd, s_display, s_parent_fd, stash_name, stash_display, stash_made,
+                                 copied_names, state_fd, args.network, record_display, t_fd, t_display), units)
+            raise
+        if shared_conf:
+            print("%s stays in %s, as testnet reads it too; copies are in the stash and the quarantine."
+                  % (CONF_NAME, d_display))
+        moved = "the wallet is in %s and the source in %s" % (t_display, stash_display)
+        progress.state = "%s; the emptied %s is still there" % (moved, s_display)
+        remove_if_empty(s_parent_fd, s_name, s_fd)
+
+        # 7. The user attaches through the group; the service runs the wallet now.
+        progress.state = "%s; %s is not in %s and the service is not enabled" % (moved, pw.pw_name, net.attach_group)
+        host.add_to_group(pw.pw_name, net.attach_group)
+        progress.state = "%s; enable the service once the cause is fixed" % moved
+        step(host, "enable", "--now", net.daemon + ".service", state=None)
+
+    # 8. What root and the user do next.
+    print("%s's wallet is in %s now, run by %s.service as %s." % (pw.pw_name, t_display, net.daemon, net.account))
+    print("The original datadir is kept in %s (root only); remove it once the service wallet is verified."
+          % stash_display)
+    print("%s must log out and back in for membership of %s to take effect." % (pw.pw_name, net.attach_group))
+    return 0
+
+
+def restore_conf(stash_path, parent_fd, parent_display, prefix, s_fd, pw, host):
+    """Copy the user's own gridcoinresearch.conf back from the stash enable recorded, a root-only
+    directory next to the datadir. Returns whether there was one to restore."""
+    name = os.path.basename(stash_path)
+    if parent_fd is None or os.path.dirname(stash_path) != parent_display or not name.startswith(prefix):
+        raise UserError("the recorded stash %s is not where enable puts it" % shown(stash_path))
+    stash_fd = open_dir(name, dir_fd=parent_fd, uids=(os.geteuid(),), display=stash_path)
+    try:
+        if os.fstat(stash_fd).st_mode & 0o077:
+            raise UserError("%s is not root-only" % stash_path)
+        if CONF_NAME not in list_dir(stash_fd):
+            return False
+        data = read_owned_file(stash_fd, CONF_NAME, (pw.pw_uid,), os.path.join(stash_path, CONF_NAME))
+    finally:
+        os.close(stash_fd)
+    write_file_as(s_fd, CONF_NAME, data, pw, host)
+    return True
+
+
+def cmd_disable(args, net, host, paths):
+    return report_state(lambda progress: disable(args, net, host, paths, progress))
+
+
+def disable(args, net, host, paths, progress):
+    pw = validate_user(args.user, host, paths)
+    refuse_own_login(host, pw)
+    acct = service_account(net, host, paths)
+    patterns = load_refused_patterns(net.refused_keys)
+    with contextlib.ExitStack() as stack:
+        def keep(fd):
+            stack.callback(os.close, fd)
+            return fd
+
+        # Only the user enable moved in takes the wallet out.
+        state_fd = keep(open_tool_state(paths))
+        record = read_owner_record(state_fd, paths, args.network)
+        record_display = owner_record_path(paths, args.network)
+        if record is None:
+            d_display = os.path.join(pw.pw_dir, DATADIR_NAME)
+            stash_glob = os.path.join(d_display, "testnet") if net.testnet else d_display
+            t_display = service_dir_display(paths, net)
+            raise UserError("%s is missing, so no %s wallet is recorded as moved into the service; refusing. If an "
+                            "enable was cut short, %s may hold a copy and the user's source may be in a stash, "
+                            "%s%s<time>: move that stash's entries back into %s, remove the stash, empty %s (find "
+                            "%s -mindepth 1 -delete), then rerun enable. Otherwise there is nothing to disable"
+                            % (record_display, args.network, t_display, stash_glob, STASH_INFIX, stash_glob,
+                               t_display, t_display))
+        if record["uid"] != pw.pw_uid or record["user"] != pw.pw_name:
+            raise UserError("%s records the wallet in the service as %s's (uid %d), not %s's; refusing"
+                            % (record_display, shown(record["user"]), record["uid"], pw.pw_name))
+        refuse_system_unit_datadir(paths, net, "disable")
+
+        # The user's side must be free: a datadir made meanwhile, by a plain GUI say, may hold
+        # coins of its own. The mainnet datadir may hold testnet's.
+        home_fd = keep(open_home(pw))
+        d_display = os.path.join(pw.pw_dir, DATADIR_NAME)
+        s_display = os.path.join(d_display, "testnet") if net.testnet else d_display
+        try:
+            d_fd = keep(open_dir(DATADIR_NAME, dir_fd=home_fd, uids=(pw.pw_uid,), display=d_display))
+        except FileNotFoundError:
+            d_fd = None
+        names = list_dir(d_fd) if d_fd is not None else []
+        if net.testnet and "testnet" in names:
+            raise UserError("%s exists; move it aside first, then rerun" % s_display)
+        if not net.testnet and any(not is_testnet_entry(n) and n != CONF_NAME for n in names):
+            raise UserError("%s exists and holds more than testnet's datadir and the conf; move it aside first, "
+                            "then rerun" % d_display)
+        # A mainnet conf left beside testnet's datadir by enable is the user's own and stays.
+        conf_kept = not net.testnet and CONF_NAME in names
+        try:
+            t_fd, t_display = open_service_dir(paths, net, acct, create=False)
+        except FileNotFoundError:
+            raise UserError("there is no service datadir at %s" % service_dir_display(paths, net)) from None
+        keep(t_fd)
+        refuse_other_network_core(host, args.network, pw.pw_name)
+
+        end_user_processes(host, pw, args.terminate_sessions)
+        system_units = core_units(net, None)
+        progress.state = "nothing was copied"
+        step(host, "disable", "--now", *system_units, state=None)
+        stopped = "%s; nothing was copied" % are_disabled(system_units)
+        progress.state = stopped
+        lock_fd = take_lock(t_fd, t_display, acct.pw_uid)
+        if lock_fd is not None:
+            keep(lock_fd)
+        if d_fd is not None:
+            refuse_changed_listing(d_fd, set(names), d_display)
+
+        # The quarantine comes first, and the directories made for the user go again if anything
+        # up to the copy fails, so a rerun finds the user's side as it was.
+        q_fd, q_display = open_quarantine(state_fd, paths, pw.pw_name, args.network, host)
+        keep(q_fd)
+        made = []
+        try:
+            if d_fd is None:
+                d_fd = keep(create_dir(DATADIR_NAME, home_fd, d_display, owner=pw))
+                made.append((home_fd, DATADIR_NAME))
+            if net.testnet:
+                s_fd = keep(create_dir("testnet", d_fd, s_display, owner=pw))
+                made.append((d_fd, "testnet"))
+            else:
+                s_fd = d_fd
+            testnet_entries = set() if net.testnet else {"testnet"}
+            found, backups = quarantine_files(t_fd, t_display, acct.pw_uid, q_fd, testnet_entries)
+            settings_text, lines = sanitize_quarantined(found, patterns, q_fd, t_display)
+            # Until copy_tree returns, an interrupt can leave the writer's files behind.
+            progress.state = ("%s may hold part or all of this copy: remove what this run put there (the entries %s "
+                              "also holds) before rerunning; %s still holds the wallet, and %s"
+                              % (s_display, t_display, t_display, are_disabled(system_units)))
+            copy_tree(t_fd, s_fd, net.account, pw.pw_name, SKIP_TOP | QUARANTINE_TOP | testnet_entries, host,
+                      t_display)
+        except DirtyCopyError:
+            progress.state = ("%s still holds part of this copy: remove the entries named above before rerunning; "
+                              "%s still holds the wallet, and %s"
+                              % (s_display, t_display, are_disabled(system_units)))
+            raise
+        except BaseException as e:
+            for parent_fd, name in reversed(made):
+                try:
+                    os.rmdir(name, dir_fd=parent_fd)
+                except OSError:
+                    pass
+            if isinstance(e, (UserError, StepError, TreeError, CopyError, OSError)):
+                # A failure the writer cleaned up after: nothing was copied. An interrupt, or
+                # anything unforeseen, keeps the cautious state.
+                progress.state = stopped
+            raise
+        copied = ("the wallet is copied to %s, %s still holds it, and %s.service stays disabled"
+                  % (s_display, t_display, net.daemon))
+        progress.state = "%s; the settings were not written" % copied
+        if settings_text is not None:
+            write_file_as(s_fd, SETTINGS_NAME, settings_text.encode("utf8"), pw, host)
+        progress.state = copied
+        report_quarantine(found, backups, q_display, lines)
+
+        # The user's own conf comes back from the stash enable recorded; a failure here leaves
+        # the wallet where it now is and says so.
+        if net.testnet:
+            stash_parent_fd, prefix = d_fd, "testnet" + STASH_INFIX
+        else:
+            stash_parent_fd, prefix = home_fd, DATADIR_NAME + STASH_INFIX
+        stash_display = record["stash"]
+        if conf_kept:
+            restored = False
+            print("Kept the %s already in %s, which testnet reads too; the stash's copy was not restored."
+                  % (CONF_NAME, d_display))
+        else:
+            try:
+                restored = restore_conf(stash_display, stash_parent_fd, os.path.dirname(s_display), prefix, s_fd,
+                                        pw, host)
+            except (UserError, TreeError, CopyError, OSError) as e:
+                print("warning: %s was not restored: %s" % (CONF_NAME, e))
+                restored = False
+
+        # Empty the service datadir as its own account.
+        progress.state = "%s; empty %s as %s before enabling again" % (copied, t_display, net.account)
+        run_as(host, acct, lambda: empty_dir(t_fd, testnet_entries), (t_fd,))
+        moved = "the wallet is in %s and %s is empty" % (s_display, t_display)
+        progress.state = ("%s; %s is still in %s (gpasswd -d %s %s), and %s is still there: remove it by hand"
+                          % (moved, pw.pw_name, net.attach_group, pw.pw_name, net.attach_group, record_display))
+        host.remove_from_group(pw.pw_name, net.attach_group)
+        progress.state = "%s; remove %s by hand" % (moved, record_display)
+        os.unlink(args.network + ".owner", dir_fd=state_fd)
+
+    print("%s's wallet is back in %s; %s.service is disabled." % (pw.pw_name, s_display, net.daemon))
+    if restored:
+        print("%s's own %s was restored from %s." % (pw.pw_name, CONF_NAME, stash_display))
+    print("%s can be removed once the wallet is verified." % shown(stash_display))
+    print("For a core under %s's own account: %s enable-user %s" % (pw.pw_name, net.tool_name, pw.pw_name))
+    return 0
+
+
+def old_autounlock(net):
+    """The RPC autounlock units this release replaces: <daemon>-autounlock@<user>.service, and the
+    system service's <daemon>-autounlock.service."""
+    return net.daemon + "-autounlock"
+
+
+def unit_instance(name, prefix):
+    """The instance of <prefix>@<instance>.service in the unit name, or None."""
+    if name.startswith(prefix + "@") and name.endswith(".service"):
+        return name[len(prefix) + 1:-len(".service")] or None
+    return None
+
+
+def read_switchover_state(path):
+    """The entries of the state file the package's preinst wrote, [(kind, user or None)] in file
+    order; None when there is no such file. The file must be root's own regular file, writable by
+    nobody else, as the entries decide what the switch-over changes."""
+    try:
+        fd = os.open(path, FILE_FLAGS)
+    except FileNotFoundError:
+        return None
+    except OSError as e:
+        raise UserError("%s: %s (a symlink is not followed); refusing" % (path, e.strerror)) from None
+    try:
+        st = os.fstat(fd)
+        if not stat.S_ISREG(st.st_mode) or st.st_uid != os.geteuid() or st.st_mode & 0o022:
+            raise UserError("%s is not root's own regular file, writable only by root; refusing" % path)
+        with os.fdopen(fd, "rb", closefd=False) as f:
+            data = f.read(MAX_CONFIG_BYTES + 1)
+    finally:
+        os.close(fd)
+    try:
+        text = data.decode("utf8")
+    except UnicodeDecodeError:
+        raise UserError("%s is not UTF-8; refusing" % path) from None
+    entries = []
+    for number, line in enumerate(text.split("\n"), start=1):
+        fields = line.split(" ")
+        if line == "":
+            continue
+        if len(fields) == 1 and fields[0] in STATE_SYSTEM_KINDS:
+            entries.append((fields[0], None))
+        elif len(fields) == 2 and fields[0] in STATE_USER_KINDS and fields[1]:
+            entries.append((fields[0], fields[1]))
+        else:
+            raise UserError("%s:%d: not a switch-over entry; refusing" % (path, number))
+    return entries
+
+
+def write_switchover_state(path, entries):
+    """Replace the state file with the entries still to do, root's and 0600."""
+    temp = "%s.%d.tmp" % (path, os.getpid())
+    lines = "".join("%s\n" % kind if user is None else "%s %s\n" % (kind, user) for kind, user in entries)
+    with os.fdopen(os.open(temp, NEW_FILE_FLAGS, 0o600), "w", encoding="utf8") as f:
+        f.write(lines)
+        f.flush()
+        os.fsync(f.fileno())
+    os.rename(temp, path)
+    sync_directory(os.path.dirname(path))
+
+
+def scan_old_installs(net, host, paths):
+    """What --scan switches over, as the package's preinst records it: the old units enabled
+    through a link in a *.wants/ directory under /etc/systemd/system and confirmed by systemctl
+    is-enabled, and the running per-user cores; and the system service's overrides written for the
+    old unit. A user whose core has this tool's drop-in already and no old autounlock unit is done,
+    and left out."""
+    old = old_autounlock(net)
+    links = set()
+    for name in sorted(os.listdir(paths.etc_systemd)):
+        wants = os.path.join(paths.etc_systemd, name)
+        if name.endswith(".wants") and os.path.isdir(wants) and not os.path.islink(wants):
+            links.update(entry for entry in os.listdir(wants) if os.path.islink(os.path.join(wants, entry)))
+    entries = []
+    for name in sorted(links):
+        user = unit_instance(name, old)
+        if user is not None and host.is_enabled(name):
+            entries.append(("autounlock", user))
+    for name in sorted(links):
+        user = unit_instance(name, net.daemon)
+        if user is not None and host.is_enabled(name):
+            entries.append(("core", user))
+    for name in host.active_units(net.daemon + "@*.service"):
+        user = unit_instance(name, net.daemon)
+        if user is not None:
+            entries.append(("core-active", user))
+    try:
+        copy, masked, stale = system_core_overrides(net, paths)
+        # The system unit's drop-in from an earlier switch-over marks it switched: what was written
+        # since then is for the new unit, and the admin's.
+        switched = os.path.exists(os.path.join(dropin_dir(paths, net.daemon + ".service"), DROPIN_MAIN))
+        system_core = (os.path.exists(system_core_record_path(paths, net))
+                       or (not switched and ((copy is not None and not masked) or bool(stale))))
+    except UserError:
+        # The switch-over itself says why.
+        system_core = True
+    if system_core:
+        entries.insert(0, (SYSTEM_CORE, None))
+    if old + ".service" in links and host.is_enabled(old + ".service"):
+        entries.append((SYSTEM_AUTOUNLOCK, None))
+    old_users = {user for kind, user in entries if kind == "autounlock"}
+
+    def done(user):
+        unit = "%s@%s.service" % (net.daemon, user)
+        return user not in old_users and os.path.exists(os.path.join(dropin_dir(paths, unit), DROPIN_MAIN))
+
+    return [(kind, user) for kind, user in entries if user is None or not done(user)]
+
+
+def ends_in_continuation(line):
+    """Whether line ends in a backslash that is not itself escaped by one before it."""
+    escaped = False
+    for char in line:
+        escaped = not escaped if char == "\\" else False
+    return escaped
+
+
+def unit_file_settings(text, section, key):
+    """The values of key in section of a unit file text, in order, read as config_parse() in
+    systemd's src/shared/conf-parser.c reads them: a UTF-8 byte order mark before the first line
+    is skipped; lines end at \n, \r\n or \r; a line whose first non-blank character is # or ;
+    is a comment, inside a continuation too; a line continues on the next when it ends in a
+    backslash that is not escaped (trailing whitespace, or an even run of backslashes, ends it),
+    the backslash becoming a space and the next line appended as it is; the joined line is then
+    stripped."""
+    values = []
+    current = None
+    pending = None
+    if text.startswith("\ufeff"):
+        text = text[1:]
+    # read_line() ends a line at \n, \r\n or \r.
+    for raw in re.split(r"\r\n|\r|\n", text):
+        if raw.lstrip(" \t").startswith(("#", ";")):
+            continue
+        if pending is not None:
+            raw = pending + raw
+            pending = None
+        if ends_in_continuation(raw):
+            pending = raw[:-1] + " "
+            continue
+        line = raw.strip()
+        if line.startswith("[") and line.endswith("]"):
+            current = line[1:-1]
+        elif current == section and "=" in line:
+            name, value = line.split("=", 1)
+            if name.strip() == key:
+                values.append(value.strip())
+    return values
+
+
+def expand_specifiers(text, pw, display):
+    """Resolve the systemd specifiers a per-user unit's -datadir can use: %i (the instance, the
+    user's name) and %%. In a unit of the system manager %h and %u are root's home and name, so a
+    -datadir with them never named the user's datadir, and is refused."""
+    values = {"i": pw.pw_name, "%": "%"}
+    out = []
+    i = 0
+    while i < len(text):
+        if text[i] != "%":
+            out.append(text[i])
+            i += 1
+            continue
+        letter = text[i + 1:i + 2]
+        if letter in ("h", "u"):
+            raise UserError("the -datadir in %s uses %%%s, which is root's home or name in a system unit, not "
+                            "%s's; write the path out" % (display, letter, pw.pw_name))
+        if letter not in values:
+            raise UserError("the -datadir in %s uses the specifier %%%s, which the switch-over does not resolve; "
+                            "write the path out" % (display, letter))
+        out.append(values[letter])
+        i += 2
+    return "".join(out)
+
+
+def command_words(command, display):
+    """The words of an ExecStart= command line. systemd and shlex read a backslash differently, so a
+    line with one is refused rather than misread; quotes they read alike."""
+    if "\\" in command:
+        raise UserError("the ExecStart= in %s has a backslash, which the switch-over does not read; write the "
+                        "command line without one" % display)
+    try:
+        return shlex.split(command)
+    except ValueError as e:
+        raise UserError("cannot read the ExecStart= in %s: %s" % (display, e)) from None
+
+
+def core_option(word):
+    """A core option word as the core reads it: a leading "--" is the same as "-"."""
+    return word[1:] if word.startswith("--") else word
+
+
+def datadir_from_command(words, pw, display):
+    """The last -datadir= (or --datadir=) value of an ExecStart= command line's words, as the core
+    reads its arguments, or None when it has none."""
+    found = None
+    for word in words[1:]:
+        if core_option(word).startswith("-datadir="):
+            found = core_option(word)[len("-datadir="):]
+    return None if found is None else expand_specifiers(found, pw, display)
+
+
+def dropped_words(net, words):
+    """The words of an old per-user command line that the new one neither carries nor replaces."""
+    carried = set(OLD_COMMAND_WORDS) | ({net.net_arg} if net.net_arg else set())
+    return [word for word in words[1:]
+            if core_option(word) not in carried and not core_option(word).startswith(OLD_COMMAND_PREFIXES)]
+
+
+def read_dropin_text(path):
+    """A drop-in's text; None when it is not a regular file (a link to /dev/null, say). The
+    directory is root's, so a link in it is followed."""
+    try:
+        fd = os.open(path, os.O_RDONLY | os.O_NONBLOCK | os.O_CLOEXEC)
+    except OSError as e:
+        raise UserError("cannot read %s: %s" % (path, e.strerror)) from None
+    try:
+        if not stat.S_ISREG(os.fstat(fd).st_mode):
+            return None
+        with os.fdopen(fd, "rb", closefd=False) as f:
+            data = f.read(MAX_CONFIG_BYTES + 1)
+    finally:
+        os.close(fd)
+    try:
+        return data.decode("utf8")
+    except UnicodeDecodeError:
+        raise UserError("%s is not UTF-8, so what it sets cannot be read; refusing" % path) from None
+
+
+def dropin_texts(directory):
+    """The *.conf drop-ins of directory in the order systemd applies them: [(path, text or None)]."""
+    if not check_dropin_dir(directory):
+        return []
+    return [(os.path.join(directory, name), read_dropin_text(os.path.join(directory, name)))
+            for name in sorted(os.listdir(directory)) if name.endswith(".conf")]
+
+
+def switched_datadir(net, pw, directory, paths):
+    """The datadir the user's core ran in under the old unit, as enable-user's --datadir: None when
+    the old command line gave no -datadir, so the core's default or a datadir= in the user's conf
+    applied, as it does on the new one. It is the last -datadir of the last ExecStart= the drop-ins
+    in directory set, this tool's own included (a rerun); without one, the old unit's
+    /home/<user>/.GridcoinResearch, which its own command line gave. An old command line with
+    options the new one would drop is refused, naming them."""
+    command = None
+    for path, text in dropin_texts(directory):
+        for value in unit_file_settings(text or "", "Service", "ExecStart"):
+            if value:
+                command = (path, value)
+    if command is None:
+        display = "the old unit"
+        datadir = os.path.join(paths.old_unit_home, pw.pw_name, DATADIR_NAME)
+    else:
+        display = command[0]
+        words = command_words(command[1], display)
+        if os.path.basename(display) != DROPIN_MAIN:
+            dropped = dropped_words(net, words)
+            if dropped:
+                raise UserError("the ExecStart= in %s has options the new unit would drop: %s; move them to the "
+                                "configuration file, or remove them, then rerun"
+                                % (display, " ".join(shown(word) for word in dropped)))
+        datadir = datadir_from_command(words, pw, display)
+    if datadir is None:
+        return None
+    # A -datadir the old command line gave goes on the new one too: without it a datadir= line in the
+    # user's conf would apply, which that -datadir overrode. The core's default spelled out is kept
+    # as written, as the old command line had it; any other path is checked as --datadir is.
+    if datadir == os.path.join(pw.pw_dir, DATADIR_NAME):
+        if UNSAFE_PATH_RE.search(datadir):
+            raise UserError("the datadir %s from %s may not contain whitespace, quotes, backslash, $, %% or ;"
+                            % (shown(datadir), display))
+        return datadir
+    return resolve_datadir(pw, datadir, "the datadir %s from %s" % (shown(datadir), display))
+
+
+def refuse_unit_replacements(net, user, paths):
+    """Refuse what would keep the new per-user unit from running as written: a unit file in
+    /etc/systemd/system that takes the packaged unit's place (a copy from systemctl edit --full, or
+    a mask), or a drop-in for every instance that sets its own command line."""
+    for name in ("%s@%s.service" % (net.daemon, user), "%s@.service" % net.daemon):
+        path = os.path.join(paths.etc_systemd, name)
+        if os.path.lexists(path):
+            raise UserError("%s takes the place of the packaged unit (a copy made with systemctl edit --full, or a "
+                            "mask); move it aside, then rerun" % path)
+    for path, text in dropin_texts(dropin_dir(paths, "%s@.service" % net.daemon)):
+        # Even an empty ExecStart= would undo this tool's command line when it comes later.
+        keys = set_keys(text, TEMPLATE_REFUSED_KEYS)
+        if keys:
+            raise UserError("%s sets %s for every %s@ instance; move it aside, then rerun"
+                            % (path, ", ".join(keys), net.daemon))
+
+
+def set_keys(text, keys):
+    """Which of keys the [Service] section of a unit file text sets, an empty value included."""
+    return [key for key in keys if unit_file_settings(text or "", "Service", key)]
+
+
+def is_mask(path):
+    """Whether systemd takes the unit file at path for a mask: through any chain of links, relative or
+    not, it is an empty regular file or a character device. That is systemd's null_or_empty()
+    (src/basic/stat-util.c), which does not check for /dev/null's numbers, so /dev/zero counts too."""
+    try:
+        st = os.stat(path)
+    except OSError:
+        return False
+    if stat.S_ISREG(st.st_mode):
+        return st.st_size == 0
+    return stat.S_ISCHR(st.st_mode)
+
+
+def system_core_overrides(net, paths):
+    """What /etc/systemd/system holds for the system service that was written for the old forking
+    unit: (a unit file there that takes the packaged unit's place, or None; whether that is a mask;
+    [(drop-in path, the old-unit keys it sets)])."""
+    unit = net.daemon + ".service"
+    copy = os.path.join(paths.etc_systemd, unit)
+    stale = []
+    for path, text in dropin_texts(dropin_dir(paths, unit)):
+        keys = set_keys(text, OLD_UNIT_KEYS)
+        if keys and os.path.basename(path) not in (DROPIN_MAIN, DROPIN_AUTOUNLOCK):
+            stale.append((path, keys))
+    return (copy if os.path.lexists(copy) else None), is_mask(copy), stale
+
+
+def system_defaults(net):
+    """The system unit's own -conf and -datadir: its configuration file, and its StateDirectory."""
+    return os.path.join(net.conf_dir, "gridcoin.conf"), "/var/lib/" + net.state
+
+
+def system_exec_start(net, conf, datadir):
+    """The system unit's command line (contrib/init/gridcoinresearchd.service.in) with conf and
+    datadir."""
+    return " ".join([os.path.join(CONFIG["bindir"], net.daemon), net.net_arg, "-nodaemon", "-nodaemonwait",
+                     "-multiprocess", "-conf=" + conf, "-datadir=" + datadir, "-ipcdir=/run/" + net.state,
+                     "-ipcattachgroup=" + net.attach_group, "$GRIDCOIN_AUTOUNLOCK_ARGS"])
+
+
+def render_system_dropin(net, conf, datadir):
+    """The system unit's drop-in from the switch-over. It marks the unit switched, and carries the
+    configuration file and datadir (None: the unit's own) the service ran with; a datadir outside
+    the StateDirectory needs ReadWritePaths= under ProtectSystem=strict."""
+    text = header(net) + "# The switch-over moved this unit's overrides for the old forking daemon aside.\n"
+    if conf is None and datadir is None:
+        return text
+    default_conf, default_datadir = system_defaults(net)
+    text += "# It carries the configuration file and datadir the service ran with.\n"
+    if datadir is not None:
+        # systemd.exec(5), Implicit Dependencies: StateDirectory= and the like require the mounts
+        # their paths need, ReadWritePaths= does not, so a datadir on another mount asks for its own.
+        text += "[Unit]\nRequiresMountsFor=" + datadir + "\n"
+    text += ("[Service]\n"
+             "ExecStart=\n"
+             "ExecStart=" + system_exec_start(net, conf or default_conf, datadir or default_datadir) + "\n")
+    if datadir is not None:
+        text += "ReadWritePaths=" + datadir + "\n"
+    return text
+
+
+def system_core_record_path(paths, net):
+    """Where a switch of the system unit in progress is recorded, for a rerun to finish."""
+    return os.path.join(paths.tool_state, "switchover-%s.system-core" % ("test" if net.testnet else "main"))
+
+
+def read_system_core_record(path):
+    """The record of a switch of the system unit in progress: {"reenable": bool}, or None."""
+    try:
+        fd = os.open(path, FILE_FLAGS)
+    except FileNotFoundError:
+        return None
+    except OSError as e:
+        raise UserError("%s: %s (a symlink is not followed); refusing" % (path, e.strerror)) from None
+    try:
+        st = os.fstat(fd)
+        if not stat.S_ISREG(st.st_mode) or st.st_uid != os.geteuid() or st.st_mode & 0o022:
+            raise UserError("%s is not root's own regular file, writable only by root; refusing" % path)
+        with os.fdopen(fd, "rb", closefd=False) as f:
+            data = f.read(MAX_CONFIG_BYTES + 1)
+    finally:
+        os.close(fd)
+    try:
+        record = json.loads(data.decode("utf8"))
+    except ValueError:
+        record = None
+    if not isinstance(record, dict) or not isinstance(record.get("reenable"), bool):
+        raise UserError("%s is not a record this tool wrote; refusing" % path)
+    return record
+
+
+def write_system_core_record(path, reenable):
+    temp = "%s.%d.tmp" % (path, os.getpid())
+    with os.fdopen(os.open(temp, NEW_FILE_FLAGS, 0o600), "w", encoding="utf8") as f:
+        f.write(json.dumps({"reenable": reenable}) + "\n")
+        f.flush()
+        os.fsync(f.fileno())
+    os.rename(temp, path)
+    sync_directory(os.path.dirname(path))
+
+
+# The account the earlier system units ran as.
+OLD_SYSTEM_ACCOUNT = "gridcoin"
+
+
+def system_sources(net, paths, copy, masked):
+    """What sets the system service up besides the packaged unit: a copy of the unit in
+    /etc/systemd/system, then its drop-ins in systemd's order. [(path, text or None)]."""
+    sources = []
+    if copy is not None and not masked:
+        # A link whose target is gone sets nothing.
+        sources.append((copy, read_dropin_text(copy) if os.path.exists(copy) else None))
+    return sources + dropin_texts(dropin_dir(paths, net.daemon + ".service"))
+
+
+def last_setting(sources, key):
+    """The last non-empty value of key in [Service] across sources: (path, value), or None."""
+    found = None
+    for path, text in sources:
+        for value in unit_file_settings(text or "", "Service", key):
+            if value:
+                found = (path, value)
+    return found
+
+
+def system_command(net, paths, copy, masked):
+    """The command line the system service ran: the last ExecStart= of system_sources. (path,
+    value), or None for the packaged unit's own."""
+    return last_setting(system_sources(net, paths, copy, masked), "ExecStart")
+
+
+def default_datadir_hint(sources, copied, host):
+    """The core's default datadir for the unit's user and HOME, for a message only. The user is the
+    last User= the sources set, root when that is empty; without one it is the account the released
+    unit ran as, but root for a full copy of the unit (copied). systemd sets HOME only for a User=,
+    to that user's home, and a HOME= in Environment= (whose empty assignment resets it) takes its
+    place. The core's GetDefaultDataDir() is $HOME/.GridcoinResearch, or /.GridcoinResearch when
+    HOME is unset or empty."""
+    users = [value for _, text in sources for value in unit_file_settings(text or "", "Service", "User")]
+    user = (users[-1] or None) if users else (None if copied else OLD_SYSTEM_ACCOUNT)
+    home = None
+    if user is not None:
+        try:
+            home = host.getpwnam(user).pw_dir
+        except KeyError:
+            return "the core's default for %s, a user this host does not know" % shown(user)
+    environment_home = None
+    for _, text in sources:
+        for value in unit_file_settings(text or "", "Service", "Environment"):
+            if not value:
+                environment_home = None
+                continue
+            try:
+                words = shlex.split(value)
+            except ValueError:
+                continue
+            for word in words:
+                if word.startswith("HOME="):
+                    environment_home = word[len("HOME="):]
+    if environment_home is not None:
+        home = environment_home
+    who = "root" if user is None else shown(user)
+    if not home:
+        return "/%s (the core's default for %s, whose HOME is not set)" % (DATADIR_NAME, who)
+    return "%s (the core's default for %s)" % (os.path.join(home, DATADIR_NAME), who)
+
+
+def service_account_uid(net, host):
+    try:
+        return host.getpwnam(net.account).pw_uid
+    except KeyError:
+        raise UserError("the service account %s does not exist; is the package installed?" % net.account) from None
+
+
+def system_dropped_words(net, words):
+    """The words of an old system command line that the new one neither carries nor replaces: the
+    per-user list, -conf=, and the new unit's own words."""
+    own = {"-ipcdir=/run/" + net.state, "-ipcattachgroup=" + net.attach_group, "$GRIDCOIN_AUTOUNLOCK_ARGS"}
+    return [word for word in dropped_words(net, words) if core_option(word) not in own
+            and not core_option(word).startswith("-conf=")]
+
+
+def refuse_other_network_lines(fd, path, testnet=False):
+    """Refuse the conf open at fd when it includes other files, and for the mainnet unit also when
+    a line may have made the core another network's node (the testnet unit runs with -testnet,
+    whatever the file says). testnet= at the top level, the first value
+    winning, would have made the core a testnet node, and rather than read it as the core does, any
+    testnet= line refuses, in a section, with a network prefix, a leading dash or negated
+    (notestnet=) too; so does any chain= line that names another network than main. A regtest= or
+    signet= line, which the core reads for its network as well, refuses for either unit: with it the
+    core is a regtest node, or does not start beside -testnet. An
+    includeconf= line refuses too: the files it names are neither read for those lines nor checked
+    for who can write them (check_conf_writers). Comments are no setting."""
+    with os.fdopen(fd, "rb", closefd=False) as f:
+        data = f.read(MAX_CONFIG_BYTES + 1)
+    if len(data) > MAX_CONFIG_BYTES:
+        raise UserError("%s is larger than %d bytes; refusing" % (path, MAX_CONFIG_BYTES))
+    for line in data.decode("utf8", errors="replace").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        name = line.split("=", 1)[0].strip().rsplit(".", 1)[-1].lstrip("-")
+        value = line.split("=", 1)[1].split("#", 1)[0].strip() if "=" in line else ""
+        if not testnet and name in ("testnet", "notestnet"):
+            raise UserError("%s has a testnet= line, so the core that read it may not have been a mainnet node; "
+                            "if it is a mainnet node, remove that line, and if it is a testnet node, run it from "
+                            "the testnet package's unit, then rerun the switch-over" % path)
+        if not testnet and name == "chain" and value != "main":
+            raise UserError("%s has a chain= line for another network than main, so the core that read it may not "
+                            "have been a mainnet node; if it is a mainnet node, remove that line, and if it is a "
+                            "testnet node, run it from the testnet package's unit, then rerun the switch-over" % path)
+        if name in ("regtest", "noregtest", "signet", "nosignet"):
+            raise UserError("%s has a %s= line, which the core reads for the network it runs on; remove that "
+                            "line, then rerun the switch-over" % (path, name))
+        if name == "includeconf":
+            raise UserError("%s includes other files (includeconf=), which the switch-over neither reads nor checks "
+                            "for who can write them; move their settings into it, then rerun the switch-over" % path)
+
+
+def check_conf_writers(net, path, name, datadir, host):
+    """Refuse a configuration file the service is to read, or a directory above it up to /, that
+    anyone but root and the service account can write: that account could add options such as
+    blocknotify= to the service. Each directory is opened from the one above it without following
+    a symlink, and each, and then the file, is checked with fstat on its own descriptor, so what is
+    checked is what the core will read. A path in the service's datadir belongs to the account, any
+    other to root, and the advice says so."""
+    acct_uid = service_account_uid(net, host)
+    parts = path.split("/")[1:]
+    real_datadir = os.path.realpath(datadir)
+
+    def check(st, target, what):
+        # A path test on the paths as they resolve, so that a datadir reached through a link holds
+        # what is under the directory it leads to.
+        in_datadir = os.path.commonpath([os.path.realpath(target), real_datadir]) == real_datadir
+        if st.st_uid not in (0, acct_uid):
+            raise UserError("%s: %s is owned by uid %d, not root or %s, so that account could change the service's "
+                            "options; chown %s: %s" % (name, what, st.st_uid, net.account,
+                                                       net.account if in_datadir else "root", target))
+        # A sticky directory is no exception: one that others can write (/dev/shm, /run/lock) lets
+        # any local user make an entry there that is missing, after a reboot say.
+        if st.st_mode & 0o022:
+            raise UserError("%s: %s can be written by group or others (mode %04o), who could change the service's "
+                            "options; chmod go-w %s" % (name, what, stat.S_IMODE(st.st_mode), target))
+
+    fd = open_dir("/")
+    try:
+        target = ""
+        for part in parts[:-1]:
+            check(os.fstat(fd), target or "/", "the directory %s above it" % (target or "/"))
+            target += "/" + part
+            try:
+                child = open_dir(part, dir_fd=fd, display=target)
+            except FileNotFoundError:
+                raise UserError("%s: %s does not exist" % (name, target)) from None
+            except UserError as e:
+                raise UserError("%s: %s; name the path without links" % (name, e)) from None
+            os.close(fd)
+            fd = child
+        check(os.fstat(fd), target or "/", "its directory")
+        # Looked at before it is opened, as open_entry does: nothing but a regular file is opened
+        # (a FIFO would wait for a writer, a device could act), and what is opened must be it.
+        try:
+            lst = os.stat(parts[-1], dir_fd=fd, follow_symlinks=False)
+        except OSError as e:
+            raise UserError("%s: %s" % (name, e.strerror)) from None
+        if stat.S_ISLNK(lst.st_mode):
+            raise UserError("%s is a symlink; name the file itself" % name)
+        if not stat.S_ISREG(lst.st_mode):
+            raise UserError("%s is not a regular file" % name)
+        try:
+            file_fd = os.open(parts[-1], FILE_FLAGS, dir_fd=fd)
+        except OSError as e:
+            if e.errno == errno.ELOOP:
+                raise UserError("%s is a symlink; name the file itself" % name) from None
+            raise UserError("%s: %s" % (name, e.strerror)) from None
+        try:
+            st = os.fstat(file_fd)
+            if not stat.S_ISREG(st.st_mode) or (st.st_dev, st.st_ino) != (lst.st_dev, lst.st_ino):
+                raise UserError("%s changed while it was checked; rerun the switch-over" % name)
+            check(st, path, "it")
+            refuse_other_network_lines(file_fd, path, net.testnet)
+        finally:
+            os.close(file_fd)
+    finally:
+        os.close(fd)
+
+
+def normalize_path(value):
+    """A path with doubled slashes collapsed and a trailing slash dropped, as the kernel reads it."""
+    value = re.sub(r"/+", "/", value)
+    return value.rstrip("/") or value
+
+
+def carried_system_path(net, value, what, display, paths, host, datadir=None, name=None):
+    """Check a -conf or -datadir value of the old system command line, for the new unit to run with
+    it, or the conf the core read in its datadir (named so by name). Returns it with doubled and
+    trailing slashes dropped."""
+    if name is None:
+        name = "the -%s %s in %s" % (what, shown(value), display)
+    if not os.path.isabs(value):
+        raise UserError("%s is not an absolute path" % name)
+    if UNSAFE_PATH_RE.search(value) or any(part in (".", "..") for part in value.split("/")):
+        raise UserError("%s may not contain whitespace, quotes, backslash, $, %%, ;, '.' or '..'" % name)
+    value = normalize_path(value)
+    # The path as written and as it resolves through links: either under a hidden directory, as
+    # written or as it resolves (systemd resolves the paths it hides, so a /home linked to
+    # /data1/home hides /data1/home), is hidden from the core.
+    hidden_dirs = [(hidden, hidden) for hidden in paths.unit_hidden]
+    hidden_dirs += [(os.path.realpath(hidden), hidden) for hidden in paths.unit_hidden
+                    if os.path.realpath(hidden) != hidden]
+    for candidate in (value, os.path.realpath(value)):
+        for hidden, written in hidden_dirs:
+            if candidate == hidden or candidate.startswith(hidden.rstrip("/") + "/"):
+                where = written if hidden == written else "%s, where %s leads" % (hidden, written)
+                raise UserError("%s is under %s, which the unit's sandbox hides (ProtectHome=, PrivateTmp=)"
+                                % (name, where))
+    if not (os.path.isdir(value) if what == "datadir" else os.path.isfile(value)):
+        raise UserError("%s does not exist" % name)
+    if what == "conf":
+        check_conf_writers(net, value, name, datadir, host)
+    if what == "datadir":
+        try:
+            acct = host.getpwnam(net.account)
+        except KeyError:
+            acct = None
+        if acct is not None and os.stat(value).st_uid != acct.pw_uid:
+            print("warning: %s is not owned by %s, which the service runs as; it may not start until you chown it "
+                  "(chown -R %s: %s)" % (value, net.account, net.account, value))
+    return value
+
+
+def carried_system_paths(net, display, value, own, sources, copied, paths, host):
+    """The -conf and -datadir of the old system command line value (in display) that the new unit
+    must run with, each None when it is the unit's own. A command line from an override or a copy
+    (not own) with any option the new one would drop is refused.
+
+    Such a command line without -datadir is refused: which datadir the core ended up on cannot be
+    told from outside it (its default for the unit's user is named as a hint, which copied, whether
+    a full copy of the unit is in effect, feeds), and the new unit must never start on a new one.
+    Without -conf the core read the configuration file in its datadir, which is carried when it is
+    there."""
+    words = command_words(value, display)
+    if not own:
+        dropped = system_dropped_words(net, words)
+        if dropped:
+            raise UserError("the ExecStart= in %s has options the new unit would drop: %s"
+                            % (display, " ".join(shown(word) for word in dropped)))
+    conf = datadir = conf_name = start_datadir = None
+    for word in words[1:]:
+        option = core_option(word)
+        if option.startswith("-conf="):
+            conf = option[len("-conf="):]
+        elif option.startswith("-datadir="):
+            datadir = option[len("-datadir="):]
+    if not own:
+        # The testnet unit's command line without -testnet ran a mainnet node.
+        if net.testnet and not any(core_option(word) == net.net_arg for word in words[1:]):
+            raise UserError("the ExecStart= in %s has no %s, so the core it ran was probably a mainnet node (a "
+                            "testnet= line in its conf would have made it a testnet one), not this network's; if it "
+                            "is a testnet node, add %s to ExecStart= in %s, then rerun the switch-over"
+                            % (display, net.net_arg, net.net_arg, display))
+        if datadir is None:
+            raise UserError("the ExecStart= in %s has no -datadir; add -datadir=<the directory this node actually "
+                            "uses> to ExecStart= in %s, then rerun the switch-over. It is probably %s"
+                            % (display, display, default_datadir_hint(sources, copied, host)))
+        # Without -conf the core read the conf in its datadir, its testnet/ one on testnet
+        # (GetConfigFile in src/util/system.cpp is net-specific).
+        start_conf = (os.path.join(datadir, *(["testnet"] if net.testnet else []), CONF_NAME)
+                      if os.path.isabs(datadir) else None)
+        if conf is None and start_conf is not None:
+            conf = start_conf
+            conf_name = "the configuration file %s in the -datadir of %s" % (shown(conf), display)
+            start_datadir = datadir
+    default_conf, default_datadir = system_defaults(net)
+    # The datadir first, so that its ownership warning comes before anything said of the conf.
+    if datadir is not None and normalize_path(datadir) != default_datadir:
+        datadir = carried_system_path(net, datadir, "datadir", display, paths, host)
+    else:
+        datadir = None
+    # The old core would have made that conf on its next start (CreateNewConfigFile in
+    # src/init.cpp) and read it; the new unit would read its own instead.
+    if conf_name is not None and not os.path.lexists(conf):
+        raise UserError("the ExecStart= in %s has no -conf, and %s, the configuration file the core would have made "
+                        "there and read, does not exist, so the new unit would read %s instead; add -conf=<the "
+                        "file this node should read> to ExecStart= in %s, or make %s, then rerun the switch-over"
+                        % (display, shown(conf), default_conf, display, shown(conf)))
+    # The walk below refuses a conf reached through a link, so the conf in a linked datadir is
+    # named by the path the link leads to.
+    if start_datadir is not None and os.path.realpath(start_datadir) != normalize_path(start_datadir):
+        raise UserError("the -datadir %s in %s leads through a link, to %s, and %s, the configuration file the core "
+                        "read there, is checked only on a path without links; set -datadir=%s in ExecStart= in %s, "
+                        "or add -conf=<that file's path without links>, then rerun the switch-over"
+                        % (shown(start_datadir), display, os.path.realpath(start_datadir), shown(conf),
+                           os.path.realpath(start_datadir), display))
+    if conf is not None and normalize_path(conf) != default_conf:
+        conf = carried_system_path(net, conf, "conf", display, paths, host, datadir or default_datadir, conf_name)
+    else:
+        conf = None
+    return conf, datadir
+
+
+def switch_system_core(net, host, paths):
+    """Take the system service off what was written for the old forking unit, which would make the
+    notify unit fail at every start: a unit file in /etc/systemd/system in the packaged unit's
+    place, and the drop-ins that set its command line, type, pid file, notify access or account,
+    are renamed aside. A mask stays, and is reported.
+
+    The service must never start on a new datadir: a -conf or -datadir the old command line set is
+    carried into the unit's drop-in from this tool. An old command line with any other option it
+    would drop refuses the switch, and nothing is moved: the service then fails to start on the
+    right data until the admin changes that override. So does a file to be moved aside that sets
+    up the service's mounts (MOUNT_KEYS), which the carried paths depend on, and a unit systemd
+    loads from files this does not read (refuse_unseen_unit_files).
+
+    A switch in progress is recorded first, with whether the copy was enabled, so a rerun finishes
+    it. Returns whether the unit changed."""
+    unit = net.daemon + ".service"
+    record_path = system_core_record_path(paths, net)
+    record = read_system_core_record(record_path)
+    copy, masked, stale = system_core_overrides(net, paths)
+    if masked:
+        print("%s is masked (empty, or a link to /dev/null or another character device); it stays masked, so %s "
+              "does not start." % (copy, unit))
+    ours = os.path.join(dropin_dir(paths, unit), DROPIN_MAIN)
+    conf = datadir = None
+    command = system_command(net, paths, copy, masked)
+    moving = ([copy] if copy is not None and not masked else []) + [path for path, _ in stale]
+    try:
+        refuse_unloadable_unit(net, paths, copy, masked)
+    except UserError as e:
+        raise UserError("%s. It stays where it is, and %s does not load until you change it; then rerun"
+                        % (e, unit)) from None
+    try:
+        refuse_unseen_unit_files(net, host, paths, copy, masked)
+        if command is not None:
+            display, value = command
+            conf, datadir = carried_system_paths(net, display, value, display == ours,
+                                                 system_sources(net, paths, copy, masked),
+                                                 copy is not None and not masked, paths, host)
+        refuse_moving_mounts(moving)
+    except UserError as e:
+        # Nothing moves: a full copy is the unit still and runs on as it did, while drop-ins on
+        # the notify unit give it their command line, which fails when it makes the daemon fork.
+        if copy is not None and not masked:
+            outcome = "keeps running on its old command line"
+        else:
+            outcome = "will not start, or will run on its old command line,"
+        raise UserError("%s. It stays where it is, and %s %s until you change it; then rerun"
+                        % (e, unit, outcome)) from None
+    if not moving and record is None:
+        return False
+    if record is not None:
+        reenable = record["reenable"]
+    else:
+        # The enablement links name the copy; they are made again for the packaged unit.
+        reenable = copy is not None and not masked and host.is_enabled(unit)
+        os.close(open_tool_state(paths))
+        write_system_core_record(record_path, reenable)
+    write_dropin(paths, unit, DROPIN_MAIN, render_system_dropin(net, conf, datadir))
+    if conf is not None or datadir is not None:
+        print("Carried %s into %s." % (" and ".join("-%s=%s" % (what, value) for what, value in
+                                                    (("conf", conf), ("datadir", datadir)) if value), ours))
+    if copy in moving:
+        target = disable_dropin(paths.etc_systemd, unit)
+        print("Renamed %s to %s: it took the place of the packaged unit, written for the old forking daemon."
+              % (copy, target))
+    for path, keys in stale:
+        target = disable_dropin(os.path.dirname(path), os.path.basename(path))
+        print("Renamed %s to %s: it sets %s for the old forking unit." % (path, target, ", ".join(keys)))
+    step(host, "daemon-reload")
+    if reenable:
+        step(host, "reenable", unit)
+    os.unlink(record_path)
+    return True
+
+
+def refuse_unloadable_unit(net, paths, copy, masked):
+    """Refuse when systemd could not load the old system unit: a copy that is a link to nothing, or
+    a unit that its copy and drop-ins leave no ExecStart= (an empty one resets the list; without a
+    copy the list starts with the packaged unit's). Moved aside, such files would give way to the
+    packaged unit on its own datadir."""
+    unit = net.daemon + ".service"
+    if copy is None or masked:
+        commands = ["the packaged unit's"]
+    elif not os.path.exists(copy):
+        raise UserError("%s is a link to %s, which does not exist, so systemd could not load %s from it; remove the "
+                        "link or point it at a unit file, then rerun the switch-over"
+                        % (copy, os.readlink(copy), unit))
+    else:
+        commands = []
+    for _, text in system_sources(net, paths, copy, masked):
+        for value in unit_file_settings(text or "", "Service", "ExecStart"):
+            commands = commands + [value] if value else []
+    if not commands:
+        where = "%s and its drop-ins" % copy if copy is not None and not masked else "the drop-ins of %s" % unit
+        raise UserError("%s leave %s no ExecStart=, so systemd could not load it; give it one, then rerun the "
+                        "switch-over" % (where, unit))
+
+
+def refuse_unseen_unit_files(net, host, paths, copy, masked):
+    """Refuse when systemd loads the system unit other than the switch-over reads it, as systemctl
+    show reports: from a file other than the packaged unit (in /usr/lib/systemd/system or, without a
+    merged /usr, /lib/systemd/system) or its copy in /etc/systemd/system, or
+    with a drop-in from another directory (/run, /usr/local/lib, /usr/lib, a type-wide service.d)
+    that sets a key the switch-over reads or moves aside (OLD_UNIT_KEYS) or one of MOUNT_KEYS. The
+    packaged unit's own drop-ins are its own. What systemd reports is of its last daemon-reload, so
+    files changed since then are refused too."""
+    unit = net.daemon + ".service"
+    fragment, dropins, need_reload = host.unit_files(unit)
+    if need_reload:
+        raise UserError("the files of %s changed since systemd last read them; run systemctl daemon-reload, then "
+                        "rerun the switch-over" % unit)
+    packaged = packaged_unit_paths(paths, unit)
+    if not masked:
+        known = packaged + ([copy] if copy is not None else [])
+        if not fragment or os.path.realpath(fragment) not in [os.path.realpath(path) for path in known]:
+            raise UserError("systemd loads %s from %s, not from %s; remove that file or move it to %s, run systemctl "
+                            "daemon-reload, then rerun the switch-over"
+                            % (unit, fragment or "no file", " or ".join(known), os.path.join(paths.etc_systemd, unit)))
+    read_here = [os.path.realpath(dropin_dir(paths, unit))] + [os.path.realpath(path + ".d") for path in packaged]
+    for path in dropins:
+        if os.path.realpath(os.path.dirname(path)) in read_here:
+            continue
+        text = read_dropin_text(path) if os.path.exists(path) else None
+        keys = set_keys(text, OLD_UNIT_KEYS)
+        keys += [key for section, key in MOUNT_KEYS if unit_file_settings(text or "", section, key)]
+        if keys:
+            raise UserError("%s, a drop-in for %s from outside %s, sets %s, which the switch-over neither reads nor "
+                            "moves aside; move those settings to a drop-in in %s, or remove them, run systemctl "
+                            "daemon-reload, then rerun the switch-over"
+                            % (path, unit, dropin_dir(paths, unit), ", ".join(key + "=" for key in keys),
+                               dropin_dir(paths, unit)))
+
+
+def refuse_moving_mounts(moving):
+    """Refuse to move aside a file (a copy of the unit, or a drop-in) that sets any of MOUNT_KEYS,
+    an empty value included: it would take them along, and the same -datadir and -conf carried
+    into the new unit could then lead elsewhere, or to a directory not yet mounted."""
+    for path in moving:
+        text = read_dropin_text(path) if os.path.exists(path) else None
+        keys = [key for section, key in MOUNT_KEYS if unit_file_settings(text or "", section, key)]
+        if keys:
+            raise UserError("%s sets %s, which decide what the paths on the command line lead to or which mounts the "
+                            "service waits for; moved aside, it would take them along, and the same -datadir and -conf "
+                            "could lead elsewhere. Move %s to a drop-in of its own, then rerun the switch-over"
+                            % (path, ", ".join(key + "=" for key in keys), "that setting" if len(keys) == 1
+                               else "those settings"))
+
+
+def restart_system_service(net, host):
+    """Restart the system service once, without waiting, when it runs, so that it runs as switched
+    over: after a --scan run or a --state rerun by hand. A run from the package leaves it to the
+    package, which restarts the service next."""
+    unit = net.daemon + ".service"
+    if host.run_by_package():
+        print("Left the restart of %s to the package." % unit)
+        return
+    if not host.is_active(unit):
+        return
+    step(host, "try-restart", "--no-block", unit)
+    print("Restarted %s without waiting, so that it runs as switched over." % unit)
+
+
+def disable_dropin(directory, name):
+    """Rename a drop-in out of systemd's view, never over an earlier one. Returns the new name."""
+    target = name + DISABLED_SUFFIX
+    number = 1
+    while os.path.lexists(os.path.join(directory, target)):
+        number += 1
+        target = "%s.%d%s" % (name, number, DISABLED_SUFFIX)
+    os.rename(os.path.join(directory, name), os.path.join(directory, target))
+    return target
+
+
+def switch_user(net, user, kinds, host, paths):
+    """Move one user's per-user core to the new unit: everything is checked before anything
+    changes. The drop-ins of the old unit go out of systemd's view; enable-user's drop-in keeps the
+    datadir the old unit used; with autounlock, the core pulls the passphrase from the user's
+    helper socket, which loads the credential where it is. Then the core is re-enabled if it was
+    enabled, and restarted without waiting if it ran. Returns the datadir (None: the default)."""
+    pw = validate_user(user, host, paths)
+    system_unit = net.daemon + ".service"
+    for state, check in (("enabled", host.is_enabled), ("running", host.is_active)):
+        if check(system_unit):
+            raise UserError("%s is %s and conflicts with the per-user unit: starting one stops the other; stop and "
+                            "disable it first" % (system_unit, state))
+    refuse_unit_replacements(net, user, paths)
+    unit, socket_unit, _ = autounlock_target(net, user)
+    directory = dropin_dir(paths, unit)
+    datadir = switched_datadir(net, pw, directory, paths)
+    foreign = [os.path.basename(path) for path, _ in dropin_texts(directory)
+               if os.path.basename(path) not in (DROPIN_MAIN, DROPIN_AUTOUNLOCK)]
+    autounlock = "autounlock" in kinds and autounlock_units_installed()
+    if autounlock:
+        check_credential(paths, net, user)
+    elif "autounlock" in kinds:
+        print("Autounlock for %s is not carried over: %s. The core starts with the wallet locked."
+              % (user, NO_AUTOUNLOCK_UNITS))
+
+    # The old autounlock unit, where it is still on: a host set up by hand, or a rerun.
+    old = "%s@%s.service" % (old_autounlock(net), user)
+    if "autounlock" in kinds and host.is_enabled(old):
+        step(host, "disable", "--now", old)
+    write_dropin(paths, unit, DROPIN_MAIN, render_user_dropin(net, datadir))
+    if autounlock:
+        write_dropin(paths, unit, DROPIN_AUTOUNLOCK, render_autounlock_dropin(net, user))
+    for name in foreign:
+        target = disable_dropin(directory, name)
+        print("Renamed %s to %s: it was written for the old unit." % (os.path.join(directory, name), target))
+    step(host, "daemon-reload")
+    if autounlock:
+        step(host, "enable", "--now", socket_unit)
+    if "core" in kinds:
+        step(host, "reenable", unit)
+    if "core-active" in kinds:
+        try_restart(host, unit)
+    return datadir
+
+
+def secure_credential(path):
+    """Make the old credential root's own and 0600 where it is, without reading it or following a
+    symlink."""
+    try:
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC)
+    except OSError as e:
+        raise UserError("%s: %s (a symlink is not followed); refusing" % (path, e.strerror)) from None
+    try:
+        st = os.fstat(fd)
+        if not stat.S_ISREG(st.st_mode):
+            raise UserError("%s is not a regular file; refusing" % path)
+        if os.geteuid() == 0 and (st.st_uid, st.st_gid) != (0, 0):
+            os.fchown(fd, 0, 0)
+        if stat.S_IMODE(st.st_mode) != 0o600:
+            os.fchmod(fd, 0o600)
+    finally:
+        os.close(fd)
+
+
+def switch_system_autounlock(net, host, paths):
+    """Move the system service's autounlock to the new helper. A credential the old unit used stays
+    where it is, made root's own 0600, and a drop-in points the helper at it; then autounlock enable
+    --system."""
+    legacy = legacy_credential_path(net)
+    old = old_autounlock(net) + ".service"
+    old_units = [old] if host.is_enabled(old) else []
+    if not autounlock_units_installed():
+        for old in old_units:
+            step(host, "disable", "--now", old)
+        print("Autounlock for %s.service is not carried over: %s. %s stays where it is."
+              % (net.daemon, NO_AUTOUNLOCK_UNITS, legacy))
+        return False
+    keep_legacy = os.path.lexists(legacy)
+    if keep_legacy:
+        secure_credential(legacy)
+    elif not os.path.exists(credential_path(paths, net, None)):
+        raise UserError("no credential at %s, where the old autounlock unit loaded it, nor at %s"
+                        % (legacy, credential_path(paths, net, None)))
+    elif os.path.lexists(existing_credential_dropin(paths, net)):
+        # A drop-in of an earlier run points the helper at the file that is gone: say so.
+        check_credential(paths, net, None)
+    for old in old_units:
+        step(host, "disable", "--now", old)
+    if keep_legacy:
+        write_dropin(paths, net.autounlock + ".service", DROPIN_EXISTING_CREDENTIAL,
+                     render_existing_credential_dropin(net))
+    check_credential(paths, net, None)
+    enable_autounlock(net, None, host, paths, restart=False)
+    return True
+
+
+def switchover_state_path(paths, network):
+    return os.path.join(paths.tool_state, "switchover-%s.state" % network)
+
+
+def cmd_switch_over(args, net, host, paths):
+    if args.state is not None:
+        entries = read_switchover_state(args.state)
+    else:
+        entries = scan_old_installs(net, host, paths)
+    if not entries:
+        if entries is not None and args.state is not None:
+            os.unlink(args.state)
+        print("Nothing to switch over.")
+        return 0
+    users = {}
+    for kind, user in entries:
+        if user is not None:
+            users.setdefault(user, set()).add(kind)
+    # Users and the system entries apart: a user may have any valid name.
+    failed = set()
+    system_changed = False
+    if (SYSTEM_CORE, None) in entries:
+        # First, so that nothing restarts the service on its old overrides.
+        try:
+            system_changed = switch_system_core(net, host, paths)
+        except (UserError, StepError, OSError) as e:
+            print("%s: %s.service: %s" % (net.tool_name, net.daemon, e), file=sys.stderr)
+            failed.add((SYSTEM_CORE, None))
+    for user, kinds in users.items():
+        try:
+            datadir = switch_user(net, user, kinds, host, paths)
+        except (UserError, StepError, OSError) as e:
+            print("%s: %s: %s; %s's core was not restarted" % (net.tool_name, shown(user), e, shown(user)),
+                  file=sys.stderr)
+            failed.add(("user", user))
+            continue
+        print("Switched %s over to %s@%s.service (datadir %s)."
+              % (user, net.daemon, user, datadir or "the default, under the home directory"))
+    if (SYSTEM_AUTOUNLOCK, None) in entries:
+        try:
+            # Its helper serves the service's core, so it waits for the service's own switch-over.
+            if (SYSTEM_CORE, None) in failed:
+                raise UserError("not switched, as the switch-over of %s.service itself did not finish"
+                                % net.daemon)
+            system_changed = switch_system_autounlock(net, host, paths) or system_changed
+        except (UserError, StepError, OSError) as e:
+            print("%s: %s.service's autounlock: %s" % (net.tool_name, net.daemon, e), file=sys.stderr)
+            failed.add((SYSTEM_AUTOUNLOCK, None))
+        else:
+            print("Switched %s.service's autounlock over to %s.socket." % (net.daemon, net.autounlock))
+    left = [(kind, user) for kind, user in entries
+            if (("user", user) if user is not None else (kind, None)) in failed]
+    state_path = args.state
+    if state_path is None and left:
+        # What a --scan run leaves is kept where a --state rerun finds it, with what is there already.
+        os.close(open_tool_state(paths))
+        state_path = switchover_state_path(paths, args.network)
+        earlier = read_switchover_state(state_path) or []
+        left = earlier + [entry for entry in left if entry not in earlier]
+    if state_path is not None:
+        if left:
+            write_switchover_state(state_path, left)
+        elif os.path.exists(state_path):
+            os.unlink(state_path)
+    # Once, for both system entries, and not onto a system entry that failed.
+    restarted = True
+    if system_changed and not any(key[0] != "user" for key in failed):
+        try:
+            restart_system_service(net, host)
+        except StepError as e:
+            print("%s: the switch-over did not finish: %s; once the cause is fixed, run: systemctl restart %s.service"
+                  % (net.tool_name, e, net.daemon), file=sys.stderr)
+            restarted = False
+    if left:
+        names = {SYSTEM_CORE: "the system service", SYSTEM_AUTOUNLOCK: "the system service's autounlock"}
+        what = [shown(key[1]) for key in sorted(k for k in failed if k[0] == "user")]
+        what += [names[key[0]] for key in sorted(k for k in failed if k[0] != "user")]
+        print("%s: the switch-over did not finish for %s; fix the cause and rerun: %s switch-over --state=%s"
+              % (net.tool_name, ", ".join(what), net.tool_name, state_path), file=sys.stderr)
+        return 1
+    return 0 if restarted else 1
+
+
+def build_parser(default_network):
+    parser = argparse.ArgumentParser(prog=NETWORKS[default_network].tool_name)
+    sub = parser.add_subparsers(dest="command", required=True)
+
+    def add_network(p):
+        p.add_argument("--network", choices=sorted(NETWORKS), default=default_network)
+
+    p = sub.add_parser("enable-user")
+    p.add_argument("user")
+    p.add_argument("--datadir")
+    add_network(p)
+    p = sub.add_parser("disable-user")
+    p.add_argument("user")
+    add_network(p)
+    p = sub.add_parser("autounlock")
+    p.add_argument("action", choices=("enable", "disable"))
+    p.add_argument("user", nargs="?")
+    p.add_argument("--system", action="store_true")
+    add_network(p)
+    for command in ("enable", "disable"):
+        p = sub.add_parser(command)
+        p.add_argument("user")
+        p.add_argument("--terminate-sessions", action="store_true",
+                       help="end the user's sessions (loginctl terminate-user) instead of refusing")
+        add_network(p)
+    p = sub.add_parser("switch-over", help="move the services of the units this release replaces to the new units")
+    source = p.add_mutually_exclusive_group(required=True)
+    source.add_argument("--state", help="the state file the package's preinst wrote; removed once done")
+    source.add_argument("--scan", action="store_true",
+                        help="find them under /etc/systemd/system instead (after cmake --install)")
+    add_network(p)
+    return parser
+
+
+def main(argv, host=None, paths=None):
+    if any(v.startswith("@") for v in CONFIG.values()) or CONFIG["autounlock_units"] not in ("yes", "no"):
+        print("gridcoin-service: not configured (build-time values missing)", file=sys.stderr)
+        return EXIT_USAGE
+    host = host if host is not None else Host()
+    paths = paths if paths is not None else Paths()
+    pre = argparse.ArgumentParser(add_help=False)
+    pre.add_argument("--network", choices=sorted(NETWORKS), default=CONFIG["default_network"])
+    known, _ = pre.parse_known_args(argv)
+    parser = build_parser(known.network)
+    args = parser.parse_args(argv)
+    if args.command == "autounlock" and (args.system == (args.user is not None)):
+        parser.error("autounlock needs exactly one of <user> or --system")
+    if not host.is_root():
+        print("gridcoin-service: must be run as root", file=sys.stderr)
+        return 1
+    net = NETWORKS[args.network]
+    handlers = {"enable-user": cmd_enable_user, "disable-user": cmd_disable_user, "autounlock": cmd_autounlock,
+                "enable": cmd_enable, "disable": cmd_disable, "switch-over": cmd_switch_over}
+    try:
+        return handlers[args.command](args, net, host, paths)
+    except (UserError, StepError, TreeError, CopyError, OSError) as e:
+        print("%s: %s" % (net.tool_name, e), file=sys.stderr)
+        return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

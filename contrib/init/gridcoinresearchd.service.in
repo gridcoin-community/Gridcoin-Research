@@ -1,0 +1,125 @@
+# Gridcoin daemon, different-account mode: the system service.
+# Generated from contrib/init/gridcoinresearchd.service.in by CMake.
+#
+# Modes: this unit runs the core as its own account (@GRC_ACCOUNT@), apart from any
+# desktop account. A GUI attaches over the socket in /run/@GRC_STATE_NAME@ when its user
+# is in the group @GRC_ATTACH_GROUP@. For the same account as the desktop user use the
+# per-user unit @GRC_DAEMON@@.service instead.
+#
+# What it gives you: the core's files, memory and processes are out of reach of the
+# desktop accounts, and the systemd sandbox below narrows, as far as it goes, what the
+# core itself can do. Autounlock never leaves the wallet weaker than unlocking it for
+# staking yourself after each start.
+# What it concedes: attach group = node operator plus wallet viewer. A member, and
+# any program running in a member's desktop account, can stop the node (the service
+# restarts it), hold the single GUI slot, manage peers and the settings that need no
+# passphrase, see balances and history, guess passphrases online at the backoff rate,
+# and capture a passphrase the member types into the GUI. An unencrypted wallet has
+# no protection against members.
+# Autounlock keeps the stored passphrase out of the desktop accounts' reach; whoever
+# holds this machine's disk can still decrypt it unless the disk is encrypted or a
+# TPM binds the credential.
+#
+# PrivatePIDs= is ignored with a log line before systemd 257; the rest of the unit
+# applies. The full model is in doc/running-unattended.md.
+#
+# With PrivatePIDs= the core is process 1 of its own PID namespace. It reaps the
+# processes the notify options leave behind, and it installs its stop handlers
+# first thing, since a signal to process 1 with no handler is discarded. Its
+# startup check for an attached debugger cannot see a tracer outside the
+# namespace; the core is still non-dumpable, which blocks an attach by the same
+# account.
+#
+# It is not recommended to modify this file in-place, because it is overwritten by
+# package upgrades. Use "systemctl edit @GRC_DAEMON@.service" for local changes.
+
+[Unit]
+Description=Gridcoin daemon
+Documentation=https://github.com/gridcoin-community/Gridcoin-Research/blob/development/doc/running-unattended.md
+
+# https://www.freedesktop.org/wiki/Software/systemd/NetworkTarget/
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+# The core reports readiness itself (Type=notify), so there is no daemonizing and
+# no pid file. GRIDCOIN_AUTOUNLOCK_ARGS is empty until autounlock is enabled for
+# this unit by a drop-in.
+Environment=GRIDCOIN_AUTOUNLOCK_ARGS=
+ExecStart=@GRC_BINDIR@/@GRC_DAEMON@ @GRC_NET_ARG@ -nodaemon -nodaemonwait -multiprocess \
+    -conf=@GRC_CONF_DIR@/gridcoin.conf \
+    -datadir=/var/lib/@GRC_STATE_NAME@ \
+    -ipcdir=/run/@GRC_STATE_NAME@ \
+    -ipcattachgroup=@GRC_ATTACH_GROUP@ \
+    $GRIDCOIN_AUTOUNLOCK_ARGS
+
+# Process management
+####################
+Type=notify
+NotifyAccess=main
+# Start is bounded. While one long startup step runs the core extends it: a rescan
+# for as long as it advances, the block index load or a block import for at most 4
+# hours. It stops extending it as soon as a stop has been requested.
+TimeoutStartSec=30min
+TimeoutStopSec=600
+# Always restart, so a shutdown requested over IPC does not leave the node down.
+# Stop it with systemctl.
+Restart=always
+RestartSec=10
+
+# Accounts and directories
+##########################
+User=@GRC_ACCOUNT@
+Group=@GRC_ACCOUNT@
+SupplementaryGroups=@GRC_ATTACH_GROUP@
+
+# /run/@GRC_STATE_NAME@ holds the IPC socket and cookie
+RuntimeDirectory=@GRC_STATE_NAME@
+RuntimeDirectoryMode=0750
+
+# /var/lib/@GRC_STATE_NAME@ is the datadir
+StateDirectory=@GRC_STATE_NAME@
+StateDirectoryMode=0700
+
+# @GRC_CONF_DIR@ is created and owned through the tmpfiles.d entry, not by this
+# unit.
+
+# Memory and files
+##################
+LimitCORE=0
+UMask=0077
+PrivatePIDs=yes
+
+# Hardening
+###########
+# Do NOT add DynamicUser= or PrivateUsers= (a uid remap would stop the GUI opening
+# the socket and cookie) or PrivateNetwork= (it would cut the P2P and RPC network).
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=yes
+ProtectProc=invisible
+NoNewPrivileges=true
+RestrictSUIDSGID=true
+CapabilityBoundingSet=
+MemoryDenyWriteExecute=true
+RestrictRealtime=true
+LockPersonality=true
+RestrictNamespaces=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+
+# A denied syscall returns EPERM instead of raising SIGSYS.
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+SystemCallArchitectures=native
+
+# AF_NETLINK is for getaddrinfo() and interface enumeration.
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
+
+[Install]
+WantedBy=multi-user.target

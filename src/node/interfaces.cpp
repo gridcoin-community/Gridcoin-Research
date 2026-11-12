@@ -12,8 +12,12 @@
 #include "gridcoin/superblock.h"
 #include "gridcoin/upgrade.h"
 #include "init.h"
+#include "node/shutdown.h"
+#include "interfaces/connection_scope.h"
+#include "interfaces/file_transfer.h"
 #include "interfaces/gui_state.h"
 #include "interfaces/handler.h"
+#include "interfaces/notification_dispatcher.h"
 #include "interfaces/init.h"
 #include "interfaces/mrc.h"
 #include "interfaces/psgt.h"
@@ -27,18 +31,24 @@
 #include "chain.h"
 #include "net.h"
 #include "netbase.h"
+#include "node/access_policy.h"
 #include "node/gui_cache.h"
 #include "node/ui_interface.h"
 #include "rpc/client.h"
+#include "rpc/passphrase_params.h"
+#include "rpc/protocol.h"
 #include "rpc/server.h"
 #include "sync.h"
 #include "util.h"
 #include "util/strencodings.h"
 #include "validation.h"
+#include "wallet/capability.h"
 #include "wallet/diagnose.h"
+#include "wallet/wallet.h"
 
 #include <univalue.h>
 
+#include <algorithm>
 #include <memory>
 #include <optional>
 #include <utility>
@@ -92,6 +102,55 @@ std::string ArgSubstitute(std::string text, const std::vector<std::string>& args
     }
 
     return text;
+}
+
+//! Run one console command under the console's capability and format the outcome. The command
+//! throws what the RPC throws; the reply, or the formatted error, is returned as text.
+//! \p connection_closed is the console's connection check (bindConnectionScope).
+template <typename Execute>
+static RpcConsoleResult RunRpcConsole(const std::string& method, const std::function<bool()>& connection_closed,
+                                      Execute&& execute)
+{
+    RpcConsoleResult out;
+
+    // The command runs under the RpcRequest capability the console began,
+    // when it began one. It begins one only after a command was refused
+    // for the keys (wallet_unlock_needed below), to run that command again.
+    // Once this console's connection has closed it runs under none, since
+    // the slot may hold the next GUI's capability.
+    std::optional<CapabilityScope> scope;
+    if (pwalletMain) {
+        scope.emplace(*pwalletMain, pwalletMain->IpcCapability(connection_closed), CapabilityKind::RpcRequest);
+    }
+
+    try {
+        ThrowIfRefusedInWarmup(method);
+        UniValue result = execute();
+
+        if (result.isNull()) {
+            out.output.clear();
+        } else if (result.isStr()) {
+            out.output = result.get_str();
+        } else {
+            out.output = result.write(2);
+        }
+        out.ok = true;
+    } catch (UniValue& objError) {
+        try { // Nice formatting for a standard-format error
+            const int code = find_value(objError, "code").get_int();
+            const std::string message = find_value(objError, "message").get_str();
+            out.output = strprintf("%s (code %d)", message, code);
+            out.wallet_unlock_needed = (code == RPC_WALLET_UNLOCK_NEEDED);
+        } catch (const std::runtime_error&) { // missing code/message: raw JSON
+            out.output = objError.write();
+        }
+        out.ok = false;
+    } catch (const std::exception& e) {
+        out.output = std::string("Error: ") + e.what();
+        out.ok = false;
+    }
+
+    return out;
 }
 
 //! In-process Node implementation: thin wrappers over the existing globals.
@@ -160,7 +219,30 @@ public:
 
     bool isMainNet() override { return OnMainnet(); }
 
-    void startShutdown() override { StartShutdown(); }
+    CorePaths getCorePaths() override
+    {
+        CorePaths paths;
+        paths.datadir = GetDataDir().string();
+        paths.debug_log = LogInstance().m_file_path.string();
+        paths.config_file = GetConfigFile().string();
+
+        fs::path settings_path;
+        if (gArgs.GetSettingsPath(&settings_path)) paths.settings_file = settings_path.string();
+
+        // pwalletMain is read once into a local; the file name is immutable after
+        // the wallet is constructed.
+        if (CWallet* const wallet = pwalletMain) {
+            paths.wallet_file = (GetDataDir() / wallet->strWalletFile).string();
+        }
+
+        return paths;
+    }
+
+    void startShutdown() override
+    {
+        MarkStopRequested();
+        StartShutdown();
+    }
 
     LatestVersionInfo checkForLatestUpdate() override
     {
@@ -351,36 +433,79 @@ public:
     RpcConsoleResult executeRpcConsoleCommand(const std::string& method,
                                               const std::vector<std::string>& args) override
     {
-        RpcConsoleResult out;
-
-        try {
-            // Convert the positional string args in the command-dependent way,
-            // dispatch, and format the reply -- all UniValue handling stays here.
-            UniValue result = tableRPC.execute(method, RPCConvertValues(method, args));
-
-            if (result.isNull()) {
-                out.output.clear();
-            } else if (result.isStr()) {
-                out.output = result.get_str();
-            } else {
-                out.output = result.write(2);
-            }
-            out.ok = true;
-        } catch (UniValue& objError) {
-            try { // Nice formatting for a standard-format error
-                const int code = find_value(objError, "code").get_int();
-                const std::string message = find_value(objError, "message").get_str();
-                out.output = strprintf("%s (code %d)", message, code);
-            } catch (const std::runtime_error&) { // missing code/message: raw JSON
-                out.output = objError.write();
-            }
-            out.ok = false;
-        } catch (const std::exception& e) {
-            out.output = std::string("Error: ") + e.what();
-            out.ok = false;
+        // Here a passphrase would cross as a plain string. The console sends
+        // these methods with executeRpcConsoleSecretCommand.
+        if (PassphraseParamIndexes(method) != nullptr) {
+            RpcConsoleResult refused;
+            refused.output = "Error: " + method + " takes a passphrase; the console sends it separately";
+            return refused;
         }
 
-        return out;
+        // A command that takes a file path would make this process read or write a
+        // path chosen by the caller, so the console does not dispatch it here. The
+        // GUI console runs these through the file transfer instead. The refusal is
+        // for this console entry point only; RPC over HTTP is unchanged, and help
+        // for such a command is a call to "help" and so is not affected.
+        if (interfaces::FindConsoleFileCommand(method)) {
+            RpcConsoleResult refused;
+            refused.output = method + " moves a file; the GUI console runs it through the file transfer, "
+                                      "which this client does not use.";
+            return refused;
+        }
+
+        return RunRpcConsole(method, m_connection_closed, [&] {
+            // Convert the positional string args in the command-dependent way,
+            // dispatch -- all UniValue handling stays here.
+            return tableRPC.execute(method, RPCConvertValues(method, args));
+        });
+    }
+
+    RpcConsoleResult executeRpcConsoleSecretCommand(const std::string& method,
+                                                    const std::vector<SecureString>& passphrases,
+                                                    const std::vector<std::string>& args) override
+    {
+        if (PassphraseParamIndexes(method) == nullptr) {
+            RpcConsoleResult refused;
+            refused.output = "Error: " + method + " takes no passphrase";
+            return refused;
+        }
+
+        RpcConsoleResult result = RunRpcConsole(method, m_connection_closed, [&] {
+            // The passphrase positions hold placeholders; the SecureStrings carry the passphrases.
+            // The other parameters are converted at their real indexes.
+            const std::vector<int>& indexes = *PassphraseParamIndexes(method);
+            std::vector<std::string> full;
+            size_t next_arg = 0;
+            const size_t total = args.size() + indexes.size();
+
+            for (size_t i = 0; i < total; ++i) {
+                const bool secret = std::find(indexes.begin(), indexes.end(), static_cast<int>(i)) != indexes.end();
+                full.push_back(secret ? std::string() : (next_arg < args.size() ? args[next_arg++] : std::string()));
+            }
+
+            const UniValue params = RPCConvertValues(method, full);
+            const PassphraseParamsCleanser cleanser(method, params);
+
+            // This path runs the method itself rather than through tableRPC.execute(), so it makes
+            // the dispatcher's checks first through CRPCTable::admit(): the arity check, and the
+            // passphrase gate, which none of these methods is subject to (walletpassphrase and
+            // walletpassphrasechange verify their own passphrase; encryptwallet refuses an
+            // encrypted wallet itself). It converts a body's exception as the dispatcher does.
+            tableRPC.admit(method, params);
+
+            try {
+                return ExecutePassphraseCommand(method, passphrases, params);
+            } catch (const std::exception& e) {
+                throw JSONRPCError(RPC_MISC_ERROR, e.what());
+            }
+        });
+
+        // A passphrase method is not run again under a capability: the client
+        // would have to send its passphrases again, and the passphrase it would
+        // ask for is the one the method already takes.
+        result.wallet_unlock_needed = false;
+
+        return result;
     }
 
     std::vector<std::string> listRpcCommands() override
@@ -388,23 +513,30 @@ public:
         return tableRPC.listCommands();
     }
 
+    // The getters answer only for the settings the GUI reads
+    // (IsGuiReadableSetting). Any other name reads as unset: the caller's
+    // default, and isSettingSet() false.
     bool getSettingBool(const std::string& name, bool default_val) override
     {
+        if (!IsGuiReadableSetting(name)) return default_val;
         return gArgs.GetBoolArg("-" + name, default_val);
     }
 
     int64_t getSettingInt(const std::string& name, int64_t default_val) override
     {
+        if (!IsGuiReadableSetting(name)) return default_val;
         return gArgs.GetArg("-" + name, default_val);
     }
 
     std::string getSettingStr(const std::string& name, const std::string& default_val) override
     {
+        if (!IsGuiReadableSetting(name)) return default_val;
         return gArgs.GetArg("-" + name, default_val);
     }
 
     bool isSettingSet(const std::string& name) override
     {
+        if (!IsGuiReadableSetting(name)) return false;
         return gArgs.IsArgSet("-" + name);
     }
 
@@ -412,6 +544,16 @@ public:
         const std::vector<std::pair<std::string, std::string>>& settings) override
     {
         SettingChangeResult out;
+
+        // The change runs under the Settings capability the client began, when
+        // it began one, which lets an Elevate-class setting through on a wallet
+        // without a full unlock. Once this client's connection has closed it runs
+        // under none, since the slot may hold the next GUI's capability.
+        std::optional<CapabilityScope> scope;
+        if (pwalletMain) {
+            scope.emplace(*pwalletMain, pwalletMain->IpcCapability(m_connection_closed), CapabilityKind::Settings);
+        }
+
         // ChangeSettings() can throw: with dynamic settings disabled (-nosettings)
         // the settings-file write throws, after the settings are restored. Report
         // it as a failed change, as the RPC dispatcher does for changesettings,
@@ -420,8 +562,13 @@ public:
         // failure handling (the proxy rows' restore, for one) never runs. The
         // result lists keep whatever was applied before the throw.
         try {
+            bool elevation_required = false;
             out.ok = ChangeSettings(settings, out.requires_restart, out.no_change, out.immediate,
-                                    out.requires_restart_settings, out.invalid_input, out.error);
+                                    out.requires_restart_settings, out.invalid_input, elevation_required, out.error);
+            // An elevation refusal is a rejected input, with the message, and is
+            // flagged so the GUI can ask for the passphrase and send it again.
+            out.elevation_required = elevation_required;
+            if (elevation_required) out.invalid_input = true;
         } catch (const std::exception& e) {
             out.ok = false;
             out.invalid_input = false;
@@ -432,12 +579,12 @@ public:
 
     std::unique_ptr<Handler> handleRwSettingsUpdated(RwSettingsUpdatedFn fn) override
     {
-        return MakeSignalHandler(uiInterface.RwSettingsUpdated_connect(interfaces::GuardNotify(std::move(fn))));
+        return MakeSignalHandler(uiInterface.RwSettingsUpdated_connect(interfaces::ForwardNotify(std::move(fn))));
     }
 
     std::unique_ptr<Handler> handleInitShutdown(InitShutdownFn fn) override
     {
-        return MakeSignalHandler(uiInterface.QueueShutdown_connect(interfaces::GuardNotify(std::move(fn))));
+        return MakeSignalHandler(uiInterface.QueueShutdown_connect(interfaces::ForwardNotify(std::move(fn))));
     }
 
     ScraperConvergenceSnapshot getScraperConvergenceSnapshot() override
@@ -461,38 +608,49 @@ public:
 
     std::unique_ptr<Handler> handleNotifyBlocksChanged(NotifyBlocksChangedFn fn) override
     {
-        return MakeSignalHandler(uiInterface.NotifyBlocksChanged_connect(interfaces::GuardNotify(std::move(fn))));
+        return MakeSignalHandler(uiInterface.NotifyBlocksChanged_connect(interfaces::ForwardNotify(std::move(fn))));
     }
 
     std::unique_ptr<Handler> handleNotifyNumConnectionsChanged(NotifyNumConnectionsChangedFn fn) override
     {
-        return MakeSignalHandler(uiInterface.NotifyNumConnectionsChanged_connect(interfaces::GuardNotify(std::move(fn))));
+        return MakeSignalHandler(uiInterface.NotifyNumConnectionsChanged_connect(interfaces::ForwardNotify(std::move(fn))));
     }
 
     std::unique_ptr<Handler> handleBannedListChanged(BannedListChangedFn fn) override
     {
-        return MakeSignalHandler(uiInterface.BannedListChanged_connect(interfaces::GuardNotify(std::move(fn))));
+        return MakeSignalHandler(uiInterface.BannedListChanged_connect(interfaces::ForwardNotify(std::move(fn))));
     }
 
     std::unique_ptr<Handler> handleNotifyAlertChanged(NotifyAlertChangedFn fn) override
     {
-        return MakeSignalHandler(uiInterface.NotifyAlertChanged_connect(interfaces::GuardNotify(std::move(fn))));
+        return MakeSignalHandler(uiInterface.NotifyAlertChanged_connect(interfaces::ForwardNotify(std::move(fn))));
     }
 
     std::unique_ptr<Handler> handleMinerStatusChanged(MinerStatusChangedFn fn) override
     {
-        return MakeSignalHandler(uiInterface.MinerStatusChanged_connect(interfaces::GuardNotify(std::move(fn))));
+        return MakeSignalHandler(uiInterface.MinerStatusChanged_connect(interfaces::ForwardNotify(std::move(fn))));
     }
 
     std::unique_ptr<Handler> handlePSGTPoolChanged(PSGTPoolChangedFn fn) override
     {
-        return MakeSignalHandler(uiInterface.PSGTPoolChanged_connect(interfaces::GuardNotify(std::move(fn))));
+        return MakeSignalHandler(uiInterface.PSGTPoolChanged_connect(interfaces::ForwardNotify(std::move(fn))));
     }
 
     std::unique_ptr<Handler> handleNotifyScraperEvent(NotifyScraperEventFn fn) override
     {
-        return MakeSignalHandler(uiInterface.NotifyScraperEvent_connect(interfaces::GuardNotify(std::move(fn))));
+        return MakeSignalHandler(uiInterface.NotifyScraperEvent_connect(interfaces::ForwardNotify(std::move(fn))));
     }
+
+    void bindConnectionScope(std::shared_ptr<ConnectionScope> scope) override
+    {
+        m_connection_closed = ConnectionClosedCheck(std::move(scope));
+    }
+
+private:
+    //! Whether the IPC connection this is served on has closed
+    //! (bindConnectionScope), asked as the console reads the IPC capability.
+    //! Empty in process, where there is no connection.
+    std::function<bool()> m_connection_closed{};
 };
 
 //! A GUI's subscription to the cache's snapshots (GuiState::handleChanged):
@@ -538,7 +696,7 @@ public:
         // Connected before it counts, so the update the first subscription asks
         // for reaches this fn too.
         std::unique_ptr<Handler> connection =
-            MakeSignalHandler(uiInterface.GuiStateChanged_connect(interfaces::GuardNotify(std::move(fn))));
+            MakeSignalHandler(uiInterface.GuiStateChanged_connect(interfaces::ForwardNotify(std::move(fn))));
 
         // Nothing was computed while no GUI was subscribed, so the first asks for
         // a forced update: it gets a computed snapshot within one timer cycle.
@@ -557,7 +715,7 @@ public:
 
     std::unique_ptr<Handler> handleMRCQuote(MRCQuoteFn fn) override
     {
-        return MakeSignalHandler(uiInterface.GuiStateMRCQuote_connect(interfaces::GuardNotify(std::move(fn))));
+        return MakeSignalHandler(uiInterface.GuiStateMRCQuote_connect(interfaces::ForwardNotify(std::move(fn))));
     }
 
 private:
@@ -630,6 +788,11 @@ std::unique_ptr<GuiState> MakeGuiState()
 std::unique_ptr<Node> MakeNode()
 {
     return std::make_unique<NodeImpl>();
+}
+
+const std::vector<int>* RpcConsolePassphraseIndexes(const std::string& method)
+{
+    return PassphraseParamIndexes(method);
 }
 
 std::unique_ptr<Init> MakeGridcoinInit()

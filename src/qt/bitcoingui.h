@@ -5,11 +5,13 @@
 #include <QSystemTrayIcon>
 #include <QMenu>
 #include <stdint.h>
+#include <functional>
 #include <memory>
 #include <vector>
 #include "guiconstants.h"
 #include "guiipcinfo.h"
 #include "psgttoastdamp.h"
+#include "interfaces/wallet.h" // CapabilityKind for unlockWalletForOperation
 #include "interfaces/wallet_tx_channel.h" // GRC::WalletEvent for processDrainedTransactions
 
 #ifdef Q_OS_MACOS
@@ -37,6 +39,7 @@ class MultisignPSGTDialog;
 class Notificator;
 
 namespace interfaces {
+class Node;
 class PSGTPoolContext;
 } // namespace interfaces
 class RPCConsole;
@@ -137,6 +140,15 @@ public:
                                   const QString& warnings);
 
     /**
+     * Whether Settings offers "Autounlock for staking": only in the split
+     * (-multiprocess) build, and only when the core's store, as \p status reads
+     * it, says this platform has one. \p status is called only in the split
+     * build: a monolithic GUI does not ask the core at all, and its in-process
+     * store, which on Windows is supported, does not count.
+     */
+    static bool AutoUnlockActionVisible(bool multiprocess, const std::function<AutoUnlockStoreStatus()>& status);
+
+    /**
      * Begin an explicit application shutdown: the menu Exit / Ctrl-Q / tray
      * Exit, a snapshot or reset-blockchain restart, the post-encryption
      * restart, or a core-initiated QueueShutdown. Sets a flag so closeEvent()
@@ -147,8 +159,38 @@ public:
      * On Qt6 quit() routes through closeAllWindows(); our closeEvent()'s
      * minimize-on-close handling would otherwise ignore that close and veto the
      * quit, so an explicit Exit only minimized the window. See issue #2995.
+     *
+     * Made at once, also while a QuitHold exists: a termination signal
+     * (logout, system shutdown, the service manager) asks for it here.
      */
     static void requestQuit();
+
+    //! requestQuit() for a quit the core's going asks for: the core stopped
+    //! (QueueShutdown), or the connection to it was lost. While a QuitHold
+    //! exists it waits, and is made when the last one goes.
+    static void requestQuitForCoreStop();
+
+    //! The quit for the end of the user's session (Windows WM_QUERYENDSESSION).
+    //! In the monolith (\p multiprocess false) the node runs in this process: it
+    //! is shut down, and its shutdown quits the GUI (QueueShutdown). In the split
+    //! build the core is another process: the GUI posts requestQuit(), which a
+    //! QuitHold does not hold, and \p node, the GUI's local one, is left alone.
+    static void requestQuitForSessionEnd(interfaces::Node& node, bool multiprocess);
+
+    //! While one exists, requestQuitForCoreStop() does not quit: the quit is
+    //! made when the last one goes. For a message the user must be able to read
+    //! to its end although the core may stop meanwhile: the one after an
+    //! encryption in the split build. Every other quit is made at once. GUI
+    //! thread only.
+    class QuitHold
+    {
+    public:
+        QuitHold();
+        ~QuitHold();
+
+        QuitHold(const QuitHold&) = delete;
+        QuitHold& operator=(const QuitHold&) = delete;
+    };
 
 protected:
     void changeEvent(QEvent *e);
@@ -210,6 +252,11 @@ private:
     //! plain bool is sufficient. See requestQuit() / issue #2995.
     static bool m_quit_requested;
 
+    //! The QuitHolds that exist, and whether requestQuitForCoreStop() was
+    //! called while one did. GUI thread only, as m_quit_requested.
+    static int m_quit_holds;
+    static bool m_quit_deferred;
+
     QLabel *statusbarAlertsLabel;
     QLabel *labelEncryptionIcon;
     QLabel *labelStakingIcon;
@@ -251,6 +298,8 @@ private:
     QAction *encryptWalletAction;
     QAction *backupWalletAction;
     QAction *changePassphraseAction;
+    //! Settings -> "Autounlock for staking". Hidden unless AutoUnlockActionVisible().
+    QAction* m_autounlock_action{nullptr};
     QAction *unlockWalletAction;
     QAction *lockWalletAction;
     QAction *openRPCConsoleAction;
@@ -396,12 +445,14 @@ private slots:
     void backupWallet();
     /** Change encrypted wallet passphrase */
     void changePassphrase();
+    /** Set up autounlock for staking, store the passphrase again, or turn it off. */
+    void autoUnlock();
     /** The Unlock BUTTON: a directive, offering the staking-only choice. */
     void unlockWallet();
 
-    /** An operation needs the passphrase. \p elevate comes from the model,
-     *  which read the wallet state; do not re-derive it here. */
-    void unlockWalletForOperation(bool elevate);
+    /** An operation of \p kind needs the wallet's keys: ask for the
+     *  passphrase and begin a capability for it. */
+    void unlockWalletForOperation(CapabilityKind kind);
 
     void lockWallet();
 

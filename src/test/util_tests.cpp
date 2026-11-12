@@ -7,19 +7,29 @@
 #include <boost/test/unit_test.hpp>
 
 #include "test/state_guard.h"
+#include <chainparamsbase.h>
 #include "init.h"
 #include <node/ui_interface.h>
 #include <boost/signals2/connection.hpp>
 #include "univalue/include/univalue.h"
 
 #include <wallet/wallet.h>
+#include <wallet/capability.h>
+#include <policy/fees.h>
+#include "test/encrypted_wallet.h"
 #include <util.h>
 //#include <util/system.h>
 #include <util/rwsettings.h>
 #include <util/settings.h>
 #include <util/strencodings.h>
+#include <util/refused_setting_keys.h>
+#include <test/data/refused-setting-keys.txt.h>
+#include <test/wine.h>
+#include <logging.h>
 #include <util/string.h>
+#include <util/dir_permissions.h>
 #include <util/syserror.h>
+#include <util/win_acl.h>
 
 #include <cerrno>
 #include <cstdint>
@@ -27,6 +37,13 @@
 #include <system_error>
 
 #include <sstream>
+#include <fstream>
+#include <functional>
+#include <list>
+
+#ifndef WIN32
+#include <sys/stat.h>
+#endif
 
 // Suite-level guard: util_GetArg and util_ParseParameters leave their test
 // arguments in the global ArgsManager (ClearArgs() clears only the
@@ -302,6 +319,209 @@ BOOST_FIXTURE_TEST_CASE(util_NoIncludeConf, NoIncludeConfTest)
     BOOST_CHECK_EQUAL(Parse("-includeconf"), "-includeconf cannot be used from commandline; -includeconf=\"\"");
     BOOST_CHECK_EQUAL(Parse("-includeconf=file"), "-includeconf cannot be used from commandline; -includeconf=\"file\"");
 }
+
+BOOST_AUTO_TEST_CASE(config_file_arg_only_from_conf)
+{
+    const std::vector<std::pair<std::string, unsigned int>> args{{"-rpcserviceuser", ArgsManager::ALLOW_ANY}};
+    std::array argv{"x", "-rpcserviceuser=bob"};
+    std::string error;
+
+    TestArgsManager conf_only;
+    conf_only.SetupArgs(args);
+    conf_only.ReadConfigString("rpcserviceuser=gridcoin\n");
+    BOOST_CHECK(conf_only.GetConfigFileArg("-rpcserviceuser") == std::optional<std::string>{"gridcoin"});
+    // A forced value changes GetArg, not what the file says.
+    conf_only.ForceSetArg("-rpcserviceuser", "forced");
+    BOOST_CHECK_EQUAL(conf_only.GetArg("-rpcserviceuser", ""), "forced");
+    BOOST_CHECK(conf_only.GetConfigFileArg("-rpcserviceuser") == std::optional<std::string>{"gridcoin"});
+
+    TestArgsManager command_line_only;
+    command_line_only.SetupArgs(args);
+    BOOST_REQUIRE(command_line_only.ParseParameters(argv.size(), argv.data(), error));
+    BOOST_CHECK_EQUAL(command_line_only.GetArg("-rpcserviceuser", ""), "bob");
+    BOOST_CHECK(command_line_only.GetConfigFileArg("-rpcserviceuser") == std::nullopt);
+
+    TestArgsManager both;
+    both.SetupArgs(args);
+    BOOST_REQUIRE(both.ParseParameters(argv.size(), argv.data(), error));
+    both.ReadConfigString("rpcserviceuser=gridcoin\n");
+    BOOST_CHECK_EQUAL(both.GetArg("-rpcserviceuser", ""), "bob");
+    BOOST_CHECK(both.GetConfigFileArg("-rpcserviceuser") == std::optional<std::string>{"gridcoin"});
+
+    // The network section outranks the default section, as it does for GetArg.
+    TestArgsManager sections;
+    sections.SetupArgs(args);
+    sections.SelectConfigNetwork(CBaseChainParams::TESTNET);
+    sections.ReadConfigString("rpcserviceuser=default\n[test]\nrpcserviceuser=testnet\n");
+    BOOST_CHECK_EQUAL(sections.GetArg("-rpcserviceuser", ""), "testnet");
+    BOOST_CHECK(sections.GetConfigFileArg("-rpcserviceuser") == std::optional<std::string>{"testnet"});
+
+    // A negated setting sets no value.
+    TestArgsManager negated;
+    negated.SetupArgs(args);
+    negated.ReadConfigString("norpcserviceuser=1\n");
+    BOOST_CHECK(negated.GetConfigFileArg("-rpcserviceuser") == std::nullopt);
+}
+
+BOOST_AUTO_TEST_CASE(config_file_used_includes)
+{
+    const std::vector<std::pair<std::string, unsigned int>> args{
+        {"-includeconf", ArgsManager::ALLOW_ANY},
+        {"-rpcport", ArgsManager::ALLOW_ANY},
+    };
+
+    TestArgsManager with_include;
+    with_include.SetupArgs(args);
+    with_include.ReadConfigString("includeconf=other.conf\n");
+    BOOST_CHECK(with_include.ConfigFileUsedIncludes());
+
+    TestArgsManager in_section;
+    in_section.SetupArgs(args);
+    in_section.ReadConfigString("[test]\nincludeconf=other.conf\n");
+    BOOST_CHECK(in_section.ConfigFileUsedIncludes());
+
+    TestArgsManager without;
+    without.SetupArgs(args);
+    without.ReadConfigString("rpcport=1\n");
+    BOOST_CHECK(!without.ConfigFileUsedIncludes());
+
+    // -noincludeconf after the value reads no other file.
+    TestArgsManager negated;
+    negated.SetupArgs(args);
+    negated.ReadConfigString("includeconf=other.conf\nnoincludeconf=1\n");
+    BOOST_CHECK(!negated.ConfigFileUsedIncludes());
+}
+
+#ifndef WIN32
+BOOST_AUTO_TEST_CASE(config_file_facts_are_the_file_read)
+{
+    // base/link.conf -> base/held/real.conf, which sets datadir= to base/other, where another
+    // configuration file waits. Each file and directory has its own mode, so the recorded facts
+    // show which one they came from.
+    const fs::path base = GetDataDir(false) / "config_file_facts";
+    const fs::path held = base / "held";
+    const fs::path other = base / "other";
+    const fs::path real = held / "real.conf";
+    const fs::path link = base / "link.conf";
+    const fs::path other_conf = other / "gridcoinresearch.conf";
+    fs::remove_all(base);
+    fs::create_directories(held);
+    fs::create_directories(other);
+
+    const auto write = [](const fs::path& path, const std::string& text, mode_t mode) {
+        fsbridge::ofstream out(path);
+        out << text;
+        out.close();
+        BOOST_REQUIRE(::chmod(path.string().c_str(), mode) == 0);
+    };
+    write(real, "datadir=" + other.string() + "\nrpcport=1\n", 0640);
+    write(other_conf, "rpcport=2\n", 0600);
+    BOOST_REQUIRE(::chmod(held.string().c_str(), 0700) == 0);
+    BOOST_REQUIRE(::chmod(base.string().c_str(), 0755) == 0);
+    fs::create_symlink(real, link);
+
+    struct stat real_st;
+    struct stat held_st;
+    struct stat other_st;
+    BOOST_REQUIRE(::stat(real.string().c_str(), &real_st) == 0);
+    BOOST_REQUIRE(::stat(held.string().c_str(), &held_st) == 0);
+    BOOST_REQUIRE(::stat(other_conf.string().c_str(), &other_st) == 0);
+
+    TestArgsManager args;
+    args.SetupArgs({{"-conf", ArgsManager::ALLOW_ANY}, {"-datadir", ArgsManager::ALLOW_ANY}, {"-rpcport", ArgsManager::ALLOW_ANY}});
+    const std::string conf_arg = "-conf=" + link.string();
+    std::array argv{"x", conf_arg.c_str()};
+    std::string error;
+    BOOST_REQUIRE(args.ParseParameters(argv.size(), argv.data(), error));
+    BOOST_CHECK(!args.GetConfigFileFacts());
+    BOOST_REQUIRE_MESSAGE(args.ReadConfigFiles(error), error);
+    BOOST_CHECK_EQUAL(args.GetArg("-rpcport", ""), "1");
+    BOOST_CHECK_EQUAL(args.GetArg("-datadir", ""), other.string());
+
+    // The facts are those of the file read, through the link, and of the directory that holds it.
+    const std::optional<ConfigFileFacts> facts = args.GetConfigFileFacts();
+    BOOST_REQUIRE(facts);
+    BOOST_CHECK_EQUAL(facts->device, static_cast<uint64_t>(real_st.st_dev));
+    BOOST_CHECK_EQUAL(facts->inode, static_cast<uint64_t>(real_st.st_ino));
+    BOOST_CHECK_EQUAL(facts->file.owner, static_cast<uint64_t>(real_st.st_uid));
+    BOOST_CHECK_EQUAL(facts->file.mode, static_cast<uint32_t>(real_st.st_mode));
+    BOOST_CHECK(facts->inode != static_cast<uint64_t>(other_st.st_ino));
+    BOOST_REQUIRE(facts->dir);
+    BOOST_CHECK_EQUAL(facts->dir->owner, static_cast<uint64_t>(held_st.st_uid));
+    BOOST_CHECK_EQUAL(facts->dir->mode, static_cast<uint32_t>(held_st.st_mode));
+
+    // A file put at the same path afterwards changes nothing recorded.
+    const fs::path swap = held / "swap.conf";
+    write(swap, "rpcport=3\n", 0666);
+    fs::rename(swap, real);
+    const std::optional<ConfigFileFacts> after = args.GetConfigFileFacts();
+    BOOST_REQUIRE(after);
+    BOOST_CHECK_EQUAL(after->inode, static_cast<uint64_t>(real_st.st_ino));
+    BOOST_CHECK_EQUAL(after->file.mode, static_cast<uint32_t>(real_st.st_mode));
+
+    // A later read that finds no file leaves no facts from the earlier one.
+    fs::remove(link);
+    BOOST_CHECK(!args.ReadConfigFiles(error));
+    BOOST_CHECK(!args.GetConfigFileFacts());
+
+    fs::remove_all(base);
+}
+#else
+BOOST_AUTO_TEST_CASE(config_file_facts_are_the_file_read)
+{
+    if (grc_test::RunningUnderWine()) {
+        BOOST_TEST_MESSAGE("Wine keeps no protected DACL; skipping");
+        return;
+    }
+    // base/held/real.conf, which sets datadir= to base/other. The file, its directory and the other
+    // directory each have an access list of their own length, so the recorded lists show which one
+    // they came from.
+    const fs::path base = GetDataDir(false) / "config_file_facts";
+    const fs::path held = base / "held";
+    const fs::path other = base / "other";
+    const fs::path real = held / "real.conf";
+    fs::remove_all(base);
+    fs::create_directories(held);
+    fs::create_directories(other);
+    {
+        fsbridge::ofstream out(real);
+        out << "datadir=" << other.string() << "\nrpcport=1\n";
+    }
+
+    const util::winacl::Sid self = util::winacl::CurrentTokenUser();
+    const util::winacl::Sid system = util::winacl::wellknown::System();
+    const util::winacl::Sid admins = util::winacl::wellknown::Administrators();
+    util::winacl::ApplyAcl(real, {self, {{self, 0x001F01FF}}});
+    util::winacl::ApplyAcl(held, {self, {{self, 0x001F01FF}, {system, 0x001F01FF}}});
+    util::winacl::ApplyAcl(other, {self, {{self, 0x001F01FF}, {system, 0x001F01FF}, {admins, 0x001F01FF}}});
+
+    TestArgsManager args;
+    args.SetupArgs({{"-conf", ArgsManager::ALLOW_ANY}, {"-datadir", ArgsManager::ALLOW_ANY}, {"-rpcport", ArgsManager::ALLOW_ANY}});
+    const std::string conf_arg = "-conf=" + real.string();
+    std::array argv{"x", conf_arg.c_str()};
+    std::string error;
+    BOOST_REQUIRE(args.ParseParameters(argv.size(), argv.data(), error));
+    BOOST_CHECK(!args.GetConfigFileFacts());
+    BOOST_REQUIRE_MESSAGE(args.ReadConfigFiles(error), error);
+    BOOST_CHECK_EQUAL(args.GetArg("-rpcport", ""), "1");
+
+    const std::optional<ConfigFileFacts> facts = args.GetConfigFileFacts();
+    BOOST_REQUIRE(facts);
+    BOOST_REQUIRE(facts->file_acl);
+    BOOST_REQUIRE(facts->dir_acl);
+    BOOST_CHECK(facts->file_acl->owner == std::optional<util::winacl::Sid>{self});
+    BOOST_CHECK_EQUAL(facts->file_acl->aces.size(), 1U);
+    BOOST_CHECK(facts->dir_acl->owner == std::optional<util::winacl::Sid>{self});
+    BOOST_CHECK_EQUAL(facts->dir_acl->aces.size(), 2U);
+
+    // A later read that finds no file leaves no facts from the earlier one.
+    fs::remove(real);
+    BOOST_CHECK(!args.ReadConfigFiles(error));
+    BOOST_CHECK(!args.GetConfigFileFacts());
+
+    fs::remove_all(base);
+}
+#endif
 
 BOOST_AUTO_TEST_CASE(util_ParseParameters)
 {
@@ -938,6 +1158,27 @@ BOOST_AUTO_TEST_CASE(test_ToUpper)
     BOOST_CHECK_EQUAL(ToUpper("\x00\xfe\xff"), "\x00\xfe\xff");
 }
 
+// Every byte: only the ASCII letters change, whether char is signed or not. Keys and labels are
+// folded with these, so the result must not depend on the platform's char.
+BOOST_AUTO_TEST_CASE(test_ToLower_ToUpper_every_byte)
+{
+    std::string all;
+    std::string all_lower;
+    std::string all_upper;
+    for (int b = 0; b < 256; ++b) {
+        const char c = static_cast<char>(b);
+        const char lower = (b >= 'A' && b <= 'Z') ? static_cast<char>(b + ('a' - 'A')) : c;
+        const char upper = (b >= 'a' && b <= 'z') ? static_cast<char>(b - ('a' - 'A')) : c;
+        BOOST_CHECK_EQUAL(ToLower(c), lower);
+        BOOST_CHECK_EQUAL(ToUpper(c), upper);
+        all += c;
+        all_lower += lower;
+        all_upper += upper;
+    }
+    BOOST_CHECK(ToLower(all) == all_lower);
+    BOOST_CHECK(ToUpper(all) == all_upper);
+}
+
 BOOST_AUTO_TEST_CASE(test_Capitalize)
 {
     BOOST_CHECK_EQUAL(Capitalize(""), "");
@@ -1431,9 +1672,10 @@ BOOST_AUTO_TEST_CASE(changesettings_listener_reads_the_value_being_stored)
         std::vector<std::string> immediate;
         std::vector<std::string> requires_restart_list;
         bool invalid_input = false;
+        bool elevation_required = false;
         std::string error;
         return ChangeSettings({{"changesettings_listener_probe", value}}, requires_restart, no_change, immediate,
-                              requires_restart_list, invalid_input, error);
+                              requires_restart_list, invalid_input, elevation_required, error);
     };
 
     BOOST_REQUIRE(change("first"));  // nothing is forced yet
@@ -1479,8 +1721,9 @@ BOOST_AUTO_TEST_CASE(changesettings_failed_store_changes_nothing)
         std::vector<std::string> immediate;
         std::vector<std::string> requires_restart_list;
         Outcome out;
+        bool elevation_required = false;
         out.ok = ChangeSettings({{"changesettings_failed_store_probe", value}}, requires_restart, no_change,
-                                immediate, requires_restart_list, out.invalid_input, out.error);
+                                immediate, requires_restart_list, out.invalid_input, elevation_required, out.error);
         return out;
     };
 
@@ -1707,6 +1950,766 @@ BOOST_AUTO_TEST_CASE(syserror_string_returns_platform_message)
     BOOST_CHECK(result.find("Unknown error") == std::string::npos);
     BOOST_CHECK(result.find(message) != std::string::npos);
     BOOST_CHECK(result.find(strprintf("(%d)", ENOENT)) != std::string::npos);
+}
+
+BOOST_AUTO_TEST_CASE(setting_key_patterns_match_whole_names)
+{
+    // The same vectors are checked against fnmatch in test/lint/lint-refused-setting-keys.py.
+    BOOST_CHECK(MatchSettingKeyPattern("*notify", "blocknotify"));
+    BOOST_CHECK(MatchSettingKeyPattern("*notify", "notify"));
+    BOOST_CHECK(!MatchSettingKeyPattern("*notify", "notifyx"));
+    BOOST_CHECK(MatchSettingKeyPattern("rpc*", "rpc"));
+    BOOST_CHECK(MatchSettingKeyPattern("clear*history", "clearbeaconhistory"));
+    BOOST_CHECK(!MatchSettingKeyPattern("clear*history", "clearbeaconhistoryx"));
+    BOOST_CHECK(MatchSettingKeyPattern("min", "min"));
+    BOOST_CHECK(!MatchSettingKeyPattern("min", "mininput"));
+    BOOST_CHECK(!MatchSettingKeyPattern("rpc*", "RPCPORT"));
+    BOOST_CHECK(MatchSettingKeyPattern("*", ""));
+    BOOST_CHECK(!MatchSettingKeyPattern("a*b*c", "acb"));
+}
+
+BOOST_AUTO_TEST_CASE(refused_setting_keys_ignore_a_section_prefix_but_not_no)
+{
+    BOOST_CHECK(IsRefusedSettingKey("blocknotify"));
+    BOOST_CHECK(IsRefusedSettingKey("test.blocknotify"));
+    BOOST_CHECK(IsRefusedSettingKey("rpcpassword"));
+    BOOST_CHECK(!IsRefusedSettingKey("staking"));
+    BOOST_CHECK(!IsRefusedSettingKey("noncruncher"));
+    BOOST_CHECK(!IsRefusedSettingKey("printtoconsole"));
+}
+
+// The compiled list is exactly the data file's patterns, in order (drift guard for the generator).
+// The file is compiled into this binary (src/test/data/CMakeLists.txt), so the check does not
+// need the source tree where it runs.
+BOOST_AUTO_TEST_CASE(compiled_refused_patterns_follow_the_data_file)
+{
+    std::istringstream file(std::string(reinterpret_cast<const char*>(refused_setting_keys_txt),
+                                        refused_setting_keys_txt_len));
+
+    std::vector<std::string> from_file;
+    std::string line;
+
+    while (std::getline(file, line)) {
+        // The generator drops carriage returns, so a checkout with Windows line ends gives
+        // the same list.
+        if (!line.empty() && line.back() == '\r') line.pop_back();
+        if (line.empty() || line[0] == '#') continue;
+
+        from_file.push_back(line);
+    }
+
+    BOOST_REQUIRE(!from_file.empty());
+    BOOST_CHECK_EQUAL_COLLECTIONS(from_file.begin(), from_file.end(),
+        util::REFUSED_SETTING_KEY_PATTERNS.begin(), util::REFUSED_SETTING_KEY_PATTERNS.end());
+}
+
+BOOST_AUTO_TEST_CASE(setting_class_follows_patterns_and_flags)
+{
+    TestArgsManager args;
+    args.SetupArgs({{"-free", ArgsManager::ALLOW_ANY | ArgsManager::SETTING_FREE},
+                    {"-plain", ArgsManager::ALLOW_ANY},
+                    {"-clo", ArgsManager::ALLOW_ANY | ArgsManager::COMMAND_LINE_ONLY},
+                    {"-blocknotify", ArgsManager::ALLOW_ANY | ArgsManager::SETTING_FREE}});
+    BOOST_CHECK(args.GetSettingClass("free") == SettingClass::FREE);
+    BOOST_CHECK(args.GetSettingClass("test.free") == SettingClass::FREE);
+    BOOST_CHECK(args.GetSettingClass("plain") == SettingClass::ELEVATE);
+    BOOST_CHECK(args.GetSettingClass("clo") == SettingClass::REFUSE);
+    BOOST_CHECK(args.GetSettingClass("blocknotify") == SettingClass::REFUSE); // the pattern wins over the flag
+    BOOST_CHECK(args.GetSettingClass("unregistered") == SettingClass::ELEVATE);
+    BOOST_CHECK_EQUAL(args.GetRegisteredArgFlags().count("-clo"), 1u);
+}
+
+BOOST_AUTO_TEST_CASE(command_line_only_options_are_ignored_in_a_config_file)
+{
+    TestArgsManager args;
+    args.SetupArgs({{"-clo", ArgsManager::ALLOW_ANY | ArgsManager::COMMAND_LINE_ONLY},
+                    {"-regular", ArgsManager::ALLOW_ANY}});
+
+    std::vector<std::string> lines;
+    auto callback = LogInstance().PushBackCallback([&lines](const std::string& s) { lines.push_back(s); });
+
+    args.ReadConfigString("clo=1\nregular=1\n[test]\nclo=2\n");
+
+    LogInstance().DeleteCallback(callback);
+
+    BOOST_CHECK(!args.IsArgSet("-clo"));
+    BOOST_CHECK(args.IsArgSet("-regular"));
+
+    size_t ignored_lines = 0;
+    for (const std::string& l : lines) {
+        if (l.find("ignored clo from") != std::string::npos
+            && l.find("it is accepted only on the command line") != std::string::npos) {
+            ++ignored_lines;
+        }
+    }
+    // The same key is logged once, whatever section it appears under.
+    BOOST_CHECK_EQUAL(ignored_lines, 1u);
+
+    const char* argv[] = {"x", "-clo=3"};
+    std::string error;
+    BOOST_REQUIRE(args.ParseParameters(2, argv, error));
+    BOOST_CHECK_EQUAL(args.GetArg("-clo", ""), "3");
+}
+
+BOOST_AUTO_TEST_CASE(command_line_only_overrides)
+{
+    // The developer and client overrides, registered as in init.cpp.
+    TestArgsManager args;
+    args.SetupArgs({{"-debugallowtracer", ArgsManager::ALLOW_BOOL | ArgsManager::DEBUG_ONLY | ArgsManager::COMMAND_LINE_ONLY},
+                    {"-rpcskiplistenercheck", ArgsManager::ALLOW_BOOL | ArgsManager::COMMAND_LINE_ONLY},
+                    {"-stdinwalletpassphrase", ArgsManager::ALLOW_BOOL | ArgsManager::COMMAND_LINE_ONLY},
+                    {"-stdinelevate", ArgsManager::ALLOW_BOOL | ArgsManager::COMMAND_LINE_ONLY}});
+    const std::vector<std::string> names{"-debugallowtracer", "-rpcskiplistenercheck", "-stdinwalletpassphrase",
+                                         "-stdinelevate"};
+
+    args.ReadConfigString("debugallowtracer=1\nrpcskiplistenercheck=1\nstdinwalletpassphrase=1\nstdinelevate=1\n");
+    for (const std::string& name : names) BOOST_CHECK_MESSAGE(!args.GetBoolArg(name, false), name);
+
+    for (const std::string& name : names) {
+        TestArgsManager cli;
+        cli.SetupArgs({{name, ArgsManager::ALLOW_BOOL | ArgsManager::COMMAND_LINE_ONLY}});
+        const char* argv[] = {"x", name.c_str()};
+        std::string error;
+        BOOST_REQUIRE(cli.ParseParameters(2, argv, error));
+        BOOST_CHECK_MESSAGE(cli.GetBoolArg(name, false), name);
+    }
+}
+
+BOOST_AUTO_TEST_CASE(command_line_only_option_is_logged_once_per_key)
+{
+    // The daemon reads the configuration file twice at startup.
+    TestArgsManager args;
+    args.SetupArgs({{"-clo", ArgsManager::ALLOW_ANY | ArgsManager::COMMAND_LINE_ONLY},
+                    {"-clo2", ArgsManager::ALLOW_ANY | ArgsManager::COMMAND_LINE_ONLY}});
+
+    std::vector<std::string> lines;
+    auto callback = LogInstance().PushBackCallback([&lines](const std::string& s) { lines.push_back(s); });
+    args.ReadConfigString("clo=1\n");
+    args.ReadConfigString("clo=1\n");
+    args.ReadConfigString("clo=1\nclo2=1\n");
+    LogInstance().DeleteCallback(callback);
+
+    size_t clo = 0, clo2 = 0;
+    for (const std::string& l : lines) {
+        if (l.find("it is accepted only on the command line") == std::string::npos) continue;
+        if (l.find("ignored clo from") != std::string::npos) ++clo;
+        if (l.find("ignored clo2 from") != std::string::npos) ++clo2;
+    }
+    BOOST_CHECK_EQUAL(clo, 1u);
+    BOOST_CHECK_EQUAL(clo2, 1u);
+}
+
+
+namespace {
+//! Register the probe arguments the settings file load cases use. The
+//! registrations outlive the case, outside the suite's StateGuard snapshot.
+void RegisterSettingsProbes()
+{
+    const auto add = [](const std::string& name, unsigned int flags) {
+        if (!gArgs.GetArgFlags("-" + name)) {
+            gArgs.AddArg("-" + name, "unit-test probe", flags, OptionsCategory::HIDDEN);
+        }
+    };
+    add("free_probe", ArgsManager::ALLOW_ANY | ArgsManager::SETTING_FREE);
+    add("elevate_probe", ArgsManager::ALLOW_ANY);
+    add("command_line_only_probe", ArgsManager::ALLOW_ANY | ArgsManager::COMMAND_LINE_ONLY);
+    add("sensitive_probe", ArgsManager::ALLOW_ANY | ArgsManager::SENSITIVE | ArgsManager::SETTING_FREE);
+    // ChangeSettings() checks registration first; init registers the real ones,
+    // with these flags.
+    add("blocknotify", ArgsManager::ALLOW_ANY);
+    add("proxy", ArgsManager::ALLOW_ANY | ArgsManager::IMMEDIATE_EFFECT);
+}
+
+//! Create the data directory, and on exit remove the settings file and reload the
+//! (now empty) settings, so no case leaves a value behind.
+struct SettingsFileScope
+{
+    fs::path m_path;
+
+    SettingsFileScope()
+    {
+        const fs::path datadir = gArgs.GetArg("-datadir", "");
+        BOOST_REQUIRE(!datadir.empty());
+        fs::create_directories(datadir);
+        gArgs.ClearPathCache();
+        RegisterSettingsProbes();
+        BOOST_REQUIRE(gArgs.GetSettingsPath(&m_path));
+    }
+
+    ~SettingsFileScope()
+    {
+        boost::system::error_code ec;
+        fs::remove(m_path, ec);
+        (void)gArgs.ReadSettingsFile();
+    }
+
+    void Write(const std::map<std::string, util::SettingsValue>& values) const
+    {
+        std::vector<std::string> errors;
+        BOOST_REQUIRE(util::WriteSettings(m_path, values, errors));
+    }
+
+    std::map<std::string, util::SettingsValue> ReadRaw() const
+    {
+        std::map<std::string, util::SettingsValue> values;
+        std::vector<std::string> errors;
+        BOOST_REQUIRE(util::ReadSettings(m_path, values, errors));
+        return values;
+    }
+};
+
+size_t CountLines(const std::vector<std::string>& lines, const std::string& needle)
+{
+    size_t n = 0;
+    for (const std::string& l : lines) {
+        if (l.find(needle) != std::string::npos) ++n;
+    }
+    return n;
+}
+
+const std::string FILE_NAME_FOR_LOG{"gridcoinsettings.json"};
+} // namespace
+
+#ifndef WIN32
+// A settings file that is wider than owner-only is still that wide after the core rewrites it,
+// and one that is not there is created owner-only. Production change that would fail this: the
+// settings writer creating its temporary file owner-only and renaming it over the old file
+// without carrying the old mode.
+BOOST_AUTO_TEST_CASE(settings_rewrite_keeps_the_mode_of_the_file)
+{
+    SettingsFileScope scope;
+    scope.Write({{"free_probe", "a"}});
+    BOOST_REQUIRE_EQUAL(::chmod(scope.m_path.string().c_str(), 0640), 0);
+    BOOST_REQUIRE(gArgs.ReadSettingsFile());
+
+    BOOST_REQUIRE(gArgs.WriteSettingsFile());
+    struct stat st;
+    BOOST_REQUIRE_EQUAL(::stat(scope.m_path.string().c_str(), &st), 0);
+    // mode_t is 16 bits on macOS, where the masked mode is an int; compare it unsigned.
+    BOOST_CHECK_EQUAL(static_cast<unsigned>(st.st_mode & 07777), 0640U);
+
+    // Again, to show the kept mode is not a one-off.
+    BOOST_REQUIRE(gArgs.WriteSettingsFile());
+    BOOST_REQUIRE_EQUAL(::stat(scope.m_path.string().c_str(), &st), 0);
+    BOOST_CHECK_EQUAL(static_cast<unsigned>(st.st_mode & 07777), 0640U);
+
+    // A read-only settings file is rewritten and stays read-only. Production change that would
+    // fail this: giving the temporary file the old mode before WriteSettings reopens it to write.
+    BOOST_REQUIRE_EQUAL(::chmod(scope.m_path.string().c_str(), 0400), 0);
+    BOOST_REQUIRE(gArgs.WriteSettingsFile());
+    BOOST_REQUIRE_EQUAL(::stat(scope.m_path.string().c_str(), &st), 0);
+    BOOST_CHECK_EQUAL(static_cast<unsigned>(st.st_mode & 07777), 0400U);
+    BOOST_REQUIRE_EQUAL(::chmod(scope.m_path.string().c_str(), 0600), 0);
+
+    // Nothing there: owner-only from creation.
+    BOOST_REQUIRE(fs::remove(scope.m_path));
+    BOOST_REQUIRE(gArgs.WriteSettingsFile());
+    BOOST_REQUIRE_EQUAL(::stat(scope.m_path.string().c_str(), &st), 0);
+    BOOST_CHECK_EQUAL(static_cast<unsigned>(st.st_mode & 07777), 0600U);
+}
+#else
+// A Users read entry on the settings file is still there after the core rewrites it, a
+// protected list stays protected, and a file that is not there is created owner-only.
+BOOST_AUTO_TEST_CASE(settings_rewrite_keeps_the_access_list_of_the_file)
+{
+    if (grc_test::RunningUnderWine()) {
+        BOOST_TEST_MESSAGE("Wine keeps no protected DACL; skipping");
+        return;
+    }
+    SettingsFileScope scope;
+    scope.Write({{"free_probe", "a"}});
+
+    util::winacl::AclSpec spec = util::OwnerOnlyAclSpec(/*inheritable=*/false);
+    spec.aces.push_back({util::winacl::wellknown::Users(), FILE_GENERIC_READ, util::winacl::Inherit::None});
+    // The wider list is applied to the file in place, as an operator would with icacls.
+    util::winacl::ApplyAcl(scope.m_path, spec);
+    BOOST_REQUIRE(gArgs.ReadSettingsFile());
+
+    BOOST_REQUIRE(gArgs.WriteSettingsFile());
+    const util::winacl::ObservedAcl after = util::winacl::ReadAcl(scope.m_path);
+    BOOST_CHECK(after.is_protected);
+    BOOST_CHECK(std::any_of(after.aces.begin(), after.aces.end(), [](const util::winacl::ObservedAce& ace) {
+        return ace.trustee == util::winacl::wellknown::Users();
+    }));
+
+    BOOST_REQUIRE(fs::remove(scope.m_path));
+    BOOST_REQUIRE(gArgs.WriteSettingsFile());
+    BOOST_CHECK(!util::winacl::CheckMatchesSpec(util::winacl::ReadAcl(scope.m_path),
+                                                util::OwnerOnlyAclSpec(/*inheritable=*/false)));
+}
+#endif
+
+BOOST_AUTO_TEST_CASE(refused_settings_are_ignored_at_load_and_kept_in_the_file)
+{
+    SettingsFileScope scope;
+    scope.Write({{"free_probe", "a"}, {"blocknotify", "echo b"}, {"command_line_only_probe", "c"},
+                 {"unknown_key", "d"}});
+
+    std::vector<std::string> lines;
+    {
+        const auto callback = LogInstance().PushBackCallback([&lines](const std::string& s) { lines.push_back(s); });
+        BOOST_REQUIRE(gArgs.ReadSettingsFile());
+        LogInstance().DeleteCallback(callback);
+    }
+
+    BOOST_CHECK_EQUAL(gArgs.GetArg("-free_probe", ""), "a");
+    BOOST_CHECK(!gArgs.IsArgSet("-blocknotify"));
+    BOOST_CHECK(!gArgs.IsArgSet("-command_line_only_probe"));
+    BOOST_CHECK(getRwSetting("blocknotify").isNull());
+    // An unknown key is not refused.
+    BOOST_CHECK_EQUAL(getRwSetting("unknown_key").write(), UniValue("d").write());
+
+    BOOST_CHECK_EQUAL(CountLines(lines, "ignored blocknotify from " + FILE_NAME_FOR_LOG
+                                        + "; set it in gridcoinresearch.conf if you want it\n"), 1u);
+    BOOST_CHECK_EQUAL(CountLines(lines, "ignored command_line_only_probe from " + FILE_NAME_FOR_LOG
+                                        + "; it is accepted only on the command line\n"), 1u);
+
+    BOOST_REQUIRE(gArgs.WriteSettingsFile());
+    const auto raw = scope.ReadRaw();
+    BOOST_CHECK_EQUAL(raw.size(), 4u);
+    BOOST_CHECK_EQUAL(raw.at("free_probe").get_str(), "a");
+    BOOST_CHECK_EQUAL(raw.at("blocknotify").get_str(), "echo b");
+    BOOST_CHECK_EQUAL(raw.at("command_line_only_probe").get_str(), "c");
+    BOOST_CHECK_EQUAL(raw.at("unknown_key").get_str(), "d");
+}
+
+BOOST_AUTO_TEST_CASE(an_unregistered_refused_key_is_logged_once_at_load)
+{
+    SettingsFileScope scope;
+
+    // Matches the rpc* pattern and is no argument, so gridcoinresearch.conf
+    // would not take it either.
+    const std::string unregistered = "rpcunregistered_probe";
+    BOOST_REQUIRE(!gArgs.GetArgFlags("-" + unregistered));
+    BOOST_REQUIRE(IsRefusedSettingKey(unregistered));
+
+    scope.Write({{unregistered, "x"}, {"blocknotify", "echo b"}});
+
+    std::vector<std::string> lines;
+    {
+        const auto callback = LogInstance().PushBackCallback([&lines](const std::string& s) { lines.push_back(s); });
+        BOOST_REQUIRE(gArgs.ReadSettingsFile());
+        LogInstance().DeleteCallback(callback);
+    }
+
+    // The unknown-value line only, without advice to move it to the config file.
+    BOOST_CHECK_EQUAL(CountLines(lines, unregistered), 1u);
+    BOOST_CHECK_EQUAL(CountLines(lines, "Ignoring unknown rw_settings value " + unregistered + "\n"), 1u);
+
+    // A registered refused key still gets the advice, once.
+    BOOST_CHECK_EQUAL(CountLines(lines, "blocknotify"), 1u);
+    BOOST_CHECK_EQUAL(CountLines(lines, "ignored blocknotify from " + FILE_NAME_FOR_LOG
+                                        + "; set it in gridcoinresearch.conf if you want it\n"), 1u);
+
+    // Both are still refused, and kept in the file.
+    BOOST_CHECK(getRwSetting(unregistered).isNull());
+    BOOST_CHECK(getRwSetting("blocknotify").isNull());
+
+    BOOST_REQUIRE(gArgs.WriteSettingsFile());
+    const auto raw = scope.ReadRaw();
+    BOOST_CHECK_EQUAL(raw.at(unregistered).get_str(), "x");
+    BOOST_CHECK_EQUAL(raw.at("blocknotify").get_str(), "echo b");
+}
+
+BOOST_AUTO_TEST_CASE(erasing_a_refused_setting_removes_it_from_the_file)
+{
+    SettingsFileScope scope;
+    scope.Write({{"free_probe", "a"}, {"blocknotify", "echo b"}});
+    BOOST_REQUIRE(gArgs.ReadSettingsFile());
+
+    BOOST_REQUIRE(updateRwSetting("blocknotify", {}));
+
+    const auto raw = scope.ReadRaw();
+    BOOST_CHECK(raw.count("blocknotify") == 0);
+    BOOST_CHECK(raw.count("free_probe") == 1);
+}
+
+BOOST_AUTO_TEST_CASE(listsettings_masks_sensitive_values_and_lists_ignored_settings)
+{
+    SettingsFileScope scope;
+    BOOST_REQUIRE(updateRwSetting("sensitive_probe", "secret", true));
+    // The write above is the file the load below reads; add the other keys to it.
+    auto values = scope.ReadRaw();
+    values.emplace("rpcpassword", "pw");
+    values.emplace("unknown_key", "d");
+    scope.Write(values);
+    BOOST_REQUIRE(gArgs.ReadSettingsFile());
+
+    UniValue out;
+    BOOST_REQUIRE_NO_THROW(out = gArgs.OutputArgs());
+
+    bool found_sensitive = false;
+    bool unknown_not_changeable = false;
+    for (const UniValue& entry : out["setting_file_args"].getValues()) {
+        if (entry.exists("sensitive_probe")) {
+            found_sensitive = true;
+            BOOST_CHECK_EQUAL(entry["sensitive_probe"].get_str(), "****");
+        }
+        if (entry.exists("unknown_key")) {
+            unknown_not_changeable = !entry["changeable_without_restart"].get_bool();
+        }
+    }
+    BOOST_CHECK(found_sensitive);
+    BOOST_CHECK(unknown_not_changeable);
+
+    const UniValue& ignored = out["setting_file_args_ignored"];
+    BOOST_REQUIRE_EQUAL(ignored.size(), 1u);
+    BOOST_CHECK_EQUAL(ignored[0]["rpcpassword"].get_str(), "****");
+
+    // Clear the forced value the update above applied.
+    BOOST_REQUIRE(updateRwSetting("sensitive_probe", {}, true));
+}
+
+BOOST_AUTO_TEST_CASE(logargs_masks_sensitive_settings_file_values)
+{
+    SettingsFileScope scope;
+    scope.Write({{"sensitive_probe", "secret"}, {"free_probe", "a"}});
+    BOOST_REQUIRE(gArgs.ReadSettingsFile());
+
+    std::vector<std::string> lines;
+    {
+        const auto callback = LogInstance().PushBackCallback([&lines](const std::string& s) { lines.push_back(s); });
+        gArgs.LogArgs();
+        LogInstance().DeleteCallback(callback);
+    }
+
+    BOOST_CHECK_EQUAL(CountLines(lines, "Setting file arg: sensitive_probe = ****"), 1u);
+    BOOST_CHECK_EQUAL(CountLines(lines, "secret"), 0u);
+    BOOST_CHECK_EQUAL(CountLines(lines, "Setting file arg: free_probe = \"a\""), 1u);
+}
+
+
+namespace {
+//! The outcome of one ChangeSettings() call.
+struct ChangeOutcome
+{
+    bool ok{false};
+    bool requires_restart{false};
+    std::vector<std::string> no_change;
+    std::vector<std::string> immediate;
+    std::vector<std::string> requires_restart_list;
+    bool invalid_input{false};
+    bool elevation_required{false};
+    std::string error;
+};
+
+ChangeOutcome Change(const std::vector<std::pair<std::string, std::string>>& settings)
+{
+    ChangeOutcome out;
+    out.ok = ChangeSettings(settings, out.requires_restart, out.no_change, out.immediate,
+                            out.requires_restart_list, out.invalid_input, out.elevation_required, out.error);
+    return out;
+}
+
+//! Erases the named settings, stored and forced, on exit, so no case leaves one behind.
+struct ProbeEraser
+{
+    std::vector<std::string> m_names;
+
+    explicit ProbeEraser(std::vector<std::string> names) : m_names(std::move(names)) {}
+
+    ~ProbeEraser()
+    {
+        for (const std::string& name : m_names) {
+            (void)updateRwSetting(name, {}, true);
+        }
+    }
+};
+
+const std::string ELEVATE_PROBE_NEEDS_PASSPHRASE{
+    "Changing elevate_probe needs the wallet passphrase: unlock the wallet fully, "
+    "or send the passphrase with this request"};
+} // namespace
+
+BOOST_AUTO_TEST_CASE(changesettings_refuses_refused_and_command_line_only_keys)
+{
+    SettingsFileScope scope;
+    ProbeEraser eraser({"blocknotify", "command_line_only_probe"});
+
+    const ChangeOutcome refused = Change({{"blocknotify", "echo x"}});
+    BOOST_CHECK(!refused.ok);
+    BOOST_CHECK(refused.invalid_input);
+    BOOST_CHECK(!refused.elevation_required);
+    BOOST_CHECK_EQUAL(refused.error, "Refused setting: blocknotify can be set only in gridcoinresearch.conf or on the command line");
+    BOOST_CHECK(getRwSetting("blocknotify").isNull());
+    BOOST_CHECK(!gArgs.IsArgSet("-blocknotify"));
+
+    const ChangeOutcome cli_only = Change({{"command_line_only_probe", "1"}});
+    BOOST_CHECK(!cli_only.ok);
+    BOOST_CHECK(cli_only.invalid_input);
+    BOOST_CHECK_EQUAL(cli_only.error, "Refused setting: command_line_only_probe can be set only on the command line");
+    BOOST_CHECK(getRwSetting("command_line_only_probe").isNull());
+}
+
+BOOST_AUTO_TEST_CASE(changesettings_refusal_leaves_a_loaded_refused_entry_alone)
+{
+    SettingsFileScope scope;
+    scope.Write({{"blocknotify", "echo b"}});
+    BOOST_REQUIRE(gArgs.ReadSettingsFile());
+
+    const auto maps = [] {
+        std::string seen;
+        gArgs.LockSettings([&seen](util::Settings& s) {
+            const auto rw = s.rw_settings.find("blocknotify");
+            const auto refused = s.refused_rw_settings.find("blocknotify");
+            seen = std::string("rw=") + (rw == s.rw_settings.end() ? "<none>" : rw->second.write())
+                   + " refused=" + (refused == s.refused_rw_settings.end() ? "<none>" : refused->second.write());
+        });
+        return seen;
+    };
+    const std::string before = maps();
+    BOOST_CHECK_EQUAL(before, "rw=<none> refused=\"echo b\"");
+
+    BOOST_CHECK(!Change({{"blocknotify", "echo y"}}).ok);
+    BOOST_CHECK_EQUAL(maps(), before);
+    BOOST_CHECK_EQUAL(scope.ReadRaw().at("blocknotify").get_str(), "echo b");
+}
+
+BOOST_AUTO_TEST_CASE(changesettings_erases_a_refused_key)
+{
+    SettingsFileScope scope;
+    scope.Write({{"free_probe", "a"}, {"blocknotify", "echo b"}});
+    BOOST_REQUIRE(gArgs.ReadSettingsFile());
+
+    const ChangeOutcome erased = Change({{"blocknotify", ""}});
+    BOOST_CHECK(erased.ok);
+    BOOST_CHECK(erased.no_change == std::vector<std::string>{"blocknotify="});
+    BOOST_CHECK(erased.immediate.empty());
+    BOOST_CHECK(erased.requires_restart_list.empty());
+    BOOST_CHECK(!erased.requires_restart);
+
+    const auto raw = scope.ReadRaw();
+    BOOST_CHECK(raw.count("blocknotify") == 0);
+    BOOST_CHECK(raw.count("free_probe") == 1);
+}
+
+BOOST_AUTO_TEST_CASE(changesettings_needs_elevation_for_elevate_keys)
+{
+    SettingsFileScope scope;
+    ProbeEraser eraser({"elevate_probe", "free_probe"});
+    grc_test::EncryptedWalletSwap swap;
+    CWallet& w = swap.wallet();
+
+    // Locked.
+    ChangeOutcome out = Change({{"elevate_probe", "1"}});
+    BOOST_CHECK(!out.ok);
+    BOOST_CHECK(out.elevation_required);
+    BOOST_CHECK(!out.invalid_input);
+    BOOST_CHECK_EQUAL(out.error, ELEVATE_PROBE_NEEDS_PASSPHRASE);
+    BOOST_CHECK(getRwSetting("elevate_probe").isNull());
+
+    // A Free setting needs none.
+    BOOST_CHECK(Change({{"free_probe", "1"}}).ok);
+
+    // Unlocked for staking only.
+    BOOST_REQUIRE(w.Unlock(grc_test::EncryptedWalletSwap::Passphrase(), UnlockScope::StakingOnly));
+    out = Change({{"elevate_probe", "1"}});
+    BOOST_CHECK(!out.ok);
+    BOOST_CHECK(out.elevation_required);
+    BOOST_CHECK(getRwSetting("elevate_probe").isNull());
+
+    // A passphrase capability on this thread.
+    {
+        CapabilityScope s(w, w.BeginElevation(grc_test::EncryptedWalletSwap::Passphrase(), CapabilityKind::Settings),
+                          CapabilityKind::Settings);
+        BOOST_REQUIRE(s.Active());
+        out = Change({{"elevate_probe", "1"}});
+        BOOST_CHECK(out.ok);
+        BOOST_CHECK(!out.elevation_required);
+    }
+    BOOST_CHECK_EQUAL(getRwSetting("elevate_probe").get_str(), "1");
+
+    // A standing full unlock needs no scope.
+    w.Lock();
+    BOOST_REQUIRE(w.Unlock(grc_test::EncryptedWalletSwap::Passphrase()));
+    BOOST_CHECK(Change({{"elevate_probe", "2"}}).ok);
+    BOOST_CHECK_EQUAL(getRwSetting("elevate_probe").get_str(), "2");
+
+    // Locked again: restating the stored value changes nothing and needs nothing.
+    w.Lock();
+    out = Change({{"elevate_probe", "2"}});
+    BOOST_CHECK(out.ok);
+    BOOST_CHECK(out.no_change == std::vector<std::string>{"elevate_probe=2"});
+    BOOST_CHECK(Change({{"elevate_probe", "3"}}).elevation_required);
+}
+
+// Erasing an Elevate-class setting that is not set changes nothing, so it needs
+// no passphrase; erasing one that is set still does. An erase of a value forced
+// empty is no change either, and the forced value stays.
+BOOST_AUTO_TEST_CASE(changesettings_erasing_an_unset_elevate_key_needs_no_elevation)
+{
+    SettingsFileScope scope;
+    ProbeEraser eraser({"proxy", "free_probe"});
+    grc_test::EncryptedWalletSwap swap;
+    BOOST_REQUIRE(swap.wallet().Unlock(grc_test::EncryptedWalletSwap::Passphrase(), UnlockScope::StakingOnly));
+
+    BOOST_REQUIRE(!gArgs.IsArgSet("-proxy"));
+    ChangeOutcome out = Change({{"proxy", ""}});
+    BOOST_CHECK(out.ok);
+    BOOST_CHECK(!out.elevation_required);
+    BOOST_CHECK_EQUAL(out.error, "");
+    BOOST_CHECK(out.no_change == std::vector<std::string>{"proxy="});
+    BOOST_CHECK(out.immediate.empty());
+    BOOST_CHECK(out.requires_restart_list.empty());
+    BOOST_CHECK(getRwSetting("proxy").isNull());
+    BOOST_CHECK(!gArgs.IsArgSet("-proxy"));
+
+    // Set, the erase is a change.
+    scope.Write({{"proxy", "10.0.0.1:9050"}});
+    BOOST_REQUIRE(gArgs.ReadSettingsFile());
+    out = Change({{"proxy", ""}});
+    BOOST_CHECK(!out.ok);
+    BOOST_CHECK(out.elevation_required);
+    BOOST_CHECK_EQUAL(out.error, "Changing proxy needs the wallet passphrase: unlock the wallet fully, "
+                                 "or send the passphrase with this request");
+    BOOST_CHECK_EQUAL(getRwSetting("proxy").get_str(), "10.0.0.1:9050");
+    BOOST_CHECK_EQUAL(gArgs.GetArg("-proxy", "<unset>"), "10.0.0.1:9050");
+
+    // Forced empty, the value already reads empty.
+    gArgs.ForceSetArg("-free_probe", "");
+    out = Change({{"free_probe", ""}});
+    BOOST_CHECK(out.ok);
+    BOOST_CHECK(out.no_change == std::vector<std::string>{"free_probe="});
+    BOOST_CHECK(gArgs.IsArgSet("-free_probe"));
+    BOOST_CHECK_EQUAL(gArgs.GetArg("-free_probe", "<unset>"), "");
+}
+
+BOOST_AUTO_TEST_CASE(changesettings_batch_with_an_unelevated_elevate_key_applies_nothing)
+{
+    SettingsFileScope scope;
+    ProbeEraser eraser({"elevate_probe", "free_probe"});
+    grc_test::EncryptedWalletSwap swap;
+
+    const ChangeOutcome out = Change({{"free_probe", "9"}, {"elevate_probe", "9"}});
+    BOOST_CHECK(!out.ok);
+    BOOST_CHECK(out.elevation_required);
+    BOOST_CHECK(out.immediate.empty() && out.requires_restart_list.empty() && out.no_change.empty());
+    BOOST_CHECK_EQUAL(gArgs.GetArg("-free_probe", "<unset>"), "<unset>");
+    BOOST_CHECK(getRwSetting("free_probe").isNull());
+    BOOST_CHECK(getRwSetting("elevate_probe").isNull());
+}
+
+BOOST_AUTO_TEST_CASE(rpc_request_elevation_covers_one_request_only)
+{
+    SettingsFileScope scope;
+    ProbeEraser eraser({"elevate_probe"});
+    grc_test::EncryptedWalletSwap swap;
+    CWallet& w = swap.wallet();
+
+    BOOST_REQUIRE(w.Unlock(grc_test::EncryptedWalletSwap::Passphrase(), UnlockScope::StakingOnly));
+
+    {
+        CapabilityScope s(w, w.BeginElevation(grc_test::EncryptedWalletSwap::Passphrase(), CapabilityKind::RpcRequest),
+                          CapabilityKind::RpcRequest);
+        BOOST_REQUIRE(s.Active());
+        BOOST_CHECK(Change({{"elevate_probe", "5"}}).ok);
+    }
+
+    const ChangeOutcome after = Change({{"elevate_probe", "6"}});
+    BOOST_CHECK(!after.ok);
+    BOOST_CHECK(after.elevation_required);
+    BOOST_CHECK_EQUAL(getRwSetting("elevate_probe").get_str(), "5");
+}
+
+BOOST_AUTO_TEST_CASE(changesettings_caps_paytxfee)
+{
+    SettingsFileScope scope;
+    if (!gArgs.GetArgFlags("-paytxfee")) {
+        gArgs.AddArg("-paytxfee", "unit-test probe", ArgsManager::ALLOW_ANY, OptionsCategory::HIDDEN);
+    }
+    ProbeEraser eraser({"paytxfee"});
+
+    BOOST_CHECK(Change({{"paytxfee", "0.1"}}).ok);
+    BOOST_CHECK_EQUAL(getRwSetting("paytxfee").get_str(), "0.1");
+
+    const ChangeOutcome high = Change({{"paytxfee", "0.10000001"}});
+    BOOST_CHECK(!high.ok);
+    BOOST_CHECK(high.invalid_input);
+    BOOST_CHECK_EQUAL(high.error, "paytxfee 0.10000001 above maximum " + FormatMoney(MaxTxFeeRate()));
+    BOOST_CHECK_EQUAL(getRwSetting("paytxfee").get_str(), "0.1");
+
+    const ChangeOutcome bad = Change({{"paytxfee", "abc"}});
+    BOOST_CHECK(!bad.ok);
+    BOOST_CHECK(bad.invalid_input);
+    BOOST_CHECK_EQUAL(bad.error, "Invalid paytxfee amount: abc");
+
+    BOOST_CHECK(Change({{"paytxfee", ""}}).ok);
+    BOOST_CHECK(getRwSetting("paytxfee").isNull());
+}
+
+
+BOOST_AUTO_TEST_CASE(printable_ascii_keeps_only_plain_ascii_messages)
+{
+    // The line break and full stop Windows ends a message with are dropped.
+    BOOST_CHECK_EQUAL(PrintableAscii("Access is denied.\r\n"), "Access is denied");
+    BOOST_CHECK_EQUAL(PrintableAscii("Access is denied"), "Access is denied");
+    BOOST_CHECK_EQUAL(PrintableAscii("The system cannot find the file. \r\n"), "The system cannot find the file");
+
+    // A message in another language is not shown.
+    BOOST_CHECK_EQUAL(PrintableAscii("Acc\xc3\xa8s refus\xc3\xa9.\r\n"), "");
+
+    BOOST_CHECK_EQUAL(PrintableAscii(""), "");
+    BOOST_CHECK_EQUAL(PrintableAscii("\r\n"), "");
+
+    // A control character inside the message is not printable.
+    BOOST_CHECK_EQUAL(PrintableAscii("Access\tdenied."), "");
+    BOOST_CHECK_EQUAL(PrintableAscii("Access\ndenied."), "");
+    BOOST_CHECK_EQUAL(PrintableAscii("Access\x7f" "denied."), "");
+}
+
+BOOST_AUTO_TEST_CASE(without_system_message_removes_only_the_final_message_suffix)
+{
+    // What std::system_error(code, category, what_arg) makes: what_arg + ": " + message.
+    BOOST_CHECK_EQUAL(WithoutSystemMessage("open x: Access is denied.", "Access is denied.").value_or("none"), "open x");
+
+    // No what_arg: ": " + message, or the message alone (the constructor without a what_arg).
+    BOOST_CHECK_EQUAL(WithoutSystemMessage(": Access is denied.", "Access is denied.").value_or("none"), "");
+    BOOST_CHECK_EQUAL(WithoutSystemMessage("Access is denied.", "Access is denied.").value_or("none"), "");
+
+    // The message twice: only the final one is the message.
+    BOOST_CHECK_EQUAL(WithoutSystemMessage("odd: Access is denied.: Access is denied.", "Access is denied.")
+                          .value_or("none"),
+                      "odd: Access is denied.");
+
+    // The what does not end with the message: what_arg cannot be told from the message.
+    BOOST_CHECK(!WithoutSystemMessage("open x: Acces refuse.", "Access is denied.").has_value());
+    BOOST_CHECK(!WithoutSystemMessage("open xAccess is denied.", "Access is denied.").has_value());
+    BOOST_CHECK(!WithoutSystemMessage("", "Access is denied.").has_value());
+}
+
+BOOST_AUTO_TEST_CASE(ascii_what_leaves_other_exceptions_alone)
+{
+    BOOST_CHECK_EQUAL(AsciiWhat(std::runtime_error("plain reason")), "plain reason");
+    BOOST_CHECK_EQUAL(AsciiWhat(std::logic_error("Acc\xc3\xa8s")), "Acc\xc3\xa8s");
+
+#ifndef WIN32
+    // Off Windows what() is returned as it is.
+    const std::system_error e(EACCES, std::system_category(), "open x");
+    BOOST_CHECK_EQUAL(AsciiWhat(e), std::string(e.what()));
+#else
+    // 5 is ERROR_ACCESS_DENIED.
+    const std::system_error denied(5, std::system_category(), "open x");
+    const std::string text = AsciiWhat(denied);
+    BOOST_CHECK(text.rfind("open x: ", 0) == 0);
+    BOOST_CHECK_MESSAGE(text.size() >= 9 && text.compare(text.size() - 9, 9, "(error 5)") == 0, text);
+    for (const char c : text) BOOST_CHECK(c >= 0x20 && c < 0x7f);
+
+    // The what_arg is the caller's own text, a path with a non-ASCII name included: it is kept, and only
+    // Windows' message is replaced.
+    const std::string path_arg = "open C:\\Users\\J\xc3\xbcrgen\\x";
+    const std::string with_path = AsciiWhat(std::system_error(5, std::system_category(), path_arg));
+    BOOST_CHECK_MESSAGE(with_path.rfind(path_arg + ": ", 0) == 0, with_path);
+    BOOST_CHECK_MESSAGE(with_path.size() >= 9 && with_path.compare(with_path.size() - 9, 9, "(error 5)") == 0, with_path);
+
+    // Without a what_arg: the error text alone.
+    const std::string bare = AsciiWhat(std::system_error(5, std::system_category()));
+    BOOST_CHECK(bare.find("(error 5)") != std::string::npos || bare == "error 5");
+    for (const char c : bare) BOOST_CHECK(c >= 0x20 && c < 0x7f);
+
+    // Another category is not Windows' text.
+    const std::system_error other(std::make_error_code(std::errc::invalid_argument), "parse");
+    BOOST_CHECK_EQUAL(AsciiWhat(other), std::string(other.what()));
+#endif
 }
 
 BOOST_AUTO_TEST_SUITE_END()

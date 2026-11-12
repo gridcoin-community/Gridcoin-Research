@@ -6,7 +6,11 @@
 #define GRIDCOIN_UTIL_DIR_PERMISSIONS_H
 
 #include "fs.h"
+#ifdef WIN32
+#include "util/win_acl.h"
+#endif
 
+#include <optional>
 #include <string>
 
 //! Owner-only directory creation, shared by every place a Gridcoin data directory
@@ -24,8 +28,10 @@ namespace util {
 
 //! Create \p path (and any missing parents) and, IF THIS CALL CREATED IT, restrict
 //! it to the current user: mode 0700 on POSIX, an explicit owner+SYSTEM PROTECTED
-//! DACL on Windows (read back and verified, so a volume that silently stores no
-//! ACL is reported rather than trusted).
+//! DACL on Windows, given when the directory is created (CreateDirectoryWithAcl), so
+//! it is never there with another list, and read back and verified, so a volume that
+//! silently stores no ACL is reported rather than trusted. Missing parents get the
+//! lists they inherit.
 //!
 //! CREATE-ONLY, and that is a rule rather than an accident: a directory that
 //! already exists is left exactly as the operator configured it. Someone who
@@ -55,6 +61,26 @@ namespace util {
 //! place and \p error says so explicitly.
 bool CreateOwnerOnlyDirectory(const fs::path& path, std::string& error);
 
+//! CreateOwnerOnlyDirectory for a directory whose files are better kept with weaker
+//! protection than not kept at all: wallet backups in -backupdir. When this call
+//! created \p path and cannot restrict it because the filesystem keeps no modes (on
+//! POSIX chmod fails with EPERM, ENOTSUP, EOPNOTSUPP or EROFS, as on FAT; on Windows
+//! the volume lacks FILE_PERSISTENT_ACLS), the directory is kept, \p unrestricted is
+//! set to the reason, and true is returned. Any other failure to restrict it
+//! withdraws it and returns false, as CreateOwnerOnlyDirectory does, so a directory
+//! left with permissive inherited access is never kept. False, with \p error set,
+//! also when the directory could not be created. A directory that exists is left as
+//! it is.
+bool CreateDirectoryRestrictedIfPossible(const fs::path& path, std::string& error,
+                                         std::optional<std::string>& unrestricted);
+
+#ifndef WIN32
+//! Whether chmod failing with \p err means the filesystem keeps no POSIX modes
+//! (EPERM, ENOTSUP, EOPNOTSUPP or EROFS), the only failures
+//! CreateDirectoryRestrictedIfPossible tolerates.
+bool RestrictErrorMeansNoModes(int err);
+#endif
+
 //! Restrict the process umask so that every file and directory this process
 //! creates afterwards is owner-only from the moment it exists.
 //!
@@ -75,29 +101,45 @@ bool CreateOwnerOnlyDirectory(const fs::path& path, std::string& error);
 //! call site, as ipc/process.cpp does when it creates the IPC socket.
 //!
 //! No-op on Windows, which has no umask. There the equivalent protection is the
-//! data directory's inheritable owner+SYSTEM DACL, applied by
-//! CreateOwnerOnlyDirectory() and inherited by everything created inside it.
+//! data directory's inheritable owner+SYSTEM DACL, which CreateOwnerOnlyDirectory()
+//! gives the directory when it creates it, and which everything created inside
+//! inherits.
 void SetOwnerOnlyUmask();
 
+//! The umask SetOwnerOnlyUmask() replaced, when it replaced one other than the
+//! owner-only mask itself. The commands the node runs for the user (the *notify
+//! options) get it back, so a script makes its files as it would when the user
+//! runs it by hand. Always empty on Windows.
+std::optional<unsigned int> InheritedUmask();
+
 #ifdef WIN32
-//! Apply an owner+SYSTEM PROTECTED DACL to an existing file or directory and verify
-//! it by reading it back. Throws std::system_error on failure — callers that hold
-//! secrets (the IPC socket and cookie) rely on this failing closed.
+//! The owner-only access list: owned by this process's token user, with that user
+//! and SYSTEM at FILE_ALL_ACCESS (SYSTEM named once when it is the user), inherited
+//! by what is created inside when \p inheritable. Throws std::system_error when the
+//! token cannot be read.
+winacl::AclSpec OwnerOnlyAclSpec(bool inheritable);
+
+//! Why \p path could not be restricted to this account, \p failure saying how,
+//! worded as the IPC startup error it becomes ("Refusing to serve IPC: ..."), with
+//! the advice that the data directory must live on an NTFS volume.
+std::string OwnerOnlyRefusalText(const fs::path& path, const std::string& failure);
+
+//! Make the current user the owner of an existing file or directory, apply an
+//! owner+SYSTEM PROTECTED DACL to it, and verify both by reading them back exactly.
+//! Throws on failure: std::system_error when a call fails, std::runtime_error when
+//! what is read back differs. Callers that hold secrets (the IPC socket and cookie)
+//! rely on this failing closed.
 //!
 //! \param inheritable  On a directory, make the ACEs inheritable so entries created
 //!                     inside are owner-only from creation rather than after the
 //!                     fact, which closes the create/protect window.
 void ApplyOwnerOnlyDacl(const fs::path& path, bool inheritable);
 
-//! Confirm \p path's DACL is present, protected, and names only owner + SYSTEM.
-//! Throws std::system_error describing the discrepancy otherwise.
+//! Confirm \p path's DACL is present and protected, its owner is the current user or
+//! SYSTEM, and every allow entry of any kind, inherit-only ones included, names one
+//! of the two. Throws std::runtime_error describing the discrepancy otherwise, and
+//! std::system_error when the ACL cannot be read.
 void VerifyOwnerOnlyDacl(const fs::path& path);
-
-//! The same DACL as a raw PACL, for callers that need it at CREATE time via
-//! SECURITY_ATTRIBUTES (CreateFileW) rather than applying it afterwards. The caller
-//! owns the result and must LocalFree() it. Returned as void* so this header stays
-//! free of <windows.h>.
-void* MakeOwnerOnlyDacl(bool inheritable);
 #endif // WIN32
 
 } // namespace util

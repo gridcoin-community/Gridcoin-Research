@@ -56,12 +56,22 @@ behavior.
     ############ Warning: Set a Good Password and Secure Your System ############
     #############################################################################
 
+    ## RPC is plain HTTP: the password and every request cross the network
+    ## unencrypted. The RPC port listens on loopback (127.0.0.1) by default, and
+    ## loopback may always connect.
+    ## Without rpcbind=, ANY rpcallowip= line opens the RPC port on every
+    ## interface of this machine, and only the allow list limits who connects.
+    ## To reach RPC from another machine, prefer an SSH tunnel and leave the
+    ## port on loopback:
+    ##   ssh -N -L 15715:127.0.0.1:15715 <user>@<this machine>
+    ## Otherwise bind it to one numeric address of this machine with rpcbind=,
+    ## and allow only the remote system (an address, or a subnet in CIDR form).
     #server=1
-    #rpcallowip=127.0.0.1
-    #rpcallowip=<IP Address of Remote System>
     #rpcport=<Port for RPC Communication>
     #rpcuser=<A Username for RPC>
     #rpcpassword=<A STRONG Password for RPC>
+    #rpcbind=<An address of this machine, e.g. 192.168.1.10>
+    #rpcallowip=<The remote system, e.g. 192.168.1.20 or 192.168.1.0/24>
 
     #############################################################################
     ######################## Optional BOINC settings ############################

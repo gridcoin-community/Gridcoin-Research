@@ -88,4 +88,11 @@ BOOST_AUTO_TEST_CASE(it_is_a_strict_weak_order)
     BOOST_CHECK(!(half < also_third));
 }
 
+BOOST_AUTO_TEST_CASE(max_tx_fee_rate_is_the_absurd_multiple_of_the_send_base_fee)
+{
+    BOOST_CHECK_EQUAL(ABSURD_FEE_MULTIPLIER, 100);
+    BOOST_CHECK_EQUAL(MaxTxFeeRate(), 100 * GetBaseFee(CTransaction(), GMF_SEND));
+    BOOST_CHECK_EQUAL(MaxTxFeeRate(), CAmount{10000000});
+}
+
 BOOST_AUTO_TEST_SUITE_END()

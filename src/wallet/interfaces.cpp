@@ -7,17 +7,31 @@
 #include "gridcoin/backup.h"
 #include "gridcoin/tx_message.h"
 #include "hash.h"
+#include "init.h"
+#include "node/shutdown.h"
+#include "interfaces/connection_scope.h"
 #include "interfaces/handler.h"
+#include "interfaces/notification_dispatcher.h"
 #include "key_io.h"
 #include "policy/fees.h"
 #include "policy/policy.h"
+#include "scheduler.h"
 #include "streams.h"
 #include "util/strencodings.h"
+#include "util/system.h"
+#include "util/time.h"
+#include "util/transfer_file.h"
+#include "wallet/autounlock_setup.h"
 #include "wallet/coincontrol.h"
 #include "net_processing.h"
+#include "wallet/transfer_sources.h"
 #include "wallet/wallet.h"
 
 #include <algorithm>
+#include <atomic>
+#include <chrono>
+#include <functional>
+#include <mutex>
 #include <map>
 #include <memory>
 #include <set>
@@ -27,6 +41,39 @@
 #include <vector>
 
 namespace interfaces {
+
+//! How long after a successful IPC encryption the core stops by itself, when the
+//! GUI's connection has not closed by then.
+static constexpr std::chrono::seconds ENCRYPT_SHUTDOWN_FALLBACK{60};
+
+namespace {
+std::mutex g_encryption_shutdown_mutex;
+std::function<void()> g_encryption_shutdown_fn;
+} // namespace
+
+void SetEncryptionShutdownFnForTesting(std::function<void()> fn)
+{
+    std::lock_guard<std::mutex> lock(g_encryption_shutdown_mutex);
+    g_encryption_shutdown_fn = std::move(fn);
+}
+
+void RequestShutdownAfterEncryption()
+{
+    // Copied out so the test function runs outside the leaf mutex.
+    std::function<void()> fn;
+    {
+        std::lock_guard<std::mutex> lock(g_encryption_shutdown_mutex);
+        fn = g_encryption_shutdown_fn;
+    }
+
+    if (fn) {
+        fn();
+    } else {
+        MarkStopRequested();
+        StartShutdown();
+    }
+}
+
 namespace {
 
 //! Build the value snapshot of one wallet output. The maturity flag needs
@@ -50,6 +97,221 @@ WalletOutput MakeWalletOutput(const CWalletTx& wtx, unsigned int n, int depth)
     return output;
 }
 
+//! Marks one wallet interface's transfer as live for as long as it exists.
+class LiveTransfer
+{
+public:
+    //! Null when a transfer of the interface owning \p flag is already live.
+    static std::unique_ptr<LiveTransfer> Claim(const std::shared_ptr<std::atomic<bool>>& flag)
+    {
+        if (flag->exchange(true)) return nullptr;
+        return std::unique_ptr<LiveTransfer>(new LiveTransfer(flag));
+    }
+
+    ~LiveTransfer() { m_flag->store(false); }
+
+    LiveTransfer(const LiveTransfer&) = delete;
+    LiveTransfer& operator=(const LiveTransfer&) = delete;
+
+private:
+    explicit LiveTransfer(std::shared_ptr<std::atomic<bool>> flag) : m_flag(std::move(flag)) {}
+
+    const std::shared_ptr<std::atomic<bool>> m_flag;
+};
+
+//! A source that keeps its wallet interface's transfer live until it is
+//! destroyed.
+class LiveFileSource final : public FileSource
+{
+public:
+    LiveFileSource(std::unique_ptr<FileSource> inner, std::unique_ptr<LiveTransfer> live)
+        : m_live(std::move(live)), m_inner(std::move(inner))
+    {
+    }
+
+    std::vector<FileEntryInfo> entries() override { return m_inner->entries(); }
+    FileChunk read(uint32_t entry, uint32_t max_bytes) override { return m_inner->read(entry, max_bytes); }
+    FileTrailer trailer(uint32_t entry) override { return m_inner->trailer(entry); }
+    void cancel() override { m_inner->cancel(); }
+
+private:
+    // Declared first, so it is destroyed last: another transfer can begin only
+    // once the inner source, and with it every snapshot, is gone.
+    std::unique_ptr<LiveTransfer> m_live;
+    std::unique_ptr<FileSource> m_inner;
+};
+
+//! A sink that keeps its wallet interface's transfer live until it is
+//! destroyed.
+class LiveFileSink final : public FileSink
+{
+public:
+    LiveFileSink(std::unique_ptr<FileSink> inner, std::unique_ptr<LiveTransfer> live)
+        : m_live(std::move(live)), m_inner(std::move(inner))
+    {
+    }
+
+    bool write(const std::vector<unsigned char>& data) override { return m_inner->write(data); }
+    FileSinkResult finish(uint64_t size, const uint256& sha256) override { return m_inner->finish(size, sha256); }
+    void cancel() override { m_inner->cancel(); }
+
+private:
+    // Declared first, so it is destroyed last: another transfer can begin only
+    // once the inner sink, and what it holds, is gone.
+    std::unique_ptr<LiveTransfer> m_live;
+    std::unique_ptr<FileSink> m_inner;
+};
+
+//! The refusals of a console file transfer: a method that is not a file
+//! command in the direction asked, and no FileTransfer capability.
+const char* const NOT_A_FILE_COMMAND = "not a file command";
+const char* const FILE_TRANSFER_REFUSAL = "Enter the wallet passphrase to transfer files.";
+
+//! Whether \p args, the console arguments without the file, has the ones the
+//! command takes before its file, and no more than its RPC takes in all
+//! (max_args, the file included), as the RPC's own count check refuses. The
+//! core puts its own value at path_index.
+bool ArgumentCountFits(const ConsoleFileCommand& command, const std::vector<std::string>& args,
+                       std::string& error)
+{
+    if (command.path_index > args.size()) {
+        error = strprintf("%s takes %u argument(s) before its file", command.method, command.path_index);
+        return false;
+    }
+
+    if (args.size() + 1 > command.max_args) {
+        error = strprintf("usage: %s takes at most %u argument(s), its file included", command.method,
+                          command.max_args);
+        return false;
+    }
+
+    return true;
+}
+
+//! Remove the snapshots in \p entries and empty it.
+void RemoveSnapshots(std::vector<wallet::SnapshotEntry>& entries)
+{
+    for (const wallet::SnapshotEntry& entry : entries) {
+        if (entry.path.empty()) continue;
+
+        boost::system::error_code ec;
+        fs::remove(entry.path, ec);
+
+        if (ec) {
+            LogPrintf("WARNING: %s: could not remove %s: %s", __func__, entry.path.string(), ec.message());
+        }
+    }
+
+    entries.clear();
+}
+
+//! Steps 3 to 5 of Wallet::beginBackup(): refuse what cannot be backed up,
+//! check that the transfer directory has room for it, and snapshot each
+//! requested item there, in the order wallet, configuration file, settings
+//! file. A configuration file that may not be sent (ConfigBackupPermitted)
+//! is listed with the reason as its note and nothing to send, so the other
+//! items are still backed up. On failure the snapshots made so far are
+//! removed and \p entries is left empty.
+bool SnapshotBackupItems(const CWallet& wallet, uint8_t items, std::vector<wallet::SnapshotEntry>& entries,
+                         std::string& error)
+{
+    const uint8_t wallet_item = static_cast<uint8_t>(BackupItem::Wallet);
+    const uint8_t config_item = static_cast<uint8_t>(BackupItem::Config);
+    const uint8_t settings_item = static_cast<uint8_t>(BackupItem::Settings);
+
+    if (items == 0 || (items & ~(wallet_item | config_item | settings_item)) != 0) {
+        error = strprintf("unknown backup items 0x%02x", static_cast<unsigned int>(items));
+        return false;
+    }
+
+    if ((items & wallet_item) && !wallet.fFileBacked) {
+        error = "the wallet is not file-backed";
+        return false;
+    }
+
+    // What each item is copied from. A configuration or settings file that
+    // does not exist, or a configuration file that may not be sent, has
+    // nothing to back up; its entry carries a note instead.
+    struct Item
+    {
+        std::string name{};
+        fs::path source{};
+        bool is_wallet{false};
+        std::string missing_note{};
+    };
+
+    std::vector<Item> plan;
+
+    if (items & wallet_item) {
+        plan.push_back({wallet.strWalletFile, GetDataDir() / wallet.strWalletFile, true, ""});
+    }
+
+    if (items & config_item) {
+        const fs::path conf = GetConfigFile();
+        std::string refused;
+
+        if (wallet::ConfigBackupPermitted(refused)) {
+            plan.push_back({conf.filename().string(), conf, false, "no configuration file"});
+        } else {
+            plan.push_back({conf.filename().string(), fs::path(), false, refused});
+        }
+    }
+
+    if (items & settings_item) {
+        fs::path settings;
+        if (gArgs.GetSettingsPath(&settings)) {
+            plan.push_back({settings.filename().string(), settings, false, "no settings file"});
+        } else {
+            plan.push_back({GRIDCOIN_SETTINGS_FILENAME, fs::path(), false, "no settings file"});
+        }
+    }
+
+    uint64_t need = 0;
+
+    for (Item& item : plan) {
+        // Nothing to copy: a refused configuration file, or no settings file.
+        if (item.source.empty()) continue;
+
+        boost::system::error_code ec;
+
+        if (!item.is_wallet && !fs::exists(item.source, ec)) {
+            item.source.clear();
+            continue;
+        }
+
+        const uintmax_t size = fs::file_size(item.source, ec);
+        if (!ec) need += size;
+    }
+
+    if (!util::HasFreeSpace(wallet::GetTransferDir(), need, error)) return false;
+
+    try {
+        for (const Item& item : plan) {
+            if (item.source.empty()) {
+                entries.push_back({item.name, fs::path(), item.missing_note});
+                continue;
+            }
+
+            const std::optional<fs::path> snapshot = item.is_wallet ? wallet::SnapshotWallet(wallet, error)
+                                                                    : wallet::SnapshotPlainFile(item.source, error);
+            if (!snapshot) {
+                RemoveSnapshots(entries);
+                return false;
+            }
+
+            entries.push_back({item.name, *snapshot, ""});
+        }
+    } catch (const std::exception& e) {
+        // In process this runs on the GUI's thread, where an exception would end
+        // the application.
+        RemoveSnapshots(entries);
+        error = strprintf("the backup failed: %s", e.what());
+        return false;
+    }
+
+    return true;
+}
+
 //! In-process Wallet implementation: thin wrappers over CWallet. Balance
 //! queries lock internally (CWallet takes LOCK2(cs_main, cs_wallet) itself),
 //! so callers never hold core locks. Signal bridges convert the wallet's own
@@ -59,6 +321,14 @@ class WalletImpl : public Wallet
 public:
     explicit WalletImpl(CWallet* wallet) : m_wallet(wallet) {}
 
+    ~WalletImpl() override
+    {
+        if (m_connection_scope && m_closing_hook != 0) m_connection_scope->removeCloseHook(m_closing_hook);
+    }
+
+    WalletImpl(const WalletImpl&) = delete;
+    WalletImpl& operator=(const WalletImpl&) = delete;
+
     int64_t getBalance() override { return m_wallet->GetBalance(); }
 
     int64_t getStake() override { return m_wallet->GetStake(); }
@@ -66,6 +336,13 @@ public:
     int64_t getUnconfirmedBalance() override { return m_wallet->GetUnconfirmedBalance(); }
 
     int64_t getImmatureBalance() override { return m_wallet->GetImmatureBalance(); }
+
+    CAmount getTransactionFeeRate() override
+    {
+        // The rate per kB CreateTransaction pays: the configured rate, or the
+        // minimum fee of a send when that is higher.
+        return std::max<CAmount>(nTransactionFee, GetBaseFee(CTransaction(), GMF_SEND));
+    }
 
     bool tryGetBalances(WalletBalances& balances) override
     {
@@ -136,7 +413,45 @@ public:
 
     bool encryptWallet(const SecureString& passphrase) override
     {
-        return m_wallet->EncryptWallet(passphrase);
+        if (!m_wallet->EncryptWallet(passphrase)) return false;
+
+        // Backup names carry whole seconds, so one named in the second the encryption
+        // finished counts as made before it (getPreEncryptionBackups()).
+        m_encrypted_before.store(GetTime() + 1, std::memory_order_release);
+
+        // Served on an IPC connection, the GUI cannot restart the core, and the
+        // wallet database still holds plaintext residue until the core stops, as
+        // the RPC encryptwallet makes it stop. The core stops when this
+        // connection closes (the GUI closes it after telling the user), and the
+        // scheduler stops it after a delay if the GUI never does. In process
+        // (no scope) the monolithic GUI quits itself.
+        if (m_connection_scope) {
+            m_connection_scope->addCloseHook(&RequestShutdownAfterEncryption);
+
+            // A null handle means shutdown has begun: nothing to add.
+            if (CScheduler* scheduler = g_scheduler_handle.load(std::memory_order_acquire)) {
+                // A refusal means the scheduler is stopping, which is shutdown
+                // already under way, so the result is not needed.
+                (void)scheduler->scheduleFromNowIfRunning(&RequestShutdownAfterEncryption,
+                                                          ENCRYPT_SHUTDOWN_FALLBACK);
+            }
+        }
+
+        return true;
+    }
+
+    std::vector<std::string> getPreEncryptionBackups() override
+    {
+        // As the RPC encryptwallet names them, for the GUI to show. Nothing is deleted.
+        const int64_t encrypted_before = m_encrypted_before.load(std::memory_order_acquire);
+        if (encrypted_before == 0) return {};
+
+        std::vector<std::string> backups;
+        for (const fs::path& backup : GRC::ListAutomaticWalletBackupsBefore(GRC::GetBackupPath(), encrypted_before)) {
+            backups.push_back(backup.string());
+        }
+
+        return backups;
     }
 
     bool lockWallet() override { return m_wallet->Lock(); }
@@ -144,11 +459,58 @@ public:
 
     bool elevateWallet(const SecureString& passphrase) override
     {
-        return m_wallet->ElevateToFull(passphrase);
+        // A client that still asks for this predates beginElevation(), and the
+        // handshake's schema major keeps such a client from connecting. Refused
+        // without reading the passphrase, so it is not counted as an attempt.
+        LogPrintf("WARNING: %s: refused. elevateWallet is retired; the client begins a "
+                  "capability for each operation instead.", __func__);
+        return false;
     }
+
+    bool beginElevation(const SecureString& passphrase, CapabilityKind kind) override
+    {
+        if (!IsKnownCapabilityKind(kind)) {
+            LogPrintf("WARNING: %s: refused a capability of unknown kind %u", __func__,
+                      static_cast<unsigned int>(kind));
+            return false;
+        }
+
+        // The connection this wallet is served on may go away while the
+        // passphrase is checked. Its scope reads closed from the moment its
+        // teardown begins, before the slot hook ends the IPC capability (an
+        // exchange under the capability mutex), and the begin asks the scope in
+        // the same capability-mutex section that installs. So either the install
+        // comes before the hook's exchange, and the hook ends it before the slot
+        // can pass to another GUI, or it comes after, and nothing is installed:
+        // the slot, and any capability the next GUI has begun, are left alone.
+        // In process (the monolithic build) there is no connection and no check.
+        // A wait for its turn ends, unchecked, when the connection closes.
+        const std::optional<PassphraseAttemptCancel> given_up = GiveUpWhenConnectionCloses();
+
+        bool begun = false;
+        try {
+            begun = m_wallet->BeginIpcElevation(passphrase, kind, m_connection_closed);
+        } catch (const std::exception& e) {
+            // Nothing the client could use is left behind: a capability this
+            // call may have issued before the throw is ended with the slot. Once
+            // the connection has closed the slot is left alone, since it may be
+            // the next GUI's, and the slot hook ended what was this one's.
+            LogPrintf("ERROR: %s: no capability was begun: %s", __func__, e.what());
+            m_wallet->EndIpcElevation(m_connection_closed);
+            return false;
+        }
+        return begun;
+    }
+
+    // Ends this connection's capability. Once the connection has closed the
+    // slot is left alone: it may hold the next GUI's capability by then.
+    void endElevation() override { m_wallet->EndIpcElevation(m_connection_closed); }
 
     bool unlockWallet(const SecureString& passphrase, bool staking_only) override
     {
+        // A wait for its turn ends, unchecked, when the connection closes.
+        const std::optional<PassphraseAttemptCancel> given_up = GiveUpWhenConnectionCloses();
+
         // One call. The scope is installed with the master key, so there is no
         // window in which the wallet is unlocked while still carrying the
         // previous unlock's restriction -- which, since nothing cleared that
@@ -160,23 +522,232 @@ public:
     bool changeWalletPassphrase(const SecureString& old_passphrase,
                                 const SecureString& new_passphrase) override
     {
-        // No preliminary lock. ChangeWalletPassphrase captures the scope and the
-        // deadline under the acquisition that clears them, and restores both.
-        // Locking here threw that state away before it could be captured, so a
-        // GUI passphrase change silently ended a staking-only unlock and its
-        // timer where the RPC path preserved them. It also takes cs_wallet
-        // itself, so holding it here bought nothing.
+        // No preliminary lock. ChangeWalletPassphrase leaves the unlock as it
+        // is, so locking here would silently end a staking-only unlock and its
+        // timer that the RPC path keeps. It also takes cs_wallet itself, so
+        // holding it here would buy nothing. A wait for its turn ends, unchecked,
+        // when the connection closes.
+        const std::optional<PassphraseAttemptCancel> given_up = GiveUpWhenConnectionCloses();
         return m_wallet->ChangeWalletPassphrase(old_passphrase, new_passphrase);
     }
 
-    bool backupWallet(const std::string& dest) override
+    // The passphrase comes with the call, not from this connection's capability:
+    // the store needs the passphrase itself. SetAutoUnlockSecret() and
+    // ClearAutoUnlockSecret() log the outcome, never the passphrase, so the error
+    // they return is not needed here. A wait for its turn ends, unchecked, when the
+    // connection closes.
+    AutoUnlockSetupResult setAutoUnlockSecret(const SecureString& passphrase) override
     {
-        return GRC::BackupWallet(*m_wallet, dest);
+        const std::optional<PassphraseAttemptCancel> given_up = GiveUpWhenConnectionCloses();
+        std::string error;
+        return SetAutoUnlockSecret(*m_wallet, passphrase, error);
     }
 
-    bool backupConfigFile(const std::string& dest) override
+    AutoUnlockSetupResult clearAutoUnlockSecret(const SecureString& passphrase) override
     {
-        return GRC::BackupConfigFile(dest);
+        const std::optional<PassphraseAttemptCancel> given_up = GiveUpWhenConnectionCloses();
+        std::string error;
+        return ClearAutoUnlockSecret(*m_wallet, passphrase, error);
+    }
+
+    AutoUnlockStoreStatus getAutoUnlockStatus() override { return GetAutoUnlockStatus(); }
+
+    // The core no longer writes to a path the client names. A client that
+    // still asks predates beginBackup(), and the handshake's schema major keeps
+    // such a client from connecting.
+    bool backupWallet(const std::string& /*dest*/) override
+    {
+        LogPrintf("WARNING: %s: refused. IPC: use the transfer channel.", __func__);
+        return false;
+    }
+
+    bool backupConfigFile(const std::string& /*dest*/) override
+    {
+        LogPrintf("WARNING: %s: refused. IPC: use the transfer channel.", __func__);
+        return false;
+    }
+
+    std::unique_ptr<FileSource> beginBackup(uint8_t items, std::string& error_out) override
+    {
+        error_out.clear();
+
+        // One transfer at a time on this interface. The claim is made here and
+        // held by the source returned, so two calls cannot both pass it.
+        std::unique_ptr<LiveTransfer> live = LiveTransfer::Claim(m_transfer_live);
+        if (!live) {
+            error_out = "a transfer is already in progress";
+            return nullptr;
+        }
+
+        // A copy of the wallet file is the keys, so the snapshots are made under
+        // the Backup capability the client began. An unencrypted or fully
+        // unlocked wallet needs none. The slot is read once, so the capability
+        // ended below is the one this call ran under.
+        const std::optional<CapabilityId> id = m_wallet->IpcCapability(m_connection_closed);
+        CapabilityScope scope(*m_wallet, id, CapabilityKind::Backup);
+        if (!m_wallet->CanUseKeys()) {
+            error_out = "Enter the wallet passphrase to back up the wallet.";
+            return nullptr;
+        }
+
+        std::vector<wallet::SnapshotEntry> entries;
+        const bool made = SnapshotBackupItems(*m_wallet, items, entries, error_out);
+
+        // A capability authorises one operation, and this attempt was it,
+        // whether the snapshots were made or not. Ended now, so the source holds
+        // none. Only when this call ran under it: on an unencrypted or fully
+        // unlocked wallet the gate passes without one, and a capability of
+        // another kind the client holds stays for its own operation. Only this
+        // call's capability is ended: one begun into the slot meanwhile stays,
+        // and once the connection has closed the slot is left alone.
+        if (scope.Active()) m_wallet->EndIpcElevationIf(*id, m_connection_closed);
+
+        if (!made) return nullptr;
+
+        return std::make_unique<LiveFileSource>(wallet::MakeSnapshotSource(std::move(entries), m_connection_scope),
+                                                std::move(live));
+    }
+
+    std::unique_ptr<FileSource> beginConsoleDownload(const std::string& method, const std::vector<std::string>& args,
+                                                     std::string& error_out) override
+    {
+        error_out.clear();
+
+        const ConsoleFileCommand* command = FindConsoleFileCommand(method);
+        if (!command || command->direction != TransferDirection::Download) {
+            error_out = NOT_A_FILE_COMMAND;
+            return nullptr;
+        }
+        if (!ArgumentCountFits(*command, args, error_out)) return nullptr;
+
+        // One transfer at a time on this interface, claimed here and held by
+        // the source returned.
+        std::unique_ptr<LiveTransfer> live = LiveTransfer::Claim(m_transfer_live);
+        if (!live) {
+            error_out = "a transfer is already in progress";
+            return nullptr;
+        }
+
+        // dumpwallet runs under the FileTransfer capability the client began
+        // when the wallet is encrypted and not fully unlocked; an unencrypted or
+        // fully unlocked wallet needs none. The slot is read once, so the
+        // capability handed on or ended below is the one this call ran under.
+        // The scope is closed again before anything runs: the dump source opens
+        // its own for each read. A capability of another kind in the slot is
+        // left for its own operation. dumpcontracts exports public chain data
+        // and reaches no key, so it runs with no capability, and one the client
+        // holds is neither used nor ended.
+        std::optional<CapabilityId> held;
+        if (command->needs_passphrase) {
+            const std::optional<CapabilityId> id = m_wallet->IpcCapability(m_connection_closed);
+            CapabilityScope scope(*m_wallet, id, CapabilityKind::FileTransfer);
+            if (!m_wallet->CanUseKeys()) {
+                error_out = FILE_TRANSFER_REFUSAL;
+                return nullptr;
+            }
+            if (scope.Active()) held = id;
+        }
+
+        // The dump is generated into the stream as it is read. The source
+        // holds the capability, when there is one, for its run and ends it
+        // through the slot, so the client keeps its own end of it until the
+        // download is done.
+        if (method == "dumpwallet") {
+            return std::make_unique<LiveFileSource>(
+                wallet::MakeDumpWalletSource(*m_wallet, held, EndThroughSlot(held), m_connection_scope),
+                std::move(live));
+        }
+
+        // The command writes into the core's transfer directory now, and the
+        // source streams that file. A capability that let it begin has done its
+        // one operation, and the source holds none.
+        std::unique_ptr<FileSource> source;
+        try {
+            source = wallet::MakeRpcOutputSource(method, args, command->path_index, m_connection_scope, error_out);
+        } catch (...) {
+            // Nothing escapes before the capability is ended below. In process
+            // this runs on a GUI thread (the console's modal worker), and an
+            // exception would reach the GUI's code directly.
+            source.reset();
+            error_out = strprintf("%s failed", method);
+        }
+        if (held) m_wallet->EndIpcElevationIf(*held, m_connection_closed);
+        if (!source) return nullptr;
+
+        return std::make_unique<LiveFileSource>(std::move(source), std::move(live));
+    }
+
+    std::unique_ptr<FileSink> beginConsoleUpload(const std::string& method, const std::vector<std::string>& args,
+                                                 uint64_t size, std::string& error_out) override
+    {
+        error_out.clear();
+
+        const ConsoleFileCommand* command = FindConsoleFileCommand(method);
+        if (!command || command->direction != TransferDirection::Upload) {
+            error_out = NOT_A_FILE_COMMAND;
+            return nullptr;
+        }
+        if (!ArgumentCountFits(*command, args, error_out)) return nullptr;
+
+        if (size > command->max_upload_bytes) {
+            error_out = strprintf("%s: the file is too large (%u bytes; at most %u)", method, size,
+                                  command->max_upload_bytes);
+            return nullptr;
+        }
+
+        std::unique_ptr<LiveTransfer> live = LiveTransfer::Claim(m_transfer_live);
+        if (!live) {
+            error_out = "a transfer is already in progress";
+            return nullptr;
+        }
+
+        // As beginConsoleDownload(): run under the capability in the slot, read
+        // once, when there is one; an unencrypted or fully unlocked wallet
+        // needs none.
+        const std::optional<CapabilityId> id = m_wallet->IpcCapability(m_connection_closed);
+        std::optional<CapabilityId> held;
+        {
+            CapabilityScope scope(*m_wallet, id, CapabilityKind::FileTransfer);
+            if (!m_wallet->CanUseKeys()) {
+                error_out = FILE_TRANSFER_REFUSAL;
+                return nullptr;
+            }
+            if (scope.Active()) held = id;
+        }
+
+        // The dump is held in memory, never on the core's disk, and imported at
+        // finish under the capability, which the sink holds until then and ends.
+        if (method == "importwallet") {
+            return std::make_unique<LiveFileSink>(
+                wallet::MakeImportWalletSink(*m_wallet, held, EndThroughSlot(held), size, m_connection_scope),
+                std::move(live));
+        }
+
+        // The command reaches no key: the capability that let the upload begin
+        // is ended now, and the upload waits in a core temporary file, for which
+        // the transfer directory needs room.
+        bool room = false;
+        try {
+            room = util::HasFreeSpace(wallet::GetTransferDir(), size, error_out);
+        } catch (...) {
+            // Nothing escapes before the capability is ended below.
+            error_out = strprintf("%s could not begin", method);
+        }
+        if (held) m_wallet->EndIpcElevationIf(*held, m_connection_closed);
+        if (!room) return nullptr;
+
+        std::unique_ptr<FileSink> sink;
+        try {
+            sink = wallet::MakeRpcFileSink(method, args, command->path_index, size, command->max_upload_bytes,
+                                           m_connection_scope);
+        } catch (...) {
+            // In process this runs on a GUI thread (the console's modal
+            // worker), and an exception would reach the GUI's code directly.
+            error_out = strprintf("%s could not begin", method);
+            return nullptr;
+        }
+
+        return std::make_unique<LiveFileSink>(std::move(sink), std::move(live));
     }
 
     MessageSignStatus signMessage(const std::string& address, const std::string& message,
@@ -188,22 +759,42 @@ public:
             return MessageSignStatus::KeyNotAvailable;
         }
 
-        CKey key;
-        if (!WITH_LOCK(m_wallet->cs_wallet, return m_wallet->GetKey(*key_id, key))) {
-            return MessageSignStatus::KeyNotAvailable;
-        }
+        // The key is read under the capability the client began for this. On
+        // a wallet unlocked for staking only there is none otherwise, and the
+        // keystore refuses the key.
+        CapabilityScope scope(*m_wallet, m_wallet->IpcCapability(m_connection_closed), CapabilityKind::SignMessage);
 
-        CDataStream ss(SER_GETHASH, 0);
-        ss << strMessageMagic;
-        ss << message;
+        try {
+            // A key the wallet holds but may not use now is a refusal, not a
+            // missing key: the capability may have expired, been displaced or
+            // ended with its connection.
+            if (!WITH_LOCK(m_wallet->cs_wallet, return m_wallet->HaveKey(*key_id))) {
+                return MessageSignStatus::KeyNotAvailable;
+            }
+            if (m_wallet->IsLocked() || !m_wallet->CanUseKeys()) {
+                return MessageSignStatus::Refused;
+            }
 
-        std::vector<unsigned char> signature;
-        if (!key.SignCompact(Hash(ss), signature)) {
+            CKey key;
+            if (!WITH_LOCK(m_wallet->cs_wallet, return m_wallet->GetKey(*key_id, key))) {
+                return MessageSignStatus::KeyNotAvailable;
+            }
+
+            CDataStream ss(SER_GETHASH, 0);
+            ss << strMessageMagic;
+            ss << message;
+
+            std::vector<unsigned char> signature;
+            if (!key.SignCompact(Hash(ss), signature)) {
+                return MessageSignStatus::SigningFailed;
+            }
+
+            signature_out = EncodeBase64(signature.data(), signature.size());
+            return MessageSignStatus::OK;
+        } catch (const std::exception& e) {
+            LogPrintf("ERROR: %s: %s", __func__, e.what());
             return MessageSignStatus::SigningFailed;
         }
-
-        signature_out = EncodeBase64(signature.data(), signature.size());
-        return MessageSignStatus::OK;
     }
 
     MessageVerifyStatus verifyMessage(const std::string& address, const std::string& message,
@@ -297,33 +888,59 @@ public:
 
     bool getNewReceiveAddress(std::string& address_out) override
     {
-        // The wallet is unlocked by the GUI's UnlockContext before this call; the
-        // reserved key stays node-side and only its encoded address is returned.
-        // fAllowReuse=true matches the old GUI addRow() behavior.
-        CPubKey new_key;
-        if (!m_wallet->GetKeyFromPool(new_key, true)) {
+        // The reserved key stays node-side and only its encoded address is
+        // returned.
+        //
+        // A fresh key or nothing (fAllowReuse=false): an empty pool reports
+        // false rather than handing back the wallet's default key, which the
+        // user already has. The address book draws first with no capability;
+        // on false, for a wallet locked or unlocked for staking only, it asks
+        // for the passphrase and draws again under a Send capability (the one
+        // under which a send refills the pool for its change key), which lets
+        // the pool refill.
+        CapabilityScope scope(*m_wallet, m_wallet->IpcCapability(m_connection_closed), CapabilityKind::Send);
+
+        try {
+            CPubKey new_key;
+            if (!m_wallet->GetKeyFromPool(new_key, false)) {
+                return false;
+            }
+
+            address_out = EncodeDestination(new_key.GetID());
+            return true;
+        } catch (const std::exception& e) {
+            // A refill can throw when the wallet locks while it runs.
+            LogPrintf("ERROR: %s: %s", __func__, e.what());
             return false;
         }
-
-        address_out = EncodeDestination(new_key.GetID());
-        return true;
     }
 
     bool getNewReceiveAddressWithLabel(const std::string& label, std::string& address_out) override
     {
         // fAllowReuse=false to match the researcher pool page's former
         // getKeyFromPool(..., false) call: a deliberately fresh receive key.
-        CPubKey new_key;
-        if (!m_wallet->GetKeyFromPool(new_key, false)) {
+        //
+        // That page is part of the researcher wizard. It draws first with no
+        // capability, and on false asks for the passphrase and draws again
+        // under a Contract capability, which lets the pool refill.
+        CapabilityScope scope(*m_wallet, m_wallet->IpcCapability(m_connection_closed), CapabilityKind::Contract);
+
+        try {
+            CPubKey new_key;
+            if (!m_wallet->GetKeyFromPool(new_key, false)) {
+                return false;
+            }
+
+            if (!label.empty()) {
+                m_wallet->SetAddressBookName(new_key.GetID(), label);
+            }
+
+            address_out = EncodeDestination(new_key.GetID());
+            return true;
+        } catch (const std::exception& e) {
+            LogPrintf("ERROR: %s: %s", __func__, e.what());
             return false;
         }
-
-        if (!label.empty()) {
-            m_wallet->SetAddressBookName(new_key.GetID(), label);
-        }
-
-        address_out = EncodeDestination(new_key.GetID());
-        return true;
     }
 
     std::vector<std::string> getUnbookedReceiveAddresses() override
@@ -480,12 +1097,30 @@ public:
 
     SendCoinsResult sendCoins(const std::vector<WalletSendRecipient>& recipients,
                               const std::optional<WalletCoinControl>& coin_control,
-                              int64_t accepted_fee) override;
+                              int64_t accepted_fee) override
+    {
+        // The whole flow runs under the Send capability the client began: the
+        // build signs, and a change key can refill the key pool.
+        CapabilityScope scope(*m_wallet, m_wallet->IpcCapability(m_connection_closed), CapabilityKind::Send);
+
+        // Nothing may escape to the caller: in the single-process build that is
+        // the GUI thread, where an exception ends the application. What can
+        // throw here is the build (a key-pool refill for the change key when
+        // the wallet locks while it runs), before anything is committed; the
+        // steps after the commit catch their own.
+        try {
+            return SendCoinsUnderScope(recipients, coin_control, accepted_fee);
+        } catch (const std::exception& e) {
+            LogPrintf("ERROR: %s: the send failed: %s", __func__, e.what());
+            return {SendCoinsStatus::TransactionCreationFailed};
+        }
+    }
 
     // NOTE: like every other uiInterface forwarder (see node/interfaces.cpp and
-    // gridcoin/interfaces.cpp), these must be wrapped in GuardNotify. They are not
-    // merely GUI conveniences: CWallet emits them from inside state transitions that
-    // are only half-complete at the emission point. CWallet::SetAddressBookName, for
+    // gridcoin/interfaces.cpp), these must be wrapped in ForwardNotify (which
+    // carries the GuardNotify catch). They are not merely GUI conveniences:
+    // CWallet emits them from inside state transitions that are only
+    // half-complete at the emission point. CWallet::SetAddressBookName, for
     // example, updates mapAddressBook, emits NotifyAddressBookChanged, and only THEN
     // writes the name to the wallet database -- so an unguarded throw here (in
     // multiprocess, when the GUI has gone away) unwinds before the write and loses
@@ -495,13 +1130,13 @@ public:
     std::unique_ptr<Handler> handleStatusChanged(StatusChangedFn fn) override
     {
         return MakeSignalHandler(m_wallet->NotifyStatusChanged.connect(
-            interfaces::GuardNotify([fn = std::move(fn)](CCryptoKeyStore*) { fn(); })));
+            interfaces::ForwardNotify([fn = std::move(fn)](CCryptoKeyStore*) { fn(); })));
     }
 
     std::unique_ptr<Handler> handleAddressBookChanged(AddressBookChangedFn fn) override
     {
         return MakeSignalHandler(m_wallet->NotifyAddressBookChanged.connect(
-            interfaces::GuardNotify([fn = std::move(fn)](CWallet*,
+            interfaces::ForwardNotify([fn = std::move(fn)](CWallet*,
                                  const CTxDestination& address,
                                  const std::string& label,
                                  bool is_mine,
@@ -514,18 +1149,85 @@ public:
     std::unique_ptr<Handler> handleTransactionChanged(TransactionChangedFn fn) override
     {
         return MakeSignalHandler(m_wallet->NotifyTransactionChanged.connect(
-            interfaces::GuardNotify([fn = std::move(fn)](CWallet*, const uint256& tx_hash, ChangeType status) {
+            interfaces::ForwardNotify([fn = std::move(fn)](CWallet*, const uint256& tx_hash, ChangeType status) {
                 fn(tx_hash, status);
             })));
     }
 
+    void bindConnectionScope(std::shared_ptr<ConnectionScope> scope) override
+    {
+        // Bound again, the earlier connection's hook goes, so that connection's
+        // close no longer reaches this wallet and the hook is not left behind.
+        if (m_connection_scope && m_closing_hook != 0) m_connection_scope->removeCloseHook(m_closing_hook);
+        m_closing_hook = 0;
+
+        m_connection_scope = std::move(scope);
+        m_connection_closed = ConnectionClosedCheck(m_connection_scope);
+        if (m_connection_scope) {
+            // Runs now, and returns 0, if the connection has already closed.
+            m_closing_hook = m_connection_scope->addCloseHook([closing = m_connection_closing] { *closing = true; });
+        }
+    }
+
 private:
+    //! On a wallet served over IPC, the cancel token for a passphrase attempt
+    //! made on this thread: set once the connection closes, so an attempt still
+    //! waiting for its turn is given up with its passphrase unchecked (nothing
+    //! counted, no delay) rather than checked for a client that has gone. None in
+    //! process, where the caller sets its own token (the GUI's dialog does) and
+    //! this must not replace it.
+    std::optional<PassphraseAttemptCancel> GiveUpWhenConnectionCloses() const
+    {
+        if (!m_connection_scope) return std::nullopt;
+        return std::optional<PassphraseAttemptCancel>(std::in_place, *m_connection_closing);
+    }
+
+    //! What a source or sink calls when it is done with capability \p held:
+    //! the capability is ended and taken out of the slot when the slot still
+    //! holds it, so no ended id is left there. Nothing without one. Built
+    //! here, so the slot is reached only from this file; it holds no
+    //! reference to this interface, which the transfer may outlive.
+    wallet::EndCapabilityFn EndThroughSlot(const std::optional<CapabilityId>& held) const
+    {
+        if (!held) return {};
+
+        return [wallet = m_wallet, id = *held, closed = m_connection_closed] {
+            wallet->EndIpcElevationIf(id, closed);
+        };
+    }
+
+    //! sendCoins() without its capability scope and exception boundary.
+    SendCoinsResult SendCoinsUnderScope(const std::vector<WalletSendRecipient>& recipients,
+                                        const std::optional<WalletCoinControl>& coin_control,
+                                        int64_t accepted_fee);
+
     CWallet* m_wallet;
+    //! The IPC connection this wallet is served on (bindConnectionScope), or null
+    //! in process. Set once, before the wallet is handed out, and only read after.
+    //! Nothing is called on it when the wallet is destroyed: what registers a hook
+    //! in it removes the hook itself.
+    std::shared_ptr<ConnectionScope> m_connection_scope{nullptr};
+    //! Whether that connection has closed, asked under the wallet's capability
+    //! mutex wherever this wallet begins, reads or ends the IPC capability.
+    //! Empty in process, where there is no connection and nothing to check.
+    std::function<bool()> m_connection_closed{};
+    //! Set by a close hook on that connection, registered in
+    //! bindConnectionScope() and removed when this wallet is bound again or
+    //! destroyed; the cancel token of the passphrase attempts this wallet makes
+    //! (GiveUpWhenConnectionCloses).
+    const std::shared_ptr<std::atomic<bool>> m_connection_closing{std::make_shared<std::atomic<bool>>(false)};
+    ConnectionScope::HookId m_closing_hook{0};
+    //! Whether a transfer this interface began is live (LiveTransfer). Shared
+    //! with that transfer, which may outlive the interface.
+    const std::shared_ptr<std::atomic<bool>> m_transfer_live{std::make_shared<std::atomic<bool>>(false)};
+    //! The first second after encryptWallet() encrypted the wallet through this
+    //! interface, or 0 when it has not.
+    std::atomic<int64_t> m_encrypted_before{0};
 };
 
-SendCoinsResult WalletImpl::sendCoins(const std::vector<WalletSendRecipient>& recipients,
-                                      const std::optional<WalletCoinControl>& coin_control,
-                                      int64_t accepted_fee)
+SendCoinsResult WalletImpl::SendCoinsUnderScope(const std::vector<WalletSendRecipient>& recipients,
+                                                const std::optional<WalletCoinControl>& coin_control,
+                                                int64_t accepted_fee)
 {
     // Refuse a staking-only wallet here, before the balance checks below can
     // answer first: a staking-only wallet is the reason regardless of the
@@ -534,8 +1236,9 @@ SendCoinsResult WalletImpl::sendCoins(const std::vector<WalletSendRecipient>& re
     // narrowing that lands between this check and the build.
     //
     // Nothing else on this path guards the unlock: this layer is what the GUI
-    // uses, and EnsureWalletIsUnlocked is RPC-only.
-    if (m_wallet->IsUnlockedForStakingOnly()) {
+    // uses, and EnsureWalletIsUnlocked is RPC-only. A capability scope open on
+    // this thread lets the send through.
+    if (m_wallet->IsUnlockedForStakingOnly() && !m_wallet->CanUseKeys()) {
         return {SendCoinsStatus::WalletUnlockedForStakingOnly};
     }
 
@@ -701,7 +1404,7 @@ SendCoinsResult WalletImpl::sendCoins(const std::vector<WalletSendRecipient>& re
         int64_t nFeeRequired = 0;
         bool fCreated = m_wallet->CreateTransaction(vecSend, wtx, keyChange, nFeeRequired, coin_control_ptr,
                                                     /*change_back_to_input_address=*/false,
-                                                    /*permitted_while_staking_only=*/false,
+                                                    /*renewal_access=*/nullptr,
                                                     subtract_fee_outputs);
 
         if (!fCreated)
@@ -713,7 +1416,7 @@ SendCoinsResult WalletImpl::sendCoins(const std::vector<WalletSendRecipient>& re
             // and send the user to look at their balance. First, because a
             // staking-only wallet is the reason regardless of what the fee
             // arithmetic below would say.
-            if (m_wallet->IsUnlockedForStakingOnly()) {
+            if (m_wallet->IsUnlockedForStakingOnly() && !m_wallet->CanUseKeys()) {
                 return {SendCoinsStatus::WalletUnlockedForStakingOnly};
             }
 
@@ -807,26 +1510,35 @@ SendCoinsResult WalletImpl::sendCoins(const std::vector<WalletSendRecipient>& re
     // was already true, because SetAddressBookName takes and releases cs_wallet
     // per call, so the old loop was never one atomic transaction across recipients
     // either.
-    std::vector<std::pair<CTxDestination, std::string>> address_book_updates;
+    //
+    // The payment is committed by now, so a failure to record the labels must
+    // not reach sendCoins' exception boundary, which would report a payment
+    // that was made as one that was not. It is logged, and the send reports OK.
+    try {
+        std::vector<std::pair<CTxDestination, std::string>> address_book_updates;
 
-    {
-        LOCK(m_wallet->cs_wallet);
+        {
+            LOCK(m_wallet->cs_wallet);
 
-        for (const WalletSendRecipient& rcp : recipients) {
-            CTxDestination dest = DecodeDestination(rcp.address);
+            for (const WalletSendRecipient& rcp : recipients) {
+                CTxDestination dest = DecodeDestination(rcp.address);
 
-            auto mi = m_wallet->mapAddressBook.find(dest);
+                auto mi = m_wallet->mapAddressBook.find(dest);
 
-            // Check if we have a new address or an updated label
-            if (mi == m_wallet->mapAddressBook.end() || mi->second.name != rcp.label)
-            {
-                address_book_updates.emplace_back(std::move(dest), rcp.label);
+                // Check if we have a new address or an updated label
+                if (mi == m_wallet->mapAddressBook.end() || mi->second.name != rcp.label)
+                {
+                    address_book_updates.emplace_back(std::move(dest), rcp.label);
+                }
             }
         }
-    }
 
-    for (const auto& [dest, label] : address_book_updates) {
-        m_wallet->SetAddressBookName(dest, label);
+        for (const auto& [dest, label] : address_book_updates) {
+            m_wallet->SetAddressBookName(dest, label);
+        }
+    } catch (const std::exception& e) {
+        LogPrintf("ERROR: %s: the payment %s was sent, but its address book labels were not "
+                  "recorded: %s", __func__, wtx.GetHash().GetHex(), e.what());
     }
 
     SendCoinsResult result;

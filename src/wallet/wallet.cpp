@@ -23,16 +23,25 @@
 #include "net_processing.h"
 #include "util.h"
 #include <util/string.h>
+#include "gridcoin/contract/message.h"
 #include "gridcoin/mnemonics.h"
 #include "gridcoin/mrc.h"
+#include "gridcoin/researcher.h"
 #include "gridcoin/staking/kernel.h"
 #include "gridcoin/support/block_finder.h"
 #include "policy/fees.h"
 #include "node/blockstorage.h"
+#include "node/shutdown.h"
+#include "wallet/autounlock_store.h"
+#include "wallet/capability.h"
+#include "wallet/staking_signer.h"
 
 #include <algorithm>
+#include <limits>
+#include <optional>
 #include <set>
 #include <stdexcept>
+#include <utility>
 
 using namespace std;
 
@@ -418,18 +427,14 @@ const CTxDestination CWallet::MasterAddress(int height)
     return CPubKey(Params().MasterKey(height)).GetID();
 }
 
-CKey CWallet::MasterPrivateKey(int height) const
-{
-    CKey key_out;
-
-    GetKey(CPubKey(Params().MasterKey(height)).GetID(), key_out);
-
-    return key_out;
-}
-
 CPubKey CWallet::GenerateNewKey() EXCLUSIVE_LOCKS_REQUIRED(cs_wallet)
 {
     AssertLockHeld(cs_wallet); // mapKeyMetadata
+
+    // Every caller asks CanCreateKeys() first and fails cleanly when it is
+    // false, which is the case while the wallet is locked or unlocked for
+    // staking only. The throws below are for a wallet that may create keys and
+    // still cannot, such as one whose HD seed is missing.
     bool fCompressed = CanSupportFeature(wallet::FEATURE_COMPRPUBKEY); // default to compressed public keys if we want 0.6.0 wallets
 
     CKey secret;
@@ -598,9 +603,9 @@ static bool SchedulerCanRelock()
 
     if (!scheduler) return false;
 
-    return scheduler->scheduleFromNowIfRunning([wallet, epoch] {
+    return scheduler->scheduleFromNowIfRunning(CatchAndLogJob("LockIfCurrent", [wallet, epoch] {
         wallet->LockIfCurrent(epoch);
-    }, delay);
+    }), delay);
 }
 
 bool CWallet::Unlock(const SecureString& strWalletPassphrase, UnlockScope scope)
@@ -611,6 +616,182 @@ bool CWallet::Unlock(const SecureString& strWalletPassphrase, UnlockScope scope)
 bool CWallet::Unlock(const SecureString& strWalletPassphrase, UnlockScope scope,
                      std::optional<std::chrono::seconds> relock_after,
                      UnlockFailure* failure_out)
+{
+    PassphraseTurn turn = AwaitPassphraseTurn();
+
+    // Given up while it waited, by a shutdown or by its caller. The passphrase
+    // was never checked, so nothing is counted.
+    if (!turn.Held()) {
+        if (failure_out) *failure_out = UnlockFailure::Abandoned;
+
+        return false;
+    }
+
+    UnlockFailure failure = UnlockFailure::None;
+
+    const bool unlocked = UnlockWithoutDelay(strWalletPassphrase, scope, relock_after, &failure,
+                                             /*epoch_out=*/nullptr);
+
+    if (failure_out) *failure_out = failure;
+
+    // Only a wrong passphrase is counted. A wallet that was already unlocked,
+    // or a right passphrase whose relock could not be armed, says nothing
+    // about whether the caller knows the passphrase, and the turn is handed
+    // on unused when it goes out of scope.
+    if (unlocked) {
+        turn.Accepted();
+    } else if (failure == UnlockFailure::Passphrase) {
+        turn.Refused();
+    }
+
+    return unlocked;
+}
+
+//! How often a passphrase attempt that is waiting looks again at whether a
+//! shutdown was requested or it was cancelled. Neither wakes it, so this
+//! bounds how long either takes to end the wait.
+static constexpr std::chrono::milliseconds PASSPHRASE_WAIT_POLL{100};
+
+//! Whether the passphrase attempt the calling thread makes is given up.
+static bool PassphraseAttemptGivenUp()
+{
+    return ShutdownRequested() || PassphraseAttemptCancel::Requested();
+}
+
+CWallet::PassphraseTurn CWallet::AwaitPassphraseTurn()
+{
+    // Never under cs_wallet (the declaration excludes it): the wait can last
+    // as long as the attempts ahead take, each up to the longest delay.
+    WAIT_LOCK(m_passphrase_turn_mutex, lock);
+
+    const uint64_t ticket = m_next_passphrase_ticket++;
+
+    while (true) {
+        // Its place passes to the attempt behind it, which then does not wait
+        // for an attempt that will never come.
+        if (PassphraseAttemptGivenUp()) {
+            EndPassphraseTicket(ticket);
+            m_passphrase_turn_ended.notify_all();
+
+            return PassphraseTurn(*this, std::nullopt);
+        }
+
+        const std::chrono::steady_clock::time_point now = std::chrono::steady_clock::now();
+
+        if (ticket != m_served_passphrase_ticket) {
+            m_passphrase_turn_ended.wait_until(lock, now + PASSPHRASE_WAIT_POLL);
+            continue;
+        }
+
+        // Served. The check waits out the delay the last refusal earned, which
+        // a later refusal cannot move: no attempt is checked meanwhile.
+        if (now >= m_next_passphrase_check) {
+            return PassphraseTurn(*this, ticket);
+        }
+
+        m_passphrase_turn_ended.wait_until(lock, std::min(m_next_passphrase_check, now + PASSPHRASE_WAIT_POLL));
+    }
+}
+
+void CWallet::EndPassphraseTicket(uint64_t ticket)
+{
+    if (ticket != m_served_passphrase_ticket) {
+        m_abandoned_passphrase_tickets.insert(ticket);
+        return;
+    }
+
+    ++m_served_passphrase_ticket;
+
+    while (m_abandoned_passphrase_tickets.erase(m_served_passphrase_ticket)) {
+        ++m_served_passphrase_ticket;
+    }
+}
+
+void CWallet::PassphraseTurn::End()
+{
+    {
+        LOCK(m_wallet.m_passphrase_turn_mutex);
+        m_wallet.EndPassphraseTicket(*m_ticket);
+    }
+
+    m_ticket.reset();
+    m_wallet.m_passphrase_turn_ended.notify_all();
+}
+
+CWallet::PassphraseTurn::~PassphraseTurn()
+{
+    // Handed on unused: the delay the last refusal earned still stands for
+    // the attempt served next.
+    if (m_ticket) End();
+}
+
+void CWallet::PassphraseTurn::Accepted()
+{
+    if (!m_ticket) return;
+
+    {
+        LOCK(m_wallet.m_passphrase_turn_mutex);
+        m_wallet.m_failed_unlocks = 0;
+        m_wallet.m_next_passphrase_check = std::chrono::steady_clock::now();
+    }
+
+    End();
+}
+
+void CWallet::PassphraseTurn::Refused()
+{
+    if (!m_ticket) return;
+
+    std::chrono::steady_clock::time_point until;
+    {
+        LOCK(m_wallet.m_passphrase_turn_mutex);
+
+        const unsigned int failures = ++m_wallet.m_failed_unlocks;
+
+        // Every later check, from any caller, waits at least as long.
+        until = std::chrono::steady_clock::now() + FailedPassphraseDelay(failures);
+        m_wallet.m_next_passphrase_check = std::max(m_wallet.m_next_passphrase_check, until);
+    }
+
+    End();
+
+    // The refusal itself returns once its delay is over. Never under
+    // cs_wallet: a sleep of up to 30 s there would stall every wallet
+    // operation, the staking miner's included. A shutdown, or the caller
+    // giving the attempt up, ends this wait early; the next check waits the
+    // whole delay regardless.
+    while (!PassphraseAttemptGivenUp()) {
+        const std::chrono::steady_clock::time_point now = std::chrono::steady_clock::now();
+
+        if (now >= until) break;
+
+        UninterruptibleSleep(std::chrono::duration_cast<std::chrono::microseconds>(
+            std::min<std::chrono::steady_clock::duration>(until - now, PASSPHRASE_WAIT_POLL)));
+    }
+}
+
+//! Whether two sets of master key records are the same records.
+static bool SameMasterKeyRecords(const CWallet::MasterKeyMap& a, const CWallet::MasterKeyMap& b)
+{
+    if (a.size() != b.size()) return false;
+
+    for (auto ai = a.begin(), bi = b.begin(); ai != a.end(); ++ai, ++bi) {
+        if (ai->first != bi->first
+            || ai->second.vchCryptedKey != bi->second.vchCryptedKey
+            || ai->second.vchSalt != bi->second.vchSalt
+            || ai->second.nDerivationMethod != bi->second.nDerivationMethod
+            || ai->second.nDeriveIterations != bi->second.nDeriveIterations
+            || ai->second.vchOtherDerivationParameters != bi->second.vchOtherDerivationParameters) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+bool CWallet::UnlockWithoutDelay(const SecureString& strWalletPassphrase, UnlockScope scope,
+                                 std::optional<std::chrono::seconds> relock_after,
+                                 UnlockFailure* failure_out, uint64_t* epoch_out)
 {
     // Default to the passphrase, so every early return that IS about the
     // passphrase needs no ceremony; the two that are not say so explicitly.
@@ -637,6 +818,9 @@ bool CWallet::Unlock(const SecureString& strWalletPassphrase, UnlockScope scope,
     // the actual relock would be on different clocks -- and a mock time that
     // moved between the unlock and a later passphrase change would recompute the
     // remaining delay from a number that never meant wall time.
+    //
+    // Fixed here, before the key derivation, so the derivation counts against
+    // the unlock's time rather than extending it.
     const std::optional<int64_t> deadline = relock_after
         ? std::optional<int64_t>(GetTimeSeconds() + relock_after->count())
         : std::nullopt;
@@ -650,8 +834,36 @@ bool CWallet::Unlock(const SecureString& strWalletPassphrase, UnlockScope scope,
         return false;
     }
 
-    CCrypter crypter;
-    CKeyingMaterial vMasterKey;
+    // The records are copied under cs_wallet and the key is derived from them
+    // outside it. The derivation is calibrated to take a few hundred
+    // milliseconds, and block and transaction processing take cs_wallet, so
+    // they must not wait behind it.
+    MasterKeyMap master_keys;
+    {
+        LOCK(cs_wallet);
+        master_keys = mapMasterKeys;
+    }
+
+    // In record order, stopping at the first record the passphrase does not
+    // open, as when the derivation ran under the lock.
+    std::vector<CKeyingMaterial> derived_keys;
+    {
+        CCrypter crypter;
+
+        for (const auto& entry : master_keys) {
+            CKeyingMaterial derived;
+
+            if (!crypter.SetKeyFromPassphrase(strWalletPassphrase, entry.second.vchSalt,
+                                              entry.second.nDeriveIterations, entry.second.nDerivationMethod)
+                || !crypter.Decrypt(entry.second.vchCryptedKey, derived)) {
+                break;
+            }
+
+            derived_keys.push_back(std::move(derived));
+        }
+    }
+
+    if (derived_keys.empty()) return false;
 
     {
         LOCK(cs_wallet);
@@ -667,12 +879,15 @@ bool CWallet::Unlock(const SecureString& strWalletPassphrase, UnlockScope scope,
             return false;
         }
 
-        for (auto const& pMasterKey : mapMasterKeys)
+        // The records were rewritten while the key was derived, by a passphrase
+        // change. The key came from records the wallet no longer has, so the
+        // passphrase is not taken as proved: it may be the one just replaced.
+        if (!SameMasterKeyRecords(master_keys, mapMasterKeys)) {
+            return error("%s: the wallet passphrase changed while the key was being derived", __func__);
+        }
+
+        for (const CKeyingMaterial& vMasterKey : derived_keys)
         {
-            if(!crypter.SetKeyFromPassphrase(strWalletPassphrase, pMasterKey.second.vchSalt, pMasterKey.second.nDeriveIterations, pMasterKey.second.nDerivationMethod))
-                return false;
-            if (!crypter.Decrypt(pMasterKey.second.vchCryptedKey, vMasterKey))
-                return false;
             uint64_t epoch = 0;
 
             if (CCryptoKeyStore::Unlock(vMasterKey, scope, deadline, &epoch))
@@ -714,44 +929,10 @@ bool CWallet::Unlock(const SecureString& strWalletPassphrase, UnlockScope scope,
                 }
 
                 if (failure_out) *failure_out = UnlockFailure::None;
+                if (epoch_out) *epoch_out = epoch;
 
                 return true;
             }
-        }
-    }
-    return false;
-}
-
-bool CWallet::ElevateToFull(const SecureString& strWalletPassphrase)
-{
-    // There is no unlock to widen, so there is no deadline to preserve and
-    // nothing this can add. The caller wants Unlock(), which begins one.
-    if (IsLocked()) {
-        return false;
-    }
-
-    CCrypter crypter;
-    CKeyingMaterial vMasterKey;
-
-    LOCK(cs_wallet);
-
-    for (auto const& pMasterKey : mapMasterKeys)
-    {
-        if (!crypter.SetKeyFromPassphrase(strWalletPassphrase, pMasterKey.second.vchSalt,
-                                          pMasterKey.second.nDeriveIterations,
-                                          pMasterKey.second.nDerivationMethod)) {
-            return false;
-        }
-
-        if (!crypter.Decrypt(pMasterKey.second.vchCryptedKey, vMasterKey)) {
-            return false;
-        }
-
-        // Refuses unless this is the key already installed, so a wrong
-        // passphrase widens nothing. The scope moves; the key, the deadline and
-        // the epoch do not, so the relock armed for this unlock still fires.
-        if (CCryptoKeyStore::Elevate(vMasterKey)) {
-            return true;
         }
     }
 
@@ -771,116 +952,508 @@ bool CWallet::RestrictToStakingOnly()
     return CCryptoKeyStore::RestrictToStakingOnly();
 }
 
-bool CWallet::ChangeWalletPassphrase(const SecureString& strOldWalletPassphrase, const SecureString& strNewWalletPassphrase)
+bool CWallet::CanCreateKeys() const
 {
-    // The lock itself reports what it ended. Reading the scope first and
-    // locking afterwards is two acquisitions with a gap, and the scheduled
-    // relock takes only cs_KeyStore, so it can land in that gap: the read says
-    // StakingOnly, the timer locks, and the restore below then reopens a wallet
-    // the timer had just closed. Capturing under the acquisition that clears
-    // them removes the gap -- the relock either ran first, and this reads
-    // Locked, or it arrives later and finds an epoch that has moved on.
-    //
-    // The deadline is captured for the same reason it is restored: it belongs
-    // to the unlock, and a passphrase change must not quietly turn a wallet
-    // unlocked for an hour into one unlocked indefinitely.
-    std::optional<UnlockState> prior;
+    // One read of the scope. An unencrypted wallet reads Full.
+    switch (GetUnlockScope()) {
+    case UnlockScope::Locked:
+        return false;
+    case UnlockScope::StakingOnly:
+        return ElevationGrant::IsActiveFor(this);
+    case UnlockScope::Full:
+        return true;
+    }
 
+    return false;
+}
+
+bool CWallet::CanUseKeys() const
+{
+    // The standing unlock, or a capability scope open on this thread. An
+    // unencrypted wallet reads Full.
+    return GetUnlockScope() == UnlockScope::Full || ElevationGrant::IsActiveFor(this);
+}
+
+bool CWallet::DecryptMasterKey(const SecureString& passphrase, CKeyingMaterial& master_key_out) const
+{
+    // Copied under cs_wallet and derived outside it. The derivation is
+    // calibrated to take a few hundred milliseconds, and nothing that needs
+    // the wallet should wait behind it. The records hold the master key only
+    // encrypted.
+    MasterKeyMap master_keys;
     {
         LOCK(cs_wallet);
+        master_keys = mapMasterKeys;
+    }
 
-        prior = LockAndCapture();
+    CCrypter crypter;
 
-        if (!prior) {
-            return false;
-        }
+    for (const auto& entry : master_keys) {
+        const CMasterKey& master_key = entry.second;
 
-        const bool fWasLocked = (prior->scope == UnlockScope::Locked);
-
-        CCrypter crypter;
-        CKeyingMaterial vMasterKey;
-        for (auto &pMasterKey : mapMasterKeys)
-        {
-            if(!crypter.SetKeyFromPassphrase(strOldWalletPassphrase, pMasterKey.second.vchSalt, pMasterKey.second.nDeriveIterations, pMasterKey.second.nDerivationMethod))
-                return false;
-            if (!crypter.Decrypt(pMasterKey.second.vchCryptedKey, vMasterKey))
-                return false;
-            // Restore whatever the wallet already permitted rather than
-            // widening to Full: a wallet that was unlocked for staking only
-            // must still be staking-only when the passphrase change returns.
-            //
-            // A wallet that WAS locked has no scope to restore, and the unlock
-            // needs a real one to check the old passphrase against the keys, so
-            // it takes Full and is locked again as soon as that check passes.
-            const UnlockScope working_scope =
-                fWasLocked ? UnlockScope::Full : prior->scope;
-
-            uint64_t epoch = 0;
-
-            if (CCryptoKeyStore::Unlock(vMasterKey, working_scope, prior->deadline, &epoch))
-            {
-                // The rewrite below needs the master key, not an open wallet, so
-                // a wallet that was locked on entry is locked again before it.
-                // No path out of the rewrite, the error returns included, then
-                // leaves that wallet open.
-                if (fWasLocked) {
-                    Lock();
-                }
-
-                // Put the relock back with the unlock it belongs to, and do it
-                // here rather than after the key rewrite: the capture above
-                // retired the one that was armed, and every path out of the
-                // rewrite -- the error returns included -- leaves a wallet that
-                // was open on entry open in the scope just restored.
-                if (prior->deadline) {
-                    const int64_t remaining = *prior->deadline - GetTimeSeconds();
-
-                    // The deadline passed while the key was being re-derived,
-                    // or the scheduler would not take the relock. Either way the
-                    // unlock this restored is already over, or has nothing that
-                    // will end it, so end it here rather than leave it open.
-                    if (remaining <= 0 || !ArmRelock(this, epoch, std::chrono::seconds(remaining))) {
-                        Lock();
-                    }
-                }
-
-                // Build the new master key in a copy and replace the one in
-                // memory only once the copy is written. A step that fails part
-                // way then leaves the master key as it was, still matching the
-                // wallet file and the old passphrase.
-                CMasterKey new_master_key = pMasterKey.second;
-
-                int64_t nStartTime = GetTimeMillis();
-                crypter.SetKeyFromPassphrase(strNewWalletPassphrase, new_master_key.vchSalt, new_master_key.nDeriveIterations, new_master_key.nDerivationMethod);
-                new_master_key.nDeriveIterations = new_master_key.nDeriveIterations * (100 / ((double)(GetTimeMillis() - nStartTime)));
-
-                nStartTime = GetTimeMillis();
-                crypter.SetKeyFromPassphrase(strNewWalletPassphrase, new_master_key.vchSalt, new_master_key.nDeriveIterations, new_master_key.nDerivationMethod);
-                new_master_key.nDeriveIterations = (new_master_key.nDeriveIterations + new_master_key.nDeriveIterations * 100 / ((double)(GetTimeMillis() - nStartTime))) / 2;
-
-                if (new_master_key.nDeriveIterations < 25000)
-                    new_master_key.nDeriveIterations = 25000;
-
-                if (!crypter.SetKeyFromPassphrase(strNewWalletPassphrase, new_master_key.vchSalt, new_master_key.nDeriveIterations, new_master_key.nDerivationMethod))
-                    return false;
-                if (!crypter.Encrypt(vMasterKey, new_master_key.vchCryptedKey))
-                    return false;
-
-                if (fFileBacked && !CWalletDB(strWalletFile).WriteMasterKey(pMasterKey.first, new_master_key)) {
-                    LogPrintf("ERROR: %s: could not write the new master key to the wallet file", __func__);
-                    return false;
-                }
-
-                pMasterKey.second = new_master_key;
-
-                LogPrintf("Wallet passphrase changed to an nDeriveIterations of %i", pMasterKey.second.nDeriveIterations);
-
-                return true;
-            }
+        if (crypter.SetKeyFromPassphrase(passphrase, master_key.vchSalt, master_key.nDeriveIterations,
+                                         master_key.nDerivationMethod)
+            && crypter.Decrypt(master_key.vchCryptedKey, master_key_out)) {
+            return true;
         }
     }
 
     return false;
+}
+
+std::optional<CapabilityId> CWallet::BeginElevation(const SecureString& passphrase, CapabilityKind kind,
+                                                    UnlockFailure* failure_out)
+{
+    if (failure_out) *failure_out = UnlockFailure::None;
+
+    // The key derivation and the failed-passphrase delay both run without
+    // cs_wallet, which they can only if the caller does not hold it either
+    // (the declaration excludes it).
+    const std::chrono::seconds ttl = CapabilityTtl(kind);
+
+    // The unlock this capability made, when it found the wallet locked.
+    std::optional<uint64_t> made_epoch;
+
+    // The unlock in progress when the passphrase matched its key.
+    std::optional<uint64_t> matched_epoch;
+
+    if (IsCrypted()) {
+        PassphraseTurn turn = AwaitPassphraseTurn();
+
+        // Given up while it waited, with the passphrase never checked.
+        if (!turn.Held()) {
+            if (failure_out) *failure_out = UnlockFailure::Abandoned;
+
+            return std::nullopt;
+        }
+
+        bool accepted = false;
+
+        // At most two passes. The unlock can change while the key is derived:
+        // another unlock can reach a locked wallet first, or a timed relock can
+        // lock an unlocked one. The second pass takes the path for the state
+        // the first one found.
+        for (int pass = 0; pass < 2; ++pass) {
+            if (IsLocked()) {
+                UnlockFailure failure = UnlockFailure::None;
+                uint64_t epoch = 0;
+
+                // Staking only, and timed to the capability, so that the wallet
+                // is never left open wider or longer than the operation needs.
+                if (UnlockWithoutDelay(passphrase, UnlockScope::StakingOnly, ttl, &failure, &epoch)) {
+                    accepted = true;
+                    made_epoch = epoch;
+                    break;
+                }
+
+                // Another unlock got there first. The next pass checks the
+                // passphrase against the key it installed.
+                if (failure == UnlockFailure::AlreadyUnlocked) continue;
+
+                // The passphrase was right, but the unlock could not be timed
+                // and was not kept. It is no passphrase failure, so there is no
+                // delay and nothing is counted: the turn is handed on unused.
+                if (failure == UnlockFailure::RelockUnavailable) {
+                    LogPrintf("WARNING: %s: no capability was issued, because the wallet's relock could not "
+                              "be scheduled", __func__);
+                    if (failure_out) *failure_out = UnlockFailure::RelockUnavailable;
+
+                    return std::nullopt;
+                }
+
+                break;
+            }
+
+            CKeyingMaterial master_key;
+
+            if (!DecryptMasterKey(passphrase, master_key)) break;
+
+            const uint64_t epoch = GetUnlockEpoch();
+
+            if (MatchesMasterKey(master_key)) {
+                accepted = true;
+                matched_epoch = epoch;
+                break;
+            }
+
+            // A key that decrypts a record but is not the one installed comes
+            // from a wrong passphrase, unless the wallet locked meanwhile.
+            if (!IsLocked()) break;
+        }
+
+        if (!accepted) {
+            if (failure_out) *failure_out = UnlockFailure::Passphrase;
+
+            turn.Refused();
+            return std::nullopt;
+        }
+
+        // Stored before the turn is handed on. A passphrase change holds its
+        // turn through the change and the ending of every capability, so this
+        // one, proved with the passphrase as it is now, is stored before any
+        // change, which then ends it, and never after one.
+        const CapabilityId id = StoreCapability(kind, ttl, made_epoch, matched_epoch);
+        turn.Accepted();
+        return id;
+    }
+
+    return StoreCapability(kind, ttl, made_epoch, matched_epoch);
+}
+
+CapabilityId CWallet::StoreCapability(CapabilityKind kind, std::chrono::seconds ttl,
+                                      std::optional<uint64_t> made_epoch, std::optional<uint64_t> matched_epoch)
+{
+    // Drawn and timed before the mutex is taken: it is a leaf, and the
+    // generator takes a lock of its own. Never 0.
+    CapabilityId id = GetRand(std::numeric_limits<uint64_t>::max() - 1) + 1;
+    const std::chrono::seconds now = GetTime<std::chrono::seconds>();
+
+    CapabilityRecord record;
+    record.kind = kind;
+    record.deadline = now + ttl;
+    record.relock_epoch = made_epoch;
+
+    LOCK(m_capability_mutex);
+
+    // Capabilities past their deadline are dropped here, so that ones never
+    // ended do not accumulate.
+    for (auto it = m_capabilities.begin(); it != m_capabilities.end();) {
+        if (it->second.deadline <= now) {
+            it = m_capabilities.erase(it);
+        } else {
+            ++it;
+        }
+    }
+
+    // A draw that collides with an issued id takes the next free one, never 0.
+    // Random draws collide with negligible odds, but the generator is
+    // deterministic under the unit tests and repeats every draw there.
+    while (m_capabilities.count(id)) {
+        id = (id == std::numeric_limits<uint64_t>::max()) ? 1 : id + 1;
+    }
+
+    // An unlock a capability made for itself serves every capability issued
+    // while it lasts, and the last of them to end locks it.
+    if (!record.relock_epoch && matched_epoch) {
+        for (const auto& entry : m_capabilities) {
+            if (entry.second.relock_epoch == matched_epoch) {
+                record.relock_epoch = matched_epoch;
+                break;
+            }
+        }
+    }
+
+    m_capabilities.emplace(id, record);
+
+    return id;
+}
+
+void CWallet::EndElevation(CapabilityId id)
+{
+    // Read before the mutex is taken; nothing is called out to while it is
+    // held.
+    const std::chrono::seconds now = GetTime<std::chrono::seconds>();
+
+    std::optional<uint64_t> relock_epoch;
+
+    {
+        LOCK(m_capability_mutex);
+
+        const auto it = m_capabilities.find(id);
+
+        if (it == m_capabilities.end()) return;
+
+        relock_epoch = it->second.relock_epoch;
+        m_capabilities.erase(it);
+
+        // Another live capability still relies on the same unlock, and the last
+        // of them to end locks it.
+        if (relock_epoch) {
+            for (const auto& entry : m_capabilities) {
+                if (entry.second.relock_epoch == relock_epoch && now < entry.second.deadline) {
+                    relock_epoch.reset();
+                    break;
+                }
+            }
+        }
+    }
+
+    // With the mutex released, and under cs_KeyStore alone. A no-op when that
+    // unlock has already ended, by its timer, a manual lock or a passphrase
+    // change.
+    if (relock_epoch) LockIfCurrent(*relock_epoch);
+}
+
+bool CWallet::BeginIpcElevation(const SecureString& passphrase, CapabilityKind kind,
+                                const std::function<bool()>& connection_closed)
+{
+    const std::optional<CapabilityId> id = BeginElevation(passphrase, kind);
+
+    // The slot takes the new capability, or is emptied when none was issued,
+    // and whatever it held is ended once the mutex is released. A closed
+    // connection is seen in this same section, so nothing can see the slot hold
+    // a capability whose client has gone away, and the slot is left alone.
+    std::optional<CapabilityId> displaced;
+    bool installed = false;
+    {
+        LOCK(m_capability_mutex);
+        if (!connection_closed || !connection_closed()) {
+            displaced = std::exchange(m_ipc_capability, id);
+            installed = true;
+        }
+    }
+
+    if (!installed) {
+        if (id) {
+            LogPrintf("WARNING: %s: the IPC connection closed while the capability was being begun; "
+                      "it was not kept", __func__);
+            EndElevation(*id);
+        }
+        return false;
+    }
+
+    // Ids are 64-bit random, so a new id equals the displaced one with
+    // negligible odds; operations that end their capability while connected
+    // also empty the slot.
+    if (displaced) EndElevation(*displaced);
+
+    return id.has_value();
+}
+
+void CWallet::EndIpcElevation(const std::function<bool()>& connection_closed)
+{
+    std::optional<CapabilityId> id;
+    {
+        LOCK(m_capability_mutex);
+        if (connection_closed && connection_closed()) return;
+        id = std::exchange(m_ipc_capability, std::nullopt);
+    }
+
+    if (id) EndElevation(*id);
+}
+
+void CWallet::EndIpcElevationIf(CapabilityId id, const std::function<bool()>& connection_closed)
+{
+    {
+        LOCK(m_capability_mutex);
+        if ((!connection_closed || !connection_closed()) && m_ipc_capability == id) {
+            m_ipc_capability.reset();
+        }
+    }
+
+    // With the mutex released, as EndIpcElevation() ends what it took. A no-op
+    // for a capability that has ended already.
+    EndElevation(id);
+}
+
+std::optional<CapabilityId> CWallet::IpcCapability(const std::function<bool()>& connection_closed) const
+{
+    LOCK(m_capability_mutex);
+    if (connection_closed && connection_closed()) return std::nullopt;
+    return m_ipc_capability;
+}
+
+bool CWallet::IsCapabilityLive(CapabilityId id, CapabilityKind kind) const
+{
+    const std::chrono::seconds now = GetTime<std::chrono::seconds>();
+
+    LOCK(m_capability_mutex);
+
+    const auto it = m_capabilities.find(id);
+
+    return it != m_capabilities.end() && it->second.kind == kind && now < it->second.deadline;
+}
+
+CWallet::CapabilityRun CWallet::RunUnderLiveCapability(CapabilityId id, CapabilityKind kind,
+                                                       const std::function<void()>& action)
+{
+    // Never under cs_wallet or cs_main (the declaration excludes both): the wait for the
+    // turn can last as long as the attempts ahead take, and the action does file I/O.
+    PassphraseTurn turn = AwaitPassphraseTurn();
+
+    if (!turn.Held()) return CapabilityRun::Abandoned;
+
+    // Looked up inside the turn, where no passphrase change can run: a change that ran
+    // before has ended the capability, and one that comes after waits for the action.
+    const CapabilityScope scope(*this, id, kind);
+
+    if (!scope.Active()) return CapabilityRun::NotLive;
+
+    action();
+
+    // No passphrase was checked, so the turn is handed on unused as it goes out of scope.
+    return CapabilityRun::Ran;
+}
+
+bool CWallet::ChangeWalletPassphrase(const SecureString& strOldWalletPassphrase, const SecureString& strNewWalletPassphrase,
+                                     UnlockFailure* failure_out)
+{
+    if (failure_out) *failure_out = UnlockFailure::None;
+
+    // The old passphrase is a passphrase attempt like any other: it waits for
+    // its turn, and a wrong one is counted and delayed.
+    PassphraseTurn turn = AwaitPassphraseTurn();
+
+    // Given up while it waited, with nothing checked or changed.
+    if (!turn.Held()) {
+        if (failure_out) *failure_out = UnlockFailure::Abandoned;
+
+        return false;
+    }
+
+    std::optional<bool> passphrase_accepted;
+    std::set<uint64_t> relock_epochs;
+
+    const bool changed = ChangeWalletPassphraseWithoutDelay(strOldWalletPassphrase, strNewWalletPassphrase,
+                                                            passphrase_accepted, relock_epochs);
+
+    // The capabilities the change ended leave no unlock of theirs behind. Each
+    // is locked as EndElevation() would lock it, under cs_KeyStore alone and
+    // with cs_wallet released; one that has ended already, by its timer or a
+    // manual lock, is left alone.
+    for (const uint64_t epoch : relock_epochs) {
+        LockIfCurrent(epoch);
+    }
+
+    // An attempt that never checked the old passphrase hands its turn on
+    // unused when the turn goes out of scope.
+    if (passphrase_accepted) {
+        if (*passphrase_accepted) {
+            // A stored autounlock passphrase follows the change. Every change
+            // that succeeds comes through here, cs_wallet is released by now,
+            // and the store's file I/O and encryption must not run under it.
+            // The turn is still held, so changes made one after another reach
+            // the store in the order they were made.
+            if (changed) OnWalletPassphraseChanged(strNewWalletPassphrase);
+
+            turn.Accepted();
+        } else {
+            if (failure_out) *failure_out = UnlockFailure::Passphrase;
+
+            turn.Refused();
+        }
+    }
+
+    return changed;
+}
+
+bool CWallet::ChangeWalletPassphraseWithoutDelay(const SecureString& strOldWalletPassphrase,
+                                                 const SecureString& strNewWalletPassphrase,
+                                                 std::optional<bool>& passphrase_accepted,
+                                                 std::set<uint64_t>& relock_epochs)
+{
+    if (!IsCrypted()) {
+        return false;
+    }
+
+    // The unlock is left as it is throughout. The master key the old
+    // passphrase opens is proved against the keys without being installed,
+    // and the rewrite needs only that key, not an open wallet. So a wallet
+    // unlocked for staking only goes on staking whatever the outcome, with
+    // its deadline and its relock untouched, a full unlock stays full, and a
+    // locked wallet is never opened.
+    //
+    // The records are copied under cs_wallet and every key is derived from
+    // them outside it: once from the old passphrase, and three times from the
+    // new one, twice to time the derivation and once at the iteration count
+    // that sets. Block and transaction processing take cs_wallet, and must not
+    // wait behind the derivations.
+    MasterKeyMap master_keys;
+    {
+        LOCK(cs_wallet);
+        master_keys = mapMasterKeys;
+    }
+
+    // Refused until a master key record opens with the old passphrase and the
+    // keys open with that master key. Records are tried in order, and one the
+    // passphrase does not open ends the search.
+    passphrase_accepted = false;
+
+    CKeyingMaterial master_key;
+    std::optional<unsigned int> opened;
+
+    for (const auto& [record_id, record] : master_keys) {
+        CCrypter crypter;
+
+        if (!crypter.SetKeyFromPassphrase(strOldWalletPassphrase, record.vchSalt, record.nDeriveIterations,
+                                          record.nDerivationMethod)
+            || !crypter.Decrypt(record.vchCryptedKey, master_key)) {
+            return false;
+        }
+
+        if (MasterKeyOpensKeys(master_key)) {
+            opened = record_id;
+            break;
+        }
+    }
+
+    if (!opened) {
+        return false;
+    }
+
+    passphrase_accepted = true;
+
+    // Build the new record in a copy and replace the one in memory only once
+    // the copy is written. A step that fails part way then leaves the record
+    // as it was, still matching the wallet file and the old passphrase.
+    CMasterKey new_master_key = master_keys.at(*opened);
+    CCrypter crypter;
+
+    int64_t nStartTime = GetTimeMillis();
+    crypter.SetKeyFromPassphrase(strNewWalletPassphrase, new_master_key.vchSalt, new_master_key.nDeriveIterations, new_master_key.nDerivationMethod);
+    new_master_key.nDeriveIterations = new_master_key.nDeriveIterations * (100 / ((double)(GetTimeMillis() - nStartTime)));
+
+    nStartTime = GetTimeMillis();
+    crypter.SetKeyFromPassphrase(strNewWalletPassphrase, new_master_key.vchSalt, new_master_key.nDeriveIterations, new_master_key.nDerivationMethod);
+    new_master_key.nDeriveIterations = (new_master_key.nDeriveIterations + new_master_key.nDeriveIterations * 100 / ((double)(GetTimeMillis() - nStartTime))) / 2;
+
+    if (new_master_key.nDeriveIterations < 25000)
+        new_master_key.nDeriveIterations = 25000;
+
+    if (!crypter.SetKeyFromPassphrase(strNewWalletPassphrase, new_master_key.vchSalt, new_master_key.nDeriveIterations, new_master_key.nDerivationMethod))
+        return false;
+    if (!crypter.Encrypt(master_key, new_master_key.vchCryptedKey))
+        return false;
+
+    LOCK(cs_wallet);
+
+    // The records changed while the keys were derived. Passphrase changes
+    // take turns, so no other change can have run meanwhile; should the
+    // records differ all the same, the old passphrase was proved against
+    // records the wallet no longer has, and it is not taken as proved.
+    if (!SameMasterKeyRecords(master_keys, mapMasterKeys)) {
+        passphrase_accepted = false;
+
+        return error("%s: the wallet passphrase changed while the new key was being derived", __func__);
+    }
+
+    if (fFileBacked && !CWalletDB(strWalletFile).WriteMasterKey(*opened, new_master_key)) {
+        LogPrintf("ERROR: %s: could not write the new master key to the wallet file", __func__);
+        return false;
+    }
+
+    mapMasterKeys[*opened] = new_master_key;
+
+    // Every capability was proved with the old passphrase, so none outlives
+    // the change, nor any unlock one of them made: the caller locks those once
+    // cs_wallet is released. They are swapped out, which cannot throw, so they
+    // are gone however the rest goes; their epochs are read from the swapped-out
+    // map afterwards. The capability mutex is a leaf, so taking it under
+    // cs_wallet keeps the lock order.
+    std::map<CapabilityId, CapabilityRecord> ended;
+    {
+        LOCK(m_capability_mutex);
+        ended.swap(m_capabilities);
+        m_ipc_capability.reset();
+    }
+
+    for (const auto& entry : ended) {
+        if (entry.second.relock_epoch) relock_epochs.insert(*entry.second.relock_epoch);
+    }
+
+    LogPrintf("Wallet passphrase changed to an nDeriveIterations of %i", new_master_key.nDeriveIterations);
+
+    return true;
 }
 
 void CWallet::ChainStateFlushed(const CBlockLocator& loc)
@@ -1008,8 +1581,21 @@ bool CWallet::EncryptWallet(const SecureString& strWalletPassphrase)
             m_seed_phrase_blob_crypted = true;
         }
 
+        // A capability issued before now had no passphrase to check, so none
+        // outlives the encryption. The capability mutex is a leaf, so taking it
+        // under cs_wallet keeps the lock order.
+        {
+            LOCK(m_capability_mutex);
+            m_capabilities.clear();
+            m_ipc_capability.reset();
+        }
+
+        // Without the failed-passphrase delay, which must not be slept under
+        // cs_wallet. The passphrase is the one the keys were just encrypted
+        // with.
         Lock();
-        Unlock(strWalletPassphrase);
+        UnlockWithoutDelay(strWalletPassphrase, UnlockScope::Full, /*relock_after=*/std::nullopt,
+                           /*failure_out=*/nullptr, /*epoch_out=*/nullptr);
 
         // If we are using HD, replace the HD master key (seed) with a new
         // one -- unless the ACTIVE master is the phrase-derived one, in
@@ -2696,7 +3282,7 @@ bool CWalletTx::WriteToDisk(CWalletDB *pwalletdb)
 // with confirmed block information. We MUST persist these state changes to
 // wallet.dat so they survive wallet restarts. Without this, transactions that
 // appear during -rescan get lost on the next normal load.
-int CWallet::ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate)
+int CWallet::ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate, std::atomic<int>* progress_height)
 {
     int ret = 0;
 
@@ -2707,6 +3293,8 @@ int CWallet::ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate)
 
         while (pindex)
         {
+            if (progress_height) progress_height->store(pindex->nHeight, std::memory_order_relaxed);
+
             // no need to read and scan block, if block was created before
             // our wallet birthday (as adjusted for block time variability)
             if (nTimeFirstKey && (pindex->nTime < (nTimeFirstKey - 7200))) {
@@ -2761,7 +3349,8 @@ int CWallet::ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate)
 // do to an overly aggressive ResendWalletTransactions in 5.4.1.0. Note the MRC
 // payment transactions were not affected. The change in effective balance due to this
 // is very small, since a successful MRC request costs 0.011 GRC.
-int CWallet::ScanForMRCRequests(CBlockIndex* pindexStart, CBlockIndex* pindexEnd, bool fUpdate)
+int CWallet::ScanForMRCRequests(CBlockIndex* pindexStart, CBlockIndex* pindexEnd, bool fUpdate,
+                                std::atomic<int>* progress_height)
 {
     int ret = 0;
 
@@ -2769,6 +3358,8 @@ int CWallet::ScanForMRCRequests(CBlockIndex* pindexStart, CBlockIndex* pindexEnd
         LOCK2(cs_main, cs_wallet);
         for(CBlockIndex* pindex = pindexStart; pindex && pindex->nHeight < pindexEnd->nHeight;)
         {
+            if (progress_height) progress_height->store(pindex->nHeight, std::memory_order_relaxed);
+
             // no need to read and scan block, if block was created before
             // our wallet birthday (as adjusted for block time variability)
             if (nTimeFirstKey && (pindex->nTime < (nTimeFirstKey - 7200))) {
@@ -4155,10 +4746,14 @@ int64_t MessageBurnAmount(const CTransaction& tx)
     return 0;
 }
 
+//! How many passes the automated beacon renewal's build may make at a fee that
+//! is not its minimum before it is refused. A renewal settles in two or three.
+static constexpr int MAX_RENEWAL_FEE_PASSES = 8;
+
 bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, set<pair<const CWalletTx*,unsigned int>>& setCoins_in,
                                 CWalletTx& wtxNew, CReserveKey& reservekey, int64_t& nFeeRet, int& nChangePosRet,
                                 const CCoinControl* coinControl, bool change_back_to_input_address,
-                                int64_t nEnforcedMinFee, bool permitted_while_staking_only,
+                                int64_t nEnforcedMinFee, const StakingKeyAccess* renewal_access,
                                 const std::set<size_t>& subtract_fee_outputs)
 {
     int64_t nValueOut = 0;
@@ -4187,6 +4782,13 @@ bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, 
     // does not move with the fee, which is what lets one selection serve every
     // pass of the loop below.
     const bool subtract_fee = !subtract_fee_outputs.empty();
+
+    // Never for the automated beacon renewal: its outputs and its burn are fixed
+    // (GRC::IsRenewalShape() below). No caller passes both, so a call that does
+    // is refused.
+    if (subtract_fee && renewal_access) {
+        return error("%s: outputs to subtract the fee from given with the renewal's access", __func__);
+    }
 
     if (subtract_fee && *subtract_fee_outputs.rbegin() >= vecSend.size()) {
         return error("%s: output %u to subtract the fee from is out of range (%u outputs)",
@@ -4227,10 +4829,45 @@ bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, 
         //
         // So a re-check at commit would add nothing, and authorisation belongs
         // at the START of an operation anyway: a send that was permitted when it
-        // began should finish. It would also need the renewal exemption
-        // threaded through commit.
-        if (IsUnlockedForStakingOnly() && !permitted_while_staking_only) {
-            return error("%s: wallet is unlocked for staking only", __func__);
+        // began should finish. It would also need the renewal's access threaded
+        // through commit.
+        //
+        // The automated beacon renewal's access is the one exception. What it
+        // may build is fixed below: its shape is checked before anything is
+        // signed, and it is signed through the staking accessor.
+        //
+        // Asked as "may this thread use the keys", so a capability scope open
+        // on the calling thread lets its operation build on a wallet unlocked
+        // for staking only, and nothing else does. A locked wallet is refused
+        // here too, where before it failed at the first signature.
+        if (!CanUseKeys() && !renewal_access) {
+            return error("%s: the wallet's keys may not be used: it is locked, or unlocked for staking only "
+                         "with no capability for this operation", __func__);
+        }
+
+        // The renewal signs through the staking accessor, which reaches the keys
+        // while the wallet is unlocked for staking only. Every other build signs
+        // with the wallet's own keys.
+        std::optional<StakingSigningProvider> renewal_signer;
+
+        if (renewal_access) {
+            renewal_signer.emplace(*this, *renewal_access);
+        }
+
+        const SigningProvider& signer = renewal_signer
+            ? static_cast<const SigningProvider&>(*renewal_signer)
+            : static_cast<const SigningProvider&>(*this);
+
+        // What the renewal's shape is checked against: the CPID of this node's
+        // own researcher, which cannot change while cs_main is held, and the
+        // burn its contracts require.
+        const GRC::CpidOption renewal_cpid = renewal_access ? GRC::Researcher::Get()->Id().TryCpid() : std::nullopt;
+        CAmount renewal_burn = 0;
+
+        if (renewal_access) {
+            for (const auto& contract : wtxNew.vContracts) {
+                renewal_burn += contract.RequiredBurnAmount();
+            }
         }
 
         // txdb must be opened before the mapWallet lock
@@ -4239,10 +4876,19 @@ bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, 
             // The caller can enforce a fee above the normal size-based fee (e.g. splitunspent's
             // per-piece fee). The while loop below only ever raises nFeeRet, so the enforced
             // minimum is preserved.
-            nFeeRet = max(nTransactionFee, nEnforcedMinFee);
+            //
+            // The renewal pays the minimum fee for its size, which the loop works
+            // out from nothing.
+            nFeeRet = renewal_access ? 0 : max(nTransactionFee, nEnforcedMinFee);
 
             // Whether setCoins_out holds the selection a subtract-fee transaction keeps.
             bool subtract_fee_coins_selected = false;
+
+            // The renewal's coins once a pass has paid more than their minimum
+            // fee, and the passes it has made at a fee that was not the minimum
+            // (both below).
+            set<pair<const CWalletTx*,unsigned int>> renewal_coins;
+            int renewal_fee_passes = 0;
 
             while (true)
             {
@@ -4304,7 +4950,7 @@ bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, 
                         nValueIn += coin.first->vout[coin.second].nValue;
                     }
                 }
-                else if (!provided_coin_set)
+                else if (!provided_coin_set && renewal_coins.empty())
                 {
                     setCoins_out.clear();
 
@@ -4345,6 +4991,16 @@ bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, 
                     }
 
                 }
+                else if (!provided_coin_set)
+                {
+                    // The renewal's coins, kept from an earlier pass.
+                    setCoins_out = renewal_coins;
+
+                    for (auto const& input : setCoins_out)
+                    {
+                        nValueIn += input.first->vout[input.second].nValue;
+                    }
+                }
                 else
                 {
                     // Add up input value for the provided set of coins.
@@ -4367,7 +5023,8 @@ bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, 
                 // in the case of no provided coin set, SelectTransaction above will be given the chance to modify its
                 // selection to cover the increased fees, hopefully converging on an appropriate solution. In the case
                 // of a provided set of inputs, that set is immutable for this transaction, so no point in continuing.
-                if (provided_coin_set && nChange < 0)
+                // The renewal's kept coins are fixed in the same way.
+                if ((provided_coin_set || !renewal_coins.empty()) && nChange < 0)
                 {
                     return error("%s: Total value of inputs, %s, cannot cover the transaction fees of %s. "
                                  "CreateTransaction aborted.",
@@ -4419,15 +5076,27 @@ bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, 
 
                         scriptChange.SetDestination(coinControl->destChange);
                     } else { // no coin control
-                        if (change_back_to_input_address) { // send change back to an existing input address
+                        // The renewal sends its change back to an input's address
+                        // as well, so that it draws no key from the pool.
+                        if (change_back_to_input_address || renewal_access) { // send change back to an existing input address
                             CTxDestination change_address;
 
                             if (!setCoins_out.empty()) {
                                 // Select the first input with a valid address as the change address. This seems as good
                                 // a choice as any, and is the fastest.
                                 for (const auto& input : setCoins_out) {
-                                    if (ExtractDestination(input.first->vout[input.second].scriptPubKey, change_address)) {
-                                        scriptChange.SetDestination(change_address);
+                                    const CScript& input_script = input.first->vout[input.second].scriptPubKey;
+
+                                    if (ExtractDestination(input_script, change_address)) {
+                                        // The renewal's change goes back to the very script the coin was paid
+                                        // to, as its fixed shape requires (GRC::IsRenewalShape()). For a coin
+                                        // paid to a public key, which a coinstake makes, that is not the script
+                                        // of the address the key has.
+                                        if (renewal_access) {
+                                            scriptChange = input_script;
+                                        } else {
+                                            scriptChange.SetDestination(change_address);
+                                        }
 
                                         break;
                                     }
@@ -4467,40 +5136,61 @@ bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, 
                     nChangePosRet = -1;
                 }
 
-                if (setCoins_in.size())
-                {
-                    // Fill vin from provided inputs
-                    for (auto const& coin : setCoins_in)
-                    {
-                        mtx.vin.push_back(CTxIn(coin.first->GetHash(),coin.second));
-                    }
+                // The provided inputs, or else the ones SelectCoins chose.
+                const set<pair<const CWalletTx*,unsigned int>>& coins = provided_coin_set ? setCoins_in : setCoins_out;
 
-                    // Sign on the mutable transaction while it's still live.
-                    // Post-F3, CTransaction fields are const, so signing can
-                    // only happen via CMutableTransaction. The copy-back to
-                    // wtxNew's CTransaction base class happens after all
-                    // signing is complete.
-                    int nIn = 0;
-                    for (auto const& coin : setCoins_in)
-                        if (!SignSignature(*this, *coin.first, mtx, nIn++)) {
-                            return error("%s: Failed to sign tx", __func__);
-                        }
+                for (auto const& coin : coins)
+                {
+                    mtx.vin.push_back(CTxIn(coin.first->GetHash(),coin.second));
                 }
-                else // use setCoins_out from SelectCoins as the inputs
+
+                // The renewal's fixed shape, checked before anything is signed.
+                // Its fee is the minimum for the size the transaction will have
+                // once signed, so a build at another fee goes round again at that
+                // one.
+                //
+                // A build at a lower fee selects again, as the check after
+                // signing does for every other build. A build at a higher fee
+                // keeps its coins, which pay their own minimum: a selection for
+                // a larger amount can take fewer coins than one for a smaller
+                // amount did (past the input count a standard transaction
+                // allows, a contract's selection falls back from the smallest
+                // coins to the fewest), so selecting again could go back and
+                // forth. The passes are bounded all the same, and a renewal that
+                // does not settle on its minimum is refused below.
+                if (renewal_access)
                 {
-                    // Fill vin from provided inputs
-                    for (auto const& coin : setCoins_out)
+                    const std::optional<CAmount> renewal_fee = GRC::RenewalMinimumFee(mtx, *this);
+
+                    if (renewal_fee && nFeeRet != *renewal_fee && ++renewal_fee_passes <= MAX_RENEWAL_FEE_PASSES)
                     {
-                        mtx.vin.push_back(CTxIn(coin.first->GetHash(),coin.second));
+                        if (nFeeRet > *renewal_fee)
+                        {
+                            renewal_coins = coins;
+                        }
+
+                        nFeeRet = *renewal_fee;
+                        continue;
                     }
 
-                    // Sign on the mutable transaction (see note above).
-                    int nIn = 0;
-                    for (auto const& coin : setCoins_out)
-                        if (!SignSignature(*this, *coin.first, mtx, nIn++))
-                        {
-                            return error("%s: Failed to sign tx", __func__);
-                        }
+                    if (!renewal_cpid || !GRC::IsRenewalShape(mtx, *renewal_cpid, renewal_burn, nFeeRet, *this))
+                    {
+                        return error("%s: renewal transaction not in the permitted shape", __func__);
+                    }
+                }
+
+                // Sign on the mutable transaction while it's still live.
+                // Post-F3, CTransaction fields are const, so signing can
+                // only happen via CMutableTransaction. The copy-back to
+                // wtxNew's CTransaction base class happens after all
+                // signing is complete.
+                int nIn = 0;
+                for (auto const& coin : coins)
+                {
+                    if (!SignSignature(signer, *coin.first, mtx, nIn++))
+                    {
+                        return error("%s: Failed to sign tx", __func__);
+                    }
                 }
 
                 // Copy the signed mutable transaction into the CWalletTx base.
@@ -4515,8 +5205,10 @@ bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, 
                     return error("%s: tx size %d greater than standard %d", __func__, nBytes, MAX_STANDARD_TX_SIZE);
                 }
 
-                // Check that enough fee is included
-                int64_t nPayFee = nTransactionFee * (1 + (int64_t)nBytes / 1000);
+                // Check that enough fee is included. The renewal's minimum fee was
+                // taken at the largest size its signatures can have, so this check
+                // passes it as built.
+                int64_t nPayFee = renewal_access ? 0 : nTransactionFee * (1 + (int64_t)nBytes / 1000);
                 int64_t nMinFee = GetMinFee(wtxNew, 1000, GMF_SEND, nBytes);
 
                 LogPrint(BCLog::LogFlags::ESTIMATEFEE, "INFO %s: nTransactionFee = %s, nBytes = %" PRId64 ", nPayFee = %s"
@@ -4558,23 +5250,23 @@ bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, 
 
 bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, CWalletTx& wtxNew, CReserveKey& reservekey,
     int64_t& nFeeRet, int& nChangePosRet, const CCoinControl* coinControl, bool change_back_to_input_address,
-    bool permitted_while_staking_only, const std::set<size_t>& subtract_fee_outputs)
+    const StakingKeyAccess* renewal_access, const std::set<size_t>& subtract_fee_outputs)
 {
     // Initialize setCoins empty to let CreateTransaction choose via SelectCoins...
     set<pair<const CWalletTx*,unsigned int>> setCoins;
 
     return CreateTransaction(vecSend, setCoins, wtxNew, reservekey, nFeeRet, nChangePosRet, coinControl,
-                             change_back_to_input_address, /*nEnforcedMinFee=*/0, permitted_while_staking_only,
+                             change_back_to_input_address, /*nEnforcedMinFee=*/0, renewal_access,
                              subtract_fee_outputs);
 }
 
 bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, CWalletTx& wtxNew, CReserveKey& reservekey,
     int64_t& nFeeRet, const CCoinControl* coinControl, bool change_back_to_input_address,
-    bool permitted_while_staking_only, const std::set<size_t>& subtract_fee_outputs)
+    const StakingKeyAccess* renewal_access, const std::set<size_t>& subtract_fee_outputs)
 {
     int nChangePosRet = -1;
     return CreateTransaction(vecSend, wtxNew, reservekey, nFeeRet, nChangePosRet, coinControl,
-                             change_back_to_input_address, permitted_while_staking_only, subtract_fee_outputs);
+                             change_back_to_input_address, renewal_access, subtract_fee_outputs);
 }
 
 bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, set<pair<const CWalletTx*,unsigned int>>& setCoins,
@@ -4727,7 +5419,9 @@ string CWallet::SendMoney(CScript scriptPubKey, int64_t nValue, CWalletTx& wtxNe
         LogPrintf("SendMoney() : %s", strError);
         return strError;
     }
-    if (IsUnlockedForStakingOnly())
+    // After the lock check, so this refuses a wallet unlocked for staking only
+    // unless a capability scope is open on this thread.
+    if (!CanUseKeys())
     {
         string strError = _("Error: Wallet unlocked for staking only, unable to create transaction.");
         LogPrintf("SendMoney() : %s", strError);
@@ -4941,13 +5635,19 @@ bool CWallet::NewKeyPool()
 {
     {
         LOCK(cs_wallet);
+
+        // Refused before anything is retired. Where no key can be made, the old
+        // pool is all the wallet has to draw from, and a caller that ignores
+        // the result (sethdseed does) would otherwise leave it with none. That
+        // includes a grant on a locked wallet, where a timed relock has landed
+        // inside a capability scope.
+        if (!CanCreateKeys())
+            return false;
+
         CWalletDB walletdb(strWalletFile);
         for (auto const& nIndex : setKeyPool)
             walletdb.ErasePool(nIndex);
         setKeyPool.clear();
-
-        if (IsLocked())
-            return false;
 
         unsigned int default_size = IsHDEnabled() ? DEFAULT_KEYPOOL_SIZE : DEFAULT_KEYPOOL_SIZE_PRE_HD;
         int64_t nKeys = max(gArgs.GetArg("-keypool", default_size), (int64_t)0);
@@ -4967,8 +5667,15 @@ bool CWallet::TopUpKeyPool(unsigned int nSize)
     {
         LOCK(cs_wallet);
 
-        if (IsLocked())
+        // A locked wallet has no master key to make a key with, and one
+        // unlocked for staking only withholds the HD seed and the key writer.
+        // The pool is topped up again once keys may be created.
+        if (!CanCreateKeys()) {
+            if (IsUnlockedForStakingOnly()) {
+                LogPrint(BCLog::LogFlags::WALLETDB, "%s: skipped, wallet unlocked for staking only", __func__);
+            }
             return false;
+        }
 
         CWalletDB walletdb(strWalletFile);
 
@@ -4995,14 +5702,16 @@ bool CWallet::TopUpKeyPool(unsigned int nSize)
     return true;
 }
 
-void CWallet::ReserveKeyFromKeyPool(int64_t& nIndex, CKeyPool& keypool)
+void CWallet::ReserveKeyFromKeyPool(int64_t& nIndex, CKeyPool& keypool, const bool top_up)
 {
     nIndex = -1;
     keypool.vchPubKey = CPubKey();
     {
         LOCK(cs_wallet);
 
-        if (!IsLocked())
+        // Taking a key the pool holds creates nothing, so it goes ahead in any
+        // scope. Topping the pool up first does only where keys may be created.
+        if (top_up && CanCreateKeys())
             TopUpKeyPool();
 
         // Get the oldest key
@@ -5073,7 +5782,13 @@ bool CWallet::GetKeyFromPool(CPubKey& result, bool fAllowReuse)
                 result = vchDefaultKey;
                 return true;
             }
-            if (IsLocked()) return false;
+            if (!CanCreateKeys()) {
+                if (IsUnlockedForStakingOnly()) {
+                    LogPrintf("WARNING: %s: the key pool is empty, and no key can be made while the wallet "
+                              "is unlocked for staking only. A full unlock refills the pool.", __func__);
+                }
+                return false;
+            }
             result = GenerateNewKey();
             return true;
         }
@@ -5087,6 +5802,9 @@ int64_t CWallet::GetOldestKeyPoolTime()
 {
     int64_t nIndex = 0;
     CKeyPool keypool;
+
+    // getinfo and getwalletinfo read this. The reservation tops the pool up
+    // only where keys may be created, so under staking only they create none.
     ReserveKeyFromKeyPool(nIndex, keypool);
     if (nIndex == -1)
         return  GetAdjustedTime();
@@ -5795,6 +6513,24 @@ bool CReserveKey::GetReservedKey(CPubKey& pubkey) EXCLUSIVE_LOCKS_REQUIRED(pwall
         }
     }
     assert(vchPubKey.IsValid());
+    pubkey = vchPubKey;
+    return true;
+}
+
+bool CReserveKey::GetReservedKeyWithoutTopUp(CPubKey& pubkey)
+{
+    if (nIndex == -1)
+    {
+        CKeyPool keypool;
+        pwallet->ReserveKeyFromKeyPool(nIndex, keypool, /*top_up=*/false);
+
+        if (nIndex == -1) {
+            return false;
+        }
+
+        vchPubKey = keypool.vchPubKey;
+    }
+
     pubkey = vchPubKey;
     return true;
 }

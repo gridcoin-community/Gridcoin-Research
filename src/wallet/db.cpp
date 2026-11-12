@@ -9,6 +9,7 @@
 #include "net.h"
 #include "node/ui_interface.h"
 #include "util.h"
+#include "util/fsmodes.h"
 
 #include <stdint.h>
 #include <stdexcept>
@@ -386,6 +387,18 @@ bool CDBEnv::RemoveDb(const string& strFile)
     return (rc == 0);
 }
 
+bool CDB::KeepRewrittenFilePermissions(const fs::path& original, const fs::path& rewritten)
+{
+    const fsmodes::KeepResult kept = fsmodes::KeepPermissions(original, rewritten);
+    if (kept.kind == fsmodes::KeepResult::Kind::NotKept) {
+        LogPrintf("WARNING: the permissions of %s could not be kept on the rewritten file %s (%s)",
+                  original.string(), rewritten.string(), kept.error);
+        return false;
+    }
+
+    return true;
+}
+
 bool CDB::Rewrite(const string& strFile, const char* pszSkip)
 {
     while (!ShutdownInProgress())
@@ -463,6 +476,11 @@ bool CDB::Rewrite(const string& strFile, const char* pszSkip)
                 }
                 if (fSuccess)
                 {
+                    // The rewritten file is complete and closed. It takes the permissions of the
+                    // file it replaces, which are not changed. A mock environment has no files.
+                    if (!bitdb.IsMock()) {
+                        (void)KeepRewrittenFilePermissions(GetDataDir() / strFile, GetDataDir() / strFileRes);
+                    }
                     Db dbA(&bitdb.dbenv, 0);
                     if (dbA.remove(strFile.c_str(), nullptr, 0))
                         fSuccess = false;

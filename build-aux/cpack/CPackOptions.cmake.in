@@ -3,6 +3,13 @@ set(CMAKE_BINARY_DIR "@CMAKE_BINARY_DIR@")
 
 if(CPACK_GENERATOR MATCHES "NSIS")
     set(CPACK_PACKAGE_FILE_NAME "gridcoin-${CPACK_PACKAGE_VERSION}-win${CPACK_WINDOWS_BITS}-setup")
+    # A release build signs the executables after stripping them, so CPack must not strip again,
+    # and signs the uninstaller through the command in GRIDCOIN_UNINSTALLER_SIGN_COMMAND (see
+    # NSIS.template.in). With neither variable set a build is unchanged.
+    if(DEFINED ENV{GRIDCOIN_PRESIGNED_BINARIES} AND NOT "$ENV{GRIDCOIN_PRESIGNED_BINARIES}" STREQUAL "")
+        set(CPACK_STRIP_FILES OFF)
+    endif()
+    set(CPACK_GRIDCOIN_UNINSTALLER_SIGN_COMMAND "$ENV{GRIDCOIN_UNINSTALLER_SIGN_COMMAND}")
 endif()
 
 if(CPACK_GENERATOR MATCHES "DragNDrop")

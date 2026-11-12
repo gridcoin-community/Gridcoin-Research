@@ -14,6 +14,8 @@
 #include <util/proc_hardening.h>
 #include <util/syserror.h>
 #include "util/threadnames.h"
+#include <util/childreaper.h>
+#include <util/sdnotify.h>
 #include <util/tokenpipe.h>
 #include "net.h"
 #include "txdb.h"
@@ -24,20 +26,42 @@
 #include "rpc/client.h"
 #include "node/ui_interface.h"
 #include "gridcoin/upgrade.h"
+#include "wallet/autounlock.h"
+#include "wallet/wallet.h"
+
+#ifdef WIN32
+#include "logging.h"
+#include "util/time.h"
+#include "util/win_acl.h"
+#include "util/win_admin_drop.h"
+#include "util/winservice.h"
+
+#include <string>
+#include <vector>
+
+#include <windows.h>
+#endif
 
 #ifdef ENABLE_MULTIPROCESS
 #include "interfaces/init.h"
 #include "interfaces/ipc.h"
+#include "interfaces/notification_dispatcher.h"
 #include "ipc/handshake.h"
 #include "ipc/peercred.h"
+#include "ipc/process.h"
 #include "ipc/serve_init.h"
+#ifdef WIN32
+#include "ipc/win_endpoint.h" // AttachGroupSid
+#endif
+#include "util/strencodings.h"
 #include "wallet/wallet.h" // pwalletMain / CWallet::GetWalletUuid for the identity token
 #include <atomic>
 #include <memory>
 #endif
 
 #include <boost/thread.hpp>
-#include <boost/algorithm/string/predicate.hpp>
+#include <csignal>
+#include <optional>
 #include <stdio.h>
 #include <stdexcept>
 
@@ -114,6 +138,102 @@ int fork_daemon(bool nochdir, bool noclose, TokenPipeEnd& endpoint)
 
 #endif
 
+#ifdef WIN32
+//! Why this service may not run under the account its token holds, or nullopt when that is its
+//! own virtual account (util::winsvc::ServiceAccountRefusal).
+static std::optional<std::string> ServiceAccountProblem()
+{
+    try {
+        const util::winacl::Sid user = util::winacl::CurrentTokenUser();
+        return util::winsvc::ServiceAccountRefusal(user, util::winacl::AccountNameOf(user),
+                                                   util::winsvc::ServiceName());
+    } catch (const std::exception& e) {
+        return strprintf("The Gridcoin service could not read the account it runs as: %s", AsciiWhat(e));
+    }
+}
+
+//! Whether \p dir is a reparse point (a link, a junction or another kind), read without following it.
+static bool IsReparsePoint(const fs::path& dir)
+{
+    const DWORD attributes = ::GetFileAttributesW(dir.wstring().c_str());
+    return attributes != INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0;
+}
+
+//! Writes a refusal from before the configuration is read, for a service, which has no console:
+//! to stderr, and to debug.log in the network's data directory as the command line names it, only
+//! when that directory exists and neither it nor the data directory is a reparse point. Nothing
+//! but the log file is created, and nothing is written through a link at its name
+//! (util::winsvc::AppendToLogNoFollow). Best effort: the log write may not happen.
+static void WriteEarlyServiceRefusal(const std::string& message)
+{
+    tfm::format(std::cerr, "Error: %s\n", message);
+
+    try {
+        const std::string datadir = gArgs.GetArg("-datadir", "");
+        if (datadir.empty()) return;
+
+        boost::system::error_code ec;
+        const fs::path root = fs::system_complete(datadir, ec);
+        if (ec) return;
+        const fs::path dir = root / CreateBaseChainParams(gArgs.GetChainName())->DataDir();
+        if (!fs::is_directory(dir, ec)) return;
+        // A junction there would lead the write elsewhere.
+        if (IsReparsePoint(root) || IsReparsePoint(dir)) return;
+
+        util::winsvc::AppendToLogNoFollow(dir / DEFAULT_DEBUGLOGFILE,
+                                          strprintf("%s Error: %s\n", FormatISO8601DateTime(GetTime()), message));
+    } catch (const std::exception&) {
+        // stderr has it; a log there is only what can be done besides.
+    }
+}
+
+//! Why the core may not start from its executable's directory, or nullopt: an account outside
+//! util::winsvc::ImageDirectoryAllowed() can change the executable or a directory above it
+//! (util::winacl::FindForeignWriterOnChain). With -allowunsafeimagedir the reason is logged
+//! instead and nullopt returned. An access list that cannot be read is a reason too.
+static std::optional<std::string> ImageDirectoryProblem()
+{
+    const bool allow_unsafe = gArgs.GetBoolArg("-allowunsafeimagedir", false);
+    fs::path exe;
+    std::optional<std::string> reason;
+
+    try {
+        std::wstring module(MAX_PATH, L'\0');
+        for (;;) {
+            const DWORD length = ::GetModuleFileNameW(nullptr, module.data(), static_cast<DWORD>(module.size()));
+            if (length == 0) {
+                throw std::runtime_error(strprintf("GetModuleFileNameW failed with error %u",
+                                                   static_cast<unsigned>(::GetLastError())));
+            }
+            if (length < module.size()) {
+                module.resize(length);
+                break;
+            }
+            // Cut short: try again with room for the whole path.
+            module.resize(module.size() * 2);
+        }
+        exe = fs::path(module);
+
+        const std::vector<util::winacl::Sid> allowed = util::winsvc::ImageDirectoryAllowed(
+            util::winsvc::IsRunningAsWindowsService(), util::winacl::CurrentTokenUser());
+        reason = util::winacl::FindForeignWriterOnChain(exe, allowed);
+    } catch (const std::exception& e) {
+        reason = strprintf("its access lists could not be read (%s)", AsciiWhat(e));
+    }
+
+    if (!reason) return std::nullopt;
+
+    const std::string message =
+        util::winsvc::ImageDirectoryMessage(exe, *reason, util::winsvc::IsRunningAsWindowsService(), allow_unsafe);
+    if (allow_unsafe) {
+        LogPrintf("%s", message);
+        return std::nullopt;
+    }
+
+    return message;
+}
+#endif
+
 bool AppInit(int argc, char* argv[])
 {
 #ifdef WIN32
@@ -130,6 +250,12 @@ bool AppInit(int argc, char* argv[])
 
     ThreadHandlerPtr threads = std::make_shared<ThreadHandler>();
     bool fRet = false;
+    // AppInit2 failed because someone requested a stop during it, not for an error.
+    bool startup_stopped = false;
+
+    // Extends the service manager start timeout on each startup progress message.
+    // Disconnected once readiness has been reported.
+    boost::signals2::connection init_message_connection;
 
     try
     {
@@ -139,8 +265,41 @@ bool AppInit(int argc, char* argv[])
         // If Qt is used, parameters/gridcoinresearch.conf are parsed in qt/bitcoin.cpp's main()
         std::string error;
         if (!gArgs.ParseParameters(argc, argv, error)) {
+#ifdef WIN32
+            if (util::winsvc::IsRunningAsWindowsService()) {
+                WriteEarlyServiceRefusal(strprintf("Error parsing command line arguments: %s", error));
+            }
+#endif
             return InitError(strprintf("Error parsing command line arguments: %s\n", error));
         }
+
+#ifdef WIN32
+        if (util::winsvc::IsRunningAsWindowsService()) {
+            // First of all, as it needs only the token and the service's name: a service under any
+            // account but its own virtual one reads none of the service's files, writes none but the
+            // refusal's line in debug.log, and exits with its own code, which event 7024 shows. Such
+            // an account, LocalService for one, may not be able to write the data directory, so the
+            // refusal also goes to stderr, and the exit code is what always reaches the operator.
+            if (const std::optional<std::string> refusal = ServiceAccountProblem()) {
+                WriteEarlyServiceRefusal(*refusal);
+                util::winsvc::RefuseServiceStart(util::winsvc::EXIT_WRONG_ACCOUNT);
+                return false;
+            }
+
+            // Help and the version are printed to a console, which a service does not have. The
+            // service stops, says why, and stays stopped: no restart can fix its command line.
+            if (HelpRequested(gArgs) || gArgs.IsArgSet("-version")) {
+                WriteEarlyServiceRefusal("-help and -version print to a console, and the service has none; remove them "
+                                         "from the service's command line");
+                util::winsvc::RefuseServiceStart(0);
+                return false;
+            }
+        }
+#endif
+
+        // The tracer override is read here, from the command line only, before the config file and the settings
+        // file are read, so a line in either cannot enable it.
+        const bool allow_tracer = gArgs.GetBoolArg("-debugallowtracer", false);
         if (HelpRequested(gArgs))
         {
             // First part of help message is specific to bitcoind / RPC client
@@ -163,6 +322,14 @@ bool AppInit(int argc, char* argv[])
             return true;
         }
 
+        // The report-only check of the data directory's files, for the installers. It reads only
+        // the command line, so it runs before the configuration file is read and the data
+        // directory created, and it starts nothing.
+        if (gArgs.GetBoolArg("-reportpermissions", false)) {
+            SelectParams(gArgs.GetChainName());
+            return ReportDataDirPermissions(std::cout);
+        }
+
 #if HAVE_DECL_FORK
         // Communication with parent after daemonizing. This is used for signalling in the following ways:
         // - a boolean token is sent when the initialization process (all the Init* functions) have finished to indicate
@@ -181,8 +348,19 @@ bool AppInit(int argc, char* argv[])
 
         std::string error_msg;
         const auto config_error = [&error_msg] {
-            return InitError(strprintf("Config file cannot be parsed%s. Cannot continue.\n",
-                                       error_msg.empty() ? "" : ": " + error_msg));
+#ifdef WIN32
+            // The service's configuration file is named on its command line, and is not one it
+            // writes. A service has no console, so the error goes to debug.log as well.
+            std::string service_hint;
+            if (util::winsvc::IsRunningAsWindowsService()) {
+                service_hint = std::string(" ") + util::winsvc::SERVICE_CONF_SETUP;
+                InitLogging();
+            }
+#else
+            const std::string service_hint;
+#endif
+            return InitError(strprintf("Config file cannot be parsed%s. Cannot continue.%s\n",
+                                       error_msg.empty() ? "" : ": " + error_msg, service_hint));
         };
 
         if (!gArgs.ReadConfigFiles(error_msg, true))
@@ -199,18 +377,23 @@ bool AppInit(int argc, char* argv[])
         }
 
         // Command-line RPC  - single commands execute and exit. Local to this
-        // entry point; formerly a util.h global read nowhere else.
-        bool fCommandLine = false;
-        for (int i = 1; i < argc; i++)
-            if (!IsSwitchChar(argv[i][0]) && !boost::algorithm::istarts_with(argv[i], "gridcoinresearchd"))
-                fCommandLine = true;
+        // entry point; formerly a util.h global read nowhere else. On Windows main() reads
+        // the same test before it decides whether to give up administrator rights.
+        const bool fCommandLine = IsRpcClientCommandLine(argc, argv);
 
         if (fCommandLine)
         {
-            // The client reads the node's read-write settings, because a connection setting stored there with
-            // changesettings (rpcconnect, rpcport, rpcuser, ...) outranks the config file. It never writes them:
-            // InitSettings rewrites the file through a fixed temporary name, so clients calling the same node at
-            // once raced on it, and a client could write back a setting the node had just changed.
+#ifndef WIN32
+            // The command line client is not the node: a termination signal ends it at
+            // once, as before the node's handlers were installed at the top of main().
+            signal(SIGTERM, SIG_DFL);
+            signal(SIGINT, SIG_DFL);
+#endif
+            // The client reads the node's read-write settings file but ignores its refused keys, the connection
+            // options (rpcconnect, rpcport, rpcuser, rpcpassword, ...) included, which it takes only from the
+            // command line and the config file. It never writes the file: InitSettings rewrites it through a
+            // fixed temporary name, so clients calling the same node at once raced on it, and a client could
+            // write back a setting the node had just changed.
             std::vector<std::string> errors;
             if (!gArgs.ReadSettingsFile(&errors)) {
                 return InitError(strprintf("Failed loading settings file:\n- %s\n", Join(errors, "\n- ")));
@@ -236,6 +419,10 @@ bool AppInit(int argc, char* argv[])
         gArgs.SoftSetBoolArg("-server", true);
         // Initialize logging as early as possible.
         InitLogging();
+        LogNonDumpableStatus();
+#ifdef WIN32
+        if (util::winadmin::StartedByAdminDrop()) LogPrintf("%s", util::winadmin::STARTED_WITHOUT_ADMIN_RIGHTS);
+#endif
 
         // Best-effort in-process privilege hardening (Linux): NO_NEW_PRIVS +
         // capability-bounding-set drop, inherited across the daemonizing fork
@@ -244,6 +431,51 @@ bool AppInit(int argc, char* argv[])
         // never the GUI process.
         if (gArgs.GetBoolArg("-nonewprivs", DEFAULT_NO_NEW_PRIVS)) {
             HardenProcess();
+        }
+
+#ifdef WIN32
+        if (util::winsvc::IsRunningAsWindowsService()) {
+            LogPrintf("Service token: %s", util::winsvc::DescribeProcessToken());
+        }
+
+        // A core that serves other processes (-multiprocess, and the service, which is one) must
+        // start from where only the administrators, and outside the service this account, can
+        // change it. Before anything is loaded or served.
+        if (util::winsvc::IsRunningAsWindowsService() || gArgs.GetBoolArg("-multiprocess", false)) {
+            if (const std::optional<std::string> refusal = ImageDirectoryProblem()) {
+                return InitError(*refusal);
+            }
+        }
+#endif
+
+#ifdef ENABLE_MULTIPROCESS
+        // The attach group's checks need only the arguments and the data directory, so a
+        // -multiprocess start they refuse stops here: before the daemonizing fork, so a -daemon
+        // parent reports the failure, and before AppInit2 loads the wallet or binds RPC. The IPC
+        // directory itself is checked again where it is opened (ipc::ApplyAttachGroupAccess; on
+        // Windows ipc::win::ApplyAttachGroupDirectoryAccess).
+        // -noipcattachgroup counts as unset.
+        if (gArgs.GetBoolArg("-multiprocess", false)) {
+            if (const std::optional<std::string> refusal = ipc::AttachGroupIpcDirRefusal()) {
+                return InitError(*refusal);
+            }
+
+            const std::string attach_group = ipc::ConfiguredOption("-ipcattachgroup");
+            if (!ipc::ConfigureAttachGroup(attach_group)) {
+                const std::optional<std::string> problem = ipc::AttachGroupProblem(attach_group);
+                return InitError(problem ? *problem
+                                         : strprintf("The IPC attach group '%s' could not be configured.",
+                                                     SanitizeString(attach_group)));
+            }
+        }
+#endif
+
+        const bool daemonize =
+            gArgs.GetBoolArg("-daemon", DEFAULT_DAEMON) || gArgs.GetBoolArg("-daemonwait", DEFAULT_DAEMONWAIT);
+        // A service manager waiting for READY=1 would never get it from a forked child. Checked
+        // before anything is changed on disk, -resetblockchaindata included.
+        if (const std::optional<std::string> refusal = sdnotify::DaemonizeRefusal(daemonize)) {
+            return InitError(*refusal);
         }
 
         // Check to see if the user requested to reset blockchain data -- We allow reset blockchain data on testnet.
@@ -272,7 +504,23 @@ bool AppInit(int argc, char* argv[])
             }
         }
 
-        if (gArgs.GetBoolArg("-daemon", DEFAULT_DAEMON) || gArgs.GetBoolArg("-daemonwait", DEFAULT_DAEMONWAIT)) {
+        // A stop requested so far (during -resetblockchaindata, for one) ends the start
+        // here, before the daemonizing fork and AppInit2.
+        if (ShutdownRequested()) {
+            LogPrintf("Shutdown requested during startup. Exiting.");
+            // This return skips the status block at the end; say why the start ended. A stop
+            // someone asked for ends cleanly, as at the end of this function; a shutdown that an
+            // error asked for is a failure.
+            if (StopWasRequested()) {
+                sdnotify::NotifyStartupStopped();
+                return true;
+            }
+
+            sdnotify::NotifyStartupFailed();
+            return false;
+        }
+
+        if (daemonize) {
 #if HAVE_DECL_FORK
             tfm::format(std::cout, PACKAGE_NAME " starting\n");
 
@@ -302,11 +550,43 @@ bool AppInit(int argc, char* argv[])
 #endif // HAVE_DECL_FORK
         }
 
+        // Refuse to run under a debugger or tracer unless the developer override is set. Done here, after the
+        // command line client form has returned and the daemonizing fork, so it sees the process that will run.
+        {
+            const std::optional<int> tracer_pid = ReadOwnTracerPid();
+            if (const std::optional<std::string> warning = TracerStateWarning(tracer_pid, TracerCheckSupported())) {
+                LogPrintf("%s", *warning);
+            }
+            switch (DecideTracer(tracer_pid, allow_tracer)) {
+            case TracerVerdict::Refuse:
+                return InitError(strprintf("A debugger or tracer (pid %d) is attached to this process; refusing to "
+                                           "start. See doc/developer-notes.md if you are debugging.\n",
+                                           *tracer_pid));
+            case TracerVerdict::StartDumpableForDebugging:
+                SetProcessDumpableForDebugging();
+                LogPrintf("WARNING: -debugallowtracer is set: this process is dumpable and may be traced");
+                break;
+            case TracerVerdict::Start:
+                break;
+            }
+        }
+
+        init_message_connection = uiInterface.InitMessage_connect(
+            [](const std::string& message) { sdnotify::ExtendStartTimeout(message); });
+
+#ifndef WIN32
+        // The daemonizing fork is behind us. Under a PID namespace this process is
+        // process 1 and must reap what the notify commands leave behind. The reaper
+        // is POSIX only.
+        util::StartOrphanReaper();
+#endif
+
         fRet = AppInit2(threads);
+        startup_stopped = !fRet && ShutdownRequested() && StopWasRequested();
 #if HAVE_DECL_FORK
         if (daemon_ep.IsOpen()) {
             // Signal initialization status to parent, then close pipe.
-            daemon_ep.TokenWrite(fRet);
+            daemon_ep.TokenWrite(fRet || startup_stopped);
             daemon_ep.Close();
         }
 #endif
@@ -321,12 +601,23 @@ bool AppInit(int argc, char* argv[])
         PrintException(nullptr, "AppInit()");
     }
 
+    // Startup is over, successful or not, so later progress messages must not
+    // extend the start timeout.
+    init_message_connection.disconnect();
+
     if (fRet) {
         // Core init succeeded. ThreadAppInit2 (the GUI's init wrapper) sets this
         // for the monolith; the daemon calls AppInit2 directly, so set it here so
         // a multiprocess GUI's isCoreReady() (served from this process) returns
         // true once the core is up.
         bGridcoinCoreInitComplete = true;
+
+        // Unlock for staking only from the platform passphrase backend, if one is configured. No core lock is held
+        // here, and a GUI that attaches afterwards sees the result.
+        if (pwalletMain) {
+            wallet::TryAutoUnlockStakingOnly(*pwalletMain);
+        }
+
 #ifdef ENABLE_MULTIPROCESS
         // Multiprocess (RFC #2937): after core init, optionally listen on the
         // AF_UNIX socket and serve a fresh interfaces::Init to each attached GUI.
@@ -341,9 +632,33 @@ bool AppInit(int argc, char* argv[])
         // set (command line or config file). There is no implicit/optional MP mode
         // in the daemon, so a failure here is a failure to honor an explicit
         // request, not the loss of a nice-to-have.
-        if (gArgs.GetBoolArg("-multiprocess", false)) {
+        const bool multiprocess = gArgs.GetBoolArg("-multiprocess", false);
+        // The attach group was resolved, and its arguments checked, before AppInit2.
+        if (multiprocess) {
+            // Whether a failure came from the listener (bind, listen), the only
+            // step after which a stale socket file can be the cause.
+            bool listening = false;
             try {
-                std::string cookie = ipc::WriteCookie(GetDataDir());
+                // An explicit -ipcdir may not exist yet. It is created restricted
+                // to this account; a failure is fatal like the rest of this block.
+                // With an attach group, the directory, the cookie and the socket
+                // are given that group before anything is served, and a failure
+                // is fatal like the rest of this block. The directory is then
+                // given its access first, and a change to it is logged. On
+                // Windows the group is the SID ConfigureAttachGroup resolved, and
+                // an Administrators-owned directory (the service layout) is
+                // checked rather than changed.
+#ifndef WIN32
+                const std::optional<gid_t> attach_group = ipc::AttachGroupGid();
+#else
+                const std::optional<std::string> attach_group = ipc::win::AttachGroupSid();
+#endif
+                if (attach_group) {
+                    ipc::PrepareAttachGroupDirectory(ipc::GetIpcDir());
+                } else {
+                    ipc::PrepareIpcDirectory(ipc::GetIpcDir());
+                }
+                std::string cookie = ipc::WriteCookie(ipc::GetIpcDir(), attach_group);
                 cookie_written = true;
                 interfaces::NodeIdentity identity;
                 identity.network = Params().NetworkIDString();
@@ -356,25 +671,55 @@ bool AppInit(int argc, char* argv[])
                 // Per-connection auth (RFC #2937 §4.3 hardening): build a FRESH
                 // ServeInit for EACH accepted connection, so every client must
                 // present the cookie itself -- no shared, sticky authentication.
-                // Reject a foreign OS user before serving (CheckPeerCredentials:
-                // SO_PEERCRED / getpeereid). Windows has no peer credentials, so
-                // there the owner-only DACLs on node.sock and ipc.cookie are the
-                // guard.
+                // Refuse a peer before serving it when its identity cannot be
+                // read or ServerPeerPolicy refuses it: another OS user outside
+                // the -ipcattachgroup group, or root. Windows has no peer
+                // credentials on the socket, and kj gives this factory no socket
+                // there, so nothing is read from it: the DACLs on node.sock and
+                // ipc.cookie decide who may connect (ipc/win_endpoint.h), and
+                // every connection, in every mode, must pass the identity check
+                // (ipc/win_attest.h) before authenticate() will compare its
+                // cookie. ServerPeerPolicy decides on what that check read.
                 // cookie + identity are captured by value and copied into each
                 // ServeInit.
-                auto make_serve_init = [cookie = std::move(cookie), identity = std::move(identity)]
+                //
+                // One GUI at a time: every connection shares this listener's one
+                // attach slot, and only the connection holding it is served the
+                // wallet and node interfaces. When that GUI goes away, its teardown
+                // ends the wallet's IPC capability before another GUI can claim the
+                // slot, so a capability never passes from one GUI to the next. The
+                // hook runs on the IPC event-loop thread; EndIpcElevation takes
+                // neither cs_main nor cs_wallet. It passes no connection check: it
+                // runs as the connection is torn down, when the check would
+                // already answer closed, and its job is to end the slot.
+                auto make_serve_init = [cookie = std::move(cookie), identity = std::move(identity),
+                                        slot = ipc::MakeAttachSlot()]
                     (int peer_fd) -> std::unique_ptr<interfaces::Init> {
-                        if (!ipc::CheckPeerCredentials(peer_fd)) return nullptr;
-                        return ipc::MakeServeInit(interfaces::MakeGridcoinInit(), cookie, identity);
+                        ipc::ServeInitOptions options;
+#ifndef WIN32
+                        const std::optional<ipc::PeerIdentity> peer = ipc::ReadPeerIdentity(peer_fd);
+                        if (!peer || ipc::ServerPeerPolicy(*peer) == ipc::PeerVerdict::Refuse) return nullptr;
+#else
+                        (void)peer_fd;
+                        options.require_attestation = true;
+#endif
+                        return ipc::MakeServeInit(interfaces::MakeGridcoinInit(), cookie, identity, slot,
+                                                  [] { if (pwalletMain) pwalletMain->EndIpcElevation({}); },
+                                                  options);
                     };
+                // Client notifications are posted to one dispatcher thread, so the
+                // core thread that emits one never waits for the GUI.
+                interfaces::SetNotificationDelivery(interfaces::NotificationDelivery::Dispatched);
+                interfaces::StartNotificationDispatcher();
                 ipc = interfaces::MakeIpc("gridcoinresearchd", std::move(make_serve_init));
                 std::string address = "unix";
+                listening = true;
                 ipc->listenAddress(address);
                 LogPrintf("IPC: serving GUI connections on %s\n", address);
                 // Say which access controls are actually in force, rather than
-                // leaving an operator to infer it from the platform. The uid check
-                // is real on POSIX and absent on Windows; debug.log should not
-                // require the reader to know that.
+                // leaving an operator to infer it from the platform. The peer is
+                // identified from the socket on POSIX and by the identity check on
+                // Windows; debug.log should not require the reader to know that.
                 LogPrintf("IPC: peer-credential enforcement: %s\n", ipc::PeerCredentialEnforcement());
             } catch (const std::exception& e) {
                 // Fail loudly and fatally. Previously this was logged and the
@@ -383,17 +728,21 @@ bool AppInit(int argc, char* argv[])
                 // cookie, dials a socket nobody is listening on, and fails forever
                 // with no explanation, while the one line that says why is buried
                 // in debug.log. The failures reaching here are all actionable:
-                // another process already listening, a socket path over the
-                // 108-byte sockaddr_un limit, or the socket/cookie access control
-                // (chmod / owner-only DACL) not being applicable to this data
-                // directory.
+                // the IPC directory cannot be created or given its access (also
+                // the attach group, or it opens as the data directory), the
+                // cookie cannot be written, another process is already listening, a socket path is over the
+                // 108-byte sockaddr_un limit, or the socket access control
+                // (chmod / owner-only DACL) is not applicable. Only a failure of
+                // the listener itself gets the advice about a stale socket.
+                const std::string stale_advice = listening ?
+                    strprintf("If the node was killed or crashed, a stale socket may be left in the IPC "
+                              "directory (%s): stop any running gridcoinresearchd, delete 'node.sock' "
+                              "there, and start again. Otherwise start without -multiprocess.",
+                              ipc::GetIpcDir().string()) :
+                    std::string{"Fix the cause above, or start without -multiprocess."};
                 InitError(strprintf("Failed to start the multiprocess IPC listener: %s\n\n"
-                                    "-multiprocess was requested, so this is fatal. If the node was "
-                                    "killed or crashed, a stale socket may be left in the data "
-                                    "directory: stop any running gridcoinresearchd, delete "
-                                    "'node.sock' there, and start again. Otherwise start without "
-                                    "-multiprocess.",
-                                    e.what()));
+                                    "-multiprocess was requested, so this is fatal. %s",
+                                    AsciiWhat(e), stale_advice));
                 // Exit non-zero and take the normal shutdown path: the wait loop
                 // below sees the request immediately and falls through to
                 // Shutdown(), so the node stops cleanly instead of running on as a
@@ -403,38 +752,79 @@ bool AppInit(int argc, char* argv[])
             }
         }
 #endif
+        // Readiness is reported only when startup, including the multiprocess
+        // listener when requested, succeeded.
+        if (fRet) sdnotify::NotifyReady();
+
         while (!ShutdownRequested()) {
             UninterruptibleSleep(std::chrono::milliseconds{500});
         }
+        // Only a start that reported readiness reports that it is stopping.
+        if (fRet) sdnotify::NotifyStopping();
 #ifdef ENABLE_MULTIPROCESS
         if (ipc) ipc->disconnectIncoming();
+        // Also reached on the fatal-error path above, so the thread is never left
+        // running at shutdown. A no-op when it was never started.
+        interfaces::StopNotificationDispatcher();
         // The cookie is a live credential for as long as the file exists, so it goes
         // when the socket does -- mirroring upstream's DeleteAuthCookie(). It is also
         // what ConnectToNode checks before dialling, so leaving it behind sends the
         // next GUI to a socket nobody is listening on.
-        if (cookie_written) ipc::DeleteCookie(GetDataDir());
+        if (cookie_written) ipc::DeleteCookie(ipc::GetIpcDir());
 #endif
     }
 
+    // A start that did not finish never sent READY=1. Its status says why, rather than
+    // the last startup step: stopped on request, or failed.
+    if (!fRet) {
+        if (startup_stopped) {
+            sdnotify::NotifyStartupStopped();
+        } else {
+            sdnotify::NotifyStartupFailed();
+        }
+    }
+
     Shutdown(nullptr);
+#ifndef WIN32
+    util::StopOrphanReaper();
+#endif
 
     // delete thread handler
     threads->interruptAll();
     threads->removeAll();
     threads.reset();
 
-    return fRet;
+    // A stop someone requested during startup ends the core cleanly, not in failure, so that what restarts
+    // a failed core (the Windows Core-Start launcher, systemd's Restart=on-failure, the service
+    // manager's recovery) does not start it again.
+    return fRet || startup_stopped;
 
 }
 
 extern void noui_connect();
 int main(int argc, char* argv[])
 {
+    SetProcessNonDumpable();
+
     // Before anything can create a file: debug.log, the read-write settings file
     // and the block subdirectories are all created without an explicit mode, so
     // without this they inherit a default desktop umask of 022 and land
     // world-readable. Narrowing here rather than after the fact leaves no window.
     util::SetOwnerOnlyUmask();
+
+    // Capture and remove NOTIFY_SOCKET while the process is still single-threaded.
+    // The process-hardening statements come before this one.
+    sdnotify::CaptureFromEnvironment();
+    // Once a stop has been requested the start timeout is no longer extended, so the
+    // stop runs into its own timeout.
+    sdnotify::SetShutdownCheck(ShutdownRequested);
+
+    // A stop requested at any point of startup must be honoured. Under a unit with
+    // PrivatePIDs= this process is process 1 of its PID namespace, and a signal to
+    // process 1 with no handler is discarded, so without this a stop sent before
+    // AppInit2 installed the handlers was lost and the start ran on until the stop
+    // timeout killed it. The handlers only request a shutdown.
+    RegisterShutdownSignalHandlers();
 
     // Reinit default timer to ensure it is zeroed out at the start of main.
     g_timer.InitTimer("default", false);
@@ -444,6 +834,38 @@ int main(int argc, char* argv[])
 
     // Connect bitcoind signal handlers
     noui_connect();
+
+#ifdef WIN32
+    // Read before AppInit, as the service manager waits only a short time for a service to reach
+    // its dispatcher. The arguments as AppInit reads them, in UTF-8.
+    {
+        util::WinCmdLineArgs utf8_args;
+        const auto [utf8_argc, utf8_argv] = utf8_args.get();
+        const bool service = util::winsvc::HasServiceFlag(utf8_argc, utf8_argv);
+
+        // A same-account core started with administrator rights gives them up before it reads
+        // anything: it starts itself again under a restricted copy of its token and exits with
+        // the copy's exit code. Not the service, which runs as its own account, nor the RPC
+        // client, which an administrator runs to read the service's configuration file, nor
+        // -reportpermissions, which starts no core and which the installer runs elevated.
+        const util::winadmin::StartOutcome start = util::winadmin::GiveUpAdminRights(
+            service, IsRpcClientCommandLine(utf8_argc, utf8_argv),
+            util::winsvc::CommandLineFlag(utf8_argc, utf8_argv, "reportpermissions"));
+        switch (start.kind) {
+        case util::winadmin::StartOutcome::Kind::Run:
+            break;
+        case util::winadmin::StartOutcome::Kind::Exited:
+            return static_cast<int>(start.exit_code);
+        case util::winadmin::StartOutcome::Kind::Refused:
+            tfm::format(std::cerr, "%s\n", start.refusal);
+            return static_cast<int>(util::winsvc::EXIT_INIT_FAILED);
+        }
+
+        if (service) {
+            return util::winsvc::RunAsService([argc, argv] { return AppInit(argc, argv); });
+        }
+    }
+#endif
 
     return (AppInit(argc, argv) ? EXIT_SUCCESS : EXIT_FAILURE);
 }

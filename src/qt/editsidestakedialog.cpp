@@ -147,6 +147,12 @@ void EditSideStakeDialog::accept()
                                     "description only contains letters, numbers, spaces, periods, or "
                                     "underscores."),
                                  QMessageBox::Ok, QMessageBox::Ok);
+            break;
+        case SideStakeTableModel::ELEVATION_REQUIRED:
+            QMessageBox::warning(this, windowTitle(),
+                                 tr("Changing side stakes needs your wallet passphrase. The change was not saved."),
+                                 QMessageBox::Ok, QMessageBox::Ok);
+            break;
         }
 
         return;

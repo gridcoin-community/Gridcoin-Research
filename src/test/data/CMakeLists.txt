@@ -20,6 +20,7 @@ endif()
 
 set(JSON_TEST_FILES
     base58_encode_decode.json
+    key_entry_points.json
     key_io_invalid.json
     key_io_valid.json
     script_valid.json
@@ -48,6 +49,26 @@ foreach(file_in IN LISTS JSON_TEST_FILES)
     add_custom_target(generate_${file_in}.h DEPENDS ${file_in}.h)
     add_dependencies(test_gridcoin generate_${file_in}.h)
 endforeach()
+
+# The entry-point access classes live beside the RPC table; rpc_tests reads them
+# as json_tests::entry_point_classes.
+add_custom_command(OUTPUT entry_point_classes.json.h
+    COMMAND ${CMAKE_COMMAND} -P ${CMAKE_SOURCE_DIR}/build-aux/cmake/json2header.cmake ${XXD} ${CMAKE_SOURCE_DIR}/src/rpc/entry_point_classes.json ${CMAKE_CURRENT_BINARY_DIR}/entry_point_classes.json.h
+    DEPENDS ${CMAKE_SOURCE_DIR}/src/rpc/entry_point_classes.json
+)
+add_custom_target(generate_entry_point_classes.json.h DEPENDS entry_point_classes.json.h)
+add_dependencies(test_gridcoin generate_entry_point_classes.json.h)
+
+# The Refuse class pattern file, which util_tests compares with the list compiled into
+# the core, as the bytes refused_setting_keys_txt: REFUSED_SETTING_KEYS_FILE, the file the
+# generator reads (src/CMakeLists.txt). txt2header.cmake cannot embed it, because it names
+# the variable after the file and refused-setting-keys is not an identifier.
+add_custom_command(OUTPUT refused-setting-keys.txt.h
+    COMMAND ${XXD} -i -n refused_setting_keys_txt ${REFUSED_SETTING_KEYS_FILE} ${CMAKE_CURRENT_BINARY_DIR}/refused-setting-keys.txt.h
+    DEPENDS ${REFUSED_SETTING_KEYS_FILE}
+)
+add_custom_target(generate_refused-setting-keys.txt.h DEPENDS refused-setting-keys.txt.h)
+add_dependencies(test_gridcoin generate_refused-setting-keys.txt.h)
 
 foreach(file_in IN LISTS BINARY_TEST_FILES)
     get_filename_component(var_name ${file_in} NAME_WE)

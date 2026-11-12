@@ -19,11 +19,13 @@
 #include <tinyformat.h>
 #include <util/settings.h>
 #include <util/time.h>
+#include <util/win_acl.h>
 
 #include <locale>
 #include <any>
 #include <exception>
 #include <map>
+#include <string_view>
 #include <optional>
 #include <set>
 #include <stdint.h>
@@ -99,6 +101,43 @@ struct SectionInfo
     int m_line;
 };
 
+//! How changing a setting is treated: FREE is stored without elevation, ELEVATE needs it,
+//! REFUSE is honoured only in gridcoinresearch.conf or on the command line.
+enum class SettingClass { FREE, ELEVATE, REFUSE };
+
+//! '*' matches any run of characters, every other character itself.
+bool MatchSettingKeyPattern(std::string_view pattern, std::string_view name);
+
+//! The Refuse class patterns: \p key is given without '-'; a "<section>." prefix is removed;
+//! the "no" prefix is not.
+bool IsRefusedSettingKey(const std::string& key);
+
+//! A POSIX owner uid and st_mode.
+struct FileOwnerMode
+{
+    uint64_t owner{0};
+    uint32_t mode{0};
+};
+
+//! The top-level configuration file ReadConfigFiles read, and the directory that holds it. On POSIX
+//! as fstat reported it on the open file whose contents were read; on Windows the owner and DACL
+//! read through that open file. Each platform leaves the other's members at their defaults.
+struct ConfigFileFacts
+{
+    FileOwnerMode file;
+    uint64_t device{0};
+    uint64_t inode{0};
+    //! The directory of the file after symbolic links are resolved, while the resolved path still
+    //! named the open file. nullopt when that could not be established.
+    std::optional<FileOwnerMode> dir;
+    //! On Windows, the owner and DACL of the file (GetSecurityInfo on the open file).
+    std::optional<util::winacl::ObservedAcl> file_acl;
+    //! On Windows, the owner and DACL of the directory that holds the file, read by the name of the
+    //! open file's final path (GetFinalPathNameByHandleW), links and junctions resolved. nullopt
+    //! when that path or that list could not be read.
+    std::optional<util::winacl::ObservedAcl> dir_acl;
+};
+
 class ArgsManager
 {
 public:
@@ -120,7 +159,11 @@ public:
         NETWORK_ONLY = 0x200,
         // This argument's value is sensitive (such as a password).
         SENSITIVE = 0x400,
-        COMMAND = 0x800
+        COMMAND = 0x800,
+        // Honoured only on the command line; a config file or the settings file is ignored.
+        COMMAND_LINE_ONLY = 0x1000,
+        // changesettings may store it without elevation.
+        SETTING_FREE = 0x2000
     };
 
 protected:
@@ -139,9 +182,12 @@ protected:
     std::map<OptionsCategory, std::map<std::string, Arg>> m_available_args GUARDED_BY(cs_args);
     bool m_accept_any_command GUARDED_BY(cs_args){true};
     std::list<SectionInfo> m_config_sections GUARDED_BY(cs_args);
+    //! Command-line-only keys already reported as ignored in a config file, so each is logged once per process.
+    std::set<std::string> m_logged_command_line_only_keys GUARDED_BY(cs_args);
     fs::path m_cached_blocks_path GUARDED_BY(cs_args);
     mutable fs::path m_cached_datadir_path GUARDED_BY(cs_args);
     mutable fs::path m_cached_network_datadir_path GUARDED_BY(cs_args);
+    std::optional<ConfigFileFacts> m_config_file_facts GUARDED_BY(cs_args);
 
     [[nodiscard]] bool ReadConfigStream(std::istream& stream, const std::string& filepath, std::string& error, bool ignore_invalid_keys = false);
 
@@ -260,6 +306,18 @@ public:
      */
     std::string GetArg(const std::string& strArg, const std::string& strDefault) const;
 
+    //! -arg as set in the configuration file(s) only: ignores the command line, the settings file and
+    //! forced values; network section first, then the default section, as GetArg resolves. nullopt
+    //! when the configuration does not set it or negates it (-noarg).
+    std::optional<std::string> GetConfigFileArg(const std::string& arg) const;
+
+    //! Any includeconf in ro_config: a value after the last negation, in any section.
+    bool ConfigFileUsedIncludes() const;
+
+    //! What the last ReadConfigFiles recorded about the top-level configuration file it read.
+    //! nullopt when it read none, and on Windows.
+    std::optional<ConfigFileFacts> GetConfigFileFacts() const;
+
     /**
      * Return integer argument or default value
      *
@@ -355,6 +413,17 @@ public:
     std::optional<unsigned int> GetArgFlags(const std::string& name) const;
 
     /**
+     * Every registration, "-name" -> flags OR'ed across categories.
+     */
+    std::map<std::string, unsigned int> GetRegisteredArgFlags() const;
+
+    /**
+     * Class of a registered setting. \p key is given without '-'; a
+     * "<section>." prefix is ignored. An unregistered key is ELEVATE.
+     */
+    SettingClass GetSettingClass(const std::string& key) const;
+
+    /**
      * Read and update settings file with saved settings. This needs to be
      * called after SelectParams() because the settings file location is
      * network-specific.
@@ -385,6 +454,14 @@ public:
     {
         LOCK(cs_args);
         fn(m_settings);
+    }
+
+    //! Read-only access to the settings with the lock held.
+    template <typename Fn>
+    void LockSettings(Fn&& fn) const
+    {
+        LOCK(cs_args);
+        fn(static_cast<const util::Settings&>(m_settings));
     }
 
     /**
@@ -443,6 +520,13 @@ fs::path GetConfigFile(const std::string& confPath);
 fs::path GetConfigFile();
 
 bool IsConfigFileEmpty();
+
+//! The value of a name-valued option such as "-ipcattachgroup", or "" when it
+//! is unset or negated (-noipcattachgroup). GetArg alone returns "0" for the
+//! negated form. The IPC options are read through it (ipc::ConfiguredOption),
+//! and so is the wallet backup's configuration-file rule, so both builds share
+//! one rule for the -no form.
+std::string GetConfiguredOption(const std::string& arg);
 
 /**
  * @return true if help has been requested via a command-line arg

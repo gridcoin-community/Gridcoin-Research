@@ -5,6 +5,7 @@
 
 #include <QApplication>
 #include "qt/guilog.h"
+#include "util/syserror.h"
 #include <QTimer>
 
 #include "bitcoingui.h"
@@ -18,6 +19,7 @@
 #include "voting/votingmodel.h"
 #include "optionsmodel.h"
 #include "guiutil.h"
+#include "qt/guiipcworker.h"
 #include "qt/intro.h"
 #include "guiconstants.h"
 #include "interfaces/init.h"
@@ -37,6 +39,12 @@
 #ifdef ENABLE_MULTIPROCESS
 #include "ipc/connect.h"
 #include "ipc/handshake.h"
+#include "ipc/process.h"
+#include "qt/coreconnectwait.h"
+#ifdef WIN32
+#include "ipc/win_attest.h"
+#include "util/win_acl.h"
+#endif
 #endif
 #include "node/ui_interface.h"
 #include "qtipcserver.h"
@@ -44,8 +52,12 @@
 #include "txdb.h"
 #include "util.h"
 #include "util/dir_permissions.h"
+#include "util/proc_hardening.h"
 #include "util/strencodings.h"
 #include "util/threadnames.h"
+#ifdef WIN32
+#include "util/win_admin_drop.h"
+#endif
 #include "winshutdownmonitor.h"
 #include "gridcoin/upgrade.h"
 #include "gridcoin/gridcoin.h"
@@ -55,8 +67,11 @@
 #include "decoration.h"
 
 #include <atomic>
-// Not inside the WIN32 guard below: the teardown join uses QThreadPool on every
-// platform, and nothing else on this file's include path pulls it in.
+#include <optional>
+// Not inside the WIN32 guard below: main() sets the pool's expiry and the teardown
+// waits for its tasks on every platform, and nothing else on this file's include
+// path pulls them in.
+#include <QThread>
 #include <QThreadPool>
 #ifndef WIN32
 #include <QSocketNotifier>
@@ -64,6 +79,7 @@
 #include <signal.h>
 #include <unistd.h>
 #endif
+#include <chrono>
 #include <stdexcept>
 #include <thread>
 
@@ -203,6 +219,10 @@ static void SetupUIArgs(ArgsManager& argsman)
                    "(e.g. debug_gui.log). Must resolve to a different path than -debuglogfile. Ignored "
                    "outside -multiprocess.",
                    ArgsManager::ALLOW_ANY, OptionsCategory::GUI);
+    argsman.AddArg("-ipcserviceuser=<user>",
+                   "Accept a core running as this account when connecting to -ipcdir (the system service). "
+                   "Unset: only your own account.",
+                   ArgsManager::ALLOW_ANY, OptionsCategory::GUI);
 }
 
 #ifdef ENABLE_MULTIPROCESS
@@ -281,10 +301,15 @@ static void QueueShutdown()
 {
     // Route a core-initiated shutdown through BitcoinGUI::requestQuit() so the
     // explicit-shutdown flag is set and minimize-on-close doesn't veto the quit
-    // on Qt6 (see BitcoinGUI::closeEvent / issue #2995). The functor overload is
-    // compile-time checked, unlike a string-named invokeMethod.
+    // on Qt6 (see BitcoinGUI::closeEvent / issue #2995). This fires for the
+    // shutdown of the node in this process: in the monolith, the core's stop,
+    // posted as requestQuitForCoreStop (no message holds the monolith's quit).
+    // The split GUI's local node is never shut down: its session end quits
+    // through requestQuitForSessionEnd, and the core's stop arrives as the
+    // dropped connection. The functor overload is compile-time checked, unlike a
+    // string-named invokeMethod.
     QMetaObject::invokeMethod(QCoreApplication::instance(),
-                              [] { BitcoinGUI::requestQuit(); },
+                              [] { BitcoinGUI::requestQuitForCoreStop(); },
                               Qt::QueuedConnection);
 }
 
@@ -342,7 +367,7 @@ static bool IsDaemonDisconnectMessage(const std::string& msg)
 
 //! Post a graceful, popup-free GUI quit to the Qt main thread when the node
 //! connection is lost -- the same path a core-initiated shutdown takes
-//! (QueueShutdown / requestQuit). Deliberately NO modal dialog: a modal would
+//! (QueueShutdown / requestQuitForCoreStop). Deliberately NO modal dialog: a modal would
 //! hang an unattended or remote GUI. Safe if the QCoreApplication is already gone.
 static void QuitOnDaemonConnectionLost(const char* reason)
 {
@@ -358,7 +383,7 @@ static void QuitOnDaemonConnectionLost(const char* reason)
         GUILogPrintf("IPC: %s; closing the GUI", reason);
     }
     if (QCoreApplication* qapp = QCoreApplication::instance()) {
-        QMetaObject::invokeMethod(qapp, [] { BitcoinGUI::requestQuit(); }, Qt::QueuedConnection);
+        QMetaObject::invokeMethod(qapp, [] { BitcoinGUI::requestQuitForCoreStop(); }, Qt::QueuedConnection);
     }
 }
 
@@ -502,6 +527,97 @@ static bool ResolveNodeIdentity(const ipc::HandshakeResult& hs)
     }
     return true;
 }
+
+//! What one connect attempt produced.
+struct CoreConnectAttempt
+{
+    std::optional<ipc::GuiConnection> connection;
+    ipc::ConnectFailure failure;
+};
+
+//! One connect attempt to the core in \p ipc_dir. If the core later drops the
+//! connection, the GUI quits.
+static CoreConnectAttempt AttemptCoreConnect(const fs::path& ipc_dir)
+{
+    CoreConnectAttempt attempt;
+    attempt.connection = ipc::ConnectToNode(ipc_dir, attempt.failure, /*on_disconnect=*/[] {
+        QuitOnDaemonConnectionLost("lost connection to the Gridcoin daemon");
+    });
+    return attempt;
+}
+
+//! Connect to the core in \p ipc_dir, waiting for one that is still starting.
+//!
+//! Every attempt runs on the modal GuiIpcWorker while WaitForCore keeps the GUI
+//! thread's event loop running (qt/coreconnectwait.h). ConnectRetry decides
+//! which failures are retried (no cookie yet, or nothing listening, for up to
+//! IPC_CONNECT_WAIT_MAX; a cookie that is denied, for IPC_COOKIE_DENIED_WAIT from
+//! its first denial), every IPC_CONNECT_RETRY_INTERVAL. On failure,
+//! including a canceled wait, \p failure says why.
+static std::optional<ipc::GuiConnection> ConnectToCore(const fs::path& ipc_dir, ipc::ConnectFailure& failure)
+{
+    CoreWaitTimings timings;
+    timings.retry_interval = ipc::IPC_CONNECT_RETRY_INTERVAL;
+    CoreWaitOutcome<CoreConnectAttempt> outcome = WaitForCore<CoreConnectAttempt>(
+        [ipc_dir] { return AttemptCoreConnect(ipc_dir); },
+        [](const CoreConnectAttempt& attempt) { return attempt.connection.has_value(); },
+        [logged = false, retry = ipc::ConnectRetry{}](const CoreConnectAttempt& attempt,
+                                                      std::chrono::seconds elapsed) mutable {
+            if (retry.Next(attempt.failure, elapsed) != ipc::ConnectStep::Retry) return false;
+            if (!logged) {
+                GUILogPrintf("IPC: waiting for the Gridcoin core to start: %s", attempt.failure.message);
+                logged = true;
+            }
+            return true;
+        },
+        timings, PACKAGE_NAME);
+
+    if (!outcome.error.empty()) {
+        GUIError("IPC: a connect attempt failed unexpectedly: %s", outcome.error);
+    }
+    if (outcome.canceled) {
+        GUILogPrintf("IPC: stopped waiting for the Gridcoin core: canceled");
+        // A connection the attempt in flight made as the wait was canceled is
+        // not used.
+        outcome.last.connection.reset();
+    }
+    if (outcome.last.connection) return std::move(outcome.last.connection);
+
+    failure = outcome.last.failure;
+    // The last attempt left no reason when it threw, or when the wait was
+    // canceled as it connected.
+    if (failure.message.empty()) {
+        if (!outcome.error.empty()) {
+            failure = {ipc::ConnectFailureKind::Handshake, "a connect attempt failed unexpectedly: " + outcome.error};
+        } else if (outcome.canceled) {
+            failure = {ipc::ConnectFailureKind::Handshake, "waiting for the Gridcoin core was canceled"};
+        } else {
+            failure = {ipc::ConnectFailureKind::Handshake, "the connect attempt gave no reason"};
+        }
+    }
+    return std::nullopt;
+}
+
+//! The text the GUI shows for a failed connect.
+static QString ConnectFailureText(const ipc::ConnectFailure& failure)
+{
+    switch (failure.kind) {
+    case ipc::ConnectFailureKind::AlreadyAttached:
+        return QObject::tr("Another Gridcoin GUI is already attached to this core. Only one GUI can attach at a "
+                           "time; close the other one first.");
+    case ipc::ConnectFailureKind::Timeout:
+        return QObject::tr("The Gridcoin core did not answer within %1 seconds. It may be busy, or another "
+                           "program may be holding its IPC connection.")
+            .arg(ipc::IPC_CLIENT_HANDSHAKE_TIMEOUT.count());
+    case ipc::ConnectFailureKind::NoCookie:
+    case ipc::ConnectFailureKind::CookieDenied:
+    case ipc::ConnectFailureKind::NotListening:
+    case ipc::ConnectFailureKind::PeerRefused:
+    case ipc::ConnectFailureKind::Handshake:
+        break;
+    } // no default case, so the compiler can warn about a kind left out
+    return QObject::tr("Could not connect to the Gridcoin daemon:\n%1").arg(QString::fromStdString(failure.message));
+}
 #endif // ENABLE_MULTIPROCESS
 
 //! QApplication subclass that contains exceptions escaping Qt event handlers.
@@ -530,7 +646,7 @@ public:
             //       (or a prior notify()) has latched g_daemon_connection_lost, the
             //       GUI is tearing down and further proxy calls will keep throwing,
             //       so any event-handler exception in that state is disconnect fallout.
-            const std::string msg{e.what()};
+            const std::string msg{AsciiWhat(e)};
             if (IsDaemonDisconnectMessage(msg)) {
                 QuitOnDaemonConnectionLost("a GUI call was interrupted by the daemon disconnecting");
                 return true;
@@ -647,6 +763,7 @@ static void InstallGuiTerminationHandler(QCoreApplication& app)
         char buf;
         while (::read(g_signal_pipe[0], &buf, 1) > 0) { /* drain */ }
         GUILogPrintf("IPC: received a termination signal; closing the GUI");
+        // Made at once: a message that holds the core's stop does not hold this.
         BitcoinGUI::requestQuit();
     });
     struct sigaction sa = {};
@@ -736,7 +853,28 @@ static void JoinGuiArchiveThread()
 #ifndef BITCOIN_QT_TEST
 int main(int argc, char *argv[])
 {
+    SetProcessNonDumpable();
+
 #ifdef WIN32
+    // A GUI started with administrator rights gives them up before it creates the application or
+    // reads anything, so that the core it hosts never runs with them: it starts itself again under
+    // a restricted copy of its token, shows no window, and exits with the copy's exit code. The
+    // refusal of an elevated multiprocess GUI further down stays for a token this could not lower.
+    {
+        const util::winadmin::StartOutcome start =
+            util::winadmin::GiveUpAdminRights(/*service=*/false, /*rpc_client=*/false,
+                                              /*report_permissions=*/false);
+        if (start.kind == util::winadmin::StartOutcome::Kind::Exited) return static_cast<int>(start.exit_code);
+        if (start.kind == util::winadmin::StartOutcome::Kind::Refused) {
+            tfm::format(std::cerr, "%s\n", start.refusal);
+            // The one case that creates an application with the rights the GUI was started with,
+            // only to show why it stops.
+            QApplication refusal_app(argc, argv);
+            QMessageBox::critical(nullptr, PACKAGE_NAME, QString::fromStdString(start.refusal));
+            return EXIT_FAILURE;
+        }
+    }
+
     util::WinCmdLineArgs winArgs;
     std::tie(argc, argv) = winArgs.get();
 #endif
@@ -800,6 +938,16 @@ int main(int argc, char *argv[])
     RegisterMetaTypes();
     GridcoinApplication app(argc, argv);
 
+    // QtConcurrent tasks call into the core on the global pool's threads (the About
+    // dialog's version check, the poll table's refresh), and a pool thread ends by
+    // default after 30 s idle: at any moment, so also while the connection to the core
+    // is being destroyed, which a thread that has made IPC calls must not do (see
+    // GuiIpcWorker). With no expiry they end only when ~QCoreApplication deletes the
+    // pool, after node_connection, declared after `app`, is gone; the teardown waits
+    // for the pool's tasks without ending its threads. Set before the pool starts a
+    // thread: the timeout applies only to threads started after it is set.
+    QThreadPool::globalInstance()->setExpiryTimeout(-1);
+
 #if defined(WIN32) && defined(QT_GUI)
     SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX);
 #endif
@@ -815,6 +963,30 @@ int main(int argc, char *argv[])
         return EXIT_FAILURE;
     }
 
+    // Refuse to run under a debugger or tracer unless the developer override is set. The dialog is the earliest
+    // place this can be shown. The override warning is logged once logging is up, below.
+    bool debug_tracer_override = false;
+    std::optional<std::string> tracer_warning;
+    {
+        const std::optional<int> tracer_pid = ReadOwnTracerPid();
+        tracer_warning = TracerStateWarning(tracer_pid, TracerCheckSupported());
+        switch (DecideTracer(tracer_pid, gArgs.GetBoolArg("-debugallowtracer", false))) {
+        case TracerVerdict::Refuse: {
+            const std::string msg = strprintf("A debugger or tracer (pid %d) is attached to this process; refusing "
+                                              "to start. See doc/developer-notes.md if you are debugging.",
+                                              *tracer_pid);
+            tfm::format(std::cerr, "%s\n", msg.c_str());
+            QMessageBox::critical(nullptr, PACKAGE_NAME, QString::fromStdString(msg));
+            return EXIT_FAILURE;
+        }
+        case TracerVerdict::StartDumpableForDebugging:
+            SetProcessDumpableForDebugging();
+            debug_tracer_override = true;
+            break;
+        case TracerVerdict::Start:
+            break;
+        }
+    }
 
     // Show help message immediately after parsing command-line options (for "-lang") and setting locale,
     // but before showing splash screen.
@@ -848,6 +1020,14 @@ int main(int argc, char *argv[])
         app.setApplicationName("Gridcoin-Qt-testnet");
     else
         app.setApplicationName("Gridcoin-Qt");
+
+#ifdef Q_OS_MACOS
+    // The login item cannot carry arguments, so the launch mode is remembered
+    // from the last command line that set it. Before the config files are read,
+    // so only command-line values count as set.
+    QSettings launch_settings;
+    GUIUtil::ApplyPersistedLaunchMode(launch_settings, gArgs);
+#endif
 
 #if defined(Q_OS_WIN) || defined(Q_OS_MACOS)
     // Apply Qt's built-in "Fusion" theme as the application's base styles to
@@ -962,6 +1142,63 @@ int main(int argc, char *argv[])
         return EXIT_FAILURE;
     }
 
+    // The -multiprocess flag may itself come from the config file, so it is decided after the first read. In that
+    // mode the GUI's own options come from its command line or the GUI settings, never from the data directory's
+    // config file, which the core shares.
+    const bool multiprocess_gui = gArgs.GetBoolArg("-multiprocess", false);
+
+    // The decision is final. A per-network config file read later cannot change it, so pin it for every later
+    // reader of the option, including the ones outside this function.
+    gArgs.ForceSetArg("-multiprocess", multiprocess_gui ? "1" : "0");
+
+    // Ignores the GUI-only options a configuration file sets, and refuses -resetblockchaindata from any source,
+    // the only option the multiprocess GUI refuses. Run after each read of the configuration files.
+    auto refuse_multiprocess_gui_args = [&]() {
+        if (!multiprocess_gui) return false;
+
+        IgnoreGuiOnlyConfigArgs(gArgs);
+
+        if (const auto err = MultiprocessGuiArgError(gArgs)) {
+            tfm::format(std::cerr, "%s\n", err->c_str());
+            QMessageBox::critical(nullptr, PACKAGE_NAME,
+                                  QObject::tr("The multiprocess GUI cannot start: %1").arg(QString::fromStdString(*err)));
+            return true;
+        }
+
+        return false;
+    };
+
+    if (refuse_multiprocess_gui_args()) return EXIT_FAILURE;
+
+#if defined(WIN32) && defined(ENABLE_MULTIPROCESS)
+    // The core's identity check admits a GUI at Medium integrity only, so an elevated multiprocess GUI would be
+    // refused at connect. Say so here, before anything connects. Both the token's elevation and its integrity
+    // level are read: the core decides on the level, and a token above Medium need not say it is elevated. The
+    // core's refusal does not depend on this: what cannot be read counts as not elevated, and the core decides.
+    if (multiprocess_gui) {
+        bool token_elevated = false;
+        uint32_t integrity_rid = ipc::win::INTEGRITY_MEDIUM_RID;
+        try {
+            token_elevated = util::winacl::CurrentTokenIsElevated();
+        } catch (const std::exception& e) {
+            tfm::format(std::cerr, "Could not tell whether this process runs elevated: %s\n", AsciiWhat(e));
+        }
+        try {
+            integrity_rid = util::winacl::CurrentTokenIntegrityRid();
+        } catch (const std::exception& e) {
+            tfm::format(std::cerr, "Could not read this process's integrity level: %s\n", AsciiWhat(e));
+        }
+        if (ipc::win::AboveMediumOrElevated(token_elevated, integrity_rid)) {
+            const QString text = QObject::tr("The Gridcoin wallet must not run as administrator in multiprocess mode. "
+                                             "Start it from a normal (not elevated) session. This happens only when "
+                                             "Gridcoin could not give up the administrator rights it was started with.");
+            tfm::format(std::cerr, "%s\n", text.toStdString());
+            QMessageBox::critical(nullptr, PACKAGE_NAME, text);
+            return EXIT_FAILURE;
+        }
+    }
+#endif
+
     // Do this to pickup -testnet / -regtest from the command line.
     SelectParams(gArgs.GetChainName());
 
@@ -999,7 +1236,7 @@ int main(int argc, char *argv[])
     // owns the datadir and already holds this lock; the GUI runs no core, so it
     // must not contend for the lock (it would always fail against the running
     // daemon). The short-circuit skips LockDirectory entirely in that mode.
-    if (!gArgs.GetBoolArg("-multiprocess", false) && !LockDirectory(dataDir, ".lock", false)) {
+    if (!multiprocess_gui && !LockDirectory(dataDir, ".lock", false)) {
         std::string str = strprintf(_("Cannot obtain a lock on data directory %s. %s is probably already running "
                                       "and using that directory."),
                                     dataDir, PACKAGE_NAME);
@@ -1020,11 +1257,15 @@ int main(int argc, char *argv[])
         return EXIT_FAILURE;
     }
 
+    // The per-network configuration file was read too: ignore its GUI-only options and refuse
+    // -resetblockchaindata again.
+    if (refuse_multiprocess_gui_args()) return EXIT_FAILURE;
+
     // In -multiprocess mode the core owns gridcoinsettings.json: it reads and writes the file and announces every
     // change, and the GUI reaches each setting through interfaces::Node. So the GUI does not open the file: a copy
     // read here would go stale, and writing it back would race the core's own writes and could revert a change
     // the core had just made. The monolithic GUI is the node, so it initializes the settings as the daemon does.
-    if (!gArgs.GetBoolArg("-multiprocess", false) && !gArgs.InitSettings(error)) {
+    if (!multiprocess_gui && !gArgs.InitSettings(error)) {
         ThreadSafeMessageBox(strprintf("Error initializing settings.\n"),
                 "", CClientUIInterface::ICON_ERROR | CClientUIInterface::BTN_OK | CClientUIInterface::MODAL);
         QMessageBox::critical(nullptr, PACKAGE_NAME,
@@ -1049,7 +1290,7 @@ int main(int argc, char *argv[])
     // the GUI file for this (GUI) process only. InitLogging then opens/shrinks the
     // GUI file exactly as it would the node's. The node is a separate process and
     // keeps its own -debuglogfile.
-    if (gArgs.GetBoolArg("-multiprocess", false)) {
+    if (multiprocess_gui) {
         const fs::path node_log = AbsPathForConfigVal(gArgs.GetArg("-debuglogfile", DEFAULT_DEBUGLOGFILE));
         const fs::path gui_log = gArgs.IsArgSet("-guilogfile")
             ? AbsPathForConfigVal(fs::path(gArgs.GetArg("-guilogfile", "")))
@@ -1070,11 +1311,46 @@ int main(int argc, char *argv[])
     }
 #endif
 
+    if (multiprocess_gui) {
+        // The GUI's log file is opened without following a symlink, hard link or FIFO, and a string that comes
+        // from the core cannot start a new line in it.
+        LogInstance().m_secure_open = true;
+        LogInstance().m_escape_newlines = true;
+        // Each directory below the data directory on the way to the log and its archive is checked.
+        LogInstance().m_secure_root = GetDataDir(/*fNetSpecific=*/false);
+    }
+
     // Initialize logging as early as possible.
     InitLogging();
+    LogNonDumpableStatus();
+#ifdef WIN32
+    if (util::winadmin::StartedByAdminDrop()) LogPrintf("%s", util::winadmin::STARTED_WITHOUT_ADMIN_RIGHTS);
+#endif
+    if (tracer_warning) {
+        LogPrintf("%s", *tracer_warning);
+    }
+    if (debug_tracer_override) {
+        LogPrintf("WARNING: -debugallowtracer is set: this process is dumpable and may be traced");
+    }
+
+    if (multiprocess_gui && LogInstance().m_file_open_failed) {
+        QMessageBox::warning(nullptr, PACKAGE_NAME,
+            QObject::tr("The GUI log file %1 could not be opened safely (it or a directory above it is a link, "
+                        "is not a regular file of yours, or is not accessible). The GUI will run without a log file.")
+                .arg(QString::fromStdString(LogInstance().m_file_path.string())));
+    }
 
     // Do this early as we don't want to bother initializing if we are just calling IPC
     ipcScanRelay(argc, argv);
+
+    if (multiprocess_gui) {
+        if (const auto err = MultiprocessGuiArgError(gArgs)) {
+            GUILogPrintf("%s", *err);
+            QMessageBox::critical(nullptr, PACKAGE_NAME,
+                                  QObject::tr("The multiprocess GUI cannot start: %1").arg(QString::fromStdString(*err)));
+            return EXIT_FAILURE;
+        }
+    }
 
     // Check to see if the user requested to reset blockchain data -- We allow on testnet.
     if (gArgs.IsArgSet("-resetblockchaindata"))
@@ -1109,10 +1385,11 @@ int main(int argc, char *argv[])
     std::unique_ptr<interfaces::Node> gui_node = local_init->makeNode();
 
 #if defined(WIN32)
-    // Windows session-end (WM_QUERYENDSESSION/WM_ENDSESSION) -> request shutdown
-    // through the LOCAL node (see gui_node note above). Installed well before
-    // app.exec(), soon enough to catch session-end.
-    app.installNativeEventFilter(new WinShutdownMonitor(*gui_node));
+    // Windows session-end (WM_QUERYENDSESSION/WM_ENDSESSION) -> in the monolith,
+    // request shutdown through the LOCAL node (see gui_node note above); in the
+    // split GUI, quit directly (BitcoinGUI::requestQuitForSessionEnd). Installed
+    // well before app.exec(), soon enough to catch session-end.
+    app.installNativeEventFilter(new WinShutdownMonitor(*gui_node, multiprocess_gui));
 #endif
 
     // interface_init is the Init the data models consume core state through: the
@@ -1122,7 +1399,7 @@ int main(int argc, char *argv[])
     // QSettings-backed GUI-local prefs are unaffected by that.
     interfaces::Init* interface_init = local_init.get();
     GuiIpcInfo ipc_info;
-    const bool multiprocess = gArgs.GetBoolArg("-multiprocess", false);
+    const bool multiprocess = multiprocess_gui;
 
     // Mark this, the Qt main thread, so that a DEBUG_LOCKORDER build reports any
     // cs_main taken on it (sync.h). Only the monolithic build: a -multiprocess
@@ -1130,23 +1407,28 @@ int main(int argc, char *argv[])
     // only here, after the arguments are parsed, which is why the mark is not
     // beside the thread name above.
     if (!multiprocess) MarkGuiThread();
+
+    // The threads the GUI calls into the core on when the GUI thread must not wait, one
+    // for each GuiIpcWorker::Role. Declared before node_connection, so they are joined
+    // only after the connection is gone: a thread that has made IPC calls must not exit
+    // while its connection may be destroyed (see GuiIpcWorker). The connect attempts
+    // below run on the modal one. Each starts its thread when it is first given a job.
+    GuiIpcWorker modal_worker(GuiIpcWorker::Role::Modal);
+    GuiIpcWorker coin_load_worker(GuiIpcWorker::Role::CoinLoad);
 #ifdef ENABLE_MULTIPROCESS
     std::optional<ipc::GuiConnection> node_connection;
     if (multiprocess)
     {
         // Connect to the separately-started daemon (moved here from StartGridcoinQt
-        // so OptionsModel can be built from the remote Init). Logging is up
-        // (InitLogging above), so failures land in the GUI log file.
-        std::string ipc_error;
-        node_connection = ipc::ConnectToNode(GetDataDir(), ipc_error,
-            /*on_disconnect=*/[] {
-                QuitOnDaemonConnectionLost("lost connection to the Gridcoin daemon");
-            });
+        // so OptionsModel can be built from the remote Init), waiting for one that
+        // is still starting. Logging is up (InitLogging above), so failures land
+        // in the GUI log file.
+        ipc::ConnectFailure connect_failure;
+        node_connection = ConnectToCore(ipc::GetIpcDir(), connect_failure);
         if (!node_connection)
         {
-            GUIError("IPC: could not connect to the Gridcoin daemon: %s", ipc_error);
-            QMessageBox::critical(nullptr, PACKAGE_NAME,
-                    QObject::tr("Could not connect to the Gridcoin daemon:\n%1").arg(QString::fromStdString(ipc_error)));
+            GUIError("IPC: could not connect to the Gridcoin daemon: %s", connect_failure.message);
+            QMessageBox::critical(nullptr, PACKAGE_NAME, ConnectFailureText(connect_failure));
             return EXIT_FAILURE;
         }
         interface_init = node_connection->init.get();
@@ -1165,12 +1447,13 @@ int main(int argc, char *argv[])
         const interfaces::BuildInfo& node_build = node_connection->handshake.remote_build;
         const interfaces::NodeIdentity& node_ident = node_connection->handshake.remote_ident;
         ipc_info.active = true;
+        ipc_info.core_other_account = node_connection->core_other_account;
         ipc_info.gui_version = QString::fromStdString(local_build.git_commit);
         ipc_info.node_version = QString::fromStdString(node_build.git_commit);
         ipc_info.node_built_at = QString::fromStdString(node_build.built_at);
         ipc_info.ipc_schema = QStringLiteral("%1.%2").arg(node_build.schema_major).arg(node_build.schema_minor);
         ipc_info.ipc_protocol = QString::number(node_build.protocol_version);
-        ipc_info.socket_path = GUIUtil::boostPathToQString(GetDataDir() / "node.sock");
+        ipc_info.socket_path = GUIUtil::boostPathToQString(ipc::GetIpcDir() / "node.sock");
         // Raw token (empty = unavailable); the dialog renders the empty case.
         ipc_info.node_identity = QString::fromStdString(node_ident.identity_token);
         ipc_info.network = QString::fromStdString(node_ident.network);
@@ -1212,12 +1495,26 @@ int main(int argc, char *argv[])
         sidestake_manager = interface_init->makeSideStakeManager();
         options_node = interface_init->makeNode();
         optionsModel = std::make_unique<OptionsModel>(*options_node, *sidestake_manager);
+        // The core's file paths, as the core sees them, for "Open debug log"
+        // and "Open config" (in the monolith they are this process's own).
+        ipc_info.core_paths = options_node->getCorePaths();
         // Per-node QSettings prefs (the datadir is finalized now) + the one-time
-        // migration of proxy / UPnP / reservebalance / etc. from Gridcoin-Qt.conf
-        // into the core read-write settings (the daemon's, over IPC, in the split
-        // build).
+        // migration of reservebalance / update-check from Gridcoin-Qt.conf into
+        // the core read-write settings (the daemon's, over IPC, in the split
+        // build). Proxy and UPnP need the wallet passphrase and move later, once
+        // the main window is shown (migrateElevatedCoreSettings).
         optionsModel->readNodeSettings();
         optionsModel->migrateCoreSettings();
+        // The monolith's core has not started yet. The proxy and UPnP an earlier
+        // version kept are applied for this run, as that version applied them,
+        // so the first start does not connect without the proxy while the
+        // passphrase to move them is still to be asked. This widens nothing the
+        // config file does not: the monolith runs in the account that writes it.
+        if (!multiprocess) {
+            for (const auto& [name, value] : optionsModel->legacyNetworkSettingsForThisRun()) {
+                gArgs.SoftSetArg("-" + name, value);
+            }
+        }
     }
     catch (const std::exception& e)
     {
@@ -1227,17 +1524,17 @@ int main(int argc, char *argv[])
         // misleading "lost the daemon connection".
         if (multiprocess)
         {
-            GUIError("IPC: lost the daemon connection during GUI startup: %s", e.what());
+            GUIError("IPC: lost the daemon connection during GUI startup: %s", AsciiWhat(e));
             QMessageBox::critical(nullptr, PACKAGE_NAME,
                     QObject::tr("Lost connection to the Gridcoin daemon during startup:\n%1")
-                        .arg(QString::fromStdString(e.what())));
+                        .arg(QString::fromStdString(AsciiWhat(e))));
         }
         else
         {
-            GUILogPrintf("Error during GUI startup: %s", e.what());
+            GUILogPrintf("Error during GUI startup: %s", AsciiWhat(e));
             QMessageBox::critical(nullptr, PACKAGE_NAME,
                     QObject::tr("An error occurred during startup:\n%1")
-                        .arg(QString::fromStdString(e.what())));
+                        .arg(QString::fromStdString(AsciiWhat(e))));
         }
         return EXIT_FAILURE;
     }
@@ -1331,6 +1628,11 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
         // IPC, and drives the models through that remote Init.
         const bool multiprocess = gArgs.GetBoolArg("-multiprocess", false);
 
+        // The About dialog's multiprocess section (active only in the split
+        // build) and the core's file paths for the debug log and config buttons,
+        // which both builds have.
+        window.setIpcConnectionInfo(ipc_info);
+
         if (multiprocess)
         {
             // The connect + GUI-side identity binding already ran in main() (so
@@ -1343,8 +1645,6 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
             {
                 window.showBuildMismatchWarning(ipc_info.gui_version, ipc_info.node_version);
             }
-            // Populate the About dialog's multiprocess connection section.
-            window.setIpcConnectionInfo(ipc_info);
 
             // The multiprocess GUI logs to its own file (set up in main() before
             // this function) but, unlike the node, runs no core scheduler to rotate
@@ -1382,7 +1682,7 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
                             // A throw here would terminate the thread (and the
                             // process); contain it. The logger is left valid (the file is
                             // reopened before the cleanup step); the next tick retries.
-                            GUILogPrintf("WARNING: GUI log archive pass failed: %s", e.what());
+                            GUILogPrintf("WARNING: GUI log archive pass failed: %s", AsciiWhat(e));
                         }
                         g_gui_archive_running = false;
                     });
@@ -1390,7 +1690,7 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
                     // std::thread construction can throw (e.g. resource exhaustion).
                     // Reset the guard so a later tick can retry, and don't let it
                     // escape the Qt slot (which would abort the GUI).
-                    GUILogPrintf("WARNING: could not start GUI log archive thread: %s", e.what());
+                    GUILogPrintf("WARNING: could not start GUI log archive thread: %s", AsciiWhat(e));
                     g_gui_archive_running = false;
                 }
             });
@@ -1460,8 +1760,8 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
                 }
                 // The windowed coin-control source (#3183): same ownership and
                 // teardown contract as the tx source. Construction is cheap —
-                // the initial wallet scan runs lazily on WalletModel's
-                // one-shot load thread at first dialog open, and the store
+                // the initial wallet scan runs lazily on the coin-load worker
+                // (WalletModel) at first dialog open, and the store
                 // stays warm (but silent) between dialog opens.
                 std::shared_ptr<interfaces::WalletCoinSource> wallet_coin_source;
                 const std::string synthetic_coins = gArgs.GetArg("-devsyntheticcoins", "");
@@ -1580,6 +1880,32 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
                 // Regenerate startup link, to fix links to old versions
                 GUIUtil::SetStartOnSystemStartup(optionsModel.getStartAtStartup(), optionsModel.getStartMin());
 
+                // Move the proxy and UPnP settings an earlier version kept in
+                // Gridcoin-Qt.conf into the core, once. Changing them needs the
+                // wallet passphrase, so this waits until the main window can ask
+                // for it. A wallet that needs no passphrase is not asked, and
+                // nothing is asked when there is nothing to move.
+                const bool kept_for_the_run = optionsModel.legacyNetworkSettingsApplied();
+                optionsModel.migrateElevatedCoreSettings([&window, &walletModel, kept_for_the_run](const std::function<void()>& apply) {
+                    const WalletModel::EncryptionStatus status = walletModel.getEncryptionStatus();
+                    if (status == WalletModel::Locked || status == WalletModel::UnlockedForStakingOnly) {
+                        QMessageBox::information(&window, PACKAGE_NAME, kept_for_the_run
+                            ? QObject::tr("This version keeps the proxy and UPnP settings in the core. To keep "
+                                          "the ones you set in an earlier version, enter your wallet passphrase. "
+                                          "If you cancel, they are used for this session only, and you are asked "
+                                          "again at the next start.")
+                            : QObject::tr("This version keeps the proxy and UPnP settings in the core. To keep "
+                                          "the ones you set in an earlier version, enter your wallet passphrase. "
+                                          "If you cancel, they are discarded."));
+                    }
+
+                    WalletModel::UnlockContext ctx(walletModel.requestUnlock(CapabilityKind::Settings));
+                    if (!ctx.isValid()) return false;
+
+                    apply();
+                    return true;
+                });
+
 #ifndef WIN32
                 // In the split (-multiprocess) build the GUI runs no in-process
                 // core, so it lacks init.cpp's SIGTERM/SIGINT handler. Install one
@@ -1639,10 +1965,20 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
                 // it has to be reaped.
                 //
                 // MUST be inside this block: `node` and the other interfaces are
-                // declared here and destroyed at the closing brace below, so joining
-                // after it would join AFTER the worker's Node is already gone --
+                // declared here and destroyed at the closing brace below, so waiting
+                // after it would wait only AFTER the worker's Node is already gone --
                 // which is the exact use-after-free this is here to prevent.
-                QThreadPool::globalInstance()->waitForDone();
+                //
+                // Not waitForDone(): it also ends the pool's threads, here, where the
+                // connection may be open, or may have been dropped and still be
+                // being destroyed on the loop thread. Wait for the tasks alone: a
+                // pool thread is counted active from when it is handed a task until
+                // it is idle again with the queue empty. Its threads end in
+                // ~QCoreApplication, after node_connection is gone (main() sets
+                // them never to expire).
+                while (QThreadPool::globalInstance()->activeThreadCount() > 0) {
+                    QThread::msleep(5);
+                }
             }
             // Shut down the core and its threads (but don't exit Bitcoin-Qt
             // here). Only in the monolithic build: there the core runs in this
@@ -1686,9 +2022,9 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
         // caught by the state arm also exits 0; the WARN in the log is what
         // distinguishes the two, not the exit code.
         RemoveGuiTerminationHandler(); // no-op if exec() already did it
-        if (IsDaemonDisconnectMessage(e.what()) || g_daemon_connection_lost.load()) {
+        if (IsDaemonDisconnectMessage(AsciiWhat(e)) || g_daemon_connection_lost.load()) {
             GUILogPrintf("IPC: the daemon connection was lost outside the GUI event loop "
-                         "(startup or teardown): %s; exiting cleanly", std::string(e.what()));
+                         "(startup or teardown): %s; exiting cleanly", std::string(AsciiWhat(e)));
             QuitOnDaemonConnectionLost("a GUI call outside the event loop was interrupted "
                                        "by the daemon disconnecting");
         } else {

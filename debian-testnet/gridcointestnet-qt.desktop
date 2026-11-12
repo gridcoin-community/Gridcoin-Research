@@ -11,8 +11,16 @@ Terminal=false
 Type=Application
 StartupWMClass=gridcointestnet
 Icon=/usr/share/icons/hicolor/48x48/apps/gridcointestnet-qt.png
-Actions=Testnet;
+Actions=Testnet;Multiprocess;SystemService;
 
 [Desktop Action Testnet]
 Name=Testnet
 Exec=sh -c "/usr/bin/gridcointestnet -testnet"
+
+[Desktop Action Multiprocess]
+Name=Connect to your own core
+Exec=/usr/bin/gridcointestnet -testnet -multiprocess
+
+[Desktop Action SystemService]
+Name=Connect to the system service
+Exec=/usr/bin/gridcointestnet -testnet -multiprocess -ipcdir=/run/gridcointestnetd -ipcserviceuser=gridcointestnet

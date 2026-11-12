@@ -1,6 +1,7 @@
 add_executable(test_gridcoin-qt
     test_main.cpp
     aboutdialogtests.cpp
+    askpassphrasedialogtests.cpp
     bitcoinunitstests.cpp
     uritests.cpp
     sidestakemodeltests.cpp
@@ -18,6 +19,12 @@ add_executable(test_gridcoin-qt
     mrcmodeltests.cpp
     pushedstatetests.cpp
     overviewtxmodeltests.cpp
+    sendcoinsdialogtests.cpp
+    coreconnectwaittests.cpp
+    filetransferdialogtests.cpp
+    guiipcworkertests.cpp
+    walletmodeltests.cpp
+    ../../test/wine.cpp
 )
 
 set_target_properties(test_gridcoin-qt PROPERTIES

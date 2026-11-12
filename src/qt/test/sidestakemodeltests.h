@@ -24,6 +24,7 @@ private slots:
     void addRowInvalidAllocationSkipsInterface();
     void removeRowDelegatesToInterface();
     void removeRowRefusesMandatory();
+    void elevationRequiredStatusMaps();
 };
 
 #endif // BITCOIN_QT_TEST_SIDESTAKEMODELTESTS_H

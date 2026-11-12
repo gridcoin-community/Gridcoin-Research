@@ -19,14 +19,31 @@ both ways of getting it wrong compile cleanly:
     method is served to a peer that never presented the cookie.
 
 This lint closes both. Every virtual on interfaces::Init must have an override
-in ServeInit, and every override must call RequireAuth() -- except the two
-methods listed in UNGATED below, which are exempt by design.
+in ServeInit, and every override must call RequireAuth() -- except the methods
+listed in UNGATED below, which are exempt by design.
+
+It also checks the connection binding. An interface that declares
+bindConnectionScope() runs operations under the client's capability, which it
+reads for its own connection only once it is bound. So every make* factory whose
+interface declares bindConnectionScope() must return BindToConnection(...) in
+ServeInit. Without it, the object reads the capability with no connection check,
+and could use the next GUI's capability after its own connection has closed. The
+check fails when it finds no such factory at all, since then it has stopped
+reading the interface headers and checks nothing.
+
+And it checks the attach slot. Only the connection that holds the listener's
+one attach slot is served any object (multiprocess_interface_spec.md section
+2.1), so every make* factory must call RequireAttachSlot() as well as
+RequireAuth(). A factory without it is served to a second, authenticated GUI
+while another is attached, and nothing else notices: the code compiles, and the
+unit test of the refusal names its factories by hand.
 
 If you are here because the lint failed, the fix is almost always to add the
 missing override to src/ipc/serve_init.cpp with RequireAuth() as its first
 statement, delegating to m_inner.
 """
 
+import glob
 import re
 import sys
 
@@ -34,6 +51,14 @@ INIT_HEADER = "src/interfaces/init.h"
 SERVE_INIT = "src/ipc/serve_init.cpp"
 INIT_CAPNP = "src/ipc/capnp/init.capnp"
 WIRE_TEST = "src/test/ipc_wire_handshake_tests.cpp"
+INTERFACE_HEADERS = "src/interfaces/*.h"
+
+# "virtual std::unique_ptr<X> makeY(" or the shared_ptr form: a factory and the
+# interface it returns.
+FACTORY_RE = re.compile(r"\bvirtual\s+std::(?:unique|shared)_ptr<\s*(?:interfaces::)?(\w+)\s*>\s+(make\w+)\s*\(")
+BIND_RE = re.compile(r"\bbindConnectionScope\s*\(")
+BIND_RETURN_RE = re.compile(r"\breturn\s+BindToConnection\s*\(")
+SLOT_RE = re.compile(r"\bRequireAttachSlot\s*\(\s*\)")
 
 # Methods that must NOT be gated, with the reason each is exempt.
 UNGATED = {
@@ -43,6 +68,17 @@ UNGATED = {
     # that is the only time the listener asks. Not exposed over capnp, so no remote
     # peer can call it.
     "isAuthenticated",
+    # Run by the local listener when the connection is torn down; never a remote
+    # call. It runs for every connection, authenticated or not.
+    "connectionClosed",
+    # The first step of the Windows identity check, which on Windows must succeed
+    # BEFORE authenticate() will compare the cookie, so gating it would deadlock
+    # the handshake as gating authenticate() would. It serves only a fresh pipe
+    # name and nonce for this connection's one check, never node data.
+    "beginAttest",
+    # The second step, for the same reason. It returns only whether this
+    # connection's peer was admitted; what it decided on is logged, never served.
+    "finishAttest",
 }
 
 # Virtuals deliberately absent from init.capnp, with the reason each is exempt.
@@ -56,6 +92,10 @@ UNSERVED = {
     # The listener asks this locally, before authentication, to decide whether a
     # connection beat the deadline. Serving it would let a peer probe the gate.
     "isAuthenticated",
+    # Run by the local listener when the connection is torn down; never a remote
+    # call. Serving it would let a peer end the attached GUI's capability or free
+    # the attach slot at will.
+    "connectionClosed",
 }
 
 # Schema methods with no interfaces::Init counterpart, with the reason.
@@ -168,6 +208,72 @@ def overrides_with_bodies(serve_text):
             i += 1
         out[key] = body[start:i - 1]
     return out
+
+
+def check_connection_binding(header_text, serve_text, interface_texts):
+    """Every make* factory on interfaces::Init whose interface declares
+    bindConnectionScope() returns BindToConnection(...) in ServeInit.
+    interface_texts are the texts of the headers that declare the interfaces.
+    Returns the errors."""
+    errors = []
+    init_body = class_body(header_text, "Init")
+    found = overrides_with_bodies(serve_text)
+    if init_body is None or found is None:
+        return ["could not locate class Init or class ServeInit for the connection-binding check"]
+    bindable_factories = 0
+    for m in FACTORY_RE.finditer(strip_noncode(init_body)):
+        interface, factory = m.group(1), m.group(2)
+        bindable = False
+        for text in interface_texts:
+            body = class_body(text, interface)
+            if body is not None and BIND_RE.search(strip_noncode(body)):
+                bindable = True
+        if not bindable:
+            continue
+        bindable_factories += 1
+        body = found.get((factory, 0))
+        if body is None:
+            continue  # the completeness check above reports a missing override
+        if not BIND_RETURN_RE.search(body):
+            errors.append(
+                "ServeInit::{0}() does not return BindToConnection(...), but interfaces::{1} declares "
+                "bindConnectionScope(). Unbound, the object reads the client's capability with no "
+                "connection check, and once its connection has closed it could use the next GUI's "
+                "capability. Return BindToConnection(m_inner->{0}()).".format(factory, interface))
+    # interfaces::Wallet, among others, declares bindConnectionScope(), so a
+    # check that finds no such factory is not reading the headers it is given,
+    # and would pass whatever ServeInit returns.
+    if bindable_factories == 0:
+        errors.append(
+            "found no make* factory on interfaces::Init whose interface declares bindConnectionScope(); "
+            "the connection-binding check is not reading the interface headers, and so checks nothing")
+    return errors
+
+
+def check_attach_slot(header_text, serve_text):
+    """Every make* factory on interfaces::Init calls RequireAttachSlot() in
+    ServeInit. Returns the errors."""
+    init_body = class_body(header_text, "Init")
+    found = overrides_with_bodies(serve_text)
+    if init_body is None or found is None:
+        return ["could not locate class Init or class ServeInit for the attach-slot check"]
+    errors = []
+    factories = 0
+    for m in FACTORY_RE.finditer(strip_noncode(init_body)):
+        factory = m.group(2)
+        factories += 1
+        body = found.get((factory, 0))
+        if body is None:
+            continue  # the completeness check reports a missing override
+        if not SLOT_RE.search(body):
+            errors.append(
+                "ServeInit::{0}() does not call RequireAttachSlot(). It would be served to an "
+                "authenticated connection that does not hold the attach slot, a second GUI while "
+                "another is attached (multiprocess_interface_spec.md section 2.1). Call "
+                "RequireAttachSlot() after RequireAuth().".format(factory))
+    if factories == 0:
+        errors.append("found no make* factory on interfaces::Init; the attach-slot check checks nothing")
+    return errors
 
 
 def capnp_init_methods(capnp_text):
@@ -364,6 +470,13 @@ def main():
                 "looks. Add `link.client->{0}();` and a matching Seen flag + BOOST_CHECK_MESSAGE "
                 "to wire_every_init_factory_reaches_the_server.".format(name, WIRE_TEST))
 
+    # --- Fifth gate: every bindable object is bound to its connection ---
+    interface_texts = [t for t in (read(path) for path in sorted(glob.glob(INTERFACE_HEADERS))) if t is not None]
+    errors.extend(check_connection_binding(header_text, serve_text, interface_texts))
+
+    # --- Sixth gate: every factory takes the attach slot ---
+    errors.extend(check_attach_slot(header_text, serve_text))
+
     # An UNGATED entry that calls RequireAuth() is a contradiction worth catching.
     for name in UNGATED:
         if any(k[0] == name and "RequireAuth()" in b for k, b in found.items()):
@@ -379,5 +492,84 @@ def main():
     return 0
 
 
+SAMPLE_INIT_HEADER = """
+class Init
+{
+public:
+    virtual std::unique_ptr<Wallet> makeWallet();
+    virtual std::unique_ptr<StakingStatus> makeStakingStatus();
+};
+"""
+
+SAMPLE_INTERFACES = ["""
+class Wallet
+{
+public:
+    virtual void bindConnectionScope(std::shared_ptr<ConnectionScope> /*scope*/) {}
+};
+class StakingStatus
+{
+public:
+    // bindConnectionScope() is not declared here, only named in this comment.
+    virtual bool isStaking() = 0;
+};
+"""]
+
+SAMPLE_SERVE = """
+class ServeInit : public interfaces::Init
+{
+public:
+    std::unique_ptr<interfaces::Wallet> makeWallet() override
+    {
+        RequireAuth();
+        RequireAttachSlot();
+        return BindToConnection(m_inner->makeWallet());
+    }
+    std::unique_ptr<interfaces::StakingStatus> makeStakingStatus() override
+    {
+        RequireAuth();
+        RequireAttachSlot();
+        return m_inner->makeStakingStatus();
+    }
+};
+"""
+
+
+def self_test():
+    """The connection-binding check passes the clean sample, fails a factory
+    of a bindable interface that is returned unbound, and fails when it finds
+    no bindable factory at all."""
+    failures = []
+    clean = check_connection_binding(SAMPLE_INIT_HEADER, SAMPLE_SERVE, SAMPLE_INTERFACES)
+    if clean:
+        failures.append("the clean sample fails: {}".format("; ".join(clean)))
+    unbound = SAMPLE_SERVE.replace("return BindToConnection(m_inner->makeWallet());",
+                                   "return m_inner->makeWallet();")
+    errors = check_connection_binding(SAMPLE_INIT_HEADER, unbound, SAMPLE_INTERFACES)
+    if not any("ServeInit::makeWallet() does not return BindToConnection(...)" in e for e in errors):
+        failures.append("no error for an unbound makeWallet(); got: {}".format("; ".join(errors) or "none"))
+    # The interface headers not read (none given): nothing is bindable, which
+    # must fail rather than pass with nothing checked.
+    errors = check_connection_binding(SAMPLE_INIT_HEADER, SAMPLE_SERVE, [])
+    if not any("found no make* factory" in e for e in errors):
+        failures.append("no error when no factory is bindable; got: {}".format("; ".join(errors) or "none"))
+    # The attach-slot check passes the clean sample and fails a factory that
+    # does not take the slot.
+    clean = check_attach_slot(SAMPLE_INIT_HEADER, SAMPLE_SERVE)
+    if clean:
+        failures.append("the clean sample fails the attach-slot check: {}".format("; ".join(clean)))
+    slotless = SAMPLE_SERVE.replace("RequireAttachSlot();\n        return m_inner->makeStakingStatus();",
+                                    "return m_inner->makeStakingStatus();")
+    errors = check_attach_slot(SAMPLE_INIT_HEADER, slotless)
+    if not any("ServeInit::makeStakingStatus() does not call RequireAttachSlot()" in e for e in errors):
+        failures.append("no error for a makeStakingStatus() without the slot; got: {}".format(
+            "; ".join(errors) or "none"))
+    for failure in failures:
+        fail("self-test: " + failure)
+    return 1 if failures else 0
+
+
 if __name__ == "__main__":
+    if sys.argv[1:] == ["--self-test"]:
+        sys.exit(self_test())
     sys.exit(main())

@@ -350,18 +350,33 @@ QString AddressTableModel::addRow(const QString &type, const QString &label, con
     }
     else if(type == Receive)
     {
-        // Generate a new address to associate with given label
-        WalletModel::UnlockContext ctx(walletModel->requestUnlock());
-        if(!ctx.isValid())
-        {
-            // Unlock wallet failed or was cancelled
-            editStatus = WALLET_UNLOCK_FAILURE;
-            return QString();
-        }
+        // Generate a new address to associate with given label. It comes from
+        // the key pool, which needs no passphrase while it has keys, so draw
+        // first. Only an empty pool on a wallet locked or unlocked for staking
+        // only needs one: under a capability the pool may be refilled, so ask,
+        // and draw once more. The kind is the one under which a send refills
+        // the pool for its change key.
         if(!walletModel->wallet().getNewReceiveAddress(strAddress))
         {
-            editStatus = KEY_GENERATION_FAILURE;
-            return QString();
+            const WalletModel::EncryptionStatus status = walletModel->getEncryptionStatus();
+            if(status != WalletModel::Locked && status != WalletModel::UnlockedForStakingOnly)
+            {
+                editStatus = KEY_GENERATION_FAILURE;
+                return QString();
+            }
+
+            WalletModel::UnlockContext ctx(walletModel->requestUnlock(CapabilityKind::Send));
+            if(!ctx.isValid())
+            {
+                // Unlock wallet failed or was cancelled
+                editStatus = WALLET_UNLOCK_FAILURE;
+                return QString();
+            }
+            if(!walletModel->wallet().getNewReceiveAddress(strAddress))
+            {
+                editStatus = KEY_GENERATION_FAILURE;
+                return QString();
+            }
         }
     }
     else if(type == ReceiveExisting)

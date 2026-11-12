@@ -17,6 +17,8 @@ class CWallet;
 
 namespace interfaces {
 
+class ConnectionScope;
+
 class Handler;
 
 //! One atomic, node-side read of everything the MRC request page needs
@@ -127,8 +129,10 @@ public:
     virtual ~MRC() = default;
 
     //! Atomic node-side snapshot at the given fee boost. \p wallet_locked (the
-    //! GUI's WalletModel encryption state) becomes CreateMRC's no_sign flag — a
-    //! locked wallet cannot sign, so the trial claim is built unsigned. \p
+    //! GUI's WalletModel encryption state) is one source of CreateMRC's no_sign
+    //! flag: the trial claim is built unsigned when it is set, and when the
+    //! wallet itself is locked or unlocked for staking only, since a wallet that
+    //! cannot use its keys cannot sign. \p
     //! researcher_eligible is the GUI's active-beacon / not-noncruncher /
     //! not-pool determination (owned by ResearcherModel, migrated in 1d-iv); when
     //! false the snapshot skips the trial CreateMRC (which would otherwise throw
@@ -163,6 +167,14 @@ public:
     //! Subscribe to the node's MRCChanged notification (the mempool MRC set
     //! changed) — the GUI re-snapshots on it.
     virtual std::unique_ptr<Handler> handleMRCChanged(MRCChangedFn fn) = 0;
+
+    //! LOCAL ONLY: not served over capnp (no ordinal), so no peer can call it,
+    //! and the GUI's proxy keeps this default, which does nothing. Binds this to
+    //! the IPC connection it is served on, so what it runs under the client's
+    //! capability reads the IPC capability for that connection: none once the
+    //! connection has closed (see Wallet::bindConnectionScope). The serving Init
+    //! calls it once, before handing it out.
+    virtual void bindConnectionScope(std::shared_ptr<ConnectionScope> /*scope*/) {}
 };
 
 //! Return an in-process MRC interface over the node's single wallet, which must

@@ -4,7 +4,13 @@
 #include <QString>
 #include <QObject>
 #include <QMessageBox>
+#include <memory>
 #include "fs.h"
+#include "qt/guiipcinfo.h"
+#include "support/allocators/secure.h" // For SecureString.
+
+class ArgsManager;
+class QSettings;
 
 QT_BEGIN_NAMESPACE
 class QFont;
@@ -56,6 +62,13 @@ namespace GUIUtil
     // HTML escaping for rich text controls
     QString HtmlEscape(const QString& str, bool fMultiLine=false);
     QString HtmlEscape(const std::string& str, bool fMultiLine=false);
+
+    //! The UTF-8 bytes of \p text, the same bytes as text.toStdString(), in a
+    //! SecureString. The QByteArray used for the conversion is cleansed before
+    //! return, and the bytes are in the string's secure buffer whatever their
+    //! length, so moving the result moves that buffer and copies nothing. Like
+    //! any SecureString, it throws std::bad_alloc past the secure pool's 256 KiB.
+    SecureString SecureStringFromQString(const QString& text);
 
     /** Copy a field of the currently selected entry of a view to the clipboard. Does nothing if nothing
         is selected.
@@ -115,8 +128,30 @@ namespace GUIUtil
     // Determine whether a widget is hidden behind other windows
     bool isObscured(QWidget *w);
 
-    // Open debug.log
-    void openDebugLogfile();
+    //! What to do with a file that lives on the core's side.
+    enum class OpenAction { OpenFile, ShowAdminMessage, Missing };
+
+    //! core_other_account -> ShowAdminMessage; else the file exists -> OpenFile;
+    //! else Missing. The file is not looked at when the core runs under another
+    //! account, since this account cannot be expected to read it.
+    OpenAction DecideCoreFileOpen(bool core_other_account, const fs::path& path);
+
+    //! The message that tells the user how to read a core file this account
+    //! cannot read. Names the path twice (where it is, and in the command).
+    QString AdminReadMessage(const QString& what, const QString& path);
+
+    //! A message box for text that carries a core-reported path: plain text,
+    //! never rich text.
+    std::unique_ptr<QMessageBox> MakeCoreFileBox(QMessageBox::Icon icon, QWidget* parent, const QString& title,
+                                                 const QString& text);
+
+    //! Open a file at a path the core reported with the associated application,
+    //! or tell the user why it cannot be opened from here. what is the display
+    //! name of the file ("debug log", "config file").
+    void openCoreFile(const GuiIpcInfo& info, const QString& what, const std::string& path, QWidget* parent);
+
+    //! Open the core's debug log.
+    void openDebugLogfile(const GuiIpcInfo& info, QWidget* parent);
 
     /** Qt event filter that intercepts ToolTipChange events, and replaces the tooltip with a rich text
       representation if needed. This assures that Qt can word-wrap long tooltip messages.
@@ -180,6 +215,14 @@ namespace GUIUtil
      * QDate::startOfDay() was introduced in Qt 5.14.
      */
     QDateTime StartOfDay(const QDate& date);
+
+    //! If the command line sets -multiprocess/-nomultiprocess, -ipcdir or -ipcserviceuser, store
+    //! them in \p settings ("launchMultiprocess" bool, "launchIpcDir", "launchIpcServiceUser"
+    //! strings); otherwise SoftSet them from \p settings. A negated or empty -ipcdir or
+    //! -ipcserviceuser means the default: it removes the stored value, and an empty stored value
+    //! is not SoftSet. Used on macOS, where the login item (SMAppService.mainApp) cannot carry
+    //! arguments.
+    void ApplyPersistedLaunchMode(QSettings& settings, ArgsManager& args);
 
 } // namespace GUIUtil
 

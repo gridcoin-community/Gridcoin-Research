@@ -279,6 +279,14 @@ if(ENABLE_TESTS)
     list(APPEND BOOST_HUNTER_COMPONENTS test)
 endif()
 
+# Boost.Asio is header-only, and from Boost 1.92 its configuration follows the
+# language standard: on macOS with a 14.4 or later deployment target a C++20
+# translation unit gets a mutex built on std::atomic::wait, a C++17 one the
+# pthread mutex. Most of this tree is C++17, and what links gridcoin_ipc is
+# C++20, so the two would share asio's inline code with two layouts of its
+# classes. This keeps asio's configuration the same under both.
+add_compile_definitions(BOOST_ASIO_DISABLE_STD_ATOMIC_WAIT)
+
 find_package(Atomics REQUIRED)
 find_package(Threads REQUIRED)
 
@@ -955,6 +963,10 @@ check_symbol_exists(fork "unistd.h" HAVE_DECL_FORK)
 list(APPEND CMAKE_REQUIRED_DEFINITIONS -D_GNU_SOURCE)
 check_symbol_exists(pipe2 "unistd.h" HAVE_DECL_PIPE2)
 list(REMOVE_ITEM CMAKE_REQUIRED_DEFINITIONS -D_GNU_SOURCE)
+# Lets the spawned notify shells be started without inherited descriptors.
+list(APPEND CMAKE_REQUIRED_DEFINITIONS -D_GNU_SOURCE)
+check_symbol_exists(posix_spawn_file_actions_addclosefrom_np "spawn.h" HAVE_POSIX_SPAWN_CLOSEFROM)
+list(REMOVE_ITEM CMAKE_REQUIRED_DEFINITIONS -D_GNU_SOURCE)
 check_symbol_exists(setsid "unistd.h" HAVE_DECL_SETSID)
 
 # randomenv.cpp gathers entropy from the network interface list under
@@ -1076,6 +1088,14 @@ if(ENABLE_TESTS AND ENABLE_DAEMON)
                 ENVIRONMENT "${_functional_env}"
                 RUN_SERIAL TRUE   # tests spin up daemons; don't overlap with other ctest cases
                 TIMEOUT 1800
+            )
+
+            # Every RPC row and capnp method has an access class in
+            # src/rpc/entry_point_classes.json that agrees with the code.
+            add_test(
+                NAME lint_entry_point_classes
+                COMMAND ${Python3_EXECUTABLE} "${CMAKE_SOURCE_DIR}/test/lint/lint-entry-point-classes.py"
+                WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
             )
         endif()
 

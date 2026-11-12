@@ -4,8 +4,11 @@
 
 #include "util/dir_permissions.h"
 
-#include "tinyformat.h" // strprintf, used by the Windows DACL verifier
+#include "tinyformat.h" // strprintf, for the errors when a directory cannot be restricted
+#include "util/win_acl.h"
+#include "util/syserror.h"
 
+#include <atomic>
 #include <cerrno>
 #include <stdexcept>
 #include <string>
@@ -13,7 +16,6 @@
 
 #ifdef WIN32
 #include <windows.h>
-#include <aclapi.h>
 #include <vector>
 #else
 #include <sys/stat.h>
@@ -21,193 +23,212 @@
 #endif
 
 namespace util {
-namespace {
 
 #ifdef WIN32
-
-//! The two trustees an IPC object's DACL may name: this process's token user
-//! ("me") and SYSTEM. SYSTEM is included because excluding it breaks backup,
-//! indexing and service scenarios while adding nothing -- SYSTEM can take
-//! ownership of any object regardless of its DACL, so denying it is theatre.
+//! The owner-only access control list: this process's token user owns the object,
+//! and only it and SYSTEM have access. SYSTEM is included because excluding it
+//! breaks backup, indexing and service scenarios while adding nothing -- SYSTEM can
+//! take ownership of any object regardless of its DACL, so denying it is theatre.
 //! Administrators are deliberately *not* included: an administrator can likewise
 //! take ownership at will, but leaving the group off keeps the ACL an accurate
 //! statement of intent (owner-only) rather than an invitation.
-struct OwnerOnlyTrustees
+//!
+//! The owner is stated rather than left to the creating token, whose default owner
+//! in an elevated process is the Administrators group.
+winacl::AclSpec OwnerOnlyAclSpec(bool inheritable)
 {
-    std::vector<unsigned char> token_user; //!< TOKEN_USER header + the SID it points into
-    unsigned char system_sid[SECURITY_MAX_SID_SIZE];
+    const winacl::Sid user = winacl::CurrentTokenUser();
+    const winacl::Sid system = winacl::wellknown::System();
 
-    PSID user() const
-    {
-        return reinterpret_cast<const TOKEN_USER*>(token_user.data())->User.Sid;
-    }
-    PSID system() const { return const_cast<unsigned char*>(system_sid); }
-};
-
-//! Resolve the process token user SID and the SYSTEM SID. Throws on failure --
-//! without both SIDs no DACL can be built, and silently skipping the DACL is the
-//! very hole this exists to close.
-OwnerOnlyTrustees GetOwnerOnlyTrustees()
-{
-    OwnerOnlyTrustees t{};
-
-    HANDLE token = nullptr;
-    if (!::OpenProcessToken(::GetCurrentProcess(), TOKEN_QUERY, &token)) {
-        throw std::system_error(static_cast<int>(::GetLastError()), std::system_category(),
-                                "OpenProcessToken");
-    }
-    // First call sizes the buffer (it fails with ERROR_INSUFFICIENT_BUFFER by design).
-    DWORD len = 0;
-    ::GetTokenInformation(token, TokenUser, nullptr, 0, &len);
-    t.token_user.resize(len ? len : 1);
-    if (!::GetTokenInformation(token, TokenUser, t.token_user.data(), len, &len)) {
-        const DWORD err = ::GetLastError();
-        ::CloseHandle(token);
-        throw std::system_error(static_cast<int>(err), std::system_category(),
-                                "GetTokenInformation(TokenUser)");
-    }
-    ::CloseHandle(token);
-
-    DWORD system_sid_size = sizeof(t.system_sid);
-    if (!::CreateWellKnownSid(WinLocalSystemSid, nullptr, t.system_sid, &system_sid_size)) {
-        throw std::system_error(static_cast<int>(::GetLastError()), std::system_category(),
-                                "CreateWellKnownSid(WinLocalSystemSid)");
-    }
-    return t;
-}
-
-//! Build the two-ACE allow-only DACL for \p trustees. The caller owns the
-//! returned ACL and must LocalFree() it.
-PACL BuildOwnerOnlyDacl(const OwnerOnlyTrustees& trustees, bool inheritable)
-{
-    EXPLICIT_ACCESS_W ea[2] = {};
-    const PSID sids[2] = {trustees.user(), trustees.system()};
-    // On a directory the ACEs must be inheritable, so anything created inside
+    // On a directory the entries must be inheritable, so anything created inside
     // is owner-only from creation rather than only after an after-the-fact
     // SetNamedSecurityInfo -- that closes the create/protect window rather than
     // merely narrowing it.
-    const DWORD inheritance = inheritable ? (CONTAINER_INHERIT_ACE | OBJECT_INHERIT_ACE)
-                                          : NO_INHERITANCE;
-    for (int i = 0; i < 2; ++i) {
-        ea[i].grfAccessPermissions = GENERIC_ALL;
-        ea[i].grfAccessMode = SET_ACCESS;
-        ea[i].grfInheritance = inheritance;
-        ea[i].Trustee.pMultipleTrustee = nullptr;
-        ea[i].Trustee.MultipleTrusteeOperation = NO_MULTIPLE_TRUSTEE;
-        ea[i].Trustee.TrusteeForm = TRUSTEE_IS_SID;
-        ea[i].Trustee.TrusteeType = i == 0 ? TRUSTEE_IS_USER : TRUSTEE_IS_WELL_KNOWN_GROUP;
-        ea[i].Trustee.ptstrName = reinterpret_cast<LPWSTR>(sids[i]);
-    }
+    const winacl::Inherit inherit = inheritable ? winacl::Inherit::ContainerAndObject : winacl::Inherit::None;
 
-    PACL dacl = nullptr;
-    const DWORD rc = ::SetEntriesInAclW(2, ea, nullptr, &dacl);
-    if (rc != ERROR_SUCCESS || dacl == nullptr) {
-        throw std::system_error(static_cast<int>(rc), std::system_category(), "SetEntriesInAcl");
-    }
-    return dacl;
+    // FILE_ALL_ACCESS here is the SDK's macro, equal to winacl::mask::FILE_ALL_ACCESS.
+    // It is used rather than GENERIC_ALL because specific rights are stored as
+    // written, so the read-back can compare the entries exactly.
+    winacl::AclSpec spec{user, {{user, FILE_ALL_ACCESS, inherit}}};
+
+    // A process running as SYSTEM names it once.
+    if (system != user) spec.aces.push_back({system, FILE_ALL_ACCESS, inherit});
+
+    return spec;
 }
 
-//! Read \p path's DACL back and confirm it says what we just asked for: present,
-//! non-NULL, protected (no inherited ACEs), and every ACE an allow-ACE naming
-//! only one of \p trustees. This is the "verify" half of fail-closed: some
-//! filesystems (FAT/exFAT volumes, some network redirectors) accept a
-//! SetNamedSecurityInfo call and store nothing, which would otherwise leave the
-//! cookie world-readable while every call reported success.
-void VerifyOwnerOnlyDaclImpl(const fs::path& path, const OwnerOnlyTrustees& trustees)
+std::string OwnerOnlyRefusalText(const fs::path& path, const std::string& failure)
 {
-    std::wstring wpath = path.wstring();
-    PACL dacl = nullptr;
-    PSECURITY_DESCRIPTOR sd = nullptr;
-    // DACL_SECURITY_INFORMATION only: PROTECTED_DACL_SECURITY_INFORMATION is a
-    // set-side flag and is rejected here. Whether the DACL is protected is read
-    // below from the descriptor's SE_DACL_PROTECTED control bit instead.
-    const DWORD rc = ::GetNamedSecurityInfoW(wpath.data(), SE_FILE_OBJECT, DACL_SECURITY_INFORMATION,
-                                             nullptr, nullptr, &dacl, nullptr, &sd);
-    if (rc != ERROR_SUCCESS) {
-        throw std::system_error(static_cast<int>(rc), std::system_category(),
-                                "GetNamedSecurityInfo " + path.string());
-    }
-
-    std::string failure;
-    SECURITY_DESCRIPTOR_CONTROL control{};
-    DWORD revision = 0;
-    if (!::GetSecurityDescriptorControl(sd, &control, &revision)) {
-        failure = "the security descriptor could not be read back";
-    } else if ((control & SE_DACL_PRESENT) == 0 || dacl == nullptr) {
-        // A NULL/absent DACL grants everyone full access -- the worst outcome.
-        failure = "it has no DACL (all users would have access)";
-    } else if ((control & SE_DACL_PROTECTED) == 0) {
-        failure = "its DACL is not protected (it still inherits ACEs from the parent)";
-    } else {
-        for (WORD i = 0; i < dacl->AceCount; ++i) {
-            void* ace = nullptr;
-            if (!::GetAce(dacl, i, &ace)) {
-                failure = "one of its ACEs could not be read back";
-                break;
-            }
-            const ACE_HEADER* header = static_cast<const ACE_HEADER*>(ace);
-            if (header->AceType != ACCESS_ALLOWED_ACE_TYPE) continue; // a deny ACE only narrows
-            PSID sid = &static_cast<ACCESS_ALLOWED_ACE*>(ace)->SidStart;
-            if (!::EqualSid(sid, trustees.user()) && !::EqualSid(sid, trustees.system())) {
-                failure = "its DACL grants access to a trustee other than the current user and SYSTEM";
-                break;
-            }
-        }
-    }
-    if (sd != nullptr) ::LocalFree(sd);
-    if (!failure.empty()) {
-        throw std::runtime_error(strprintf(
-            "Refusing to serve IPC: '%s' could not be restricted to the current user -- %s. "
-            "The data directory must live on an NTFS volume that supports access control.",
-            path.string(), failure));
-    }
+    return strprintf("Refusing to serve IPC: '%s' could not be restricted to the current user -- %s. "
+                     "The data directory must live on an NTFS volume that supports access control.",
+                     path.string(), failure);
 }
 
-#endif // WIN32
-
-} // namespace
-
-#ifdef WIN32
 void ApplyOwnerOnlyDacl(const fs::path& path, bool inheritable)
 {
-    const OwnerOnlyTrustees trustees = GetOwnerOnlyTrustees();
-    PACL dacl = BuildOwnerOnlyDacl(trustees, inheritable);
-
-    // SetNamedSecurityInfoW takes a mutable LPWSTR, hence the local buffer.
-    std::wstring wpath = path.wstring();
-    const DWORD rc = ::SetNamedSecurityInfoW(wpath.data(), SE_FILE_OBJECT,
-                                             DACL_SECURITY_INFORMATION | PROTECTED_DACL_SECURITY_INFORMATION,
-                                             nullptr, nullptr, dacl, nullptr);
-    ::LocalFree(dacl);
-    if (rc != ERROR_SUCCESS) {
-        throw std::system_error(static_cast<int>(rc), std::system_category(),
-                                "SetNamedSecurityInfo " + path.string());
+    // ApplyAcl reads the ACL back before returning. Some filesystems (FAT/exFAT
+    // volumes, some network redirectors) accept a SetNamedSecurityInfo call and store
+    // nothing, which would otherwise leave the cookie world-readable while every call
+    // reported success.
+    try {
+        winacl::ApplyAcl(path, OwnerOnlyAclSpec(inheritable));
+    } catch (const winacl::AclNotKeptError& e) {
+        throw std::runtime_error(OwnerOnlyRefusalText(path, e.reason()));
     }
-    // Setting an ACL can succeed nominally on a volume that does not store one;
-    // read it back before we act as though the secret is protected.
-    VerifyOwnerOnlyDaclImpl(path, trustees);
 }
-
-void* MakeOwnerOnlyDacl(bool inheritable)
-{
-    return BuildOwnerOnlyDacl(GetOwnerOnlyTrustees(), inheritable);
-}
-
 
 void VerifyOwnerOnlyDacl(const fs::path& path)
 {
-    VerifyOwnerOnlyDaclImpl(path, GetOwnerOnlyTrustees());
+    const winacl::ObservedAcl acl = winacl::ReadAcl(path);
+    const std::vector<winacl::Sid> allowed{winacl::CurrentTokenUser(), winacl::wellknown::System()};
+
+    // Present and protected, owned by this account or SYSTEM, and naming nobody else
+    // in an allow entry of any kind, inherit-only entries included.
+    std::optional<std::string> failure;
+    if (acl.dacl_present && !acl.is_protected) {
+        failure = "its DACL is not protected (it still inherits ACEs from the parent)";
+    } else {
+        failure = winacl::FindForeignTrustee(acl, allowed);
+    }
+
+    if (failure) throw std::runtime_error(OwnerOnlyRefusalText(path, *failure));
 }
 #endif // WIN32
+
+namespace {
+//! The umask SetOwnerOnlyUmask() replaced, or -1.
+std::atomic<int> g_inherited_umask{-1};
+} // namespace
 
 void SetOwnerOnlyUmask()
 {
 #ifndef WIN32
-    ::umask(077);
+    const mode_t replaced = ::umask(077);
+    // A second call replaces the owner-only mask itself; the first answer stands.
+    if (replaced != 077) g_inherited_umask.store(static_cast<int>(replaced));
 #endif
 }
 
-bool CreateOwnerOnlyDirectory(const fs::path& path, std::string& error)
+std::optional<unsigned int> InheritedUmask()
+{
+    const int mask = g_inherited_umask.load();
+    if (mask < 0) return std::nullopt;
+    return static_cast<unsigned int>(mask);
+}
+
+#ifndef WIN32
+bool RestrictErrorMeansNoModes(int err)
+{
+    // EOPNOTSUPP and ENOTSUP are the same value on Linux and differ elsewhere.
+    return err == EPERM || err == ENOTSUP || err == EOPNOTSUPP || err == EROFS;
+}
+#endif
+
+namespace {
+#ifdef WIN32
+//! Whether the volume holding \p path keeps ACLs (FILE_PERSISTENT_ACLS). A volume
+//! that cannot be asked is taken to keep them, so a failure there is not tolerated.
+bool VolumeKeepsAcls(const fs::path& path)
+{
+    wchar_t root[MAX_PATH + 1];
+    if (!GetVolumePathNameW(path.wstring().c_str(), root, MAX_PATH + 1)) return true;
+
+    DWORD flags = 0;
+    if (!GetVolumeInformationW(root, nullptr, 0, nullptr, nullptr, &flags, nullptr, 0)) return true;
+
+    return (flags & FILE_PERSISTENT_ACLS) != 0;
+}
+#endif
+
+//! What CreateAndRestrict did.
+enum class CreateResult
+{
+    //! The directory was there already, and is left as it is.
+    Existing,
+    //! This call created it and restricted it to this account.
+    Restricted,
+    //! This call created it and could not restrict it because its filesystem keeps
+    //! no POSIX modes, or its volume no ACLs; error says why.
+    NoModes,
+    //! This call created it and could not restrict it for another reason; error says why.
+    NotRestricted,
+    //! The directory could not be created; error says why.
+    Failed,
+};
+
+#ifdef WIN32
+//! \p path without separators at its end, so that its parent is the directory above it.
+//! A root such as "C:\" keeps its separator.
+fs::path WithoutTrailingSeparators(const fs::path& path)
+{
+    std::wstring text = path.wstring();
+    while (text.size() > 1 && (text.back() == L'\\' || text.back() == L'/') && text[text.size() - 2] != L':') {
+        text.pop_back();
+    }
+
+    return fs::path(text);
+}
+
+//! Create \p path and, if this call created it, restrict it to this account.
+CreateResult CreateAndRestrict(const fs::path& path, std::string& error)
+{
+    error.clear();
+
+    // The parents get the lists they inherit. The directory itself is created with the
+    // owner-only list, inheritable so that entries created inside are owner-only from
+    // creation, and read back, so it is never there with another list.
+    const fs::path dir = WithoutTrailingSeparators(path);
+    const fs::path parent = dir.has_parent_path() ? dir.parent_path() : fs::path(".");
+
+    boost::system::error_code ec;
+    if (dir.has_parent_path()) fs::create_directories(parent, ec);
+    if (ec) {
+        error = "could not create the directory " + path.string() + ": " + ec.message();
+        return CreateResult::Failed;
+    }
+
+    try {
+        if (winacl::CreateDirectoryWithAcl(dir, OwnerOnlyAclSpec(/*inheritable=*/true))) return CreateResult::Restricted;
+    } catch (const std::exception& e) {
+        // CreateDirectoryWithAcl took away anything it made.
+        const auto* const not_kept = dynamic_cast<const winacl::AclNotKeptError*>(&e);
+        if (VolumeKeepsAcls(parent)) {
+            if (!not_kept) {
+                error = "could not create the directory " + path.string() + ": " + AsciiWhat(e);
+                return CreateResult::Failed;
+            }
+            error = "created " + path.string() + " but could not restrict it to this account: " +
+                    OwnerOnlyRefusalText(path, not_kept->reason());
+            return CreateResult::NotRestricted;
+        }
+
+        // A volume that keeps no ACLs: the directory is made without one, for the caller
+        // that keeps such a directory.
+        boost::system::error_code plain_ec;
+        if (!fs::create_directory(dir, plain_ec)) {
+            error = "could not create the directory " + path.string() + ": " +
+                    (plain_ec ? plain_ec.message() : std::string{AsciiWhat(e)});
+            return CreateResult::Failed;
+        }
+        error = "created " + path.string() + " but could not restrict it to this account: " + AsciiWhat(e) +
+                " (the volume keeps no ACLs)";
+        return CreateResult::NoModes;
+    }
+
+    // Already there: leave it exactly as the operator configured it. Re-tightening a
+    // directory somebody widened on purpose is not ours to do. Anything else in its
+    // place is an error.
+    boost::system::error_code stat_ec;
+    if (!fs::is_directory(dir, stat_ec)) {
+        error = "could not create the directory " + path.string() + ": something that is not a directory is there";
+        return CreateResult::Failed;
+    }
+
+    return CreateResult::Existing;
+}
+#else
+//! Create \p path and, if this call created it, restrict it to this account.
+CreateResult CreateAndRestrict(const fs::path& path, std::string& error)
 {
     error.clear();
 
@@ -222,7 +243,7 @@ bool CreateOwnerOnlyDirectory(const fs::path& path, std::string& error)
         boost::system::error_code stat_ec;
         if (!fs::is_directory(path, stat_ec)) {
             error = "could not create the directory " + path.string() + ": " + ec.message();
-            return false;
+            return CreateResult::Failed;
         }
     }
 
@@ -230,52 +251,83 @@ bool CreateOwnerOnlyDirectory(const fs::path& path, std::string& error)
     // a directory somebody widened on purpose is not ours to do, and the secrets
     // that live inside (the IPC socket and cookie) carry their own owner-only
     // protection regardless of how permissive the parent is.
-    if (!created) return true;
+    if (!created) return CreateResult::Existing;
 
     // We made it, so we set the terms.
-    //
-    // If we cannot, the directory we just created is withdrawn again before
-    // returning false. Leaving it behind is what made this fail open: on the NEXT
-    // start the directory exists, the !created branch above returns true without
-    // inspecting it, and a directory we already know we failed to protect is
-    // accepted silently and forever. One warning, then permanent exposure.
+    if (::chmod(path.string().c_str(), 0700) != 0) {
+        const int err = errno;
+        error = strprintf("created %s but could not chmod it to 0700: %s (errno %d)", path.string(),
+                          std::generic_category().message(err), err);
+        return RestrictErrorMeansNoModes(err) ? CreateResult::NoModes : CreateResult::NotRestricted;
+    }
+
+    return CreateResult::Restricted;
+}
+#endif // WIN32
+
+//! Remove \p path, which this call created and could not restrict, and return false.
+bool Withdraw(const fs::path& path, std::string& error)
+{
+    // This call created the directory and could not restrict it, so it is withdrawn
+    // again before returning false. Leaving it behind is what made this fail open:
+    // on the NEXT start the directory exists, the existing-directory branch returns
+    // true without inspecting it, and a directory we already know we failed to
+    // protect is accepted silently and forever. One warning, then permanent exposure.
     //
     // fs::remove is deliberately the non-recursive form: it removes an empty
     // directory or nothing. This runs microseconds after create_directories()
-    // returned `created`, so the directory is empty -- but if that assumption is
-    // ever wrong, remove() fails and reports rather than destroying anything. A
-    // data directory is the last place to use remove_all().
+    // created it, so the directory is empty -- but if that assumption is ever
+    // wrong, remove() fails and reports rather than destroying anything. A data
+    // directory is the last place to use remove_all().
     //
-    // A pre-existing directory never reaches here (it returned true above), so the
-    // create-only rule is intact: nothing the operator set up is inspected,
-    // re-tightened, or removed.
-    const auto withdraw = [&path](std::string& err) {
-        boost::system::error_code rm_ec;
-        fs::remove(path, rm_ec);
-        if (rm_ec) {
-            err += "; the directory could not be removed either (" + rm_ec.message()
-                 + "), so it is left in place UNRESTRICTED -- do not put a wallet in it";
-        }
-    };
-
-#ifdef WIN32
-    try {
-        // Inheritable: entries created inside are owner-only from creation rather
-        // than after the fact.
-        ApplyOwnerOnlyDacl(path, /*inheritable=*/true);
-    } catch (const std::exception& e) {
-        error = "created " + path.string() + " but could not restrict it to this account: " + e.what();
-        withdraw(error);
-        return false;
+    // A pre-existing directory never reaches here, so the create-only rule is
+    // intact: nothing the operator set up is inspected, re-tightened, or removed.
+    boost::system::error_code rm_ec;
+    fs::remove(path, rm_ec);
+    if (rm_ec) {
+        error += "; the directory could not be removed either (" + rm_ec.message()
+               + "), so it is left in place UNRESTRICTED -- do not put a wallet in it";
     }
-#else
-    if (::chmod(path.string().c_str(), 0700) != 0) {
-        error = strprintf("created %s but could not chmod it to 0700 (errno %d)", path.string(), errno);
-        withdraw(error);
-        return false;
-    }
-#endif
+    return false;
+}
+} // namespace
 
+bool CreateOwnerOnlyDirectory(const fs::path& path, std::string& error)
+{
+    switch (CreateAndRestrict(path, error)) {
+    case CreateResult::Existing:
+    case CreateResult::Restricted:
+        return true;
+    case CreateResult::Failed:
+        return false;
+    case CreateResult::NoModes:
+    case CreateResult::NotRestricted:
+        break;
+    }
+    return Withdraw(path, error);
+}
+
+bool CreateDirectoryRestrictedIfPossible(const fs::path& path, std::string& error,
+                                         std::optional<std::string>& unrestricted)
+{
+    unrestricted.reset();
+
+    switch (CreateAndRestrict(path, error)) {
+    case CreateResult::Existing:
+    case CreateResult::Restricted:
+        return true;
+    case CreateResult::Failed:
+        return false;
+    case CreateResult::NotRestricted:
+        return Withdraw(path, error);
+    case CreateResult::NoModes:
+        break;
+    }
+
+    // A filesystem without modes: kept, and the reason handed back for the caller to
+    // report.
+    unrestricted = error;
+    error.clear();
     return true;
 }
 

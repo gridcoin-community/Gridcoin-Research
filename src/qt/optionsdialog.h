@@ -65,7 +65,15 @@ private slots:
     void handlePollExpireNotifyValid(QValidatedLineEdit *object, bool fState);
     void handleSideStakeAllocationInvalid();
     void handleSideStakeDescriptionInvalid();
+    //! Tell the user a side-stake change was not saved for want of the
+    //! passphrase, with the table refetched.
+    void handleSideStakeElevationRequired();
+    //! After the table's delegate committed an edit: if the passphrase was not
+    //! given, report it once the editor has closed.
+    void sidestakeTableEditCommitted();
 
+    //! Submits the dialog when side staking is toggled. Not saved for want of
+    //! the passphrase, the box shows side staking as stored again.
     void refreshSideStakeTableModel();
 
     void tabWidgetSelectionChanged(int index);
@@ -79,6 +87,13 @@ signals:
     void sidestakeDescriptionInvalid();
 
 private:
+    //! Submit every field through the mapper, for OK, Apply and the side-staking
+    //! toggle. When the submit changes a setting that needs the wallet
+    //! passphrase (OptionsModel::needsSettingsElevation), ask for it first and
+    //! hold it across the submit. Returns false, having saved nothing and told
+    //! the user, when it was not given.
+    bool submitSettings();
+
     Ui::OptionsDialog *ui;
     OptionsModel *model;
     MonitoredDataMapper *mapper;
@@ -92,6 +107,10 @@ private:
     std::vector<int> m_table_column_sizes;
     bool m_init_column_sizes_set;
     bool m_resize_columns_in_progress;
+
+    //! A refused side-stake table edit's message is queued to show once the
+    //! editor has closed.
+    bool m_sidestake_elevation_report_queued{false};
 
     enum SideStakeTableColumnWidths
     {
