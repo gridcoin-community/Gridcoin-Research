@@ -1369,8 +1369,8 @@ void SetupServerArgs()
     hidden_args.emplace_back("-autogreylistredesignheight");
 
     // This puts hidden options in the form of -clear<type>history, where <type> is the contract types that have a
-    // registry with a backing db. This is currently beacon, project, protocol, and scraper, with sidestakes starting
-    // at V13 height.
+    // registry with a backing db. This is currently beacon, project, protocol, scraper, sidestake (starting at V13
+    // height), and the two pool types, which share the pool registry.
     for (const auto& contract_type : GRC::RegistryBookmarks::CONTRACT_TYPES_WITH_REG_DB) {
         std::string history_arg = "-clear" + GRC::Contract::Type::ToString(contract_type) + "history";
 
@@ -2753,9 +2753,9 @@ bool AppInit2(ThreadHandlerPtr threads)
     // startup: walk the chain backward from pindexBest, hash-verify each
     // block's on-disk data against its index hash, and if a mismatch is
     // found (Scenario C from #2865), abandon-rewind to the last consistent
-    // block, reset the beacon registry if the rewind crossed an SB boundary
-    // (otherwise clamp the four non-beacon registry bookmarks), and let
-    // P2P sync re-supply the missing blocks normally.
+    // block, reset the beacon registry if the rewind crossed an SB boundary,
+    // clamp the registry bookmarks to that block, and let P2P sync re-supply
+    // the missing blocks normally.
     //
     // Hook position is deliberate: AFTER LoadBlockIndex (pindexBest is
     // populated and we can walk the chain), AFTER the -printblock* early

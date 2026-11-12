@@ -101,8 +101,8 @@ public:
     //!
     //! \brief Producer: a transaction is no longer visible / was deleted.
     //! Enqueues a removal by \p hash for the worker (O(1), same threading
-    //! contract as enqueueInsert). Safe from the CT_DELETED path (no wallet
-    //! locks held).
+    //! contract as enqueueInsert). Safe from the CT_DELETED path: it needs no
+    //! wallet lock (it takes cs_intake, and the logger's mutex if it warns).
     //!
     void enqueueRemove(const uint256& hash);
 

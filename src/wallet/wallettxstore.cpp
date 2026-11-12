@@ -665,13 +665,13 @@ void WalletTxStore::prime(bool limit_enabled, int64_t limit_time)
     // Hold cs_main + cs_wallet across the whole rebuild AND the queue drain,
     // exactly as the old loadWallet held them for its scan. cs_main is the
     // load-bearing exclusion lock here: EVERY producer of insert/remove holds
-    // cs_main — CT_NEW/CT_UPDATED under cs_main+cs_wallet, and BOTH CT_DELETED
-    // sites (ReorganizeChain in main.cpp, ResendWalletTransactions in
-    // wallet.cpp) under cs_main even though they do NOT hold cs_wallet at the
-    // fire site. So holding cs_main across both the index rebuild and the
-    // queue drain fully excludes producers: no event can be queued between the
-    // two, which makes the rebuilt index, the re-armed cursors, and the emptied
-    // queue mutually consistent.
+    // cs_main — CT_NEW/CT_UPDATED under cs_main+cs_wallet, and every CT_DELETED
+    // site under cs_main, whether or not it also holds cs_wallet at the fire
+    // site (ReorganizeChain does not; ResendWalletTransactions does). So
+    // holding cs_main across both the index rebuild and the queue drain fully
+    // excludes producers: no event can be queued between the two, which makes
+    // the rebuilt index, the re-armed cursors, and the emptied queue mutually
+    // consistent.
     //
     // NOTE this is a full wallet rescan under cs_main, and it is reachable at
     // runtime from the GUI (WalletModel::reloadTransactionView, wired to the
@@ -770,14 +770,14 @@ void WalletTxStore::prime(bool limit_enabled, int64_t limit_time)
 
     // Discard any events queued before this rebuild: they were computed against
     // the old index and are superseded by the freshly scanned records now in
-    // m_records. Producers are still blocked on cs_wallet, so nothing new can be
+    // m_records. Producers are still blocked on cs_main, so nothing new can be
     // queued until we return; the rebuilt index and the now-empty queue are
     // consistent.
     m_queue.drain();
 
     // Re-publish the per-view cursor Resets AFTER the drain so they survive it;
     // the windowed consumers (e.g. OverviewTxModel) refill via getRows. Producers
-    // are still blocked on cs_wallet, so these are the only queued events until
+    // are still blocked on cs_main, so these are the only queued events until
     // we return. Record each Reset's seqno as the view high-water (PR4-fix B) so a
     // consumer's reset-refetch knows exactly what it reflects; re-taking cs_store
     // here is contention-free (producers blocked, worker parked).
@@ -790,7 +790,7 @@ void WalletTxStore::prime(bool limit_enabled, int64_t limit_time)
 
     // The store-worker is released by park_guard's destructor as this function
     // returns (PR2.5): the rebuilt index is live, so it resumes draining.
-    // Producers remain blocked on cs_wallet until we return, so the worker has
+    // Producers remain blocked on cs_main until we return, so the worker has
     // nothing to apply until the snapshot is installed.
 }
 

@@ -342,9 +342,9 @@ CNode* CConnman::FindNode(const CService& addr)
 
 void AddressCurrentlyConnected(const CService& addr)
 {
-    // Defensive null check matching the `if (g_connman)` pattern every other
-    // external g_connman consumer uses (net.cpp:114 / 1251 / 2277 / 2285). This
-    // was the one free-function consumer still dereferencing g_connman
+    // Defensive null check matching the `if (g_connman)` pattern the other
+    // guarded g_connman consumers use (e.g. CNode::PushGetBlocks, MapPort,
+    // StartNode, StopNode). This free function dereferenced g_connman
     // unguarded. No null window is reachable today -- its only caller is
     // ProcessMessage on the message-handler thread, which Shutdown() joins (via
     // StopNode() -> CConnman::Stop()) before g_connman.reset() (init.cpp) -- so

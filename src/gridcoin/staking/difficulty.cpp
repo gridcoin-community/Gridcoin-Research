@@ -449,17 +449,17 @@ double GRC::GetEstimatedTimetoStake(bool ignore_staking_status, double dDiff, do
 {
     /*
      * The algorithm below is an attempt to come up with a more accurate way of estimating Time to Stake (ETTS) based on
-     * the actual situation of the miner and UTXO's. A simple equation will not provide good results, because in mainnet,
-     * the cooldown period is 16 hours, and depending on how many UTXO's and where they are with respect to getting out of
+     * the actual situation of the miner and UTXOs. A simple equation will not provide good results, because in mainnet,
+     * the cooldown period is 16 hours, and depending on how many UTXOs and where they are with respect to getting out of
      * cooldown has a lot to do with the expected time to stake.
      *
-     * The way to conceptualize the approach below is to think of the UTXO's as bars on a Gantt Chart. It is a negative Gantt
+     * The way to conceptualize the approach below is to think of the UTXOs as bars on a Gantt Chart. It is a negative Gantt
      * chart, meaning that each UTXO bar is cooldown period long, and while the current time is in that bar, the staking probability
      * for the UTXO is zero, and UnitStakingProbability elsewhere. A timestamp mask of 16x the normal mask is used to reduce
      * the work in the nested loop, so that a 16 hour interval will have a maximum of 225 events, and most likely far less.
-     * This is important, because the inner loop will be the number of UTXO's. A future improvement to this algorithm would
-     * also be to quantize (group) the UTXO's themselves (the Gantt bars) so that the work would be further reduced.
-     * You will see that once the UTXO's are sorted in ascending order based on the time of the end of each of their cooldowns, this
+     * This is important, because the inner loop will be the number of UTXOs. A future improvement to this algorithm would
+     * also be to quantize (group) the UTXOs themselves (the Gantt bars) so that the work would be further reduced.
+     * You will see that once the UTXOs are sorted in ascending order based on the time of the end of each of their cooldowns, this
      * becomes a manageable algorithm to piece the probabilities together.
      *
      * You will note that the compound Poisson (geometric) recursive probability relation is used, since you cannot simply add
@@ -495,8 +495,8 @@ double GRC::GetEstimatedTimetoStake(bool ignore_staking_status, double dDiff, do
     int64_t nCurrentTime = GetAdjustedTime();
     LogPrint(BCLog::LogFlags::NOISY, "GetEstimatedTimetoStake debug: nCurrentTime = %i", nCurrentTime);
 
-    // Here I am defining a time mask 16 times as long as the normal stake time mask. This is to quantize the UTXO's into a maximum of
-    // 16 hours * 3600 / 256 = 225 time bins for evaluation. Otherwise for a large number of UTXO's, this algorithm could become
+    // Here I am defining a time mask 16 times as long as the normal stake time mask. This is to quantize the UTXOs into a maximum of
+    // 16 hours * 3600 / 256 = 225 time bins for evaluation. Otherwise for a large number of UTXOs, this algorithm could become
     // really expensive.
     const int ETTS_TIMESTAMP_MASK = (16 * (GRC::STAKE_TIMESTAMP_MASK + 1)) - 1;
     LogPrint(BCLog::LogFlags::NOISY, "GetEstimatedTimetoStake debug: ETTS_TIMESTAMP_MASK = %x", ETTS_TIMESTAMP_MASK);
@@ -537,7 +537,7 @@ double GRC::GetEstimatedTimetoStake(bool ignore_staking_status, double dDiff, do
     }
 
 
-    // An efficient local structure to store the UTXO's with the bare minimum info we need.
+    // An efficient local structure to store the UTXOs with the bare minimum info we need.
     typedef std::vector< std::pair<int64_t, CAmount> > vCoinsExt;
     vCoinsExt vUTXO;
     // A local ordered set to store the unique "bins" corresponding to the UTXO transaction times. We are going to use this
@@ -558,7 +558,7 @@ double GRC::GetEstimatedTimetoStake(bool ignore_staking_status, double dDiff, do
 
         nValue = value;
 
-        // Only consider UTXO's that are actually stakeable - which means that each one must be less than the available balance
+        // Only consider UTXOs that are actually stakeable - which means that each one must be less than the available balance
         // subtracting the reserve. Each UTXO also needs at least one stake weight unit (0.0125 GRC) to have a weight
         // greater than zero in the CreateCoinStake loop.
         if (BalanceAvailForStaking >= nValue && nValue >= STAKE_WEIGHT_UNIT_V8)
@@ -568,7 +568,7 @@ double GRC::GetEstimatedTimetoStake(bool ignore_staking_status, double dDiff, do
 
         LogPrint(BCLog::LogFlags::NOISY, "GetEstimatedTimetoStake debug: pair (relative to current time: <%i, %i>", nTime - nCurrentTime, nValue);
 
-        // Only record a time below if it is after nCurrentTime, because UTXO's that have matured already are already stakeable and can be grouped (will be found)
+        // Only record a time below if it is after nCurrentTime, because UTXOs that have matured already are already stakeable and can be grouped (will be found)
         // by the nCurrentTime record that was already injected above.
         if (nTime > nCurrentTime) UniqueUTXOTimes.insert(nTime);
         }
@@ -636,7 +636,7 @@ double GRC::GetEstimatedTimetoStake(bool ignore_staking_status, double dDiff, do
     }
 
     // If (dConfidence - dCumulativeProbability) > 0, it means we exited the negative Gantt chart area and the desired confidence level
-    // has not been reached. All of the eligible UTXO's are contributing probability, and this is the final dProbAccumulator value.
+    // has not been reached. All of the eligible UTXOs are contributing probability, and this is the final dProbAccumulator value.
     // If the loop above is degenerate (i.e. only the current time pass through), then dCumulativeProbability will be zero.
     // If it was not degenerate and the positive reqions in the Gantt chart area contributed some probability, then dCumulativeProbability will
     // be greater than zero. We must compute the amount of time beyond nTime that is required to bridge the gap between
@@ -644,7 +644,7 @@ double GRC::GetEstimatedTimetoStake(bool ignore_staking_status, double dDiff, do
     // and we will back off by nThrows amount, which will now be negative.
     LogPrint(BCLog::LogFlags::NOISY, "GetEstimatedTimetoStake debug: dProbAccumulator = %e", dProbAccumulator);
 
-    // Shouldn't happen because if we are down here, we are staking, and there have to be eligible UTXO's, but just in case...
+    // Shouldn't happen because if we are down here, we are staking, and there have to be eligible UTXOs, but just in case...
     if (dProbAccumulator == 0.0)
     {
         LogPrint(BCLog::LogFlags::NOISY, "GetEstimatedTimetoStake debug: ERROR in dProbAccumulator calculations");

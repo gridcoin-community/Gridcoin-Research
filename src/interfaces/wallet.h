@@ -233,8 +233,9 @@ struct SendCoinsResult
 //! src/interfaces/README.md); notification callbacks are bridged from
 //! CWallet's own signals, which fire on core threads and, depending on the
 //! signal, may or may not hold core locks at emission time (e.g.
-//! NotifyTransactionChanged fires with cs_wallet held while
-//! NotifyAddressBookChanged deliberately does not). Callbacks must not
+//! NotifyTransactionChanged fires with cs_main held, and with cs_wallet as
+//! well for CT_NEW and CT_UPDATED but not necessarily for CT_DELETED, while
+//! NotifyAddressBookChanged deliberately does not hold cs_wallet). Callbacks must not
 //! assume either way: enqueue and return, and never take core locks or
 //! re-enter interface methods that do.
 //!

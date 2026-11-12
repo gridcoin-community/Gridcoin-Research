@@ -37,7 +37,9 @@ bool NodeLessThan::operator()(const interfaces::PeerInfo &left, const interfaces
         return pLeft->recv_bytes < pRight->recv_bytes;
     } // no default case, so the compiler can warn about missing cases
     assert(false);
-    return false; // keep release (NDEBUG) behavior well-defined; unreachable given the exhaustive switch
+    // Unreachable: the switch covers every column. The return keeps the
+    // result defined without relying on the assert.
+    return false;
 }
 
 // private implementation

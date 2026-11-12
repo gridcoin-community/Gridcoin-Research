@@ -770,10 +770,11 @@ EXCLUSIVE_LOCKS_REQUIRED(CScraperManifest::cs_mapManifest, CSplitBlob::cs_manife
 
     // Reference validity. The comparison is >= rather than >: the ranges are
     // inclusive, so partc == 0 names exactly one part and a reference ending at
-    // vph.size() names one PAST the end. quorum.cpp:1436 guards the index it
-    // reads, but scraper.cpp:5669 indexes vParts[part1] unguarded, so admitting
-    // that value here is not harmless. An empty vph is rejected by the same
-    // comparison, which is correct: a manifest with no parts carries nothing.
+    // vph.size() names one PAST the end. ResolvePartsFor in quorum.cpp guards
+    // the index it reads, but ScraperConstructConvergedManifestByProject in scraper.cpp
+    // indexes vParts[part1] unguarded, so admitting that value here is not
+    // harmless. An empty vph is rejected by the same comparison, which is
+    // correct: a manifest with no parts carries nothing.
     //
     // Negative starts are rejected EXPLICITLY, and the range arithmetic is done
     // in int64_t.

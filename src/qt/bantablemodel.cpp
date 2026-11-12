@@ -30,7 +30,9 @@ bool BannedNodeLessThan::operator()(const interfaces::BannedNode& left, const in
         return pLeft->ban_until < pRight->ban_until;
     } // no default case, so the compiler can warn about missing cases
     assert(false);
-    return false; // Unreachable: keeps release builds (NDEBUG) well-defined.
+    // Unreachable: the switch covers every column. The return keeps the
+    // result defined without relying on the assert.
+    return false;
 }
 
 // private implementation

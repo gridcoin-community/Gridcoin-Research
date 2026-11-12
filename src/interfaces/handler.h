@@ -50,7 +50,7 @@ public:
 //! request/response IPC calls, not one-way sends, so the emitting CORE thread
 //! blocks until the handler returns -- and it is usually blocked while holding a
 //! core lock (cs_main plus an open CTxDB batch for BeaconChanged/MRCChanged,
-//! cs_main+cs_wallet for NotifyTransactionChanged,
+//! cs_main, plus cs_wallet for its CT_NEW/CT_UPDATED, for NotifyTransactionChanged,
 //! cs_main+PollRegistry::cs_poll_registry for
 //! NewPollReceived/NewVoteReceived (plus an open CTxDB batch when a block
 //! connects or disconnects), MinerStatus::m_cs for MinerStatusChanged -- with
