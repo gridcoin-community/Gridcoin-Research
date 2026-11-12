@@ -25,8 +25,8 @@ Three crash scenarios during block write:
 
 Phase 2 logic runs between two existing call sites in `src/init.cpp`:
 
-- **`LoadBlockIndex()` at init.cpp:1325-1335** — populates the in-memory `mapBlockIndex` tree and sets `pindexBest`. After this, the chain tree is loaded but no contract state exists in memory.
-- **`GRC::Initialize(threads, pindexBest)` at init.cpp:1510** — internally runs `InitializeContracts`, which calls each registry's `Initialize()` to load LevelDB-backed state into memory, then `ApplyContracts` to replay contracts forward from the last bookmark.
+- **`LoadBlockIndex()` in `AppInit2` (src/init.cpp)** — populates the in-memory `mapBlockIndex` tree and sets `pindexBest`. After this, the chain tree is loaded but no contract state exists in memory.
+- **`GRC::Initialize(threads, pindexBest)` in `AppInit2` (src/init.cpp)** — internally runs `InitializeContracts`, which calls each registry's `Initialize()` to load LevelDB-backed state into memory, then `ApplyContracts` to replay contracts forward from the last bookmark.
 
 The Phase 2 hook slots in this window. Critically: **registries have not been initialized yet**, so we can mutate their LevelDB-stored bookmarks (`height_stored`) without having to invalidate any in-memory state.
 
@@ -119,7 +119,7 @@ The scan cost is **O(txdb size), not O(abandoned range)**. A deeper rewind (with
 
 This is the Gridcoin-specific complication and the source of subtlety worth documenting carefully.
 
-Each contract registry with LevelDB backing (`BeaconRegistry`, `ProjectRegistry`, `ProtocolRegistry`, `ScraperRegistry`, `SideStakeRegistry` — enumerated in `src/gridcoin/contract/registry.cpp` as `CONTRACT_TYPES_WITH_REG_DB`) stores a "highest block I've processed" bookmark under the LevelDB key `("<keytype>_db", "height_stored")` (e.g. `("beacon_db", "height_stored")`). Format and access:
+Each contract registry with LevelDB backing (`BeaconRegistry`, `Whitelist` (the project registry), `ProtocolRegistry`, `ScraperRegistry`, `SideStakeRegistry`, `PoolRegistry` — enumerated in `src/gridcoin/contract/registry.cpp` as `CONTRACT_TYPES_WITH_REG_DB`, where `POOL_REGISTER` and `POOL_APPROVE` both map to the one `PoolRegistry`) stores a "highest block I've processed" bookmark under the LevelDB key `("<keytype>_db", "height_stored")` (e.g. `("beacon_db", "height_stored")`). Format and access:
 
 - Write: `RegistryDB::StoreDBHeight()` in `src/gridcoin/contract/registry_db.h`.
 - Read: `RegistryDB::LoadDBHeight()` in `src/gridcoin/contract/registry_db.h`.
@@ -188,7 +188,7 @@ If the rewind (whether abandonment or standard reorg-disconnect) crosses one or 
 
 1. `BeaconRegistry::Reset()` — clears `m_beacons`, `m_pending`, `m_pending_ownership_proofs` and `m_expired_pending`, then calls `m_beacon_db.clear()`, which clears the beacon-side `BeaconDB`'s in-memory historical map and bookmarks (`clear_in_memory_only()`) and wipes all `beacon` and `beacon_db` LevelDB entries, re-writing the schema version (`clear_leveldb()`). The first draft split this into two methods; it shipped as this one call.
 2. Because `clear_leveldb()` erases the `beacon_db` height bookmark and `clear_in_memory_only()` zeroes `m_height_stored`, the next contract replay starts from `V11_height`; no separate bookmark step shipped.
-3. Other registries (project / protocol / scraper / sidestake) get the regular clamp — they have no analogous superblock-level state.
+3. Other registries (project / protocol / scraper / sidestake / pool) get the regular clamp — they have no analogous superblock-level state.
 
 The cost is one full beacon contract replay from `V11_height` (block 2,053,000 on mainnet) up to the recovered tip. Beacon contracts are sparse in the contract stream — `ApplyContracts` walks the chain but only does meaningful work on blocks that actually contain beacon contracts. On the order of minutes on a modern machine, not hours. Acceptable as the rare-corruption-recovery and rare-multi-SB-reorg cost.
 
@@ -211,7 +211,7 @@ The draft had both the Phase 2 abandonment hook and the standard reorg path call
 
 This rebuild applies on **both** paths:
 
-- **Phase 2 abandonment** (this design doc's main subject): walk-back finds `pindex_consistent`, check for SB-cross, rebuild beacon registry if crossed, then clamp the other four registries normally.
+- **Phase 2 abandonment** (this design doc's main subject): walk-back finds `pindex_consistent`, check for SB-cross, rebuild beacon registry if crossed, then clamp the other five registries normally.
 - **Standard reorg** (existing `DisconnectBlocksBatch` / `ReorganizeChain`): after the disconnect loop succeeds, check whether the disconnect range crossed any SB. If yes, trigger the same beacon-registry rebuild. This fixes the latent limitation the beacon.cpp comments already acknowledge ("almost inconceivable") and treats it correctly instead of accepting drift.
 
 Each lives in its own commit on the Phase 2 PR. **As shipped:** there is no shared helper. `GRC::VerifyChainCoherence()` (`src/node/coherence.cpp`) counts the superblocks in the abandoned range into `CoherenceResult::sb_cross_count`, and `GRC::RunStartupCoherenceRecovery()` calls `GetBeaconRegistry().Reset()` when that count is above 0. `DisconnectBlocksBatch()` (`src/node/chainman.cpp`) counts the superblocks it disconnects and calls `GRC::RebuildBeaconRegistry()` (`src/gridcoin/gridcoin.cpp`, which runs `GetBeaconRegistry().Reset()` and then `InitializeContracts()`) only when it disconnected two or more; for a single superblock it relies on `BeaconRegistry::Deactivate`. A new rewind site has to count and trigger for itself.
@@ -243,7 +243,7 @@ Safety: the erasure runs at a specific point in init (after `LoadBlockIndex`, be
 
 ### Block-index pool allocation — never `delete` a `CBlockIndex*`
 
-`CBlockIndex` objects are allocated from `GRC::BlockIndexPool` (`src/gridcoin/block_index.h`), backed by `std::forward_list<std::array<CBlockIndex, CHUNK_SIZE>>` — chunks of 32,768 contiguous objects with no per-object deallocation path. The class comment is explicit (block_index.h:54-55): *"The pool does not provide a way to return discarded objects because the application never removes or destroys block index entries."*
+`CBlockIndex` objects are allocated from `GRC::BlockIndexPool` (`src/gridcoin/block_index.h`), backed by `std::forward_list<std::array<CBlockIndex, CHUNK_SIZE>>` — chunks of 32,768 contiguous objects with no per-object deallocation path. `BlockIndexPool`'s class comment is explicit: *"The pool does not provide a way to return discarded objects because the application never removes or destroys block index entries."*
 
 **Hard rule:** `mapBlockIndex.erase(hash)` is safe (only removes the lookup); calling `delete p` on a pool-allocated `CBlockIndex*` is **undefined behavior**. The address is in the middle of a `std::array`, not a heap allocation; `operator delete` corrupts the C++ runtime's free list at that address. The corruption surfaces *much later* — sometimes in a different thread, sometimes after another network round-trip — as `bad_alloc` or assertion failures in unrelated code.
 
@@ -385,7 +385,7 @@ The initial misdiagnosis ("system under memory pressure") delayed the catch — 
 
 **Symptom:** Phase 2 reported clean completion; wallet caught up to peers via P2P; on the first P2P-delivered block past the rewound tip, `assert(!pindexBest->pnext)` fired inside `DisconnectBlocksBatch`.
 
-**Root cause:** `CBlockIndex` objects are allocated from `GRC::BlockIndexPool` (chunked `std::array`-backed; see `src/gridcoin/block_index.h:54-55`). Calling `delete` on a pool slot is undefined behavior — `operator delete` tried to free a heap chunk at the middle of a `std::array`, corrupting the C++ runtime's free list. The corruption surfaced minutes later when subsequent `CBlockIndex` pool slots got back garbage from the corrupted free list, including `pindex_consistent->pnext`.
+**Root cause:** `CBlockIndex` objects are allocated from `GRC::BlockIndexPool` (chunked `std::array`-backed; see `BlockIndexPool`'s class comment in `src/gridcoin/block_index.h`). Calling `delete` on a pool slot is undefined behavior — `operator delete` tried to free a heap chunk at the middle of a `std::array`, corrupting the C++ runtime's free list. The corruption surfaced minutes later when subsequent `CBlockIndex` pool slots got back garbage from the corrupted free list, including `pindex_consistent->pnext`.
 
 **Fix:** remove the `delete p` call. Pool slots leak by design (a few hundred bytes per abandoned block, bounded by `-coherencewalkmax`). Future maintainers must NEVER call `delete` on a `CBlockIndex*` — the constraint is documented in `src/gridcoin/block_index.h` and reiterated in the `PurgeOrphanedBlockIndexEntries` doc comment.
 
