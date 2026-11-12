@@ -106,9 +106,7 @@ public:
 
     QModelIndex index(int row, int column, const QModelIndex &parent) const override
     {
-        Q_UNUSED(parent);
-
-        if (row > static_cast<int>(m_rows.size())) {
+        if (!hasIndex(row, column, parent)) {
             return QModelIndex();
         }
 
