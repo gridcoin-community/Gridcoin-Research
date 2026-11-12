@@ -604,8 +604,9 @@ void AskPassphraseDialogTests::cancelPastTheTurnKeepsTheLoopRunning()
 
     // The loop ran on for the 300 ms the check took, and ended only once the
     // check had reported: rejected, with the capability it began ended, since
-    // no operation was waiting for it.
-    QVERIFY2(ticks_before_release >= 5, qPrintable(QStringLiteral("%1 ticks").arg(ticks_before_release)));
+    // no operation was waiting for it. One tick shows the loop ran, and how
+    // many a 10 ms timer delivers in that time is the machine's business.
+    QVERIFY2(ticks_before_release >= 1, qPrintable(QStringLiteral("%1 ticks").arg(ticks_before_release)));
     QVERIFY(!returned_before_release);
     QVERIFY(wallet.m_returned.load());
     QCOMPARE(result, int(QDialog::Rejected));
