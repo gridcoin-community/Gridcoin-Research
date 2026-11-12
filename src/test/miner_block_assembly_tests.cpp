@@ -2765,6 +2765,8 @@ BOOST_AUTO_TEST_CASE(stake_candidates_carry_their_confirming_block_time)
 //!
 BOOST_AUTO_TEST_CASE(coinstake_signed_under_staking_only)
 {
+    const TipRestorer restore_tip;
+
     CWallet staking;
 
     // The premine key and the outputs it owns, with the spent bits the chain and
