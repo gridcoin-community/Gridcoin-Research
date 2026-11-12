@@ -86,6 +86,14 @@ class FakeHost:
         self.need_reload = set()
         # The test's Paths, as a callable, so that a test that replaces them is seen.
         self.paths_of = None
+        # What systemd-creds says when it cannot decrypt a credential (None: it can), and the
+        # credentials it was asked about.
+        self.credential_failure = None
+        self.credentials_asked = []
+
+    def credential_error(self, cred):
+        self.credentials_asked.append(cred)
+        return self.credential_failure
 
     def unit_files(self, unit):
         """systemctl show's FragmentPath, DropInPaths and NeedDaemonReload for the files a test
@@ -783,6 +791,32 @@ class AutounlockTests(ServiceTestBase):
         self.assertNotEqual(rc, 0)
         self.assertEqual(self.host.calls, [])
         self.assertEqual(os.listdir(self.paths.etc_systemd), [])
+
+    def test_autounlock_enable_refuses_a_credential_systemd_cannot_decrypt(self):
+        # The helper's unit would fail at the same decryption and the wallet would stay locked, so
+        # enable asks systemd first, says what it answered, and writes nothing.
+        cases = [
+            ("TPM2 PCR bank invalid or not supported", True),
+            ("Failed to decrypt: Bad message", False),
+        ]
+        for said, hint in cases:
+            with self.subTest(said=said):
+                self.make_credential("gridcoinresearch-bob.wallet-passphrase")
+                self.host.calls.clear()
+                self.host.credentials_asked.clear()
+                self.host.credential_failure = said
+                rc, out, err = self.run_main("autounlock", "enable", "bob")
+                self.assertEqual(rc, 1)
+                self.assertIn("systemd cannot decrypt", err)
+                self.assertIn("gridcoinresearch-bob.wallet-passphrase", err)
+                self.assertIn(said, err)
+                self.assertEqual("--tpm2-pcrs" in err, hint)
+                self.assertEqual(len(self.host.credentials_asked), 1)
+                self.assertEqual(self.host.calls, [])
+                self.assertEqual(os.listdir(self.paths.etc_systemd), [])
+        self.host.credential_failure = None
+        rc, out, err = self.run_main("autounlock", "enable", "bob")
+        self.assertEqual(rc, 0, err)
 
     def test_autounlock_dropin_paths(self):
         cases = [
