@@ -548,7 +548,7 @@ UniValue finalizepsgt(const UniValue& params)
 static const RPCHelpMan walletprocesspsgt_help{
     "walletprocesspsgt",
     "Sign a PSGT with keys from the wallet. "
-    "Requires wallet passphrase to be set with walletpassphrase first if wallet is encrypted.",
+    "If the wallet is encrypted, it must be unlocked with walletpassphrase first (not for staking only), or the request must carry the passphrase (the client's -stdinelevate option).",
     {
         {"psgt", RPCArg::Type::STR, RPCArg::Optional::NO,
             "A base64-encoded PSGT."},
@@ -757,7 +757,7 @@ UniValue converttopsgt(const UniValue& params)
 static const RPCHelpMan walletcreatefundedpsgt_help{
     "walletcreatefundedpsgt",
     "Create and fund a PSGT with wallet UTXOs, optionally signing it. "
-    "Requires wallet passphrase to be set with walletpassphrase first if wallet is encrypted and `sign` is true.",
+    "If the wallet is encrypted, it must be unlocked with walletpassphrase first (not for staking only), or the request must carry the passphrase (the client's -stdinelevate option).",
     {
         {"inputs", RPCArg::Type::ARR, RPCArg::Optional::NO,
             "A JSON array of inputs (empty array allows auto-selection from wallet UTXOs).",
@@ -1182,8 +1182,9 @@ static const RPCHelpMan signpsgtinpool_help{
     "if your signature(s) complete the m-of-n requirement, the transaction is\n"
     "finalized and broadcast and the pool slot is freed; otherwise the enriched\n"
     "PSGT replaces the pooled revision and is relayed to co-signers.\n"
-    "Requires the wallet passphrase to be set with walletpassphrase first if\n"
-    "the wallet is encrypted.",
+    "If the wallet is encrypted, it must be unlocked with walletpassphrase first\n"
+    "(not for staking only), or the request must carry the passphrase (the\n"
+    "client's -stdinelevate option).",
     {
         {"hash", RPCArg::Type::STR_HEX, RPCArg::Optional::NO,
             "The multisig image, unsigned transaction id, or revision hash of the pooled PSGT."},

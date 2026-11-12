@@ -2263,7 +2263,7 @@ static const RPCHelpMan fundrawtransaction_help{
     "Note: The transaction must have no existing inputs. Unlike Bitcoin Core's fundrawtransaction,\n"
     "this command does not yet support adding funds to a transaction that already has inputs.\n"
     "\n"
-    "Requires wallet passphrase to be set with walletpassphrase first if wallet is encrypted.",
+    "If the wallet is encrypted, it must be unlocked with walletpassphrase first (not for staking only), or the request must carry the passphrase (the client's -stdinelevate option).",
     {
         {"hexstring", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "Hex string of the raw transaction."},
         {"options", RPCArg::Type::OBJ, RPCArg::Optional::OMITTED, "",
@@ -2696,7 +2696,7 @@ static const RPCHelpMan signrawtransactionwithwallet_help{
     "signrawtransactionwithwallet",
     "Sign inputs for a raw (serialized, hex-encoded) transaction using wallet keys.\n"
     "\n"
-    "Requires wallet passphrase to be set with walletpassphrase first if wallet is encrypted.",
+    "If the wallet is encrypted, it must be unlocked with walletpassphrase first (not for staking only), or the request must carry the passphrase (the client's -stdinelevate option).",
     {
         {"hexstring", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "The transaction hex string."},
         {"prevtxs", RPCArg::Type::ARR, RPCArg::Optional::OMITTED,
@@ -2745,7 +2745,7 @@ static const RPCHelpMan signrawtransaction_help{
     "If the optional private-keys array is provided, those are the only keys used to sign;\n"
     "otherwise the wallet's keys are used.\n"
     "\n"
-    "Requires wallet passphrase to be set with walletpassphrase first if wallet is encrypted.",
+    "If the wallet is encrypted, it must be unlocked with walletpassphrase first (not for staking only), or the request must carry the passphrase (the client's -stdinelevate option).",
     {
         {"hexstring", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "The transaction hex string."},
         {"prevtxs", RPCArg::Type::ARR, RPCArg::Optional::OMITTED,

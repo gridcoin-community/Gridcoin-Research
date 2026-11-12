@@ -98,7 +98,8 @@ static void accountAddressDeprecationCheck(const std::string& strRpc)
 std::string HelpRequiringPassphrase()
 {
     return pwalletMain->IsCrypted()
-        ? "\nrequires wallet passphrase to be set with walletpassphrase first"
+        ? "\nrequires the wallet to be unlocked with walletpassphrase first (not for staking only),"
+          " or the passphrase sent with the request (the client's -stdinelevate option)"
         : "";
 }
 
@@ -787,7 +788,7 @@ UniValue migratelabels(const UniValue& params)
 static const RPCHelpMan sendtoaddress_help{
     "sendtoaddress",
     "Send an amount of GRC to the given Gridcoin address. "
-    "Requires wallet passphrase to be set with walletpassphrase first if wallet is encrypted.",
+    "If the wallet is encrypted, it must be unlocked with walletpassphrase first (not for staking only), or the request must carry the passphrase (the client's -stdinelevate option).",
     {
         {"address", RPCArg::Type::STR, RPCArg::Optional::NO,
             "The Gridcoin address to send to."},
@@ -927,7 +928,7 @@ UniValue listaddressgroupings(const UniValue& params)
 static const RPCHelpMan signmessage_help{
     "signmessage",
     "Sign a message with the private key of an address. "
-    "Requires wallet passphrase to be set with walletpassphrase first if wallet is encrypted.",
+    "If the wallet is encrypted, it must be unlocked with walletpassphrase first (not for staking only), or the request must carry the passphrase (the client's -stdinelevate option).",
     {
         {"address", RPCArg::Type::STR, RPCArg::Optional::NO,
             "The Gridcoin address that owns the private key to sign with."},
@@ -1749,7 +1750,7 @@ static const RPCHelpMan sendfrom_help{
     "sendfrom",
     "DEPRECATED. The accounts subsystem is deprecated and may be removed in a future release.\n"
     "Send GRC from an account to a Gridcoin address. Use sendtoaddress instead. "
-    "Requires wallet passphrase to be set with walletpassphrase first if wallet is encrypted.",
+    "If the wallet is encrypted, it must be unlocked with walletpassphrase first (not for staking only), or the request must carry the passphrase (the client's -stdinelevate option).",
     {
         {"account", RPCArg::Type::STR, RPCArg::Optional::NO,
             "Account to send from."},
@@ -1845,7 +1846,7 @@ UniValue sendfrom(const UniValue& params)
 static const RPCHelpMan sendmany_help{
     "sendmany",
     "Send GRC to multiple addresses in a single transaction. "
-    "Requires wallet passphrase to be set with walletpassphrase first if wallet is encrypted.",
+    "If the wallet is encrypted, it must be unlocked with walletpassphrase first (not for staking only), or the request must carry the passphrase (the client's -stdinelevate option).",
     {
         {"fromaccount", RPCArg::Type::STR, RPCArg::Optional::NO,
             "Specify account name to use; use \"\" to use all addresses in the wallet. "
@@ -3389,7 +3390,7 @@ UniValue maintainbackups(const UniValue& params)
 static const RPCHelpMan keypoolrefill_help{
     "keypoolrefill",
     "Fills the keypool. "
-    "Requires wallet passphrase to be set with walletpassphrase first if wallet is encrypted.",
+    "If the wallet is encrypted, it must be unlocked with walletpassphrase first (not for staking only), or the request must carry the passphrase (the client's -stdinelevate option).",
     {
         {"newsize", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
             "The new keypool size (default: from -keypool option)."},
@@ -4566,7 +4567,7 @@ UniValue makekeypair(const UniValue& params)
 static const RPCHelpMan burn_help{
     "burn",
     "Send an amount to an unspendable OP_RETURN output, optionally with a hex data payload. "
-    "Requires wallet passphrase to be set with walletpassphrase first if wallet is encrypted.",
+    "If the wallet is encrypted, it must be unlocked with walletpassphrase first (not for staking only), or the request must carry the passphrase (the client's -stdinelevate option).",
     {
         {"amount", RPCArg::Type::AMOUNT, RPCArg::Optional::NO,
             "Amount to burn in GRC (rounded to the nearest 0.00000001)."},
@@ -4614,7 +4615,7 @@ static const RPCHelpMan sethdseed_help{
     "Wallets that are already HD will have a new HD seed set so that new keys added to the keypool "
     "will be derived from this new seed. "
     "Note that you will need to MAKE A NEW BACKUP of your wallet after setting the HD wallet seed. "
-    "Requires wallet passphrase to be set with walletpassphrase first if wallet is encrypted.",
+    "If the wallet is encrypted, it must be unlocked with walletpassphrase first (not for staking only), or the request must carry the passphrase (the client's -stdinelevate option).",
     {
         {"newkeypool", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
             "Whether to flush old unused addresses (including change addresses) from the keypool and regenerate it (default: true). "
@@ -4686,7 +4687,7 @@ static const RPCHelpMan upgradewallet_help{
     "upgradewallet",
     "Upgrade the wallet to a newer version. Upgrades to the latest version if no version "
     "number is specified. New keys may be generated and a new wallet backup may be required. "
-    "Requires wallet passphrase to be set with walletpassphrase first if wallet is encrypted.",
+    "If the wallet is encrypted, it must be unlocked with walletpassphrase first (not for staking only), or the request must carry the passphrase (the client's -stdinelevate option).",
     {
         {"version", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
             "The version number to upgrade to. Default is the latest wallet version."},
@@ -4825,7 +4826,7 @@ static const RPCHelpMan makeseedphrase_help{
     "master, remain usable but are NOT covered by the phrase; run getseedphraseinfo for a "
     "coverage report. The phrase is stored in wallet.dat (encrypted under the wallet "
     "passphrase once the wallet is encrypted) and can be re-displayed with dumpseedphrase. "
-    "Requires wallet passphrase to be set with walletpassphrase first if wallet is encrypted.",
+    "If the wallet is encrypted, it must be unlocked with walletpassphrase first (not for staking only), or the request must carry the passphrase (the client's -stdinelevate option).",
     {
         {"phrasepassword", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
             "An additional password baked into the phrase itself (default: empty). It is required "
@@ -4921,7 +4922,7 @@ static const RPCHelpMan restoreseedphrase_help{
     "master if something (e.g. sethdseed) moved the active master off it, and resumes an "
     "interrupted rescan. Keys that already exist in this wallet remain usable but are NOT "
     "covered by the phrase; for a clean restore, use a fresh wallet. "
-    "Requires wallet passphrase to be set with walletpassphrase first if wallet is encrypted.",
+    "If the wallet is encrypted, it must be unlocked with walletpassphrase first (not for staking only), or the request must carry the passphrase (the client's -stdinelevate option).",
     {
         {"seedphrase", RPCArg::Type::STR, RPCArg::Optional::NO,
             "The 24-word seed phrase, words separated by single spaces."},
@@ -5103,7 +5104,7 @@ static const RPCHelpMan dumpseedphrase_help{
     "Re-display the wallet's 24-word seed phrase from the record stored in wallet.dat. The "
     "phrase encodes its own encryption: viewing it does not require the phrase password, but "
     "restoring from it does. "
-    "Requires wallet passphrase to be set with walletpassphrase first if wallet is encrypted.",
+    "If the wallet is encrypted, it must be unlocked with walletpassphrase first (not for staking only), or the request must carry the passphrase (the client's -stdinelevate option).",
     {},
     RPCResult{RPCResult::Type::OBJ, "", "",
         {
@@ -5427,7 +5428,7 @@ static const RPCHelpMan sweepuncoveredcoins_help{
     "complete. Immature and unconfirmed uncovered outputs are reported as pending and picked "
     "up by later runs. Script outputs (e.g. multisig) cannot be classified per key and are "
     "never swept. "
-    "Requires wallet passphrase to be set with walletpassphrase first if wallet is encrypted.",
+    "If the wallet is encrypted, it must be unlocked with walletpassphrase first (not for staking only), or the request must carry the passphrase (the client's -stdinelevate option).",
     {
         {"destination", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
             "A phrase-covered wallet address to sweep to. If omitted, a fresh address is drawn "
