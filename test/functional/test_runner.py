@@ -191,6 +191,7 @@ BASE_SCRIPTS = [
     'p2p_mempool_request.py',
     'p2p_block_tx_relay.py',
     'p2p_part_announcement.py',
+    'p2p_tx_after_its_block.py',
     # The PSGT multi-node tests run under deterministic mock-time lockstep
     # (sync_clocks/advance_to_next_stake_slot, #3165): no wall-clock sleeps on
     # their critical paths.

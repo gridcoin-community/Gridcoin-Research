@@ -1364,6 +1364,18 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 
         LOCK(cs_main);
 
+        // A transaction can arrive after the block that holds it. Such a transaction is not a candidate for
+        // the pool. Drop it, as sendrawtransaction refuses one.
+        {
+            CTxDB txdb("r");
+
+            if (txdb.ContainsTx(inv.hash)) {
+                LogPrint(BCLog::LogFlags::NET, "ignored tx %s from %s: already in a block",
+                         inv.hash.ToString(), pfrom->addr.ToString());
+                return true;
+            }
+        }
+
         CValidationState state;
         bool fMissingInputs = false;
         if (AcceptToMemoryPool(mempool, tx, state, &fMissingInputs))
