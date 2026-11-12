@@ -115,11 +115,20 @@ Windows the installer itself carries the signature (next section).
 
 ### Windows release signing
 
-On release tags the separate job `windows-sign` runs under the GitHub environment
-`windows-release` (limit it to tags in the environment's deployment branch and tag rules); only that job has
-`id-token: write`. The Windows build job strips the executables and uploads its install tree (`win-pack-tree`);
-`windows-sign` unpacks it, signs, packs with CPack again and uploads `gridcoin-windows-signed`, which the deploy
-job uses in place of the unsigned Windows files. Other runs are unchanged. It signs
+On release tags the Windows leg of the `depends-builds` job signs what it has just built. That leg, and only on
+a release tag, runs under the GitHub environment `windows-release` (limit it to tags in the environment's
+deployment branch and tag rules); the job has `id-token: write` for the Azure login, and without the environment
+the federated credential refuses the token. The leg strips the executables, signs them and the elevated scripts,
+packs with CPack as every build does, signs the installer, and uploads the same artifact as an unsigned build.
+Other legs and other runs are unchanged.
+
+The signing is part of the build leg, not a job of its own, because CPack builds the tree before it packs it: a
+job that received only the install tree could not pack. A separate job would also not narrow who can obtain a
+signature. That is decided by the tag ruleset and the environment's tag rule (`doc/release-process.md`), and a
+separate job would sign whatever the build leg produced. What it would withhold from the build steps is the
+ability to request the signing token during a release run.
+
+It signs
 with Microsoft Artifact Signing: `azure/login` with a federated credential, an access token for
 `https://codesigning.azure.net`, then `jsign` (pinned version, SHA-256 checked, the token passed by file and deleted after each call) with the timestamp service
 `http://timestamp.acs.microsoft.com` (RFC 3161). The executables and the elevated scripts are signed before
