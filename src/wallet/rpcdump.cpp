@@ -43,7 +43,7 @@ public:
 static const RPCHelpMan importprivkey_help{
     "importprivkey",
     "Add a private key (as returned by dumpprivkey) to your wallet.\n"
-    "Requires wallet passphrase to be set with walletpassphrase first if wallet is encrypted.\n"
+    "If the wallet is encrypted, it must be unlocked with walletpassphrase first (not for staking only), or the request must carry the passphrase (the client's -stdinelevate option).\n"
     "\n"
     "WARNING: when rescan is true, a full rescan of the blockchain will occur. This can take up to 20 minutes.",
     {
@@ -120,7 +120,7 @@ static const RPCHelpMan importwallet_help{
     "importwallet",
     "Imports keys from a wallet dump file (see dumpwallet).\n"
     "If a path is not specified in the filename, the data directory is used.\n"
-    "Requires wallet passphrase to be set with walletpassphrase first if wallet is encrypted.",
+    "If the wallet is encrypted, it must be unlocked with walletpassphrase first (not for staking only), or the request must carry the passphrase (the client's -stdinelevate option).",
     {
         {"filename", RPCArg::Type::STR, RPCArg::Optional::NO, "Filename of the wallet dump to import."},
     },
@@ -152,7 +152,7 @@ UniValue importwallet(const UniValue& params)
 static const RPCHelpMan dumpprivkey_help{
     "dumpprivkey",
     "Reveals the private key corresponding to <gridcoinaddress>.\n"
-    "Requires wallet passphrase to be set with walletpassphrase first if wallet is encrypted.",
+    "If the wallet is encrypted, it must be unlocked with walletpassphrase first (not for staking only), or the request must carry the passphrase (the client's -stdinelevate option).",
     {
         {"gridcoinaddress", RPCArg::Type::STR, RPCArg::Optional::NO, "Address of the requested key."},
         {"dump_hex", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
@@ -211,7 +211,7 @@ static const RPCHelpMan dumpwallet_help{
     "Dumps all wallet keys in a human-readable format into the specified file.\n"
     "If a path is not specified in the filename, the data directory is used.\n"
     "The file must not already exist.\n"
-    "Requires wallet passphrase to be set with walletpassphrase first if wallet is encrypted.",
+    "If the wallet is encrypted, it must be unlocked with walletpassphrase first (not for staking only), or the request must carry the passphrase (the client's -stdinelevate option).",
     {
         {"filename", RPCArg::Type::STR, RPCArg::Optional::NO, "Filename to dump the wallet to."},
     },
