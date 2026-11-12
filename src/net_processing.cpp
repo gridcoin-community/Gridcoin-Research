@@ -977,8 +977,20 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             // this inventory object:
             if (fAlreadyHave)
             {
-                LOCK(CScraperManifest::cs_mapManifest);
-                fAlreadyHave = CScraperManifest::AlreadyHave(pfrom, inv);
+                if (inv.type == MSG_PART)
+                {
+                    // A node asks for the parts of the manifests it holds itself (CSplitBlob::UseAsSource), so a
+                    // peer's announcement of a part is answered from the part store: only a part that a manifest
+                    // here references and whose data has not arrived draws a request. The lookup takes
+                    // cs_mapParts alone, as the part handlers of this function do, and is made here and not in
+                    // CScraperManifest::AlreadyHave, which SendMessages also calls with the peer's cs_vSend held.
+                    fAlreadyHave = !CSplitBlob::PartNeeded(inv.hash);
+                }
+                else
+                {
+                    LOCK(CScraperManifest::cs_mapManifest);
+                    fAlreadyHave = CScraperManifest::AlreadyHave(pfrom, inv);
+                }
             }
 
             LogPrint(BCLog::LogFlags::NOISY, " got inventory: %s  %s", inv.ToString(), fAlreadyHave ? "have" : "new");

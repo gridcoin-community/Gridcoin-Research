@@ -88,6 +88,13 @@ public:
      */
     static bool SendPartTo(CNode* pto, const uint256& hash);
 
+    /** Whether a part is needed here: a split object references it and its data has not arrived.
+     *
+     * UseAsSource() asks for those parts. A part that no split object references, and a part whose data is
+     * already here, are not needed. Takes cs_mapParts.
+     */
+    static bool PartNeeded(const uint256& hash);
+
     // public methods
     /** Boolean that returns whether all parts for the split object have been received. */
     bool isComplete() const;
