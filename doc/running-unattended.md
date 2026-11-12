@@ -326,6 +326,11 @@ For the system service, use `cred=/etc/credstore.encrypted/gridcoinresearch.wall
   ordinary firmware maintenance. What is given up is the TPM's refusal after a Secure Boot change. To keep it,
   drop `--tpm2-pcrs=""` and re-encrypt the passphrase after every BIOS key, dbx or firmware change. A credential
   already sealed to PCR 7 that no longer unseals cannot be recovered: run the pipeline again.
+- **With a TPM and systemd older than 255 (Debian 12, for one), leave `--tpm2-pcrs=""` out.** `systemctl
+  --version` shows the version. Those versions encrypt with the option and then cannot decrypt the result (`TPM2
+  PCR bank invalid or not supported`), so the wallet would stay locked. Without the option the credential is
+  sealed to PCR 7: after a change to the Secure Boot keys or dbx, a firmware update or a Secure Boot toggle, run
+  the pipeline again to make a new credential, or the wallet stays locked from the next restart on.
 - **On a host without a TPM**, the host key decrypts the credential on its own; see
   [*Whoever holds the machine's disk*](#whoever-holds-the-machines-disk).
 - **The file stays root's, mode 0600.** Never give it to another account: systemd decrypts it for the helper.
@@ -337,7 +342,8 @@ sudo gridcoin-service autounlock enable alice        # the system service: --sys
 ```
 
 It refuses when the credential file is missing (`no credential at <path>; create it first`), and warns when the
-file is not root's with mode 0600. It also refuses a core unit that systemd loads other than as packaged (a copy
+file is not root's with mode 0600. It refuses a credential that systemd cannot decrypt (`systemd cannot decrypt
+<path> (<what systemd-creds said>), so the wallet would stay locked`). It also refuses a core unit that systemd loads other than as packaged (a copy
 in `/etc/systemd/system`, or a drop-in other than the tool's own that sets `ExecStart=`, `Type=`, `PIDFile=`,
 `NotifyAccess=` or `User=`): the helper serves the unit's main process, which is then the core. It writes the drop-in `60-gridcoin-autounlock.conf` for the core, which then
 starts with `-autounlocksocket=/run/gridcoin-autounlock/alice.sock`, enables `gridcoin-autounlock@alice.socket`,
