@@ -1133,9 +1133,16 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
                     }
                 }
                 else if(!pushed && inv.type == MSG_PART) {
-                    LOCK(CSplitBlob::cs_mapParts);
+                    // As for the relay stream above, the part is copied out under cs_mapParts (CopyPart takes it)
+                    // and pushed after it is released: PushMessage takes the peer's cs_vSend, which the message
+                    // handler holds across SendMessages while its request loop takes cs_mapManifest and
+                    // cs_mapParts. A part's data is written once and the part is named by the hash of that
+                    // data, so the copy is the part whatever happens to the part store before the push.
+                    CDataStream part_stream(SER_NETWORK, PROTOCOL_VERSION);
 
-                    CSplitBlob::SendPartTo(pfrom, inv.hash);
+                    if (CSplitBlob::CopyPart(inv.hash, part_stream)) {
+                        pfrom->PushMessage(NetMsgType::PART, std::move(part_stream));
+                    }
                 }
                 else if (!pushed && inv.type == MSG_PSGT) {
                     // Serve from the PSGT pool, not mapRelay: pooled PSGTs
@@ -1157,52 +1164,63 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
                 }
                 else if(!pushed &&  inv.type == MSG_SCRAPERINDEX)
                 {
-                    LOCK2(CScraperManifest::cs_mapManifest, CSplitBlob::cs_mapParts);
+                    // The manifest is looked up, checked and serialized in one scope of the scraper locks, and
+                    // pushed after they are released, for the reason given for a part above. Nothing checked
+                    // here is read again after the release. The scope must not be split: a manifest found in
+                    // one scope need not be the one a second scope would serialize.
+                    CDataStream manifest_stream(SER_NETWORK, PROTOCOL_VERSION);
+                    bool send_manifest = false;
 
-                    // Do not send manifests while out of sync.
-                    if (!OutOfSyncByAge())
                     {
-                        // Do not send unauthorized manifests. This check needs to be done here, because in the
-                        // case of a scraper deauthorization, a request from another node to forward the manifest
-                        // may come before the housekeeping loop has a chance to do the periodic culling. This could
-                        // result in unnecessary node banscore. This will suppress "this" node from sending any
-                        // unauthorized manifests.
+                        LOCK2(CScraperManifest::cs_mapManifest, CSplitBlob::cs_mapParts);
 
-                        auto iter = CScraperManifest::mapManifest.find(inv.hash);
-                        if (iter != CScraperManifest::mapManifest.end())
+                        // Do not send manifests while out of sync.
+                        if (!OutOfSyncByAge())
                         {
-                            CScraperManifest_shared_ptr manifest = iter->second;
+                            // Do not send unauthorized manifests. This check needs to be done here, because in the
+                            // case of a scraper deauthorization, a request from another node to forward the manifest
+                            // may come before the housekeeping loop has a chance to do the periodic culling. This could
+                            // result in unnecessary node banscore. This will suppress "this" node from sending any
+                            // unauthorized manifests.
 
-                            // We are not going to do anything with the banscore here, because this is the sending node,
-                            // but it is an out parameter of IsManifestAuthorized.
-                            unsigned int banscore_out = 0;
-
-                            // We have to copy out the nTime and pubkey from the selected manifest, because the
-                            // IsManifestAuthorized call chain traverses the map and locks the cs_manifests in turn,
-                            // which creates a deadlock potential if the cs_manifest lock is already held on one of
-                            // the manifests.
-                            int64_t nTime = 0;
-                            CPubKey pubkey;
+                            auto iter = CScraperManifest::mapManifest.find(inv.hash);
+                            if (iter != CScraperManifest::mapManifest.end())
                             {
-                                LOCK(manifest->cs_manifest);
+                                CScraperManifest_shared_ptr manifest = iter->second;
 
-                                nTime = manifest->nTime;
-                                pubkey = manifest->pubkey;
-                            }
+                                // We are not going to do anything with the banscore here, because this is the sending node,
+                                // but it is an out parameter of IsManifestAuthorized.
+                                unsigned int banscore_out = 0;
 
-                            // Also don't send a manifest that is not current.
-                            if (CScraperManifest::IsManifestAuthorized(nTime, pubkey, banscore_out)
-                                    && WITH_LOCK(manifest->cs_manifest, return manifest->IsManifestCurrent()))
-                            {
-                                // SendManifestTo takes its own lock on the manifest. Note that the original form of
-                                // SendManifestTo took the inv.hash and did another lookup to find the actual
-                                // manifest in the mapManifest. This is unnecessary since we already have the manifest
-                                // identified above. The new form, which takes a smart shared pointer to the manifest
-                                // as an argument, sends the manifest directly using PushMessage, and avoids another
-                                // map find.
-                                CScraperManifest::SendManifestTo(pfrom, manifest);
+                                // We have to copy out the nTime and pubkey from the selected manifest, because the
+                                // IsManifestAuthorized call chain traverses the map and locks the cs_manifests in turn,
+                                // which creates a deadlock potential if the cs_manifest lock is already held on one of
+                                // the manifests.
+                                int64_t nTime = 0;
+                                CPubKey pubkey;
+                                {
+                                    LOCK(manifest->cs_manifest);
+
+                                    nTime = manifest->nTime;
+                                    pubkey = manifest->pubkey;
+                                }
+
+                                // Also don't send a manifest that is not current.
+                                if (CScraperManifest::IsManifestAuthorized(nTime, pubkey, banscore_out)
+                                        && WITH_LOCK(manifest->cs_manifest, return manifest->IsManifestCurrent()))
+                                {
+                                    // SerializeForSend takes its own lock on the manifest. It takes the smart
+                                    // shared pointer to the manifest identified above, so no second lookup in
+                                    // mapManifest is needed.
+                                    manifest_stream = CScraperManifest::SerializeForSend(manifest);
+                                    send_manifest = true;
+                                }
                             }
                         }
+                    }
+
+                    if (send_manifest) {
+                        pfrom->PushMessage(NetMsgType::SCRAPERINDEX, std::move(manifest_stream));
                     }
                 }
             }

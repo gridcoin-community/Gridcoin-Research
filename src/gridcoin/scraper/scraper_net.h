@@ -83,10 +83,14 @@ public:
      */
     static bool RecvPart(CNode* pfrom, CDataStream& vRecv);
 
-    /** Forward requested Part of Blob.
-     * @returns whether something was sent
+    /** Copy a requested Part of Blob for sending.
+     *
+     * The caller sends the copy after the call returns, with no scraper lock held: a send takes the peer's
+     * cs_vSend, which the message handler holds while SendMessages takes the scraper locks. Takes cs_mapParts.
+     *
+     * @returns whether the part's data is here; \p out then holds it
      */
-    static bool SendPartTo(CNode* pto, const uint256& hash);
+    static bool CopyPart(const uint256& hash, CDataStream& out);
 
     /** Whether a part is needed here: a split object references it and its data has not arrived.
      *
@@ -182,10 +186,12 @@ public: /* static methods */
      */
     static void PushInvTo(CNode* pto);
 
-    /** Send manifest pointed to by the provided smart pointer to node.
-     * @returns whether something was sent
+    /** Serialize the manifest pointed to by the provided smart pointer for sending.
+     *
+     * The caller sends the result after it has released the scraper locks, for the reason given at
+     * CSplitBlob::CopyPart. Takes the manifest's cs_manifest.
      */
-    static bool SendManifestTo(CNode* pfrom, std::shared_ptr<CScraperManifest> manifest);
+    static CDataStream SerializeForSend(const std::shared_ptr<CScraperManifest>& manifest);
 
     /** Add new manifest object into list of known manifests */
     static bool addManifest(std::shared_ptr<CScraperManifest> m, CKey& keySign);

@@ -382,15 +382,17 @@ bool CSplitBlob::PartNeeded(const uint256& hash)
     return part != mapParts.end() && !part->second.present();
 }
 
-bool CSplitBlob::SendPartTo(CNode* pto, const uint256& hash) EXCLUSIVE_LOCKS_REQUIRED(CSplitBlob::cs_mapParts)
+bool CSplitBlob::CopyPart(const uint256& hash, CDataStream& out)
 {
+    LOCK(cs_mapParts);
+
     auto ipart = mapParts.find(hash);
 
     if (ipart != mapParts.end())
     {
         if (ipart->second.present())
         {
-            pto->PushMessage(NetMsgType::PART,ipart->second.getReader());
+            out = ipart->second.getReader();
             return true;
         }
     }
@@ -476,14 +478,15 @@ void CScraperManifest::PushInvTo(CNode* pto) EXCLUSIVE_LOCKS_REQUIRED(CScraperMa
 // The exclusive lock on cs_mapParts is required because the part hashes are serialized as part of the manifest
 // serialization. These hashes are contained in the part objects in the mapParts, which is POINTED TO by the manifest
 // vParts vector. We need to ensure that the mapParts is not changing while the vParts vector is traversed.
-bool CScraperManifest::SendManifestTo(CNode* pto, std::shared_ptr<CScraperManifest> manifest)
+CDataStream CScraperManifest::SerializeForSend(const std::shared_ptr<CScraperManifest>& manifest)
 EXCLUSIVE_LOCKS_REQUIRED(CSplitBlob::cs_mapParts)
 {
     LOCK(manifest->cs_manifest);
 
-    pto->PushMessage(NetMsgType::SCRAPERINDEX, *manifest);
+    CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
+    ss << *manifest;
 
-    return true;
+    return ss;
 }
 
 void CScraperManifest::dentry::Serialize(CDataStream& ss) const
