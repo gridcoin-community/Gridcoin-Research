@@ -18,6 +18,7 @@
 #include "wallet/db.h"
 #include "random.h"
 #include "wallet/wallet.h"
+#include "util/tls_libraries.h"
 
 #include <cerrno>
 #include <cstdio>
@@ -108,6 +109,10 @@ static void ReportSetupThrow()
 }
 
 struct TestingSetup {
+    //! First, so that it is built before anything here can reach OpenSSL or
+    //! libcurl, as in the programs' main().
+    const util::TlsLibrariesScope m_tls_libraries;
+
     //! The suite's data directory. It has to exist: GetDataDir() returns an
     //! empty path for a -datadir that is not a directory, so everything placed
     //! under it -- banlist.dat, which BanMan writes when it is destroyed --

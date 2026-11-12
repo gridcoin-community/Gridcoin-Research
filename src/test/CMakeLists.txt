@@ -399,3 +399,34 @@ endif()
 # Verified by strace: the pre-install alone leaves Boost installing per test case;
 # the switch alone leaves framework::init() installing. Together, neither happens.
 add_test(NAME gridcoin_tests COMMAND test_gridcoin --use_alt_stack=no)
+
+# util::TlsLibrariesScope has to make the process's first OpenSSL
+# initialisation call, so it cannot be checked inside test_gridcoin, where
+# OpenSSL is long since initialised. The probe is its own small program: it is
+# run once with the scope (no configuration file may be read) and once
+# without it (the same file is read, which shows the check can fail). It
+# returns 77 for an OpenSSL without providers. It uses setenv(), so it is not
+# built for Windows, where the same code path is compiled into the programs.
+if(NOT WIN32)
+    add_executable(openssl_noconfig_probe
+        openssl_noconfig_probe.cpp
+        ${CMAKE_SOURCE_DIR}/src/util/tls_libraries.cpp
+    )
+    target_include_directories(openssl_noconfig_probe PRIVATE ${CMAKE_SOURCE_DIR}/src)
+    # Linked as gridcoin_util links libcurl: a static libcurl names neither its
+    # TLS backend nor zlib.
+    target_compile_definitions(openssl_noconfig_probe PRIVATE CURL_STATICLIB)
+    target_link_libraries(openssl_noconfig_probe PRIVATE
+        CURL::libcurl
+        OpenSSL::SSL OpenSSL::Crypto
+        Threads::Threads
+        ZLIB::ZLIB
+        ${CMAKE_DL_LIBS}
+    )
+
+    add_test(NAME openssl_noconfig
+        COMMAND openssl_noconfig_probe ${CMAKE_CURRENT_SOURCE_DIR}/data/openssl_null_provider.cnf)
+    add_test(NAME openssl_noconfig_control
+        COMMAND openssl_noconfig_probe ${CMAKE_CURRENT_SOURCE_DIR}/data/openssl_null_provider.cnf --control)
+    set_tests_properties(openssl_noconfig openssl_noconfig_control PROPERTIES SKIP_RETURN_CODE 77)
+endif()

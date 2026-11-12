@@ -12,6 +12,7 @@
 #include "chainparamsbase.h"
 #include "util.h"
 #include <util/proc_hardening.h>
+#include <util/tls_libraries.h>
 #include <util/syserror.h>
 #include "util/threadnames.h"
 #include <util/childreaper.h>
@@ -805,6 +806,11 @@ extern void noui_connect();
 int main(int argc, char* argv[])
 {
     SetProcessNonDumpable();
+
+    // Before any use of OpenSSL or libcurl, in this thread or another: the
+    // first OpenSSL initialisation call in the process decides whether
+    // openssl.cnf is read, and this one says it is not.
+    const util::TlsLibrariesScope tls_libraries;
 
     // Before anything can create a file: debug.log, the read-write settings file
     // and the block subdirectories are all created without an explicit mode, so

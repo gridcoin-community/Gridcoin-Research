@@ -53,6 +53,7 @@
 #include "util.h"
 #include "util/dir_permissions.h"
 #include "util/proc_hardening.h"
+#include "util/tls_libraries.h"
 #include "util/strencodings.h"
 #include "util/threadnames.h"
 #ifdef WIN32
@@ -854,6 +855,11 @@ static void JoinGuiArchiveThread()
 int main(int argc, char *argv[])
 {
     SetProcessNonDumpable();
+
+    // Before any use of OpenSSL or libcurl, in this thread or another: the
+    // first OpenSSL initialisation call in the process decides whether
+    // openssl.cnf is read, and this one says it is not.
+    const util::TlsLibrariesScope tls_libraries;
 
 #ifdef WIN32
     // A GUI started with administrator rights gives them up before it creates the application or
