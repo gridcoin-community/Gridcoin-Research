@@ -757,7 +757,7 @@ UniValue converttopsgt(const UniValue& params)
 static const RPCHelpMan walletcreatefundedpsgt_help{
     "walletcreatefundedpsgt",
     "Create and fund a PSGT with wallet UTXOs, optionally signing it. "
-    "If the wallet is encrypted and `sign` is true, it must be unlocked with walletpassphrase first (not for staking only), or the request must carry the passphrase (the client's -stdinelevate option).",
+    "If the wallet is encrypted, it must be unlocked with walletpassphrase first (not for staking only), or the request must carry the passphrase (the client's -stdinelevate option).",
     {
         {"inputs", RPCArg::Type::ARR, RPCArg::Optional::NO,
             "A JSON array of inputs (empty array allows auto-selection from wallet UTXOs).",
