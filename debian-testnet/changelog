@@ -1,3 +1,176 @@
+gridcoinresearch (5.5.2.0-3) UNRELEASED; urgency=medium
+
+  * Renamed the launcher's action to "Connect to your own core" and added
+    "Connect to the system service", the two actions the mainnet launcher
+    has. The system service action attaches the GUI to gridcointestnetd.service
+    and needs membership of the gridcointestnet-gui group.
+
+  * Added the gridcointestnet icon in the sizes 16 to 256 pixels and as SVG to
+    gridcointestnet-qt, in place of the single 48 pixel file. The launcher
+    refers to the icon by its theme name.
+
+  * Installed the upstream CHANGELOG.md as changelog.gz.
+
+  * Removed build-essential from Build-Depends; every build host has it.
+
+ -- Gridcoin Developers <dev@gridcoin.us>  Thu, 12 Nov 2026 18:09:45 -0500
+
+gridcoinresearch (5.5.2.0-2) unstable; urgency=medium
+
+  * Changed the account gridcointestnetd.service runs as to gridcointestnet,
+    a system user and group the package creates, in place of gridcoin. The
+    gridcoin user and group are not removed. Commands that were run as
+    gridcoin against the testnet daemon or its files run as gridcointestnet
+    from now on. A user who reaches /etc/gridcoin-testnet or
+    /var/lib/gridcointestnetd through membership of group gridcoin needs the
+    new group:
+      adduser NAME gridcointestnet
+
+  * Changed file ownership on upgrade. /etc/gridcoin-testnet becomes
+    root:gridcointestnet, mode 0710. Regular files directly inside it with a
+    single hard link pass from user gridcoin to user gridcointestnet and from
+    group gridcoin to group gridcointestnet; a file with more than one link
+    keeps its owner. Subdirectories of /etc/gridcoin-testnet and their
+    contents keep their owner and are the administrator's to change. When
+    /etc/gridcoin-testnet/gridcoin.conf exists and gridcointestnet cannot
+    read it, the upgrade prints a warning on its error output that
+    gridcointestnetd.service will not start until it can.
+    /var/lib/gridcointestnetd keeps its owner until gridcointestnetd.service
+    next starts, when systemd (StateDirectory=) gives the directory and
+    everything below it to gridcointestnet:gridcointestnet.
+
+  * Changed what a package upgrade does to gridcointestnetd.service: a
+    running service keeps running while the new files are unpacked and is
+    restarted, under the new account, when the package is configured. A
+    stopped service stays stopped.
+
+  * Removed RemainAfterExit= from gridcointestnetd-autounlock@.service, the
+    unit that unlocks the wallet once the daemon is up. After a successful
+    unlock it shows "inactive (dead)" in systemctl status, and the journal
+    holds the result.
+
+  * Added -I (Python's isolated mode) to the unlock helper's command line in
+    that unit: the helper ignores PYTHON* environment variables and the user
+    site-packages directory.
+
+  * Set LimitCORE=0 in gridcointestnetd.service, gridcointestnetd@.service
+    and gridcointestnetd-autounlock@.service: the core file size limit of the
+    daemon and of the unlock helper is zero.
+
+ -- Richard Leckinger <caraka@gridcoin.us>  Mon, 09 Nov 2026 18:06:24 -0500
+
+gridcoinresearch (5.5.2.0-1) unstable; urgency=medium
+
+  * 5.5.2.0, the mainnet release, built for testnet so testers run the
+    released code.
+
+  * gridcointestnetd@.service now matches gridcoinresearchd@.service: the core
+    runs with -daemonwait as Type=forking, so the autounlock unit starts only
+    once RPC is up.
+
+  * gridcointestnetd-autounlock@.service now reads its credential from
+    /etc/credstore.encrypted/gridcointestnet-<user>.wallet-passphrase, as
+    mainnet does. Move an existing credential before upgrading:
+      sudo install -d -m 0700 /etc/credstore.encrypted
+      sudo mv /etc/gridcoin-testnet/<user>-wallet-passphrase.cred \
+          /etc/credstore.encrypted/gridcointestnet-<user>.wallet-passphrase
+
+  * The launcher is now gridcointestnet.desktop, named "Gridcoin Testnet",
+    using the gridcointestnet theme icon. Its one action, "Connect to running
+    core (multiprocess)", matches mainnet's. A launcher pinned to the old
+    gridcointestnet-qt.desktop has to be pinned again.
+
+ -- Richard Leckinger <caraka@gridcoin.us>  Sun, 01 Nov 2026 17:46:37 -0500
+
+gridcoinresearch (5.5.1.15-1) unstable; urgency=medium
+
+  * 5.5.1.15 testnet, which also carries everything in 5.5.1.13
+
+    Twelve merged pull requests: fixes for test failures on Debian 12 and on
+    32-bit x86, a wallet backup that reports failure instead of throwing,
+    exact fee-rate handling and pooled-parent registration in the miner,
+    contract version checks, and GUI fixes. No consensus rule change
+    activates in this build.
+
+  * The multiprocess IPC schema is unchanged from 5.5.1.11 (major 4), so a
+    5.5.1.11 GUI and a 5.5.1.15 core still connect.
+
+ -- Richard Leckinger <caraka@gridcoin.us>  Sun, 01 Nov 2026 08:55:14 -0500
+
+gridcoinresearch (5.5.1.11-1) unstable; urgency=medium
+
+  * 5.5.1.11 testnet, which also carries everything in 5.5.1.9
+
+    A consolidation of 193 merged pull requests across 5.5.1.9 and 5.5.1.11:
+    wallet, staking, mempool, network and scraper fixes, lock-order and
+    test-suite work, and the v15 consensus rules. v15 is not scheduled on
+    testnet in this build, so no consensus rule change activates.
+
+  * The multiprocess IPC schema major version moved from 3 to 4, so a 5.5.1.7
+    GUI refuses to connect to a 5.5.1.11 core, and the reverse. Upgrade
+    gridcointestnetd and gridcointestnet-qt together.
+
+  * Build-Depends follow upstream: libzip, Boost.Serialization, Qt Charts and
+    Qt 5 compatibility are no longer needed, zlib is, and the cmake floor is
+    3.21.
+
+  * gridcointestnetd-autounlock@.service: the setup command now encrypts the
+    passphrase with --tpm2-pcrs="", and exit 243 (credential not decryptable)
+    no longer restarts in a loop, following upstream's autounlock unit.
+
+ -- Richard Leckinger <caraka@gridcoin.us>  Wed, 28 Oct 2026 14:51:03 -0400
+
+gridcoinresearch (5.5.1.7-1) unstable; urgency=medium
+
+  * 5.5.1.7 testnet
+
+    A consolidation of 33 merged pull requests: security hardening across the
+    P2P, scraper, RPC, script and database paths, an internal refactor that
+    retires main.h, and packaging fixes for multiprocess. No consensus rule
+    change activates in this build.
+
+  * The multiprocess IPC schema major version moved from 2 to 3, so a 5.5.1.5
+    GUI refuses to connect to a 5.5.1.7 core, and the reverse. Upgrade
+    gridcointestnetd and gridcointestnet-qt together.
+
+ -- Richard Leckinger <caraka@gridcoin.us>  Tue, 25 Aug 2026 14:16:27 -0400
+
+gridcoinresearch (5.5.1.5-5) unstable; urgency=medium
+
+  * Corrected gridcointestnetd-autounlock@.service to take the RPC port from the
+    wallet's own configuration. It had passed a default that overrode the
+    configured value.
+
+ -- Richard Leckinger <caraka@gridcoin.us>  Tue, 18 Aug 2026 22:08:38 -0400
+
+gridcoinresearch (5.5.1.5-4) unstable; urgency=medium
+
+  * Added gridcointestnetd-autounlock@.service, a per-user stake-only autounlock
+    companion to gridcointestnetd@.service. Opt-in and not enabled on install.
+  * Installed the autounlock helper as
+    /usr/share/gridcointestnet/gridcoin_autounlock.py.
+
+ -- Richard Leckinger <caraka@gridcoin.us>  Tue, 18 Aug 2026 21:28:22 -0400
+
+gridcoinresearch (5.5.1.5-3) unstable; urgency=medium
+
+  * Added a desktop action that launches the GUI in multiprocess mode, attaching
+    to a core that is already running.
+  * Reduced the desktop entry to a single main category, Office, so the launcher
+    appears once in the application menu.
+
+ -- Richard Leckinger <caraka@gridcoin.us>  Tue, 18 Aug 2026 20:05:28 -0400
+
+gridcoinresearch (5.5.1.5-2) unstable; urgency=medium
+
+  * Added gridcointestnetd@.service, a per-user systemd template that runs the
+    core as the account which attaches the GUI. Neither unit is enabled on
+    install.
+  * Built with multiprocess enabled. (#3265)
+  * Stopped forcing UPnP on at startup. (#3264)
+
+ -- Richard Leckinger <caraka@gridcoin.us>  Tue, 18 Aug 2026 19:35:48 -0400
+
 gridcoinresearch (5.5.1.5-1) unstable; urgency=medium
 
   * 5.5.1.5 testnet

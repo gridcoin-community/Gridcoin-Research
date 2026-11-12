@@ -72,3 +72,18 @@ gridcoinresearch (5.5.2.1-1) unstable; urgency=medium
   https://github.com/gridcoin-community/Gridcoin-Research/blob/development/doc/running-unattended.md
 
  -- Gridcoin Developers <dev@gridcoin.us>  Thu, 05 Nov 2026 12:00:00 +0000
+
+gridcoinresearch (5.5.2.0-1) unstable; urgency=medium
+
+  gridcointestnetd-autounlock@.service now reads the wallet passphrase
+  credential from /etc/credstore.encrypted/gridcointestnet-<user>.wallet-passphrase,
+  the same location mainnet uses. The previous location,
+  /etc/gridcoin-testnet/<user>-wallet-passphrase.cred, is no longer read, so
+  automatic unlocking stops until the credential is moved.
+
+  Move an existing credential before upgrading:
+      sudo install -d -m 0700 /etc/credstore.encrypted
+      sudo mv /etc/gridcoin-testnet/<user>-wallet-passphrase.cred \
+          /etc/credstore.encrypted/gridcointestnet-<user>.wallet-passphrase
+
+ -- Gridcoin Developers <dev@gridcoin.us>  Sun, 01 Nov 2026 17:46:37 -0500

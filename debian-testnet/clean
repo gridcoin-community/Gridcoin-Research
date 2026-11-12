@@ -1,3 +1,4 @@
+debian/gridcointestnetd.1
 debian/gridcointestnetd.gridcointestnetd.service
 debian/gridcointestnetd.gridcointestnet-autounlock.socket
 debian/gridcointestnetd.gridcointestnet-autounlock.service

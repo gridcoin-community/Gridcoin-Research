@@ -5,7 +5,11 @@
  - git pull
  - git merge testnet
  - Update changelog and commit
- - Change version in CMakeLists.txt to [version] and set CLIENT_VERSION_IS_RELEASE to 'true' and commit
+ - Change version in CMakeLists.txt to [version] and set CLIENT_VERSION_IS_RELEASE to 'true'
+ - Run contrib/devtools/debian-changelog-release.sh, then commit CMakeLists.txt and the changelog changes it made (debian/changelog, debian-testnet/changelog) together
+   - The script runs in the release checkout and needs dch (devscripts) and dpkg-parsechangelog (dpkg-dev). On a host without them, run it from a Debian or Ubuntu container: `docker run --rm -v "$PWD":/src -w /src debian:stable bash -c 'apt-get update -q && apt-get install -yq --no-install-recommends devscripts dpkg-dev && contrib/devtools/debian-changelog-release.sh; status=$?; chown --reference=. debian/changelog debian-testnet/changelog debian/changelog.dch debian-testnet/changelog.dch 2>/dev/null; exit $status'`
+   - The entry it writes says "New upstream release." (an UNRELEASED entry already at the release version is finalized as it stands). The release notes reach the packages as changelog.gz (the upstream CHANGELOG.md), not as text in the Debian changelog entry; mainnet entries up to 5.5.2.0-1 carried them.
+   - The OBS source build refuses a tag whose top changelog entry is UNRELEASED or names an upstream version other than the one in CMakeLists.txt, so a release made without the script stops in the build instead of mislabelling the packages.
  - git push
 
 ### Merge to master
@@ -111,3 +115,12 @@ by hand; see [`running-unattended.md` -> *Upgrading (Windows)*](running-unattend
 ### Announce the release:
  - Reddit /r/Gridcoin, Discord, Slack, Hive, and Twitter
  - Update title of #gridcoin on IRC
+
+### Testnet pre-release
+ - git checkout development
+ - git pull
+ - With the version in CMakeLists.txt at the version to release (a fourth field other than 0 marks a testnet release), run contrib/devtools/debian-changelog-release.sh (tools and container command under Preparation) and commit the change it made to debian-testnet/changelog
+ - git tag [version]-testnet
+ - git push --tags
+ - Edit CMakeLists.txt, increment version for development. Commit it.
+ - git push

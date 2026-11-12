@@ -1,5 +1,3 @@
-# The testnet icon: the mainnet GUI package does not ship it.
-usr/share/icons/hicolor/48x48/apps/gridcointestnet.png
 # The system units reach the package through dh_installsystemd (debian/rules).
 usr/lib/systemd/system/gridcoinresearchd.service
 usr/lib/systemd/system/gridcoin-autounlock.socket

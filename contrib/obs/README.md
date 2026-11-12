@@ -13,7 +13,7 @@ nothing — merging them changes nothing for a repo that hasn't configured OBS.
 | File | Role |
 |------|------|
 | `../../debian/` | Mainnet (stable) Debian packaging — `gridcoinresearchd` / `gridcoinresearch-qt` |
-| `../../debian-testnet/` | Testnet packaging — same source, **renamed** to `gridcointestnetd` / `gridcointestnet-qt` (via `dh-exec`) so a testnet build coexists with mainnet |
+| `../../debian-testnet/` | Testnet packaging — same source, **renamed** to `gridcointestnetd` / `gridcointestnet-qt` (the daemon by CMake, the GUI via `dh-exec`) so a testnet build coexists with mainnet |
 | `../../.github/workflows/obs-build.yml` | Reusable engine: generate `3.0 (quilt)` source → push to OBS |
 | `../../.github/workflows/OBS-mainnet.yml` | Trigger: mainnet release tags (`*.*.*.0`) |
 | `../../.github/workflows/OBS-testnet.yml` | Trigger: testnet release tags (`*-testnet`) |
