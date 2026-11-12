@@ -468,7 +468,7 @@ if(APPLE)
     # contains parentheses that /bin/sh cannot handle.  When the env var
     # is not set, macdeployqtplus falls back to ad-hoc signing on macOS.
     if(DEFINED ENV{APPLE_SIGNING_IDENTITY})
-        set(_entitlements "${CMAKE_SOURCE_DIR}/contrib/macdeploy/entitlements.plist")
+        set(_entitlements "${CMAKE_SOURCE_DIR}/contrib/macdeploy/entitlements-gui.plist")
         if(EXISTS "${_entitlements}")
             list(APPEND _deploy_cmd -entitlements "${_entitlements}")
         endif()

@@ -644,6 +644,8 @@ jobs:
         run: cmake --build build --target deploy
 
       - name: Verify DMG Package
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
           set -e
           DMG_FILE=$(find build -maxdepth 1 -name "gridcoin-*.dmg" | head -1)
@@ -702,6 +704,20 @@ jobs:
             exit 1
           fi
           echo "PASS: gridcoinresearchd present in the bundle"
+
+          # What every Mach-O in the bundle is signed with and where it loads
+          # code from. A build signed with the release identity is also held to
+          # that team's signature and the hardened runtime on every file; an ad
+          # hoc build has neither, so only the structure is checked there.
+          BUNDLE_MODE=""
+          if [ -n "${APPLE_SIGNING_IDENTITY:-}" ] && [ -n "${APPLE_TEAM_ID:-}" ]; then
+            BUNDLE_MODE="--release --team-id ${APPLE_TEAM_ID}"
+          fi
+          # shellcheck disable=SC2086
+          if ! python3 contrib/devtools/check-macos-bundle.py --app "$APP" $BUNDLE_MODE; then
+            hdiutil detach "$MOUNT_POINT" || true
+            exit 1
+          fi
 
           # The bundle's real macOS floor is the HIGHEST LC_BUILD_VERSION minos
           # among every Mach-O it ships, because dyld refuses to load a library
@@ -1070,6 +1086,8 @@ jobs:
         run: cmake --build build --target deploy
 
       - name: Verify DMG Package
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
           set -e
           DMG_FILE=$(find build -maxdepth 1 -name "gridcoin-*.dmg" | head -1)
@@ -1128,6 +1146,20 @@ jobs:
             exit 1
           fi
           echo "PASS: gridcoinresearchd present in the bundle"
+
+          # What every Mach-O in the bundle is signed with and where it loads
+          # code from. A build signed with the release identity is also held to
+          # that team's signature and the hardened runtime on every file; an ad
+          # hoc build has neither, so only the structure is checked there.
+          BUNDLE_MODE=""
+          if [ -n "${APPLE_SIGNING_IDENTITY:-}" ] && [ -n "${APPLE_TEAM_ID:-}" ]; then
+            BUNDLE_MODE="--release --team-id ${APPLE_TEAM_ID}"
+          fi
+          # shellcheck disable=SC2086
+          if ! python3 contrib/devtools/check-macos-bundle.py --app "$APP" $BUNDLE_MODE; then
+            hdiutil detach "$MOUNT_POINT" || true
+            exit 1
+          fi
 
           # The bundle's real macOS floor is the HIGHEST LC_BUILD_VERSION minos
           # among every Mach-O it ships, because dyld refuses to load a library

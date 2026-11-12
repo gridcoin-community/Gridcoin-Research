@@ -321,6 +321,41 @@ def changeIdentification(id: str, binaryPath: str, verbose: int):
         print(" to", id)
     runInstallNameTool("id", id, binaryPath)
 
+MACHO_MAGICS = (b"\xfe\xed\xfa\xce", b"\xce\xfa\xed\xfe", b"\xfe\xed\xfa\xcf", b"\xcf\xfa\xed\xfe",
+                b"\xca\xfe\xba\xbe", b"\xbe\xba\xfe\xca")
+
+def isMachO(path: str) -> bool:
+    try:
+        with open(path, "rb") as f:
+            return f.read(4) in MACHO_MAGICS
+    except OSError:
+        return False
+
+def removeBuildRpaths(bundlePath: str, verbose: int):
+    """Delete every LC_RPATH of the bundle's Mach-O files that is not relative to the bundle.
+
+    The executables come from the build tree and the libraries from the build
+    machine's package manager, and both carry search paths of that machine.
+    Every reference has been rewritten to a path inside the bundle by now, so
+    those search paths are unused, and they name directories that mean nothing
+    where the bundle is installed.
+    """
+    for dirpath, _dirnames, filenames in os.walk(bundlePath):
+        for filename in sorted(filenames):
+            path = os.path.join(dirpath, filename)
+            if os.path.islink(path) or not isMachO(path):
+                continue
+            # A universal file lists each slice's paths, and one delete removes
+            # the path from every slice that has it.
+            for rpath in dict.fromkeys(getRpaths(path, 0)):
+                if rpath.startswith(("@executable_path/", "@loader_path/")):
+                    continue
+                if verbose:
+                    print("Using install_name_tool:")
+                    print(" in", path)
+                    print(" delete search path", rpath)
+                runInstallNameTool("delete_rpath", rpath, path)
+
 def runStrip(binaryPath: str, verbose: int):
     stripbin=os.getenv("STRIP", "strip")
     if verbose:
@@ -604,7 +639,7 @@ ap.add_argument("-sign", nargs="?", const="-", default=None, metavar="identity",
     help="Code signing identity. Omit flag to skip signing. "
          "Use without value for ad-hoc ('-').")
 ap.add_argument("-entitlements", nargs=1, default=None, metavar="path",
-    help="Path to entitlements plist for hardened runtime signing")
+    help="Path to the entitlements plist for the main executable; with a real identity it also turns the hardened runtime on")
 
 config = ap.parse_args()
 
@@ -779,6 +814,13 @@ else:
 
 # ------------------------------------------------
 
+# Before signing, which seals each file as it is then.
+if platform.system() == "Darwin":
+    print("+ Removing the build machine's library search paths +")
+    removeBuildRpaths(target, verbose)
+
+# ------------------------------------------------
+
 if config.sign is not None and platform.system() == "Darwin":
     identity = config.sign
     entitlements_path = config.entitlements[0] if config.entitlements else None
@@ -814,15 +856,15 @@ if config.sign is not None and platform.system() == "Darwin":
     #    bundle. Inside-out order is not a style choice here: codesign validates a
     #    bundle's subcomponents, so an unsigned helper makes signing the bundle fail
     #    with "code object is not signed at all" naming the helper as the subcomponent.
-    #    Helpers get the same entitlements as the main binary -- gridcoinresearchd does
-    #    the same networking and file access the GUI does when it runs core in-process,
-    #    so under a hardened runtime it needs the same grants.
+    #    Helpers are signed with no entitlements. gridcoinresearchd needs none:
+    #    outgoing connections and file access are not restricted outside the App
+    #    Sandbox, which the bundle does not use.
     helpers_dir = os.path.join(target, "Contents", "Helpers")
     if os.path.exists(helpers_dir):
         for item in sorted(os.listdir(helpers_dir)):
             item_path = os.path.join(helpers_dir, item)
             if os.path.isfile(item_path) and os.access(item_path, os.X_OK):
-                codesignItem(item_path, identity, entitlements_path, hardened, verbose)
+                codesignItem(item_path, identity, None, hardened, verbose)
 
     # 4. Sign the main executable (with entitlements)
     main_binary = os.path.join(target, "Contents", "MacOS", "gridcoinresearch")
