@@ -110,8 +110,9 @@ The environment holds these secrets, and the repository holds none of them:
 
 The main executable is signed with `contrib/macdeploy/entitlements-gui.plist`, and everything else in the
 bundle with no entitlements. On every run `contrib/devtools/check-macos-bundle.py` checks the mounted DMG:
-each file's entitlements, library references and search paths, and, on a release tag, that team's signature
-and the hardened runtime on every file.
+each file's entitlements, library references and search paths, and that its signature verifies, and, on a
+release tag, that team's signature and the hardened runtime on every file. A release tag build with a signing
+identity and no `APPLE_TEAM_ID` fails.
 
 ### Tag
  - git tag -s [version]  # Paste previous commit message into this commit message

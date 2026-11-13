@@ -68,17 +68,40 @@ class EntitlementTests(unittest.TestCase):
 
 class LoadPathTests(unittest.TestCase):
     def test_rpath_outside_bundle_fails(self):
-        self.assertEqual(len(bundle.check_rpaths(DAEMON, ["/opt/homebrew/lib"])), 1)
-        self.assertEqual(len(bundle.check_rpaths(DAEMON, ["/usr/local/lib", "@loader_path/../Frameworks"])), 1)
-        self.assertEqual(bundle.check_rpaths(DAEMON, ["@loader_path/../Frameworks"]), [])
-        self.assertEqual(bundle.check_rpaths(GUI, ["@executable_path/../Frameworks"]), [])
+        self.assertEqual(len(bundle.check_rpaths(APP, DAEMON, ["/opt/homebrew/lib"])), 1)
+        self.assertEqual(len(bundle.check_rpaths(APP, DAEMON, ["/usr/local/lib", "@loader_path/../Frameworks"])), 1)
+        self.assertEqual(bundle.check_rpaths(APP, DAEMON, ["@loader_path/../Frameworks"]), [])
+        self.assertEqual(bundle.check_rpaths(APP, GUI, ["@executable_path/../Frameworks"]), [])
+        self.assertEqual(bundle.check_rpaths(APP, DYLIB, ["@loader_path", "@executable_path/../Frameworks"]), [])
+
+    def test_rpath_that_climbs_out_of_the_bundle_fails(self):
+        self.assertEqual(len(bundle.check_rpaths(APP, DAEMON, ["@loader_path/../../../../Libraries"])), 1)
+        self.assertEqual(len(bundle.check_rpaths(APP, GUI, ["@executable_path/../../../Gridcoin.app.other"])), 1)
+        self.assertEqual(len(bundle.check_rpaths(APP, GUI, ["@executable_path/../.."])), 0)
+        self.assertEqual(len(bundle.check_rpaths(APP, GUI, ["@executable_path/../../.."])), 1)
+        self.assertEqual(len(bundle.check_rpaths(APP, GUI, ["@loader_pathology/x"])), 1)
+
+    def test_load_command_that_climbs_out_fails(self):
+        for lib in ("/usr/lib/../../opt/example.dylib",
+                    "/System/Library/../../Users/x/lib.dylib",
+                    "@loader_path/../../../../Libraries/x.dylib",
+                    "@executable_path/../../../x.dylib",
+                    "@rpath/../../../../x.dylib",
+                    "@rpath/a/../../x.dylib"):
+            self.assertEqual(len(bundle.check_load_commands(APP, GUI, [lib])), 1, lib)
+        self.assertEqual(bundle.check_load_commands(APP, DYLIB, [
+            "@loader_path/../Frameworks/y.dylib",
+            "@executable_path/../Frameworks/y.dylib",
+            "@rpath/a/../y.dylib",
+            "/usr/lib/system/../libSystem.B.dylib",
+        ]), [])
 
     def test_homebrew_load_command_fails(self):
         self.assertEqual(
-            len(bundle.check_load_commands(GUI, ["/usr/local/opt/openssl@3/lib/libcrypto.3.dylib"])), 1)
+            len(bundle.check_load_commands(APP, GUI, ["/usr/local/opt/openssl@3/lib/libcrypto.3.dylib"])), 1)
         self.assertEqual(
-            len(bundle.check_load_commands(GUI, ["/opt/homebrew/opt/qtbase/lib/QtCore.framework/Versions/A/QtCore"])), 1)
-        self.assertEqual(bundle.check_load_commands(GUI, [
+            len(bundle.check_load_commands(APP, GUI, ["/opt/homebrew/opt/qtbase/lib/QtCore.framework/Versions/A/QtCore"])), 1)
+        self.assertEqual(bundle.check_load_commands(APP, GUI, [
             "/usr/lib/libc++.1.dylib",
             "/System/Library/Frameworks/AppKit.framework/Versions/C/AppKit",
             "@executable_path/../Frameworks/x.dylib",
@@ -86,7 +109,7 @@ class LoadPathTests(unittest.TestCase):
         ]), [])
 
     def test_load_command_under_a_home_directory_fails(self):
-        self.assertEqual(len(bundle.check_load_commands(GUI, ["/Users/runner/work/lib/libfoo.dylib"])), 1)
+        self.assertEqual(len(bundle.check_load_commands(APP, GUI, ["/Users/runner/work/lib/libfoo.dylib"])), 1)
 
 
 class SignatureTests(unittest.TestCase):
@@ -94,6 +117,13 @@ class SignatureTests(unittest.TestCase):
         self.assertEqual(len(bundle.check_team(GUI, "OTHERTEAM1", "ABCDE12345")), 1)
         self.assertEqual(len(bundle.check_team(GUI, None, "ABCDE12345")), 1)
         self.assertEqual(bundle.check_team(GUI, "ABCDE12345", "ABCDE12345"), [])
+
+    def test_signature_that_does_not_verify_fails(self):
+        failures = bundle.check_verified(GUI, 1, "x: invalid signature (code or signature have been modified)\n")
+        self.assertEqual(len(failures), 1)
+        self.assertIn("invalid signature", failures[0])
+        self.assertEqual(len(bundle.check_verified(GUI, 1, "")), 1)
+        self.assertEqual(bundle.check_verified(GUI, 0, ""), [])
 
     def test_parse_codesign_display(self):
         text = ("Executable=/x/Gridcoin.app/Contents/MacOS/gridcoinresearch\n"

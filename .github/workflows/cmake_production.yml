@@ -712,11 +712,16 @@ jobs:
           echo "PASS: gridcoinresearchd present in the bundle"
 
           # What every Mach-O in the bundle is signed with and where it loads
-          # code from. A build signed with the release identity is also held to
-          # that team's signature and the hardened runtime on every file; an ad
-          # hoc build has neither, so only the structure is checked there.
+          # code from, and that each signature verifies. A build signed with
+          # the release identity is also held to that team's signature and the
+          # hardened runtime on every file; an ad hoc build has neither.
           BUNDLE_MODE=""
-          if [ -n "${APPLE_SIGNING_IDENTITY:-}" ] && [ -n "${APPLE_TEAM_ID:-}" ]; then
+          if [ -n "${APPLE_SIGNING_IDENTITY:-}" ]; then
+            if [ -z "${APPLE_TEAM_ID:-}" ]; then
+              echo "FAIL: a signing identity is configured without APPLE_TEAM_ID"
+              hdiutil detach "$MOUNT_POINT" || true
+              exit 1
+            fi
             BUNDLE_MODE="--release --team-id ${APPLE_TEAM_ID}"
           fi
           # shellcheck disable=SC2086
@@ -1158,11 +1163,16 @@ jobs:
           echo "PASS: gridcoinresearchd present in the bundle"
 
           # What every Mach-O in the bundle is signed with and where it loads
-          # code from. A build signed with the release identity is also held to
-          # that team's signature and the hardened runtime on every file; an ad
-          # hoc build has neither, so only the structure is checked there.
+          # code from, and that each signature verifies. A build signed with
+          # the release identity is also held to that team's signature and the
+          # hardened runtime on every file; an ad hoc build has neither.
           BUNDLE_MODE=""
-          if [ -n "${APPLE_SIGNING_IDENTITY:-}" ] && [ -n "${APPLE_TEAM_ID:-}" ]; then
+          if [ -n "${APPLE_SIGNING_IDENTITY:-}" ]; then
+            if [ -z "${APPLE_TEAM_ID:-}" ]; then
+              echo "FAIL: a signing identity is configured without APPLE_TEAM_ID"
+              hdiutil detach "$MOUNT_POINT" || true
+              exit 1
+            fi
             BUNDLE_MODE="--release --team-id ${APPLE_TEAM_ID}"
           fi
           # shellcheck disable=SC2086

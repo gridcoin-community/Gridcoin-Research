@@ -11,8 +11,9 @@ runs on macOS only. It fails when:
 
   * a file carries an entitlement that relaxes the hardened runtime, or one
     that needs a provisioning profile the bundle does not have;
-  * a file names a library, or a library search path, outside the bundle and
-    the system;
+  * a file names a library, or a library search path, that resolves outside
+    the bundle and the system;
+  * a file's signature does not verify;
   * with --release, a file is not signed by the given team or lacks the
     hardened runtime.
 
@@ -49,9 +50,12 @@ JIT = "com.apple.security.cs.allow-jit"
 GUI_PATH = "Contents/MacOS/gridcoinresearch"
 DAEMON_PATH = "Contents/Helpers/gridcoinresearchd"
 
-#: Where a load command may point: into the bundle, or at the system.
-LOAD_PREFIXES = ("@executable_path/", "@loader_path/", "@rpath/", "/usr/lib/", "/System/Library/")
-RPATH_PREFIXES = ("@executable_path", "@loader_path")
+#: Where an absolute load command may point.
+SYSTEM_PREFIXES = ("/usr/lib/", "/System/Library/")
+
+#: The directories of the bundle's executables, which @executable_path can
+#: stand for in a library either of them loads.
+EXECUTABLE_DIRS = (os.path.dirname(GUI_PATH), os.path.dirname(DAEMON_PATH))
 
 MACHO_MAGICS = (b"\xfe\xed\xfa\xce", b"\xce\xfa\xed\xfe", b"\xfe\xed\xfa\xcf", b"\xcf\xfa\xed\xfe",
                 b"\xca\xfe\xba\xbe", b"\xbe\xba\xfe\xca")
@@ -80,14 +84,64 @@ def check_entitlements(role: str, ents: Dict[str, object], allow_gui_jit: bool) 
     return failures
 
 
-def check_rpaths(macho: str, rpaths: List[str]) -> List[str]:
-    return ["%s has the library search path %s, which is outside the bundle" % (macho, rpath)
-            for rpath in rpaths if not rpath.startswith(RPATH_PREFIXES)]
+def is_inside(root: str, path: str) -> bool:
+    root = os.path.normpath(root)
+    path = os.path.normpath(path)
+    return path == root or path.startswith(root + "/")
 
 
-def check_load_commands(macho: str, libs: List[str]) -> List[str]:
-    return ["%s loads %s, which is outside the bundle and the system" % (macho, lib)
-            for lib in libs if not lib.startswith(LOAD_PREFIXES)]
+def resolve(app: str, macho: str, path: str) -> Optional[List[str]]:
+    """Return the places a @loader_path or @executable_path reference can name.
+
+    None means the path starts with neither. @loader_path is the directory of
+    the file itself. @executable_path is the directory of the executable that
+    started the process: the file's own for an executable, either one's for a
+    library.
+    """
+    role = role_of(app, macho)
+    if role == "other":
+        executable_dirs = [os.path.join(app, directory) for directory in EXECUTABLE_DIRS]
+    else:
+        executable_dirs = [os.path.dirname(macho)]
+    for token, bases in (("@loader_path", [os.path.dirname(macho)]), ("@executable_path", executable_dirs)):
+        if path == token or path.startswith(token + "/"):
+            return [os.path.normpath(base + path[len(token):]) for base in bases]
+    return None
+
+
+def check_rpaths(app: str, macho: str, rpaths: List[str]) -> List[str]:
+    failures = []
+    for rpath in rpaths:
+        places = resolve(app, macho, rpath)
+        if places is None or not all(is_inside(app, place) for place in places):
+            failures.append("%s has the library search path %s, which is outside the bundle" % (macho, rpath))
+    return failures
+
+
+def check_load_commands(app: str, macho: str, libs: List[str]) -> List[str]:
+    failures = []
+    for lib in libs:
+        places = resolve(app, macho, lib)
+        if lib.startswith("@rpath/"):
+            # The search paths are held inside the bundle by check_rpaths, so
+            # the rest must not climb out of one.
+            rest = os.path.normpath(lib[len("@rpath/"):])
+            good = not (rest == ".." or rest.startswith("../") or rest.startswith("/"))
+        elif places is not None:
+            good = all(is_inside(app, place) for place in places)
+        else:
+            good = os.path.normpath(lib).startswith(SYSTEM_PREFIXES)
+        if not good:
+            failures.append("%s loads %s, which is outside the bundle and the system" % (macho, lib))
+    return failures
+
+
+def check_verified(macho: str, code: int, text: str) -> List[str]:
+    """Judge the result of `codesign --verify` on one file."""
+    if code != 0:
+        lines = text.strip().splitlines()
+        return ["the signature of %s does not verify: %s" % (macho, lines[-1] if lines else "no output")]
+    return []
 
 
 def check_team(macho: str, found: Optional[str], expected: str) -> List[str]:
@@ -185,8 +239,12 @@ def main(argv: List[str]) -> int:
             failures.append("otool could not read %s" % macho)
             continue
         libs, rpaths = parse_otool_load_commands(text)
-        failures += check_load_commands(macho, libs)
-        failures += check_rpaths(macho, rpaths)
+        failures += check_load_commands(args.app, macho, libs)
+        failures += check_rpaths(args.app, macho, rpaths)
+
+        # A signature's details mean nothing unless the signature verifies.
+        code, text = run(["codesign", "--verify", "--strict", "--all-architectures", macho])
+        failures += check_verified(macho, code, text)
 
         if args.release:
             code, text = run(["codesign", "-dvv", macho])
