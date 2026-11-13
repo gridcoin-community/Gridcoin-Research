@@ -156,7 +156,7 @@ The cost of the clamp is therefore a small amount of dead LevelDB weight in the 
 
 ## Beacon registry rebuild on superblock boundary cross
 
-The clamp-and-tolerate-phantoms approach above works cleanly for `ProjectRegistry`, `ProtocolRegistry`, `ScraperRegistry`, and `SideStakeRegistry` because those registries are mutated only by their contract transactions — the in-memory state is a deterministic function of the contracts that have been applied.
+The clamp-and-tolerate-phantoms approach above works cleanly for `Whitelist` (the project registry), `ProtocolRegistry`, `ScraperRegistry`, `SideStakeRegistry`, and `PoolRegistry` because those registries are mutated only by their contract transactions — the in-memory state is a deterministic function of the contracts that have been applied.
 
 `BeaconRegistry` is different. Beacons have a two-step lifecycle:
 
@@ -294,7 +294,7 @@ All rebuilt inside `GRC::Initialize`, which runs *after* the Phase 2 hook. They 
 
 ## Alternatives considered (and rejected) — registry path
 
-These alternatives apply to the four "regular" registries (`ProjectRegistry`, `ProtocolRegistry`, `ScraperRegistry`, `SideStakeRegistry`). `BeaconRegistry` has its own rebuild path described above when an SB boundary is crossed. Chainstate (`CTxIndex` / `vSpent`) is handled by the surgical `CleanTxdbAbandonedRange` scan documented earlier, not by any of these.
+These alternatives apply to the five "regular" registries (`Whitelist`, `ProtocolRegistry`, `ScraperRegistry`, `SideStakeRegistry`, `PoolRegistry`). `BeaconRegistry` has its own rebuild path described above when an SB boundary is crossed. Chainstate (`CTxIndex` / `vSpent`) is handled by the surgical `CleanTxdbAbandonedRange` scan documented earlier, not by any of these.
 
 - **Targeted registry reset.** For each registry where `GetDBHeight() > pindex_consistent->nHeight`, call `registry.Reset()` to clear both in-memory maps and LevelDB storage, then let `InitializeContracts` do a full contract replay from `V11_height`. Safe and well-tested (equivalent to `-clearallregistryhistory`), but the full replay grows linearly with chain height and is increasingly expensive — punishing every rare corruption recovery with a from-genesis registry rebuild.
 - **Selective revert via `m_previous_hash` chains.** Walk backward through registry entries to undo phantom entries from blocks above the rewound tip. Faster than full replay, but requires writing a new revert path that works without block data (the existing `Revert()` needs `ContractContext` which requires `ReadBlockFromDisk` — the very blocks we cannot read). Significant new code with its own edge cases.
