@@ -1522,9 +1522,25 @@ bool CWallet::EncryptWallet(const SecureString& strWalletPassphrase)
         if (fFileBacked)
         {
             pwalletdbEncryption = new CWalletDB(strWalletFile);
-            if (!pwalletdbEncryption->TxnBegin())
+
+            // Nothing is encrypted yet, so a failure here leaves the wallet as
+            // it was: no transaction, no batch, and no master key in the map
+            // for an encryption that did not happen. The master key record is
+            // what unlocks every key encrypted below, so a wallet file must
+            // never be committed without it.
+            const bool began = pwalletdbEncryption->TxnBegin();
+
+            if (!began || !pwalletdbEncryption->WriteMasterKey(nMasterKeyMaxID, kMasterKey)) {
+                if (began) {
+                    pwalletdbEncryption->TxnAbort();
+                }
+
+                delete pwalletdbEncryption;
+                pwalletdbEncryption = nullptr;
+                mapMasterKeys.erase(nMasterKeyMaxID--);
+
                 return false;
-            pwalletdbEncryption->WriteMasterKey(nMasterKeyMaxID, kMasterKey);
+            }
         }
 
         // Convert the seed phrase record (if any) to its crypted form inside
