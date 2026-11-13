@@ -221,6 +221,15 @@ def getRpaths(binaryPath: str, verbose: int) -> List[str]:
         print(f"  rpaths for {binaryPath}: {rpaths}")
     return rpaths
 
+def getOwnInstallName(binaryPath: str) -> Optional[str]:
+    """Return the install name (LC_ID_DYLIB) of a Mach-O file, or None if it has none."""
+    output = run(["otool", "-D", binaryPath], stdout=PIPE, stderr=PIPE, text=True)
+    if output.returncode != 0:
+        return None
+    # The first line names the file; the install name, if any, follows.
+    names = [line.strip() for line in output.stdout.split("\n")[1:] if line.strip()]
+    return names[0] if names else None
+
 def expandRpathTokens(rpath: str, binaryPath: str) -> str:
     """Expand @loader_path and @executable_path tokens in an rpath entry."""
     rpath = rpath.replace("@loader_path", os.path.dirname(binaryPath))
@@ -272,8 +281,14 @@ def getFrameworks(binaryPath: str, verbose: int, originalPaths: Optional[List[st
 
     lines = output.stdout.split("\n")
     lines.pop(0) # First line is the inspected binary
-    if ".framework" in binaryPath or binaryPath.endswith(".dylib"):
-        lines.pop(0) # Frameworks and dylibs list themselves as a dependency.
+    # A library lists its own install name first. A Qt plugin is a loadable
+    # bundle with a .dylib name and no install name, so its first line is a
+    # real dependency.
+    ownName = getOwnInstallName(binaryPath)
+    if ownName is not None and lines:
+        first = FrameworkInfo.reOLine.match(lines[0].strip())
+        if first is not None and first.group(1) == ownName:
+            lines.pop(0)
 
     # Extract rpaths for resolving @rpath references
     rpaths = getRpaths(binaryPath, verbose)
