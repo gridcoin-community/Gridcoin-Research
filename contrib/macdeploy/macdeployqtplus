@@ -227,15 +227,15 @@ def expandRpathTokens(rpath: str, binaryPath: str) -> str:
     rpath = rpath.replace("@executable_path", os.path.dirname(binaryPath))
     return rpath
 
-def resolveRpath(line: str, rpaths: List[str], binaryPath: str) -> Optional[str]:
+def resolveRpath(line: str, rpaths: List[str], binaryPaths: List[str]) -> Optional[str]:
     """Try to resolve an @rpath reference using extracted rpaths.
 
     Returns the line with @rpath replaced by the matching rpath,
     or None if no rpath resolves to an existing path.
-    Expands @loader_path/@executable_path tokens within rpath entries.
+    Expands @loader_path/@executable_path tokens within rpath entries, from
+    each of binaryPaths in turn.
     """
-    for rp in rpaths:
-        rp = expandRpathTokens(rp, binaryPath)
+    for rp in [expandRpathTokens(rpath, binaryPath) for binaryPath in binaryPaths for rpath in rpaths]:
         candidate = line.replace("@rpath", rp)
         stripped = candidate.strip()
         m = FrameworkInfo.reOLine.match(stripped)
@@ -254,7 +254,13 @@ def resolveRpath(line: str, rpaths: List[str], binaryPath: str) -> Optional[str]
                 return f"  {path}{version_info}"
     return None
 
-def getFrameworks(binaryPath: str, verbose: int) -> List[FrameworkInfo]:
+def getFrameworks(binaryPath: str, verbose: int, originalPaths: Optional[List[str]] = None) -> List[FrameworkInfo]:
+    """List the libraries binaryPath references that are to be deployed.
+
+    originalPaths names where a copied file came from. Its search paths are
+    relative to that place, so its @rpath references are resolved from there
+    and not from where the copy sits.
+    """
     objdump = os.getenv("OBJDUMP", "objdump")
     if verbose:
         print(f"Inspecting with {objdump}: {binaryPath}")
@@ -281,7 +287,7 @@ def getFrameworks(binaryPath: str, verbose: int) -> List[FrameworkInfo]:
 
         line = line.replace("@loader_path", os.path.dirname(binaryPath))
         if "@rpath/" in line:
-            resolved = resolveRpath(line, rpaths, binaryPath)
+            resolved = resolveRpath(line, rpaths, originalPaths or [binaryPath])
             if resolved is not None:
                 line = resolved
             else:
@@ -331,8 +337,24 @@ def isMachO(path: str) -> bool:
     except OSError:
         return False
 
+def rpathStaysInBundle(bundlePath: str, path: str, rpath: str) -> bool:
+    """Whether an LC_RPATH of the file at path names a directory inside the bundle.
+
+    @loader_path is the file's own directory. @executable_path is the
+    directory of whichever of the bundle's executables started the process.
+    A library's package layout can give it a relative path that lands outside
+    the bundle from where the library sits here.
+    """
+    root = os.path.normpath(bundlePath)
+    executableDirs = [os.path.join(root, "Contents", "MacOS"), os.path.join(root, "Contents", "Helpers")]
+    for token, bases in (("@loader_path", [os.path.dirname(path)]), ("@executable_path", executableDirs)):
+        if rpath == token or rpath.startswith(token + "/"):
+            places = [os.path.normpath(base + rpath[len(token):]) for base in bases]
+            return all(place == root or place.startswith(root + "/") for place in places)
+    return False
+
 def removeBuildRpaths(bundlePath: str, verbose: int):
-    """Delete every LC_RPATH of the bundle's Mach-O files that is not relative to the bundle.
+    """Delete every LC_RPATH of the bundle's Mach-O files that does not stay inside the bundle.
 
     The executables come from the build tree and the libraries from the build
     machine's package manager, and both carry search paths of that machine.
@@ -348,7 +370,7 @@ def removeBuildRpaths(bundlePath: str, verbose: int):
             # A universal file lists each slice's paths, and one delete removes
             # the path from every slice that has it.
             for rpath in dict.fromkeys(getRpaths(path, 0)):
-                if rpath.startswith(("@executable_path/", "@loader_path/")):
+                if rpathStaysInBundle(bundlePath, path, rpath):
                     continue
                 if verbose:
                     print("Using install_name_tool:")
@@ -611,7 +633,12 @@ def deployPlugins(appBundleInfo: ApplicationBundleInfo, deploymentInfo: Deployme
         if strip:
             runStrip(destinationPath, verbose)
 
-        dependencies = getFrameworks(destinationPath, verbose)
+        # The plugin's search path is relative to where the package manager
+        # put it, which may be behind a symbolic link, so its @rpath references
+        # are resolved from there. From the copy in the bundle they resolve to
+        # nothing, and a reference left unresolved is left unrewritten.
+        dependencies = getFrameworks(destinationPath, verbose,
+                                     list(dict.fromkeys([os.path.realpath(sourcePath), sourcePath])))
 
         for dependency in dependencies:
             changeInstallName(dependency.installName, dependency.deployedInstallName, destinationPath, verbose)

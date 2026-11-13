@@ -85,14 +85,11 @@ class LoadPathTests(unittest.TestCase):
         for lib in ("/usr/lib/../../opt/example.dylib",
                     "/System/Library/../../Users/x/lib.dylib",
                     "@loader_path/../../../../Libraries/x.dylib",
-                    "@executable_path/../../../x.dylib",
-                    "@rpath/../../../../x.dylib",
-                    "@rpath/a/../../x.dylib"):
+                    "@executable_path/../../../x.dylib"):
             self.assertEqual(len(bundle.check_load_commands(APP, GUI, [lib])), 1, lib)
         self.assertEqual(bundle.check_load_commands(APP, DYLIB, [
             "@loader_path/../Frameworks/y.dylib",
             "@executable_path/../Frameworks/y.dylib",
-            "@rpath/a/../y.dylib",
             "/usr/lib/system/../libSystem.B.dylib",
         ]), [])
 
@@ -105,8 +102,13 @@ class LoadPathTests(unittest.TestCase):
             "/usr/lib/libc++.1.dylib",
             "/System/Library/Frameworks/AppKit.framework/Versions/C/AppKit",
             "@executable_path/../Frameworks/x.dylib",
-            "@rpath/QtCore.framework/Versions/A/QtCore",
         ]), [])
+
+    def test_load_command_through_a_search_path_fails(self):
+        for lib in ("@rpath/QtCore.framework/Versions/A/QtCore", "@rpath/../../../../x.dylib"):
+            failures = bundle.check_load_commands(APP, DYLIB, [lib])
+            self.assertEqual(len(failures), 1, lib)
+            self.assertIn("search path", failures[0])
 
     def test_load_command_under_a_home_directory_fails(self):
         self.assertEqual(len(bundle.check_load_commands(APP, GUI, ["/Users/runner/work/lib/libfoo.dylib"])), 1)

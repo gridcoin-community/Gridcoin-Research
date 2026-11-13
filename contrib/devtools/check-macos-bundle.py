@@ -12,7 +12,7 @@ runs on macOS only. It fails when:
   * a file carries an entitlement that relaxes the hardened runtime, or one
     that needs a provisioning profile the bundle does not have;
   * a file names a library, or a library search path, that resolves outside
-    the bundle and the system;
+    the bundle and the system, or names a library through a search path;
   * a file's signature does not verify;
   * with --release, a file is not signed by the given team or lacks the
     hardened runtime.
@@ -123,11 +123,12 @@ def check_load_commands(app: str, macho: str, libs: List[str]) -> List[str]:
     for lib in libs:
         places = resolve(app, macho, lib)
         if lib.startswith("@rpath/"):
-            # The search paths are held inside the bundle by check_rpaths, so
-            # the rest must not climb out of one.
-            rest = os.path.normpath(lib[len("@rpath/"):])
-            good = not (rest == ".." or rest.startswith("../") or rest.startswith("/"))
-        elif places is not None:
+            # Where this lands depends on the search paths of whatever loads
+            # the file. The deploy step rewrites every reference to an
+            # explicit path, so one left like this was missed.
+            failures.append("%s loads %s through a search path, not by an explicit path" % (macho, lib))
+            continue
+        if places is not None:
             good = all(is_inside(app, place) for place in places)
         else:
             good = os.path.normpath(lib).startswith(SYSTEM_PREFIXES)
