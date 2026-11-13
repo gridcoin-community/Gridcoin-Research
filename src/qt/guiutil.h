@@ -63,6 +63,11 @@ namespace GUIUtil
     QString HtmlEscape(const QString& str, bool fMultiLine=false);
     QString HtmlEscape(const std::string& str, bool fMultiLine=false);
 
+    //! Rich text that shows \p url: a link to it when it is a valid http or
+    //! https URL, and otherwise the text alone. Every character of \p url is
+    //! escaped in both places. For labels that show a poll's URL.
+    QString WebLinkHtml(const QString& url);
+
     //! The UTF-8 bytes of \p text, the same bytes as text.toStdString(), in a
     //! SecureString. The QByteArray used for the conversion is cleansed before
     //! return, and the bytes are in the string's secure buffer whatever their

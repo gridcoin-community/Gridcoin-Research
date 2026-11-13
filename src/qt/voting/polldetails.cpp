@@ -41,7 +41,7 @@ void PollDetails::setItem(const PollItem& poll_item)
              GUIUtil::dateTimeStr(poll_item.m_expiration)));
 
     ui->titleLabel->setText(poll_item.m_title);
-    ui->urlLabel->setText(QStringLiteral("<a href=\"%1\">%1</a>").arg(poll_item.m_url));
+    ui->urlLabel->setText(GUIUtil::WebLinkHtml(poll_item.m_url));
 
     m_additional_fields_model->setPollItem(&poll_item);
     m_additional_fields_model->refresh();

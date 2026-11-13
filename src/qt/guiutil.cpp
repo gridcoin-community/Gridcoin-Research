@@ -28,6 +28,7 @@
 #include <QMessageBox>
 #include <QProcess>
 #include <QTextDocument> // For Qt::escape
+#include <QUrl>
 #include <QUrlQuery>
 #include <QAbstractItemView>
 #include <QApplication>
@@ -291,6 +292,24 @@ QString HtmlEscape(const QString& str, bool fMultiLine)
 QString HtmlEscape(const std::string& str, bool fMultiLine)
 {
     return HtmlEscape(QString::fromStdString(str), fMultiLine);
+}
+
+QString WebLinkHtml(const QString& url)
+{
+    const QString text = url.toHtmlEscaped();
+    const QUrl parsed(url, QUrl::StrictMode);
+    const QString scheme = parsed.scheme();
+
+    if (!parsed.isValid()
+        || parsed.host().isEmpty()
+        || (scheme != QLatin1String("http") && scheme != QLatin1String("https")))
+    {
+        return text;
+    }
+
+    const QString target = QString::fromUtf8(parsed.toEncoded()).toHtmlEscaped();
+
+    return QStringLiteral("<a href=\"%1\">%2</a>").arg(target, text);
 }
 
 SecureString SecureStringFromQString(const QString& text)
