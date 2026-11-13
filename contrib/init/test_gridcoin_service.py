@@ -14,6 +14,7 @@ import contextlib
 import dataclasses
 import datetime
 import fnmatch
+import glob
 import importlib.machinery
 import importlib.util
 import io
@@ -620,18 +621,42 @@ class DesktopFileTests(unittest.TestCase):
         self.assertGreaterEqual(installs, 5)
 
     def test_the_testnet_package_builds_what_its_own_launcher_runs(self):
-        # debian-testnet installs its own desktop file with both actions, so its build must have
-        # the multiprocess GUI, the daemon and the units, and the actions must name its units.
+        # debian-testnet installs its own desktop file with both core actions, so its build must
+        # have the multiprocess GUI, the daemon and the units, and the actions must name its units.
         with open(os.path.join(SOURCE_ROOT, "debian-testnet", "rules"), encoding="utf8") as f:
             rules = f.read()
         for option in ("-DENABLE_MULTIPROCESS=ON", "-DENABLE_DAEMON=ON", "-DGRC_UNIT_NETWORK=test"):
             self.assertIn(option, rules)
         self.assertNotIn("INSTALL_SYSTEMD_UNITS", rules)
-        with open(os.path.join(SOURCE_ROOT, "debian-testnet", "gridcointestnet-qt.desktop"), encoding="utf8") as f:
-            actions, listed = desktop_actions(f.read())
-        self.assertEqual(sorted(listed), ["Multiprocess", "SystemService", "Testnet"])
-        self.assertEqual(actions["SystemService"], "/usr/bin/gridcointestnet -testnet -multiprocess "
-                                                   "-ipcdir=/run/gridcointestnetd -ipcserviceuser=gridcointestnet")
+        with open(os.path.join(SOURCE_ROOT, "debian-testnet", "gridcointestnet-qt.install"), encoding="utf8") as f:
+            install = f.read()
+        self.assertIn("\ndebian/gridcointestnet.desktop usr/share/applications/\n", install)
+        # The icons are installed from the source tree, one line per file, each into the
+        # matching hicolor directory; the general install leaves them out.
+        icon_lines = [line.split() for line in install.splitlines()
+                      if line.startswith("share/icons/hicolor/")]
+        self.assertGreaterEqual(len(icon_lines), 9)
+        in_tree = glob.glob(os.path.join(SOURCE_ROOT, "share", "icons", "hicolor", "*", "apps", "gridcointestnet.*"))
+        self.assertEqual(sorted(source for source, _ in icon_lines),
+                         sorted(os.path.relpath(path, SOURCE_ROOT) for path in in_tree))
+        for source, destination in icon_lines:
+            self.assertEqual(destination, "usr/" + os.path.dirname(source) + "/")
+            self.assertRegex(os.path.basename(source), r"^gridcointestnet\.(png|svg)$")
+        with open(os.path.join(SOURCE_ROOT, "src", "qt", "CMakeLists.txt"), encoding="utf8") as f:
+            # Bounded to the share/icons install() call: no other install( may start in between.
+            self.assertRegex(f.read(), r'(?s)install\(DIRECTORY "\$\{CMAKE_SOURCE_DIR\}/share/icons"(?:(?!install\().)*?'
+                                       r'\n\s*PATTERN "gridcointestnet\.\*" EXCLUDE\n\s*\)')
+        with open(os.path.join(SOURCE_ROOT, "debian-testnet", "gridcointestnet.desktop"), encoding="utf8") as f:
+            desktop = f.read()
+        actions, listed = desktop_actions(desktop)
+        self.assertEqual(sorted(listed), ["Multiprocess", "SystemService"])
+        self.assertEqual(actions, {
+            "Multiprocess": "gridcointestnet -testnet -multiprocess",
+            "SystemService": "gridcointestnet -testnet -multiprocess "
+                             "-ipcdir=/run/gridcointestnetd -ipcserviceuser=gridcointestnet",
+        })
+        self.assertRegex(desktop, r"(?m)^Exec=gridcointestnet -testnet$")
+        self.assertRegex(desktop, r"(?m)^Icon=gridcointestnet$")
 
 
 class ResolveDatadirTests(ServiceTestBase):

@@ -52,6 +52,10 @@ UNITDIR := debian/tmp/usr/lib/systemd/system
 %:
 	dh $@ --buildsystem=cmake
 
+# Install the upstream CHANGELOG.md as changelog.gz.
+override_dh_installchangelogs:
+	dh_installchangelogs CHANGELOG.md
+
 override_dh_auto_configure:
 	dh_auto_configure -- \
 		-DENABLE_DAEMON=ON \

@@ -1,12 +1,13 @@
-# Files under mainnet names: this package installs its own desktop file, icon and
-# completions (debian/rules), and no metainfo.
+# Files under mainnet names: this package installs its own desktop file and icons
+# (gridcointestnet-qt.install), completions (debian/rules) and daemon manual page
+# (gridcointestnetd.manpages), and no metainfo.
 usr/share/applications/gridcoinresearch.desktop
 usr/share/icons/hicolor/*/apps/gridcoinresearch.png
 usr/share/icons/hicolor/scalable/apps/gridcoinresearch.svg
-usr/share/icons/hicolor/48x48/apps/gridcointestnet.png
 usr/share/metainfo/us.gridcoin.GridcoinResearch.metainfo.xml
 usr/share/bash-completion/completions/gridcoinresearchd
 usr/share/bash-completion/completions/gridcoinresearch
+usr/share/man/man1/gridcoinresearchd.1
 # The system units reach the package through dh_installsystemd (debian/rules).
 usr/lib/systemd/system/gridcointestnetd.service
 usr/lib/systemd/system/gridcointestnet-autounlock.socket

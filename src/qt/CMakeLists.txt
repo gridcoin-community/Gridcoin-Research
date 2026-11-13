@@ -344,6 +344,9 @@ if(UNIX AND NOT APPLE)
     )
     install(DIRECTORY "${CMAKE_SOURCE_DIR}/share/icons" COMPONENT gui
         DESTINATION "${CMAKE_INSTALL_DATADIR}"
+        # The testnet icons are for the Debian testnet package, which installs
+        # them from the source tree (debian-testnet/gridcointestnet-qt.install).
+        PATTERN "gridcointestnet.*" EXCLUDE
     )
     # The desktop file, with the launcher actions this build can run.
     set(GRC_DESKTOP_FILE "${CMAKE_CURRENT_BINARY_DIR}/gridcoinresearch.desktop")

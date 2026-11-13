@@ -1,6 +1,4 @@
-#!/usr/bin/dh-exec
 usr/bin/gridcointestnetd
-usr/share/man/man1/gridcoinresearchd.1 => usr/share/man/man1/gridcointestnetd.1
 usr/share/gridcointestnet/refused-setting-keys.txt
 usr/lib/systemd/system/gridcointestnetd@.service
 usr/lib/sysusers.d/gridcointestnetd.conf

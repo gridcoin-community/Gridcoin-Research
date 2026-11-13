@@ -52,6 +52,10 @@ UNITDIR := debian/tmp/usr/lib/systemd/system
 %:
 	dh $@ --buildsystem=cmake
 
+# Install the upstream CHANGELOG.md as changelog.gz.
+override_dh_installchangelogs:
+	dh_installchangelogs CHANGELOG.md
+
 override_dh_auto_configure:
 	dh_auto_configure -- \
 		-DENABLE_DAEMON=ON \
@@ -81,12 +85,12 @@ override_dh_auto_test:
 	dh_auto_test -- ARGS="--output-on-failure"
 endif
 
+# The daemon's manual page under the testnet name, installed by dh_installman from
+# gridcointestnetd.manpages. A dh-exec rename in gridcointestnetd.install would move
+# the page out of debian/tmp, and the second dh_install run below would then fail.
 override_dh_install:
 	dh_install
-	install -D -m 644 debian/gridcointestnet-qt.desktop \
-		debian/gridcointestnet-qt/usr/share/applications/gridcointestnet-qt.desktop
-	install -D -m 644 debian/gridcointestnet-qt.png \
-	    debian/gridcointestnet-qt/usr/share/icons/hicolor/48x48/apps/gridcointestnet-qt.png
+	cp doc/gridcoinresearchd.1 debian/gridcointestnetd.1
 	install -d debian/gridcointestnetd/usr/share/bash-completion/completions
 	sed 's/gridcoinresearchd/gridcointestnetd/g' \
 		contrib/completions/bash/gridcoinresearchd.bash \

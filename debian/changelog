@@ -1,3 +1,33 @@
+gridcoinresearch (5.5.2.0-3) UNRELEASED; urgency=medium
+
+  * Installed the upstream CHANGELOG.md as changelog.gz.
+
+  * Removed build-essential from Build-Depends; every build host has it.
+
+ -- Gridcoin Developers <dev@gridcoin.us>  Thu, 12 Nov 2026 18:09:45 -0500
+
+gridcoinresearch (5.5.2.0-2) unstable; urgency=medium
+
+  * Changed what a package upgrade does to gridcoinresearchd.service: a
+    running service keeps running while the new files are unpacked and is
+    restarted when the package is configured. A stopped service stays
+    stopped.
+
+  * Removed RemainAfterExit= from gridcoinresearchd-autounlock.service and
+    gridcoinresearchd-autounlock@.service, the units that unlock the wallet
+    once the daemon is up. After a successful unlock they show
+    "inactive (dead)" in systemctl status, and the journal holds the result.
+
+  * Added -I (Python's isolated mode) to the unlock helper's command line in
+    both autounlock units: the helper ignores PYTHON* environment variables
+    and the user site-packages directory.
+
+  * Set LimitCORE=0 in gridcoinresearchd.service, gridcoinresearchd@.service
+    and both autounlock units: the core file size limit of the daemon and of
+    the unlock helper is zero.
+
+ -- Richard Leckinger <caraka@gridcoin.us>  Mon, 09 Nov 2026 18:06:24 -0500
+
 gridcoinresearch (5.5.2.0-1) unstable; urgency=medium
 
   * 5.5.2.0 2026-11-01 Leisure
@@ -27,6 +57,10 @@ gridcoinresearch (5.5.2.0-1) unstable; urgency=medium
 
   Added
 
+    - debian: per-user gridcoinresearchd@.service and
+      gridcoinresearchd-autounlock@.service templates, so a desktop
+      -multiprocess GUI can attach to a packaged core, and a launcher
+      action that starts the GUI that way (@caraka)
     - doc: add client-facing integration guide for the API proxy #3494
       (@jamescowens)
     - qt: add the SIL OFL texts for the bundled Inter and Inconsolata fonts
