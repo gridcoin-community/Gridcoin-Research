@@ -82,7 +82,7 @@ public:
 
     ProjectRow* index(const int row)
     {
-        if (row > static_cast<int>(m_rows.size())) {
+        if (row < 0 || row >= static_cast<int>(m_rows.size())) {
             return nullptr;
         }
 
@@ -248,7 +248,10 @@ QVariant ProjectTableModel::headerData(int section, Qt::Orientation orientation,
 
 QModelIndex ProjectTableModel::index(int row, int column, const QModelIndex &parent) const
 {
-    Q_UNUSED(parent);
+    if (!hasIndex(row, column, parent)) {
+        return QModelIndex();
+    }
+
     ProjectRow* data = m_data->index(row);
 
     if (data) {

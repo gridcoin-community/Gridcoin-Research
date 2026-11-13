@@ -188,9 +188,7 @@ QVariant PollTableDataModel::headerData(int section, Qt::Orientation orientation
 
 QModelIndex PollTableDataModel::index(int row, int column, const QModelIndex &parent) const
 {
-    Q_UNUSED(parent);
-
-    if (row > static_cast<int>(m_rows.size())) {
+    if (!hasIndex(row, column, parent)) {
         return QModelIndex();
     }
 

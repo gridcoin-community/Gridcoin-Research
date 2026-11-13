@@ -138,7 +138,7 @@ private:
     }
 };
 
-//! Fake interfaces::ResearcherContext: serves a canned snapshot and pool list,
+//! Fake interfaces::ResearcherContext: serves a canned snapshot, pool list and project list,
 //! answers every command with a default result, and counts mode switches so a
 //! test can tell how many times a wizard page was entered.
 class FakeResearcherContext : public interfaces::ResearcherContext
@@ -147,6 +147,7 @@ public:
     // Canned responses (set by the test before use).
     interfaces::ResearcherSnapshot m_snapshot;
     std::vector<interfaces::PoolRow> m_pools;
+    std::vector<interfaces::ResearcherProjectRow> m_projects;
 
     // Recorded calls. The model reads the snapshot from the pushed state and
     // takes none from here, so these stay 0. reload() runs on a worker thread
@@ -172,7 +173,7 @@ public:
     std::vector<interfaces::ResearcherProjectRow> projects(bool /*extended*/) override
     {
         ++m_projects_calls;
-        return {};
+        return m_projects;
     }
     std::vector<interfaces::WhitelistProject> whitelistProjects() override { return {}; }
     std::vector<interfaces::PoolRow> activePools() override { return m_pools; }

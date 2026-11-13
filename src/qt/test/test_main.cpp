@@ -26,6 +26,7 @@
 #include "rpcconsoletests.h"
 #include "sendcoinsdialogtests.h"
 #include "sidestakemodeltests.h"
+#include "tablemodelindextests.h"
 #include "uritests.h"
 #include "walletmodeltests.h"
 
@@ -167,6 +168,10 @@ int main(int argc, char *argv[])
 
     WalletModelTests test24;
     if (QTest::qExec(&test24) != 0)
+        fInvalid = true;
+
+    TableModelIndexTests test25;
+    if (QTest::qExec(&test25) != 0)
         fInvalid = true;
 
     return fInvalid;
