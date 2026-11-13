@@ -27,6 +27,8 @@
 #include "node/chainman.h"
 #include "primitives/block.h"
 #include "primitives/transaction.h"
+#include "rpc/protocol.h"
+#include "rpc/server.h"
 #include "script/script.h"
 #include "streams.h"
 #include "sync.h"
@@ -40,6 +42,8 @@
 #include <functional>
 #include <string>
 #include <vector>
+
+#include <univalue.h>
 
 namespace {
 
@@ -291,6 +295,34 @@ BOOST_AUTO_TEST_CASE(acceptblock_checks_the_stake_before_the_sequence_locks)
     // expects it.
     BOOST_REQUIRE(ForceReorganizeToHash(WITH_LOCK(cs_main, return pindexGenesisBlock->GetBlockHash())));
     BOOST_REQUIRE_EQUAL(WITH_LOCK(cs_main, return nBestHeight), 0);
+}
+
+// getblocksbatch walks the main chain from its starting block. A block that is
+// in the index but no longer in the main chain has no next block, so it is
+// refused as a starting block.
+BOOST_AUTO_TEST_CASE(getblocksbatch_refuses_a_starting_block_off_the_main_chain)
+{
+    const CBlock block = MineOne();
+    const uint256 block_hash = block.GetHash(true);
+
+    UniValue params(UniValue::VARR);
+    params.push_back(block_hash.GetHex());
+    params.push_back(10);
+
+    // On the main chain the block starts a batch.
+    UniValue batch;
+    BOOST_REQUIRE_NO_THROW(batch = getblocksbatch(params));
+    BOOST_CHECK_EQUAL(find_value(batch, "block_count").get_int(), 1);
+
+    // Park the chain at genesis, which leaves the block in the index and off
+    // the main chain, and where a case that runs after this one expects it.
+    BOOST_REQUIRE(WITH_LOCK(cs_main, return pindexGenesisBlock != nullptr));
+    BOOST_REQUIRE(ForceReorganizeToHash(WITH_LOCK(cs_main, return pindexGenesisBlock->GetBlockHash())));
+    BOOST_REQUIRE_EQUAL(WITH_LOCK(cs_main, return nBestHeight), 0);
+
+    BOOST_CHECK_EXCEPTION(getblocksbatch(params), UniValue, [](const UniValue& error) {
+        return find_value(error, "message").get_str() == "Starting block for batch is not in the main chain.";
+    });
 }
 
 BOOST_AUTO_TEST_SUITE_END()

@@ -1209,6 +1209,14 @@ UniValue getblocksbatch(const UniValue& params)
         {
             throw JSONRPCError(RPC_INVALID_PARAMETER, "Starting block for batch not found.");
         }
+
+        // The batch is walked along the main chain from the starting block, so
+        // a block that is in the index but off the main chain (a stale fork)
+        // has no next block to go to.
+        if (!mapBlockIndex[hash]->IsInMainChain())
+        {
+            throw JSONRPCError(RPC_INVALID_PARAMETER, "Starting block for batch is not in the main chain.");
+        }
     }
 
     int batch_size = params[1].get_int();
