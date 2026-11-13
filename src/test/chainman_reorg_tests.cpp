@@ -40,6 +40,7 @@
 #include <boost/test/unit_test.hpp>
 
 #include <functional>
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -323,6 +324,37 @@ BOOST_AUTO_TEST_CASE(getblocksbatch_refuses_a_starting_block_off_the_main_chain)
     BOOST_CHECK_EXCEPTION(getblocksbatch(params), UniValue, [](const UniValue& error) {
         return find_value(error, "message").get_str() == "Starting block for batch is not in the main chain.";
     });
+}
+
+// listtransactions adds its count and its starting offset. With a wallet that
+// has transactions, a count at the top of the int range and an offset must
+// give the entries from the offset on, as any count past the end does.
+BOOST_AUTO_TEST_CASE(listtransactions_takes_a_count_at_the_top_of_the_int_range)
+{
+    MineOne();
+    MineOne();
+
+    UniValue all(UniValue::VARR);
+    all.push_back("*");
+    all.push_back(1000);
+    all.push_back(0);
+
+    const UniValue listed = listtransactions(all);
+    BOOST_REQUIRE(listed.size() >= 2);
+
+    UniValue params(UniValue::VARR);
+    params.push_back("*");
+    params.push_back(std::numeric_limits<int>::max());
+    params.push_back(1);
+
+    UniValue tail;
+    BOOST_REQUIRE_NO_THROW(tail = listtransactions(params));
+    BOOST_CHECK_EQUAL(tail.size(), listed.size() - 1);
+
+    // Leave the chain at genesis, where a case that runs after this one
+    // expects it.
+    BOOST_REQUIRE(ForceReorganizeToHash(WITH_LOCK(cs_main, return pindexGenesisBlock->GetBlockHash())));
+    BOOST_REQUIRE_EQUAL(WITH_LOCK(cs_main, return nBestHeight), 0);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
