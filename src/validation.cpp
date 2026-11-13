@@ -1817,13 +1817,6 @@ bool AcceptBlock(CBlock& block, CValidationState& state, bool generated_by_me, b
         // Check that all transactions are finalized
         if (!IsFinalTx(tx, nHeight, block.GetBlockTime()))
             return state.DoS(10, error("%s: contains a non-final transaction", __func__));
-
-        // BIP68: Check sequence locks for v14+ blocks (skip coinbase and coinstake)
-        if (IsV14Enabled(nHeight) && !tx.IsCoinBase() && !tx.IsCoinStake()) {
-            if (!CheckSequenceLocks(tx, 0, pindexPrev)) {
-                return state.DoS(10, error("%s: contains a transaction with unsatisfied sequence locks", __func__));
-            }
-        }
     }
 
     // Check that the block chain matches the known block chain up to a checkpoint
@@ -1861,6 +1854,19 @@ bool AcceptBlock(CBlock& block, CValidationState& state, bool generated_by_me, b
                 __func__,
                 hashProof.ToString(),
                 hash.ToString());
+        }
+
+        // BIP68: Check sequence locks for v14+ blocks (skip coinbase and coinstake). This follows the checks of
+        // the block's own stake and comes before the stake proof is remembered. Block version 14 is at least
+        // version 8, so every block the rule applies to passes through this branch.
+        if (IsV14Enabled(nHeight)) {
+            for (auto const& tx : block.vtx) {
+                if (tx.IsCoinBase() || tx.IsCoinStake()) continue;
+
+                if (!CheckSequenceLocks(tx, 0, pindexPrev)) {
+                    return state.DoS(10, error("%s: contains a transaction with unsatisfied sequence locks", __func__));
+                }
+            }
         }
 
         g_seen_stakes.Remember(hashProof);
