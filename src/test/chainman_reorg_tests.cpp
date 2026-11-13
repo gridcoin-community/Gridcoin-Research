@@ -17,6 +17,7 @@
 //! is the one way to reach the leg deterministically.
 //!
 
+#include "amount.h"
 #include "chain.h"
 #include "consensus/merkle.h"
 #include "dbwrapper.h"
@@ -25,6 +26,8 @@
 #include "gridcoin/staking/chain_trust.h"
 #include "node/chainman.h"
 #include "primitives/block.h"
+#include "primitives/transaction.h"
+#include "script/script.h"
 #include "streams.h"
 #include "sync.h"
 #include "test/chain_setup.h"
@@ -34,7 +37,9 @@
 
 #include <boost/test/unit_test.hpp>
 
+#include <functional>
 #include <string>
+#include <vector>
 
 namespace {
 
@@ -78,6 +83,43 @@ CBlock SiblingWithSameStake(const CBlock& block)
     stream >> sibling;
 
     return sibling;
+}
+
+//! A transaction whose one input carries a relative lock of \p blocks blocks
+//! on a premine output. It is not signed; the case runs no scripts.
+CTransaction SpendWithRelativeLock(const uint32_t blocks, const uint32_t time)
+{
+    const std::vector<COutPoint> outputs = grc_test::SpendablePremineOutputs();
+    BOOST_REQUIRE(!outputs.empty());
+
+    CMutableTransaction mtx;
+    mtx.nVersion = 2;
+    mtx.nTime = time;
+    mtx.vin.emplace_back(outputs.front(), CScript(), blocks);
+    mtx.vout.emplace_back(1 * COIN, grc_test::PremineScript());
+
+    return CTransaction(mtx);
+}
+
+//! A copy of \p block after \p change, with its merkle root and signature made
+//! again. It shares the block's parent and, unless \p change touches the
+//! coinstake, its stake.
+CBlock ChangedCopy(const CBlock& block, const std::function<void(CBlock&)>& change)
+{
+    CBlock changed = block;
+    change(changed);
+    changed.hashMerkleRoot = BlockMerkleRoot(changed);
+
+    CKey key = grc_test::PremineKey();
+    BOOST_REQUIRE(key.Sign(changed.GetHash(), changed.vchBlockSig));
+
+    CDataStream stream(SER_NETWORK, PROTOCOL_VERSION);
+    stream << changed;
+
+    CBlock copy;
+    stream >> copy;
+
+    return copy;
 }
 
 } // anonymous namespace
@@ -194,6 +236,61 @@ BOOST_AUTO_TEST_CASE(an_imported_block_is_taken_with_a_stake_proof_another_block
     BOOST_REQUIRE(pindexGenesisBlock);
     BOOST_CHECK(ForceReorganizeToHash(pindexGenesisBlock->GetBlockHash()));
     BOOST_CHECK_EQUAL(nBestHeight, 0);
+}
+
+// AcceptBlock() checks a block's stake before the sequence locks of its
+// transactions. A block that breaks both rules is refused for its stake, and a
+// block with a sound stake is still refused for an unsatisfied sequence lock.
+BOOST_AUTO_TEST_CASE(acceptblock_checks_the_stake_before_the_sequence_locks)
+{
+    const CBlock mined = MineOne();
+
+    // A relative lock far longer than the chain is unsatisfied in any block here.
+    const CTransaction locked = SpendWithRelativeLock(1000, mined.nTime);
+
+    const CBlock with_locked_spend = ChangedCopy(mined, [&](CBlock& block) {
+        block.vtx.push_back(locked);
+    });
+
+    const CBlock with_locked_spend_and_unsigned_stake = ChangedCopy(mined, [&](CBlock& block) {
+        block.vtx.push_back(locked);
+
+        CMutableTransaction coinstake(block.vtx[1]);
+        coinstake.vin[0].scriptSig = CScript();
+        block.vtx[1] = CTransaction(std::move(coinstake));
+    });
+
+    {
+        LOCK(cs_main);
+
+        // The stake is checked first.
+        CBlock block = with_locked_spend_and_unsigned_stake;
+        CValidationState state;
+        int score = 0;
+        BOOST_CHECK(!AcceptBlock(block, state, /*generated_by_me=*/false, /*imported=*/false));
+        BOOST_CHECK(state.IsInvalid(score));
+        BOOST_CHECK_EQUAL(score, 100);
+        BOOST_CHECK(!mapBlockIndex.count(block.GetHash(true)));
+    }
+
+    {
+        LOCK(cs_main);
+
+        // The stake is the mined block's own, which is why this copy is given
+        // as an imported block: the stake proof is one the node has seen.
+        CBlock block = with_locked_spend;
+        CValidationState state;
+        int score = 0;
+        BOOST_CHECK(!AcceptBlock(block, state, /*generated_by_me=*/false, /*imported=*/true));
+        BOOST_CHECK(state.IsInvalid(score));
+        BOOST_CHECK_EQUAL(score, 10);
+        BOOST_CHECK(!mapBlockIndex.count(block.GetHash(true)));
+    }
+
+    // Leave the chain at genesis, where a case that runs after this one
+    // expects it.
+    BOOST_REQUIRE(ForceReorganizeToHash(WITH_LOCK(cs_main, return pindexGenesisBlock->GetBlockHash())));
+    BOOST_REQUIRE_EQUAL(WITH_LOCK(cs_main, return nBestHeight), 0);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
