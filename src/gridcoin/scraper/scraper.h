@@ -268,6 +268,17 @@ const std::string GetTextForscraperSBvalidationtype(scraperSBvalidationtype Scra
 double MagRound(double dMag);
 
 /**
+ * @brief Computes statistics from a provided project object
+ * @param project
+ * @param ProjectData
+ * @param projectmag
+ * @param mScraperStats
+ * @return bool true if successful. On false, mScraperStats is empty.
+ */
+bool LoadProjectObjectToStatsByCPID(const std::string& project, const SerializeData& ProjectData, const double& projectmag,
+                                    ScraperStats& mScraperStats);
+
+/**
  * @brief Returns the number of scrapers required for a supermajority when determining a convergence. This is a CONSENSUS
  * critical function
  * @param nScraperCount

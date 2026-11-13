@@ -17,10 +17,14 @@
 #include <util/string.h>
 #include <util/system.h>
 
+#include <boost/iostreams/copy.hpp>
+#include <boost/iostreams/filter/gzip.hpp>
+#include <boost/iostreams/filtering_stream.hpp>
 #include <boost/test/unit_test.hpp>
 
 #include <map>
 #include <memory>
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -290,6 +294,48 @@ BOOST_AUTO_TEST_CASE(convergence_by_project_fails_when_the_beacon_list_manifest_
     ConvergedManifest converged;
 
     BOOST_CHECK(!ScraperConstructConvergedManifestByProject(OneProjectWhitelist(), binned, converged));
+}
+
+//! A project's statistics part is read to its end or not used. A part whose
+//! compressed data ends before its trailer gives every record and then a failed
+//! read.
+BOOST_AUTO_TEST_CASE(a_project_part_that_cannot_be_read_to_its_end_is_refused)
+{
+    const std::string records =
+        "100,1700000000,10,00010203040506070809101112131415\n"
+        "200,1700000000,20,15141312111009080706050403020100\n";
+
+    std::string compressed;
+    {
+        std::istringstream in(records);
+        std::ostringstream out;
+
+        boost::iostreams::filtering_istream filter;
+        filter.push(boost::iostreams::gzip_compressor());
+        filter.push(in);
+        boost::iostreams::copy(filter, out);
+
+        compressed = out.str();
+    }
+
+    // The gzip trailer is the last eight bytes.
+    BOOST_REQUIRE(compressed.size() > 8);
+
+    const std::byte* const begin = reinterpret_cast<const std::byte*>(compressed.data());
+
+    const SerializeData whole(begin, begin + compressed.size());
+    const SerializeData cut_short(begin, begin + compressed.size() - 8);
+
+    ScraperStats stats;
+
+    BOOST_CHECK(LoadProjectObjectToStatsByCPID("project", whole, 0.0, stats));
+    // One entry for each CPID and one for the project.
+    BOOST_CHECK_EQUAL(stats.size(), 3U);
+
+    stats.clear();
+
+    BOOST_CHECK(!LoadProjectObjectToStatsByCPID("project", cut_short, 0.0, stats));
+    BOOST_CHECK(stats.empty());
 }
 
 //! The scraper thread reaches its key while the wallet is unlocked for staking

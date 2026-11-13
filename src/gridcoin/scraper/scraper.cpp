@@ -454,16 +454,6 @@ ScraperStatsVerifiedBeaconsTotalCredits GetScraperStatsFromSingleManifest(const 
 bool LoadProjectFileToStatsByCPID(const std::string& project, const fs::path& file, const double& projectmag,
                                   ScraperStats& mScraperStats);
 /**
- * @brief Computes statistics from a provided project object
- * @param project
- * @param ProjectData
- * @param projectmag
- * @param mScraperStats
- * @return bool true if successful
- */
-bool LoadProjectObjectToStatsByCPID(const std::string& project, const SerializeData& ProjectData, const double& projectmag,
-                                    ScraperStats& mScraperStats);
-/**
  * @brief Computes statistics from a provided project data stream. This is used by LoadProjectFileToStatsByCPID.
  * @param project
  * @param sUncompressedIn
@@ -4117,6 +4107,19 @@ bool ProcessProjectStatsFromStreamByCPID(const std::string& project, boostio::fi
 
         // Increment project
         dProjectRAC += statsentry.statsvalue.dRAC;
+    }
+
+    // A read that fails ends the loop as the end of the data does, with badbit
+    // set on the stream. The part is refused rather than taken as far as it
+    // was read.
+    if (sUncompressedIn.bad()) {
+        _log(logattribute::ERR, __func__, "Project " + project + " part could not be read to its end; rejecting.");
+
+        // As for the record-count path above, the map is emptied for the
+        // rejection to mean anything.
+        mScraperStats.clear();
+
+        return false;
     }
 
     // ReadLineBounded stops rather than buffering an over-long record, so this is
