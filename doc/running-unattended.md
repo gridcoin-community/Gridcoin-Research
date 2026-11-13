@@ -961,3 +961,11 @@ with `(Get-FileHash .\gridcoin-5.5.2.1-win64-setup.exe).Hash`.
 - **`server=0` in the configuration file** turns the RPC listener off, and with it Core-Stop, which stops the core
   over RPC: the only way left to stop the core is a hard kill with no flush. Leave the listener on; it binds to
   loopback only unless you add `rpcallowip`.
+- **"Back Up Wallet and Settings..." fails and Windows says the file cannot be found.** Controlled folder
+  access, the ransomware protection of Windows Security, is on. It is off by default. It stops a program Windows
+  does not yet trust from writing to Documents, Desktop, Pictures and the other folders on its protected list, and
+  the backup dialog opens in Documents. Either save the backup to a folder that is not on the list, or allow the
+  wallet: Windows Security, *Virus & threat protection*, *Manage ransomware protection*, *Allow an app through
+  Controlled folder access*, *Add an allowed app*, and choose `gridcoinresearch.exe` in the install folder. The
+  data directory under `%APPDATA%` and the automatic backups in its `walletbackups` folder are not on the list
+  unless you added them.
