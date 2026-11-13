@@ -326,4 +326,16 @@ const ScraperPendingBeaconMap::value_type* FindOwnershipProofVerifiedBeacon(
     const std::map<std::string, std::string>& project_public_keys,
     unsigned int& signature_failures);
 
+/**
+ * @brief Gives a string as it is used for part of a file name.
+ *
+ * savescraperfilemanifest builds the name of each file it writes from a project name and its ETag, and writes
+ * each file under a plain name in the dump directory.
+ *
+ * @param str A project name or an ETag.
+ * @return The string without the characters / \ : * ? " < > | and without control characters. Other characters,
+ * spaces included, are kept.
+ */
+std::string ToPlainFileNamePart(const std::string& str);
+
 #endif // GRIDCOIN_SCRAPER_SCRAPER_H

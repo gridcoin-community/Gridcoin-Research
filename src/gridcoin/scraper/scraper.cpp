@@ -4616,6 +4616,23 @@ ScraperStatsVerifiedBeaconsTotalCredits GetScraperStatsFromSingleManifest(const 
 * Scraper networking   *
 ************************/
 
+std::string ToPlainFileNamePart(const std::string& str)
+{
+    static const std::string not_in_a_file_name = "/\\:*?\"<>|";
+
+    std::string result;
+    result.reserve(str.size());
+
+    for (const unsigned char c : str) {
+        if (c < 0x20 || c == 0x7f) continue;
+        if (not_in_a_file_name.find(static_cast<char>(c)) != std::string::npos) continue;
+
+        result.push_back(static_cast<char>(c));
+    }
+
+    return result;
+}
+
 bool ScraperSaveCScraperManifestToFiles(uint256 nManifestHash)
 {
     // Check to see if the hash exists in the manifest map, and if not, bail.
@@ -4683,6 +4700,16 @@ bool ScraperSaveCScraperManifestToFiles(uint256 nManifestHash)
         std::string outputfile;
         fs::path outputfilewpath;
 
+        // The parts after the beacon list are named from the manifest's project
+        // entries. A manifest with more parts than entries has none for this one.
+        if (iPartNum > 0 && static_cast<size_t>(iPartNum - 1) >= manifest->projects.size())
+        {
+            _log(logattribute::ERR, "ScraperSaveCScraperManifestToFiles",
+                 "The manifest has no project entry for part " + ToString(iPartNum) + ".");
+
+            return false;
+        }
+
         if (iPartNum == 0)
         {
             outputfile = "BeaconList.csv.gz";
@@ -4693,7 +4720,9 @@ bool ScraperSaveCScraperManifestToFiles(uint256 nManifestHash)
         }
         else
         {
-            outputfile = manifest->projects[iPartNum-1].project + "-" + manifest->projects[iPartNum-1].ETag + ".csv.gz";
+            // Each file is written under a plain name in savepath.
+            outputfile = ToPlainFileNamePart(manifest->projects[iPartNum-1].project) + "-"
+                    + ToPlainFileNamePart(manifest->projects[iPartNum-1].ETag) + ".csv.gz";
         }
 
         outputfilewpath = savepath / outputfile;

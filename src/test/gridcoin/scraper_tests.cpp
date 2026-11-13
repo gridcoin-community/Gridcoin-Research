@@ -395,4 +395,22 @@ BOOST_AUTO_TEST_CASE(scraper_rpc_path_refused_under_staking_only)
     }
 }
 
+// savescraperfilemanifest names the files it writes from project names and
+// ETags, and writes each under a plain name in the dump directory.
+BOOST_AUTO_TEST_CASE(a_plain_file_name_part_keeps_the_characters_of_a_file_name)
+{
+    BOOST_CHECK_EQUAL(ToPlainFileNamePart("World Community Grid"), "World Community Grid");
+    BOOST_CHECK_EQUAL(ToPlainFileNamePart("yoyo@home"), "yoyo@home");
+    BOOST_CHECK_EQUAL(ToPlainFileNamePart("5f3a-61b2c.d_e"), "5f3a-61b2c.d_e");
+    BOOST_CHECK_EQUAL(ToPlainFileNamePart(""), "");
+
+    BOOST_CHECK_EQUAL(ToPlainFileNamePart("../project"), "..project");
+    BOOST_CHECK_EQUAL(ToPlainFileNamePart("/project"), "project");
+    BOOST_CHECK_EQUAL(ToPlainFileNamePart("project\\name"), "projectname");
+    BOOST_CHECK_EQUAL(ToPlainFileNamePart("D:project"), "Dproject");
+    BOOST_CHECK_EQUAL(ToPlainFileNamePart("project:stream"), "projectstream");
+    BOOST_CHECK_EQUAL(ToPlainFileNamePart("a*b?c\"d<e>f|g"), "abcdefg");
+    BOOST_CHECK_EQUAL(ToPlainFileNamePart(std::string("a\0b\tc\nd\x7f" "e", 9)), "abcde");
+}
+
 BOOST_AUTO_TEST_SUITE_END()
