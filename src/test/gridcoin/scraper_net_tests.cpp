@@ -585,4 +585,67 @@ BOOST_AUTO_TEST_CASE(a_part_is_needed_only_while_referenced_and_missing)
     BOOST_CHECK(CSplitBlob::PartNeeded(unreferenced) == false);
 }
 
+//! A manifest ends at its signature. A message with more after it is refused.
+//!
+BOOST_AUTO_TEST_CASE(recvmanifest_refuses_data_after_the_signature)
+{
+    CKey key;
+    key.MakeNewKey(true);
+
+    // The publisher's object is never put in the manifest map. It holds the
+    // parts, so the copy a node receives below is complete on arrival.
+    const auto publisher = std::make_shared<CScraperManifest>();
+
+    CDataStream beacon_part(SER_NETWORK, 1);
+    beacon_part << std::string("beacon list part for the signature test");
+    CDataStream project_part(SER_NETWORK, 1);
+    project_part << std::string("project part for the signature test");
+
+    BOOST_REQUIRE_EQUAL(publisher->addPartData(std::move(beacon_part)), 0);
+    BOOST_REQUIRE_EQUAL(publisher->addPartData(std::move(project_part)), 1);
+
+    CDataStream wire(SER_NETWORK, 1);
+    {
+        LOCK2(CSplitBlob::cs_mapParts, publisher->cs_manifest);
+
+        publisher->sCManifestName = "signature-test-scraper";
+        publisher->pubkey = key.GetPubKey();
+        publisher->nTime = GetAdjustedTime();
+        publisher->BeaconList = 0;
+        publisher->BeaconList_c = 0;
+
+        CScraperManifest::dentry project;
+        project.project = "project";
+        project.part1 = 1;
+        publisher->projects.push_back(project);
+
+        CDataStream compare(SER_NETWORK, 1);
+        publisher->SerializeForManifestCompare(compare);
+        publisher->nContentHash = Hash(compare);
+
+        CDataStream unsigned_bytes(SER_NETWORK, 1);
+        publisher->SerializeWithoutSignature(unsigned_bytes);
+        BOOST_REQUIRE(key.Sign(Hash(unsigned_bytes), publisher->signature));
+
+        publisher->Serialize(wire);
+    }
+
+    CDataStream longer(wire);
+    longer << static_cast<unsigned char>(0);
+
+    const uint256 received_hash = Hash(wire);
+    const uint256 longer_hash = Hash(longer);
+
+    CDataStream as_signed(wire);
+    BOOST_CHECK(CScraperManifest::RecvManifest(nullptr, as_signed));
+    BOOST_CHECK(!CScraperManifest::RecvManifest(nullptr, longer));
+
+    LOCK(CScraperManifest::cs_mapManifest);
+
+    BOOST_CHECK_EQUAL(CScraperManifest::mapManifest.count(received_hash), 1u);
+    BOOST_CHECK_EQUAL(CScraperManifest::mapManifest.count(longer_hash), 0u);
+
+    CScraperManifest::DeleteManifest(received_hash, true);
+}
+
 BOOST_AUTO_TEST_SUITE_END()
