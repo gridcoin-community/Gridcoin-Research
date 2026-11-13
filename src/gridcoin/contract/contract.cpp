@@ -916,15 +916,17 @@ ContractPayload Contract::Body::AssumeLegacy() const
 
 ContractPayload Contract::Body::ConvertFromLegacy(const ContractType type, uint32_t version) const
 {
-    // We use static_cast here instead of dynamic_cast to avoid the lookup. The
-    // value of m_payload is guaranteed to be a LegacyPayload for v1 contracts.
+    // Only a payload in the legacy text form needs converting. Any other is
+    // already the native payload for the contract's type, which is what the
+    // caller asks for, so it is returned as it is.
     //
-    LegacyPayload legacy;
+    const auto* const legacy_payload = dynamic_cast<const LegacyPayload*>(&*m_payload);
 
-    //TODO: Evaluate if this condition is relevant anymore
-    //if (version < 2) {
-        legacy = static_cast<const LegacyPayload&>(*m_payload);
-    //}
+    if (!legacy_payload) {
+        return m_payload;
+    }
+
+    const LegacyPayload& legacy = *legacy_payload;
 
     switch (type) {
         case ContractType::UNKNOWN:

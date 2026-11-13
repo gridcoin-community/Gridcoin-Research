@@ -708,6 +708,23 @@ BOOST_AUTO_TEST_CASE(it_converts_known_legacy_contract_payloads)
     BOOST_CHECK_EQUAL(payload->m_url, "test");
 }
 
+// ConvertFromLegacy() converts a payload in the legacy text form. A payload that
+// is already the native one for its contract type is returned as it is.
+BOOST_AUTO_TEST_CASE(convert_from_legacy_returns_a_native_payload_as_it_is)
+{
+    const GRC::Contract contract = TestMessage::Current();
+
+    const GRC::ContractPayload payload = contract.m_body.ConvertFromLegacy(
+        GRC::ContractType::PROJECT, contract.m_version);
+
+    BOOST_REQUIRE(dynamic_cast<const GRC::Project*>(&*payload) != nullptr);
+
+    const GRC::Project& project = payload.As<GRC::Project>();
+
+    BOOST_CHECK_EQUAL(project.m_name, "test");
+    BOOST_CHECK_EQUAL(project.m_url, "test");
+}
+
 BOOST_AUTO_TEST_CASE(it_copies_a_cast_or_converted_payload)
 {
     const GRC::Contract contract = TestMessage::Current();
