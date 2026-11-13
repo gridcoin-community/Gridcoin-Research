@@ -544,4 +544,45 @@ BOOST_AUTO_TEST_CASE(purging_a_pending_entry_clears_phash)
     BOOST_CHECK(WITH_LOCK(manifest->cs_manifest, return manifest->phash) == nullptr);
 }
 
+//!
+//! A part is needed only while a split object references it and its data has
+//! not arrived. That is the one case in which a peer's announcement of the part
+//! draws a request. A part nothing references, and a part whose data is already
+//! here, are not needed.
+//!
+BOOST_AUTO_TEST_CASE(a_part_is_needed_only_while_referenced_and_missing)
+{
+    auto manifest = std::shared_ptr<CScraperManifest>(new CScraperManifest());
+
+    // A part the manifest references whose data has not arrived.
+    const uint256 missing = Hash(std::string("a part that has not arrived"));
+    manifest->addPart(missing);
+
+    // A part the manifest references whose data is here.
+    CDataStream data(SER_NETWORK, PROTOCOL_VERSION);
+    data << std::string("a part that is here");
+    BOOST_REQUIRE_EQUAL(manifest->addPartData(std::move(data)), 1);
+
+    // A part that nothing references.
+    const uint256 unreferenced = Hash(std::string("a part nothing references"));
+
+    uint256 held;
+    {
+        // The order production uses: cs_mapParts, then cs_manifest.
+        LOCK2(CSplitBlob::cs_mapParts, manifest->cs_manifest);
+
+        BOOST_REQUIRE_EQUAL(manifest->vParts.size(), 2u);
+        BOOST_REQUIRE(!manifest->vParts[0]->present());
+        BOOST_REQUIRE(manifest->vParts[1]->present());
+        BOOST_REQUIRE(CSplitBlob::mapParts.count(unreferenced) == 0);
+
+        held = manifest->vParts[1]->hash;
+    }
+
+    // PartNeeded() takes cs_mapParts itself, so it is called with no lock held.
+    BOOST_CHECK(CSplitBlob::PartNeeded(missing) == true);
+    BOOST_CHECK(CSplitBlob::PartNeeded(held) == false);
+    BOOST_CHECK(CSplitBlob::PartNeeded(unreferenced) == false);
+}
+
 BOOST_AUTO_TEST_SUITE_END()

@@ -373,6 +373,15 @@ void CSplitBlob::UseAsSource(CNode* pfrom) EXCLUSIVE_LOCKS_REQUIRED(CSplitBlob::
     }
 }
 
+bool CSplitBlob::PartNeeded(const uint256& hash)
+{
+    LOCK(cs_mapParts);
+
+    const auto part = mapParts.find(hash);
+
+    return part != mapParts.end() && !part->second.present();
+}
+
 bool CSplitBlob::SendPartTo(CNode* pto, const uint256& hash) EXCLUSIVE_LOCKS_REQUIRED(CSplitBlob::cs_mapParts)
 {
     auto ipart = mapParts.find(hash);
