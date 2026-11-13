@@ -5,13 +5,18 @@
 #include "qt/test/guiutiltests.h"
 
 #include "qt/guiutil.h"
+#include "qt/overviewpage.h"
+#include "qt/voting/pollwizardsummarypage.h"
+#include "qt/voting/votewizardsummarypage.h"
 #include "util.h"
 
 #include <QFile>
+#include <QLabel>
 #include <QMessageBox>
 #include <QSettings>
 #include <QString>
 #include <QTemporaryDir>
+#include <QWidget>
 
 #include <string>
 
@@ -200,4 +205,54 @@ void GUIUtilTests::coreFileOpenDecision()
     const auto box = GUIUtil::MakeCoreFileBox(QMessageBox::Information, nullptr, QStringLiteral("t"),
                                               QStringLiteral("<b>/x</b>"));
     QVERIFY(box->textFormat() == Qt::PlainText);
+}
+
+void GUIUtilTests::webLinkHtml_data()
+{
+    QTest::addColumn<QString>("url");
+    QTest::addColumn<QString>("html");
+
+    QTest::newRow("https") << QStringLiteral("https://gridcoin.us/polls")
+                           << QStringLiteral("<a href=\"https://gridcoin.us/polls\">https://gridcoin.us/polls</a>");
+    QTest::newRow("http") << QStringLiteral("http://example.com/a?b=1&c=2")
+                          << QStringLiteral("<a href=\"http://example.com/a?b=1&amp;c=2\">"
+                                            "http://example.com/a?b=1&amp;c=2</a>");
+
+    // Not a web address: shown as text, with no link.
+    QTest::newRow("no scheme") << QStringLiteral("gridcoin.us/polls") << QStringLiteral("gridcoin.us/polls");
+    QTest::newRow("other scheme") << QStringLiteral("file:///poll") << QStringLiteral("file:///poll");
+    QTest::newRow("no host") << QStringLiteral("https:///polls") << QStringLiteral("https:///polls");
+
+    // Not a valid URL: shown as text, escaped for the rich text label.
+    QTest::newRow("double quote") << QStringLiteral("https://example.com/a\"b")
+                                  << QStringLiteral("https://example.com/a&quot;b");
+    QTest::newRow("angle brackets") << QStringLiteral("https://example.com/<a>")
+                                    << QStringLiteral("https://example.com/&lt;a&gt;");
+}
+
+void GUIUtilTests::webLinkHtml()
+{
+    QFETCH(QString, url);
+    QFETCH(QString, html);
+
+    QCOMPARE(GUIUtil::WebLinkHtml(url), html);
+}
+
+// The labels that show a poll's title are plain text labels.
+void GUIUtilTests::pollTitleLabelsShowPlainText()
+{
+    const auto format_of = [](const QWidget& page, const char* const name) {
+        const auto* const label = page.findChild<QLabel*>(QString::fromLatin1(name));
+
+        return label ? label->textFormat() : Qt::AutoText;
+    };
+
+    const OverviewPage overview;
+    QCOMPARE(format_of(overview, "currentPollsTitleLabel"), Qt::PlainText);
+
+    const VoteWizardSummaryPage vote_summary;
+    QCOMPARE(format_of(vote_summary, "pollTitleLabel"), Qt::PlainText);
+
+    const PollWizardSummaryPage poll_summary;
+    QCOMPARE(format_of(poll_summary, "pollTitleLabel"), Qt::PlainText);
 }

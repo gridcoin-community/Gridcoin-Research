@@ -454,16 +454,6 @@ ScraperStatsVerifiedBeaconsTotalCredits GetScraperStatsFromSingleManifest(const 
 bool LoadProjectFileToStatsByCPID(const std::string& project, const fs::path& file, const double& projectmag,
                                   ScraperStats& mScraperStats);
 /**
- * @brief Computes statistics from a provided project object
- * @param project
- * @param ProjectData
- * @param projectmag
- * @param mScraperStats
- * @return bool true if successful
- */
-bool LoadProjectObjectToStatsByCPID(const std::string& project, const SerializeData& ProjectData, const double& projectmag,
-                                    ScraperStats& mScraperStats);
-/**
  * @brief Computes statistics from a provided project data stream. This is used by LoadProjectFileToStatsByCPID.
  * @param project
  * @param sUncompressedIn
@@ -4119,6 +4109,19 @@ bool ProcessProjectStatsFromStreamByCPID(const std::string& project, boostio::fi
         dProjectRAC += statsentry.statsvalue.dRAC;
     }
 
+    // A read that fails ends the loop as the end of the data does, with badbit
+    // set on the stream. The part is refused rather than taken as far as it
+    // was read.
+    if (sUncompressedIn.bad()) {
+        _log(logattribute::ERR, __func__, "Project " + project + " part could not be read to its end; rejecting.");
+
+        // As for the record-count path above, the map is emptied for the
+        // rejection to mean anything.
+        mScraperStats.clear();
+
+        return false;
+    }
+
     // ReadLineBounded stops rather than buffering an over-long record, so this is
     // the decompression-bomb case: an expansion with no newlines, or a record far
     // wider than the format allows. Refuse the part rather than accept a
@@ -4613,6 +4616,23 @@ ScraperStatsVerifiedBeaconsTotalCredits GetScraperStatsFromSingleManifest(const 
 * Scraper networking   *
 ************************/
 
+std::string ToPlainFileNamePart(const std::string& str)
+{
+    static const std::string not_in_a_file_name = "/\\:*?\"<>|";
+
+    std::string result;
+    result.reserve(str.size());
+
+    for (const unsigned char c : str) {
+        if (c < 0x20 || c == 0x7f) continue;
+        if (not_in_a_file_name.find(static_cast<char>(c)) != std::string::npos) continue;
+
+        result.push_back(static_cast<char>(c));
+    }
+
+    return result;
+}
+
 bool ScraperSaveCScraperManifestToFiles(uint256 nManifestHash)
 {
     // Check to see if the hash exists in the manifest map, and if not, bail.
@@ -4680,6 +4700,16 @@ bool ScraperSaveCScraperManifestToFiles(uint256 nManifestHash)
         std::string outputfile;
         fs::path outputfilewpath;
 
+        // The parts after the beacon list are named from the manifest's project
+        // entries. A manifest with more parts than entries has none for this one.
+        if (iPartNum > 0 && static_cast<size_t>(iPartNum - 1) >= manifest->projects.size())
+        {
+            _log(logattribute::ERR, "ScraperSaveCScraperManifestToFiles",
+                 "The manifest has no project entry for part " + ToString(iPartNum) + ".");
+
+            return false;
+        }
+
         if (iPartNum == 0)
         {
             outputfile = "BeaconList.csv.gz";
@@ -4690,7 +4720,9 @@ bool ScraperSaveCScraperManifestToFiles(uint256 nManifestHash)
         }
         else
         {
-            outputfile = manifest->projects[iPartNum-1].project + "-" + manifest->projects[iPartNum-1].ETag + ".csv.gz";
+            // Each file is written under a plain name in savepath.
+            outputfile = ToPlainFileNamePart(manifest->projects[iPartNum-1].project) + "-"
+                    + ToPlainFileNamePart(manifest->projects[iPartNum-1].ETag) + ".csv.gz";
         }
 
         outputfilewpath = savepath / outputfile;

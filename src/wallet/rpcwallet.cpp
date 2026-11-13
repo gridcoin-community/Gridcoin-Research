@@ -2659,6 +2659,10 @@ UniValue listtransactions(const UniValue& params)
     if (nFrom < 0)
         throw JSONRPCError(RPC_INVALID_PARAMETER, "Negative from");
 
+    // The two are added to find how many entries to collect, and each may be
+    // as large as an int, so the sum is taken in 64 bits.
+    const int64_t wanted = (int64_t)nCount + nFrom;
+
     UniValue ret(UniValue::VARR);
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
@@ -2685,7 +2689,7 @@ UniValue listtransactions(const UniValue& params)
             AcentryToJSON(pacentry_opt.value(), strAccount, ret);
         }
 
-        if ((int)ret.size() >= (nCount + nFrom)) {
+        if ((int64_t)ret.size() >= wanted) {
             break;
         }
     }
@@ -2693,7 +2697,7 @@ UniValue listtransactions(const UniValue& params)
 
     if (nFrom > (int)ret.size())
         nFrom = ret.size();
-    if ((nFrom + nCount) > (int)ret.size())
+    if ((int64_t)nFrom + nCount > (int64_t)ret.size())
         nCount = ret.size() - nFrom;
 
     std::vector<UniValue> arrTmp = ret.getValues();

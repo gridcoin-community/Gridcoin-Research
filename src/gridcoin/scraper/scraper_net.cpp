@@ -972,6 +972,9 @@ EXCLUSIVE_LOCKS_REQUIRED(CScraperManifest::cs_mapManifest, CSplitBlob::cs_manife
 
     if (!pubkey.Verify(hash, signature)) return error("CScraperManifest: Invalid manifest signature");
 
+    // The signature is the last field of a manifest.
+    if (!ss.empty()) return error("CScraperManifest: manifest has data after its signature");
+
     // Validate the whole part list before registering any of it, so a rejected
     // manifest never leaves half its parts in the shared mapParts.
     for (const uint256& ph : vph)

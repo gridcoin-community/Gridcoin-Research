@@ -268,6 +268,17 @@ const std::string GetTextForscraperSBvalidationtype(scraperSBvalidationtype Scra
 double MagRound(double dMag);
 
 /**
+ * @brief Computes statistics from a provided project object
+ * @param project
+ * @param ProjectData
+ * @param projectmag
+ * @param mScraperStats
+ * @return bool true if successful. On false, mScraperStats is empty.
+ */
+bool LoadProjectObjectToStatsByCPID(const std::string& project, const SerializeData& ProjectData, const double& projectmag,
+                                    ScraperStats& mScraperStats);
+
+/**
  * @brief Returns the number of scrapers required for a supermajority when determining a convergence. This is a CONSENSUS
  * critical function
  * @param nScraperCount
@@ -314,5 +325,17 @@ const ScraperPendingBeaconMap::value_type* FindOwnershipProofVerifiedBeacon(
     uint32_t user_account_id,
     const std::map<std::string, std::string>& project_public_keys,
     unsigned int& signature_failures);
+
+/**
+ * @brief Gives a string as it is used for part of a file name.
+ *
+ * savescraperfilemanifest builds the name of each file it writes from a project name and its ETag, and writes
+ * each file under a plain name in the dump directory.
+ *
+ * @param str A project name or an ETag.
+ * @return The string without the characters / \ : * ? " < > | and without control characters. Other characters,
+ * spaces included, are kept.
+ */
+std::string ToPlainFileNamePart(const std::string& str);
 
 #endif // GRIDCOIN_SCRAPER_SCRAPER_H

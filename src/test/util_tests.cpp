@@ -36,7 +36,9 @@
 #include <stdexcept>
 #include <system_error>
 
+#include <ios>
 #include <sstream>
+#include <streambuf>
 #include <fstream>
 #include <functional>
 #include <list>
@@ -1590,6 +1592,52 @@ BOOST_AUTO_TEST_CASE(readlinebounded_treats_a_blank_line_as_a_line)
 
     BOOST_CHECK(ReadLineBounded(in, line, 64, overlong));
     BOOST_CHECK_EQUAL(line, "third");
+}
+
+namespace {
+//! A stream buffer that serves its text and then fails the next read by
+//! throwing, as a filtering buffer does on input it cannot decode.
+class FailingReadBuffer : public std::streambuf
+{
+public:
+    explicit FailingReadBuffer(std::string text) : m_text(std::move(text))
+    {
+        setg(m_text.data(), m_text.data(), m_text.data() + m_text.size());
+    }
+
+protected:
+    int_type underflow() override
+    {
+        throw std::ios_base::failure("read failed");
+    }
+
+private:
+    std::string m_text;
+};
+} // anonymous namespace
+
+//! A buffer that throws on a read ends the caller's loop the way it does for
+//! the istream functions: badbit is set, the read reports failure, and nothing
+//! is thrown at the caller.
+BOOST_AUTO_TEST_CASE(readlinebounded_reports_a_read_the_buffer_fails)
+{
+    FailingReadBuffer buffer("whole line\npart of a li");
+    std::istream in(&buffer);
+    std::string line;
+    bool overlong = false;
+
+    BOOST_CHECK(ReadLineBounded(in, line, 64, overlong));
+    BOOST_CHECK_EQUAL(line, "whole line");
+    BOOST_CHECK(!in.bad());
+
+    bool read = true;
+    BOOST_CHECK_NO_THROW(read = ReadLineBounded(in, line, 64, overlong));
+    BOOST_CHECK(!read);
+    BOOST_CHECK(in.bad());
+    BOOST_CHECK(!overlong);
+
+    // The stream stays failed.
+    BOOST_CHECK(!ReadLineBounded(in, line, 64, overlong));
 }
 
 //! A final line with no trailing newline is still a line.
