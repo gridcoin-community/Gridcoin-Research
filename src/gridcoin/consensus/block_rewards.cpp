@@ -577,6 +577,16 @@ bool BlockRewardRules::CheckMRCRewards(
                                 return false;
                             }
 
+                            // From block version 15 a claim lists each MRC under the MRC's own CPID, as the miner
+                            // builds it. That a listed transaction carries one MRC and no other contract is
+                            // ValidateMRC()'s rule, which ConnectBlock applies to every transaction of the block
+                            // before it checks the rewards.
+                            if (m_block_version >= 15 && mrc_entry.first != *cpid) {
+                                error_out = strprintf("MRC for CPID %s listed in the claim under CPID %s",
+                                                      cpid->ToString(), mrc_entry.first.ToString());
+                                return false;
+                            }
+
                             const auto mrc_it = mapBlockIndex.find(mrc.m_last_block_hash);
                             if (mrc_it == mapBlockIndex.end() || mrc_it->second == nullptr) {
                                 error_out = "MRC refers to unknown last-block hash";
