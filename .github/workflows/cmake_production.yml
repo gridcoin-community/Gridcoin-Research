@@ -450,6 +450,10 @@ jobs:
     env:
       MACOS_DEPLOYMENT_TARGET: "15.0"
     runs-on: macos-15
+    # On a release tag the job signs with the release identity and notarizes, under the
+    # macos-release environment, which holds the Apple secrets. Every other run has no
+    # environment and signs ad hoc (doc/release-process.md, "macOS signing").
+    environment: ${{ startsWith(github.ref, 'refs/tags/') && 'macos-release' || '' }}
     steps:
       - uses: actions/checkout@v5
 
@@ -501,6 +505,7 @@ jobs:
           "${RUNNER_TEMP}/venv/bin/pip" install ds_store mac_alias
 
       - name: Import Code Signing Certificate
+        if: startsWith(github.ref, 'refs/tags/')
         env:
           APPLE_CERTIFICATE_P12: ${{ secrets.APPLE_CERTIFICATE_P12 }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
@@ -533,6 +538,7 @@ jobs:
           echo "KEYCHAIN_PATH=$KEYCHAIN_PATH" >> $GITHUB_ENV
 
       - name: Set Signing Identity
+        if: startsWith(github.ref, 'refs/tags/')
         run: |
           if [ -n "$IDENTITY" ]; then
             echo "APPLE_SIGNING_IDENTITY=$IDENTITY" >> $GITHUB_ENV
@@ -896,6 +902,8 @@ jobs:
     # macos-15-intel is available until August 2027, after which Actions drops
     # x86_64 entirely (actions/runner-images#13045).
     runs-on: macos-15-intel
+    # As in the ARM64 job: the macos-release environment on a release tag, none otherwise.
+    environment: ${{ startsWith(github.ref, 'refs/tags/') && 'macos-release' || '' }}
     steps:
       - uses: actions/checkout@v5
 
@@ -948,6 +956,7 @@ jobs:
           "${RUNNER_TEMP}/venv/bin/pip" install ds_store mac_alias
 
       - name: Import Code Signing Certificate
+        if: startsWith(github.ref, 'refs/tags/')
         env:
           APPLE_CERTIFICATE_P12: ${{ secrets.APPLE_CERTIFICATE_P12 }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
@@ -980,6 +989,7 @@ jobs:
           echo "KEYCHAIN_PATH=$KEYCHAIN_PATH" >> $GITHUB_ENV
 
       - name: Set Signing Identity
+        if: startsWith(github.ref, 'refs/tags/')
         run: |
           if [ -n "$IDENTITY" ]; then
             echo "APPLE_SIGNING_IDENTITY=$IDENTITY" >> $GITHUB_ENV
