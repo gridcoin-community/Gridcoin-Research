@@ -97,6 +97,27 @@ installer.
 Users check a release with `Update-GridcoinCore.ps1`, or with `Test-GridcoinRelease.ps1` for an installer they run
 by hand; see [`running-unattended.md` -> *Upgrading (Windows)*](running-unattended.md#upgrading-windows).
 
+### macOS signing
+The macOS DMGs are signed with a Developer ID Application certificate under the hardened runtime and notarized
+by Apple. CI does both on release tags only, in the two macOS jobs of `cmake_production.yml`, which run under
+the GitHub environment `macos-release` on a release tag. The same two repository settings as for Windows decide
+who can reach the signing: the environment deploys only for tags shaped like a version, and the tag ruleset
+"Release tags: admins only" lets only administrators create such a tag. Every other run, and every run in
+another repository, has no environment, signs ad hoc and is not notarized; the build does not fail.
+
+The environment holds these secrets, and the repository holds none of them:
+
+ - `APPLE_CERTIFICATE_P12` and `APPLE_CERTIFICATE_PASSWORD`: the certificate and its key, base64 of a `.p12`;
+ - `APPLE_SIGNING_IDENTITY`: the certificate's common name;
+ - `APPLE_TEAM_ID`: the team the DMG check holds every file of the bundle to;
+ - `APPLE_NOTARY_APPLE_ID` and `APPLE_NOTARY_PASSWORD`: the notary account and its app-specific password.
+
+The main executable is signed with `contrib/macdeploy/entitlements-gui.plist`, and everything else in the
+bundle with no entitlements. On every run `contrib/devtools/check-macos-bundle.py` checks the mounted DMG:
+each file's entitlements, library references (explicit paths only) and search paths, and that its signature verifies, and, on a
+release tag, that team's signature and the hardened runtime on every file. A release tag build with a signing
+identity and no `APPLE_TEAM_ID` fails.
+
 ### Tag
  - git tag -s [version]  # Paste previous commit message into this commit message
  - git push --tags

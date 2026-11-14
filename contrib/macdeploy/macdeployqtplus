@@ -221,21 +221,30 @@ def getRpaths(binaryPath: str, verbose: int) -> List[str]:
         print(f"  rpaths for {binaryPath}: {rpaths}")
     return rpaths
 
+def getOwnInstallName(binaryPath: str) -> Optional[str]:
+    """Return the install name (LC_ID_DYLIB) of a Mach-O file, or None if it has none."""
+    output = run(["otool", "-D", binaryPath], stdout=PIPE, stderr=PIPE, text=True)
+    if output.returncode != 0:
+        return None
+    # The first line names the file; the install name, if any, follows.
+    names = [line.strip() for line in output.stdout.split("\n")[1:] if line.strip()]
+    return names[0] if names else None
+
 def expandRpathTokens(rpath: str, binaryPath: str) -> str:
     """Expand @loader_path and @executable_path tokens in an rpath entry."""
     rpath = rpath.replace("@loader_path", os.path.dirname(binaryPath))
     rpath = rpath.replace("@executable_path", os.path.dirname(binaryPath))
     return rpath
 
-def resolveRpath(line: str, rpaths: List[str], binaryPath: str) -> Optional[str]:
+def resolveRpath(line: str, rpaths: List[str], binaryPaths: List[str]) -> Optional[str]:
     """Try to resolve an @rpath reference using extracted rpaths.
 
     Returns the line with @rpath replaced by the matching rpath,
     or None if no rpath resolves to an existing path.
-    Expands @loader_path/@executable_path tokens within rpath entries.
+    Expands @loader_path/@executable_path tokens within rpath entries, from
+    each of binaryPaths in turn.
     """
-    for rp in rpaths:
-        rp = expandRpathTokens(rp, binaryPath)
+    for rp in [expandRpathTokens(rpath, binaryPath) for binaryPath in binaryPaths for rpath in rpaths]:
         candidate = line.replace("@rpath", rp)
         stripped = candidate.strip()
         m = FrameworkInfo.reOLine.match(stripped)
@@ -254,7 +263,13 @@ def resolveRpath(line: str, rpaths: List[str], binaryPath: str) -> Optional[str]
                 return f"  {path}{version_info}"
     return None
 
-def getFrameworks(binaryPath: str, verbose: int) -> List[FrameworkInfo]:
+def getFrameworks(binaryPath: str, verbose: int, originalPaths: Optional[List[str]] = None) -> List[FrameworkInfo]:
+    """List the libraries binaryPath references that are to be deployed.
+
+    originalPaths names where a copied file came from. Its search paths are
+    relative to that place, so its @rpath references are resolved from there
+    and not from where the copy sits.
+    """
     objdump = os.getenv("OBJDUMP", "objdump")
     if verbose:
         print(f"Inspecting with {objdump}: {binaryPath}")
@@ -266,8 +281,14 @@ def getFrameworks(binaryPath: str, verbose: int) -> List[FrameworkInfo]:
 
     lines = output.stdout.split("\n")
     lines.pop(0) # First line is the inspected binary
-    if ".framework" in binaryPath or binaryPath.endswith(".dylib"):
-        lines.pop(0) # Frameworks and dylibs list themselves as a dependency.
+    # A library lists its own install name first. A Qt plugin is a loadable
+    # bundle with a .dylib name and no install name, so its first line is a
+    # real dependency.
+    ownName = getOwnInstallName(binaryPath)
+    if ownName is not None and lines:
+        first = FrameworkInfo.reOLine.match(lines[0].strip())
+        if first is not None and first.group(1) == ownName:
+            lines.pop(0)
 
     # Extract rpaths for resolving @rpath references
     rpaths = getRpaths(binaryPath, verbose)
@@ -281,7 +302,7 @@ def getFrameworks(binaryPath: str, verbose: int) -> List[FrameworkInfo]:
 
         line = line.replace("@loader_path", os.path.dirname(binaryPath))
         if "@rpath/" in line:
-            resolved = resolveRpath(line, rpaths, binaryPath)
+            resolved = resolveRpath(line, rpaths, originalPaths or [binaryPath])
             if resolved is not None:
                 line = resolved
             else:
@@ -320,6 +341,57 @@ def changeIdentification(id: str, binaryPath: str, verbose: int):
         print(" change identification in", binaryPath)
         print(" to", id)
     runInstallNameTool("id", id, binaryPath)
+
+MACHO_MAGICS = (b"\xfe\xed\xfa\xce", b"\xce\xfa\xed\xfe", b"\xfe\xed\xfa\xcf", b"\xcf\xfa\xed\xfe",
+                b"\xca\xfe\xba\xbe", b"\xbe\xba\xfe\xca")
+
+def isMachO(path: str) -> bool:
+    try:
+        with open(path, "rb") as f:
+            return f.read(4) in MACHO_MAGICS
+    except OSError:
+        return False
+
+def rpathStaysInBundle(bundlePath: str, path: str, rpath: str) -> bool:
+    """Whether an LC_RPATH of the file at path names a directory inside the bundle.
+
+    @loader_path is the file's own directory. @executable_path is the
+    directory of whichever of the bundle's executables started the process.
+    A library's package layout can give it a relative path that lands outside
+    the bundle from where the library sits here.
+    """
+    root = os.path.normpath(bundlePath)
+    executableDirs = [os.path.join(root, "Contents", "MacOS"), os.path.join(root, "Contents", "Helpers")]
+    for token, bases in (("@loader_path", [os.path.dirname(path)]), ("@executable_path", executableDirs)):
+        if rpath == token or rpath.startswith(token + "/"):
+            places = [os.path.normpath(base + rpath[len(token):]) for base in bases]
+            return all(place == root or place.startswith(root + "/") for place in places)
+    return False
+
+def removeBuildRpaths(bundlePath: str, verbose: int):
+    """Delete every LC_RPATH of the bundle's Mach-O files that does not stay inside the bundle.
+
+    The executables come from the build tree and the libraries from the build
+    machine's package manager, and both carry search paths of that machine.
+    Every reference has been rewritten to a path inside the bundle by now, so
+    those search paths are unused, and they name directories that mean nothing
+    where the bundle is installed.
+    """
+    for dirpath, _dirnames, filenames in os.walk(bundlePath):
+        for filename in sorted(filenames):
+            path = os.path.join(dirpath, filename)
+            if os.path.islink(path) or not isMachO(path):
+                continue
+            # A universal file lists each slice's paths, and one delete removes
+            # the path from every slice that has it.
+            for rpath in dict.fromkeys(getRpaths(path, 0)):
+                if rpathStaysInBundle(bundlePath, path, rpath):
+                    continue
+                if verbose:
+                    print("Using install_name_tool:")
+                    print(" in", path)
+                    print(" delete search path", rpath)
+                runInstallNameTool("delete_rpath", rpath, path)
 
 def runStrip(binaryPath: str, verbose: int):
     stripbin=os.getenv("STRIP", "strip")
@@ -576,7 +648,12 @@ def deployPlugins(appBundleInfo: ApplicationBundleInfo, deploymentInfo: Deployme
         if strip:
             runStrip(destinationPath, verbose)
 
-        dependencies = getFrameworks(destinationPath, verbose)
+        # The plugin's search path is relative to where the package manager
+        # put it, which may be behind a symbolic link, so its @rpath references
+        # are resolved from there. From the copy in the bundle they resolve to
+        # nothing, and a reference left unresolved is left unrewritten.
+        dependencies = getFrameworks(destinationPath, verbose,
+                                     list(dict.fromkeys([os.path.realpath(sourcePath), sourcePath])))
 
         for dependency in dependencies:
             changeInstallName(dependency.installName, dependency.deployedInstallName, destinationPath, verbose)
@@ -604,7 +681,7 @@ ap.add_argument("-sign", nargs="?", const="-", default=None, metavar="identity",
     help="Code signing identity. Omit flag to skip signing. "
          "Use without value for ad-hoc ('-').")
 ap.add_argument("-entitlements", nargs=1, default=None, metavar="path",
-    help="Path to entitlements plist for hardened runtime signing")
+    help="Path to the entitlements plist for the main executable; with a real identity it also turns the hardened runtime on")
 
 config = ap.parse_args()
 
@@ -779,6 +856,13 @@ else:
 
 # ------------------------------------------------
 
+# Before signing, which seals each file as it is then.
+if platform.system() == "Darwin":
+    print("+ Removing the build machine's library search paths +")
+    removeBuildRpaths(target, verbose)
+
+# ------------------------------------------------
+
 if config.sign is not None and platform.system() == "Darwin":
     identity = config.sign
     entitlements_path = config.entitlements[0] if config.entitlements else None
@@ -814,15 +898,15 @@ if config.sign is not None and platform.system() == "Darwin":
     #    bundle. Inside-out order is not a style choice here: codesign validates a
     #    bundle's subcomponents, so an unsigned helper makes signing the bundle fail
     #    with "code object is not signed at all" naming the helper as the subcomponent.
-    #    Helpers get the same entitlements as the main binary -- gridcoinresearchd does
-    #    the same networking and file access the GUI does when it runs core in-process,
-    #    so under a hardened runtime it needs the same grants.
+    #    Helpers are signed with no entitlements. gridcoinresearchd needs none:
+    #    outgoing connections and file access are not restricted outside the App
+    #    Sandbox, which the bundle does not use.
     helpers_dir = os.path.join(target, "Contents", "Helpers")
     if os.path.exists(helpers_dir):
         for item in sorted(os.listdir(helpers_dir)):
             item_path = os.path.join(helpers_dir, item)
             if os.path.isfile(item_path) and os.access(item_path, os.X_OK):
-                codesignItem(item_path, identity, entitlements_path, hardened, verbose)
+                codesignItem(item_path, identity, None, hardened, verbose)
 
     # 4. Sign the main executable (with entitlements)
     main_binary = os.path.join(target, "Contents", "MacOS", "gridcoinresearch")

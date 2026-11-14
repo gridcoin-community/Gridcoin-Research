@@ -131,18 +131,6 @@ namespace
     }
 } // anonymous namespace
 
-Http::CurlLifecycle::CurlLifecycle()
-{
-    curl_global_init(CURL_GLOBAL_ALL);
-}
-
-Http::CurlLifecycle::~CurlLifecycle()
-{
-    curl_global_cleanup();
-}
-
-Http::CurlLifecycle Http::curl_lifecycle;
-
 void Http::Download(
         const std::string &url,
         const fs::path &destination,

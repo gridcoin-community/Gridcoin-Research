@@ -159,25 +159,6 @@ public:
             const std::string& userpass = "");
 
 private:
-    //!
-    //! \brief RAII wrapper around libcurl's initialization/cleanup functions.
-    //!
-    struct CurlLifecycle
-    {
-        CurlLifecycle();
-        ~CurlLifecycle();
-    };
-
-    //!
-    //! \brief Manages the libcurl lifecycle by invoking initialization and
-    //! cleanup functions.
-    //!
-    //! The static lifetime of this object ensures that curl_global_init() is
-    //! called at the beginning of the program before it starts other threads
-    //! and that curl_global_cleanup() is called when the program ends.
-    //!
-    static CurlLifecycle curl_lifecycle;
-
     void EvaluateResponse(int code, const std::string& url);
 };
 
