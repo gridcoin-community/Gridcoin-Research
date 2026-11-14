@@ -50,10 +50,45 @@ env:
   BUILD_TYPE: RelWithDebInfo
 
 jobs:
+  # Skips the rest of this run when it would repeat a pull request run on the
+  # identical tree. contrib/devtools/ci-gate.py holds the rule. Every other job
+  # in this workflow needs this one and runs unless it answers 'false', so a
+  # gate that fails still gives a full run.
+  ci-gate:
+    name: CI Gate
+    runs-on: ubuntu-24.04
+    permissions:
+      actions: read
+      contents: read
+      pull-requests: read
+    outputs:
+      run: ${{ steps.gate.outputs.run }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          sparse-checkout: contrib/devtools/ci-gate.py
+          sparse-checkout-cone-mode: false
+      - name: Decide
+        id: gate
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CI_GATE_RECORD: ${{ runner.temp }}/ci-tested-tree.txt
+        run: python3 -I contrib/devtools/ci-gate.py
+      - name: Record the tested tree
+        if: steps.gate.outputs.tested-tree != ''
+        uses: actions/upload-artifact@v5
+        with:
+          name: ci-tested-tree-${{ steps.gate.outputs.tested-tree }}
+          path: ${{ runner.temp }}/ci-tested-tree.txt
+          retention-days: 30
+          overwrite: true
+
   # ----------------------------------------------------------------------
   # Linux Native (amd64) — system apt Cap'n Proto (pkg-config-fallback config)
   # ----------------------------------------------------------------------
   mp-linux-native:
+    needs: ci-gate
+    if: ${{ !cancelled() && needs.ci-gate.outputs.run != 'false' }}
     name: MP Linux Native (System Qt6)
     runs-on: ubuntu-24.04
     steps:
@@ -80,6 +115,8 @@ jobs:
   # Depends builds — Linux Static + Windows Cross (depends-built Cap'n Proto)
   # ----------------------------------------------------------------------
   mp-depends:
+    needs: ci-gate
+    if: ${{ !cancelled() && needs.ci-gate.outputs.run != 'false' }}
     name: MP ${{ matrix.name }}
     runs-on: ubuntu-24.04
     strategy:
@@ -155,6 +192,8 @@ jobs:
   # functional suite on a non-x86-64, 32-bit target.
   # ----------------------------------------------------------------------
   mp-linux-armhf:
+    needs: ci-gate
+    if: ${{ !cancelled() && needs.ci-gate.outputs.run != 'false' }}
     name: MP Linux ARMhf (cross-compiled)
     runs-on: ubuntu-24.04
     steps:

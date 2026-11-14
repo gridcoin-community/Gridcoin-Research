@@ -24,10 +24,45 @@ env:
   CCACHE_DIR: /home/runner/.ccache
 
 jobs:
+  # Skips the rest of this run when it would repeat a pull request run on the
+  # identical tree. contrib/devtools/ci-gate.py holds the rule. Every other job
+  # in this workflow needs this one and runs unless it answers 'false', so a
+  # gate that fails still gives a full run.
+  ci-gate:
+    name: CI Gate
+    runs-on: ubuntu-24.04
+    permissions:
+      actions: read
+      contents: read
+      pull-requests: read
+    outputs:
+      run: ${{ steps.gate.outputs.run }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          sparse-checkout: contrib/devtools/ci-gate.py
+          sparse-checkout-cone-mode: false
+      - name: Decide
+        id: gate
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CI_GATE_RECORD: ${{ runner.temp }}/ci-tested-tree.txt
+        run: python3 -I contrib/devtools/ci-gate.py
+      - name: Record the tested tree
+        if: steps.gate.outputs.tested-tree != ''
+        uses: actions/upload-artifact@v5
+        with:
+          name: ci-tested-tree-${{ steps.gate.outputs.tested-tree }}
+          path: ${{ runner.temp }}/ci-tested-tree.txt
+          retention-days: 30
+          overwrite: true
+
   # ----------------------------------------------------------------------
   # JOB 1: Linux Native
   # ----------------------------------------------------------------------
   linux-native:
+    needs: ci-gate
+    if: ${{ !cancelled() && needs.ci-gate.outputs.run != 'false' }}
     name: Linux Native (System Qt6)
     runs-on: ubuntu-24.04
     steps:
@@ -84,6 +119,8 @@ jobs:
   # JOB 2: Linux ARM64
   # -------------------------------------------------------------------------
   linux-arm64-system:
+    needs: ci-gate
+    if: ${{ !cancelled() && needs.ci-gate.outputs.run != 'false' }}
     name: Linux ARM64 (System Qt6)
     runs-on: ubuntu-24.04
     steps:
@@ -202,6 +239,8 @@ jobs:
   # JOB 3: Linux ARMhf
   # -------------------------------------------------------------------------
   linux-armhf-system:
+    needs: ci-gate
+    if: ${{ !cancelled() && needs.ci-gate.outputs.run != 'false' }}
     name: Linux ARMhf (System Qt6)
     runs-on: ubuntu-24.04
     steps:
