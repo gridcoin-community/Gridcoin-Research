@@ -648,4 +648,68 @@ BOOST_AUTO_TEST_CASE(recvmanifest_refuses_data_after_the_signature)
     CScraperManifest::DeleteManifest(received_hash, true);
 }
 
+//!
+//! A part is copied for sending only when its data is here, and the copy is the
+//! part's data. CopyPart() takes cs_mapParts itself: the caller sends the copy
+//! with no scraper lock held.
+//!
+BOOST_AUTO_TEST_CASE(a_part_is_copied_for_sending_only_when_its_data_is_here)
+{
+    auto manifest = std::shared_ptr<CScraperManifest>(new CScraperManifest());
+
+    const uint256 missing = Hash(std::string("a part that has not arrived"));
+    manifest->addPart(missing);
+
+    CDataStream data(SER_NETWORK, PROTOCOL_VERSION);
+    data << std::string("a part that is here");
+    const SerializeData expected(data.begin(), data.end());
+    BOOST_REQUIRE_EQUAL(manifest->addPartData(std::move(data)), 1);
+
+    const uint256 held = WITH_LOCK(CSplitBlob::cs_mapParts,
+                                   return WITH_LOCK(manifest->cs_manifest, return manifest->vParts[1]->hash));
+    const uint256 unreferenced = Hash(std::string("a part nothing references"));
+
+    CDataStream out(SER_NETWORK, PROTOCOL_VERSION);
+
+    BOOST_CHECK(CSplitBlob::CopyPart(held, out));
+    BOOST_CHECK(SerializeData(out.begin(), out.end()) == expected);
+
+    CDataStream untouched(SER_NETWORK, PROTOCOL_VERSION);
+
+    BOOST_CHECK(!CSplitBlob::CopyPart(missing, untouched));
+    BOOST_CHECK(!CSplitBlob::CopyPart(unreferenced, untouched));
+    BOOST_CHECK(untouched.empty());
+}
+
+//!
+//! SerializeForSend() gives the bytes the manifest serializes to, which is what
+//! a peer is sent for a manifest.
+//!
+BOOST_AUTO_TEST_CASE(a_manifest_is_serialized_for_sending_as_it_serializes)
+{
+    auto manifest = std::shared_ptr<CScraperManifest>(new CScraperManifest());
+
+    CDataStream data(SER_NETWORK, PROTOCOL_VERSION);
+    data << std::string("the part of a manifest to send");
+    BOOST_REQUIRE_EQUAL(manifest->addPartData(std::move(data)), 0);
+
+    // The order production uses: cs_mapManifest, then cs_mapParts, then cs_manifest.
+    LOCK2(CScraperManifest::cs_mapManifest, CSplitBlob::cs_mapParts);
+
+    CDataStream expected(SER_NETWORK, PROTOCOL_VERSION);
+    {
+        LOCK(manifest->cs_manifest);
+
+        manifest->sCManifestName = "a manifest to send";
+        manifest->nTime = 1700000000;
+
+        expected << *manifest;
+    }
+
+    const CDataStream sent = CScraperManifest::SerializeForSend(manifest);
+
+    BOOST_CHECK(!sent.empty());
+    BOOST_CHECK(SerializeData(sent.begin(), sent.end()) == SerializeData(expected.begin(), expected.end()));
+}
+
 BOOST_AUTO_TEST_SUITE_END()
