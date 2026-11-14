@@ -196,6 +196,9 @@ BASE_SCRIPTS = [
     'p2p_psgt_orphan.py',
     'p2p_psgt_read_cap.py',
     'p2p_ping.py',
+    # p2p_getdata_send_queue.py: a getdata is served as the peer's send queue
+    # has room, in the order asked, and the node goes on serving other peers.
+    'p2p_getdata_send_queue.py',
     'rpc_help.py',
     'rpc_signmessage.py',
     'rpc_rawtransaction.py',
