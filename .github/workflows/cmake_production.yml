@@ -50,10 +50,45 @@ env:
   MACOS_BREW_DEPS: boost libevent miniupnpc qrencode ccache cmake capnp
 
 jobs:
+  # Skips the rest of this run when it would repeat a pull request run on the
+  # identical tree. contrib/devtools/ci-gate.py holds the rule. Every other job
+  # in this workflow needs this one and runs unless it answers 'false', so a
+  # gate that fails still gives a full run.
+  ci-gate:
+    name: CI Gate
+    runs-on: ubuntu-24.04
+    permissions:
+      actions: read
+      contents: read
+      pull-requests: read
+    outputs:
+      run: ${{ steps.gate.outputs.run }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          sparse-checkout: contrib/devtools/ci-gate.py
+          sparse-checkout-cone-mode: false
+      - name: Decide
+        id: gate
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CI_GATE_RECORD: ${{ runner.temp }}/ci-tested-tree.txt
+        run: python3 -I contrib/devtools/ci-gate.py
+      - name: Record the tested tree
+        if: steps.gate.outputs.tested-tree != ''
+        uses: actions/upload-artifact@v5
+        with:
+          name: ci-tested-tree-${{ steps.gate.outputs.tested-tree }}
+          path: ${{ runner.temp }}/ci-tested-tree.txt
+          retention-days: 30
+          overwrite: true
+
   # ----------------------------------------------------------------------
   # JOB 1: Depends Builds (Linux Static & Windows Cross)
   # ----------------------------------------------------------------------
   depends-builds:
+    needs: ci-gate
+    if: ${{ !cancelled() && needs.ci-gate.outputs.run != 'false' }}
     name: ${{ matrix.name }}
     runs-on: ubuntu-24.04
     # On a release tag the Windows leg signs what it builds (steps 8c to 9b), under the
@@ -420,6 +455,8 @@ jobs:
   # JOB 2: macOS Native
   # ----------------------------------------------------------------------
   macos-native-arm64:
+    needs: ci-gate
+    if: ${{ !cancelled() && needs.ci-gate.outputs.run != 'false' }}
     name: macOS ARM64 (Homebrew Qt6)
     # Runs on macos-15 and declares a 15.0 floor (#3366).
     #
@@ -896,6 +933,8 @@ jobs:
         run: security delete-keychain "$KEYCHAIN_PATH" || true
 
   macos-native-intel:
+    needs: ci-gate
+    if: ${{ !cancelled() && needs.ci-gate.outputs.run != 'false' }}
     name: macOS Intel (Homebrew Qt6)
     # A NATIVE Intel runner, not Rosetta on arm64. Homebrew removed Intel
     # support from its installer on 2026-09-11 (Homebrew/install#1140), so a
@@ -1350,6 +1389,8 @@ jobs:
   # JOB 2b: AMD64 Native Build (for Docker)
   # ----------------------------------------------------------------------
   amd64-native-build:
+    needs: ci-gate
+    if: ${{ !cancelled() && needs.ci-gate.outputs.run != 'false' }}
     name: Linux AMD64 Native Build
     runs-on: ubuntu-24.04
     steps:
@@ -1414,6 +1455,8 @@ jobs:
   # JOB 2c: ARM64 Cross-Build (for Docker)
   # ----------------------------------------------------------------------
   arm64-cross-build:
+    needs: ci-gate
+    if: ${{ !cancelled() && needs.ci-gate.outputs.run != 'false' }}
     name: Linux ARM64 Cross-Build
     runs-on: ubuntu-24.04
     steps:
@@ -1558,6 +1601,8 @@ jobs:
   # JOB 2d: Flatpak Build
   # ----------------------------------------------------------------------
   flatpak-build:
+    needs: ci-gate
+    if: ${{ !cancelled() && needs.ci-gate.outputs.run != 'false' }}
     name: Flatpak Build (x86_64)
     runs-on: ubuntu-24.04
     steps:
