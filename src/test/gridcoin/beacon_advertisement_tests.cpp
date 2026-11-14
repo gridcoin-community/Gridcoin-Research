@@ -1262,6 +1262,31 @@ struct RenewableBeacon
     RenewableBeacon& operator=(const RenewableBeacon&) = delete;
 };
 
+//! Checks that \p fee is the automated renewal's fee for \p tx, whose signed
+//! size is \p size.
+//!
+//! The wallet takes the fee at the largest size the signatures can have
+//! (GRC::RenewalMinimumFee()). So the fee is never under the minimum for the
+//! signed size, and it is one fee step over that minimum when the two sizes
+//! fall on either side of a size step. A renewal that spends one coin cannot do
+//! that; one that spends hundreds can, and these cases share pwalletMain with
+//! others that leave it many small coins.
+void CheckRenewalFee(const CMutableTransaction& tx, const CAmount fee, const size_t size)
+{
+    const CTransaction signed_tx(tx);
+    const CAmount signed_minimum = GetMinFee(signed_tx, 1000, GMF_SEND, size);
+
+    BOOST_CHECK_GE(fee, signed_minimum);
+    BOOST_CHECK_LE(fee, signed_minimum + GetBaseFee(signed_tx, GMF_SEND));
+
+    LOCK(pwalletMain->cs_wallet);
+
+    const std::optional<CAmount> renewal_minimum = GRC::RenewalMinimumFee(tx, *pwalletMain);
+
+    BOOST_REQUIRE(renewal_minimum);
+    BOOST_CHECK_EQUAL(fee, *renewal_minimum);
+}
+
 } // anonymous namespace
 
 //! The automated renewal pays the minimum fee for its size.
@@ -1311,7 +1336,7 @@ BOOST_FIXTURE_TEST_CASE(renewal_pays_minimum_fee, grc_test::WalletTxScope)
         size = entry.GetTxSize();
     }
 
-    BOOST_CHECK_EQUAL(fee, GetMinFee(CTransaction(*renewal), 1000, GMF_SEND, size));
+    CheckRenewalFee(*renewal, fee, size);
     BOOST_CHECK_LT(fee, COIN);
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
@@ -1673,7 +1698,7 @@ BOOST_FIXTURE_TEST_CASE(renewal_access_advertises_a_new_beacon_from_the_key_pool
         size = entry.GetTxSize();
     }
 
-    BOOST_CHECK_EQUAL(fee, GetMinFee(CTransaction(*advertisement), 1000, GMF_SEND, size));
+    CheckRenewalFee(*advertisement, fee, size);
     BOOST_CHECK_LT(fee, COIN);
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
