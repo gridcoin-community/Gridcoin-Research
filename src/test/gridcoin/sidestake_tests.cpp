@@ -367,6 +367,102 @@ BOOST_AUTO_TEST_CASE(sidestake_editors_do_not_revert_the_field_not_being_edited)
     registry.NonContractDelete(dest, /*save_to_file=*/false);
 }
 
+// The interface refuses a local side stake edit that would take the active
+// total past 100%. The refusal is pinned with side staking enabled. With it
+// off, the total counts only the active mandatory side stakes, so local
+// entries are never refused for adding up past 100% among themselves.
+namespace {
+//! Side staking enabled, no mandatory side stake, and three local
+//! destinations that are removed from the registry and from the read-write
+//! settings however a case exits.
+struct OverAllocationScope
+{
+    GRC::SideStakeRegistry& registry = GRC::GetSideStakeRegistry();
+    grc_test::ForcedArgGuard sidestaking{"enablesidestaking", "1"};
+    grc_test::RegistryReset reset{GRC::ContractType::SIDESTAKE};
+    std::vector<CTxDestination> dests;
+    std::vector<std::string> addresses;
+
+    OverAllocationScope()
+    {
+        for (const int byte : {0x63, 0x64, 0x65}) {
+            uint160 hash;
+            *(hash.begin()) = static_cast<unsigned char>(byte);
+            dests.push_back(CKeyID(hash));
+            addresses.push_back(EncodeDestination(dests.back()));
+            registry.NonContractDelete(dests.back(), /*save_to_file=*/false);
+        }
+
+        // The manager persists through SaveLocalSideStakesToConfig(), which
+        // needs a real data directory.
+        const fs::path datadir = gArgs.GetArg("-datadir", "");
+        BOOST_REQUIRE(!datadir.empty());
+        fs::create_directories(datadir);
+        gArgs.ClearPathCache();
+    }
+
+    ~OverAllocationScope()
+    {
+        // A throw from here while a failed check unwinds would terminate the
+        // binary, so nothing may leave this destructor.
+        try {
+            for (const CTxDestination& dest : dests) {
+                registry.NonContractDelete(dest, /*save_to_file=*/false);
+            }
+            updateRwSettings({{"sidestakeaddresses", util::SettingsValue{}},
+                              {"sidestakeallocations", util::SettingsValue{}},
+                              {"sidestakedescriptions", util::SettingsValue{}}});
+        } catch (...) {
+        }
+    }
+};
+} // namespace
+
+BOOST_FIXTURE_TEST_CASE(sidestake_add_refuses_a_total_over_100_percent, OverAllocationScope)
+{
+    BOOST_REQUIRE(registry.ActiveSideStakeEntries(GRC::SideStake::FilterFlag::ALL, true).empty());
+
+    std::unique_ptr<interfaces::SideStakeManager> manager = interfaces::MakeSideStakeManager();
+    BOOST_REQUIRE(manager != nullptr);
+
+    BOOST_REQUIRE(manager->addLocal(addresses[0], 60.0, "a").status == interfaces::SideStakeEditStatus::OK);
+
+    // Exactly 100% is allowed.
+    BOOST_CHECK(manager->addLocal(addresses[1], 40.0, "b").status == interfaces::SideStakeEditStatus::OK);
+
+    // One percent more is not, and nothing is stored.
+    BOOST_CHECK(manager->addLocal(addresses[2], 1.0, "c").status
+                == interfaces::SideStakeEditStatus::INVALID_ALLOCATION);
+    BOOST_CHECK(registry.Try(dests[2], GRC::SideStake::FilterFlag::LOCAL).empty());
+}
+
+BOOST_FIXTURE_TEST_CASE(sidestake_edit_refuses_a_total_over_100_percent, OverAllocationScope)
+{
+    BOOST_REQUIRE(registry.ActiveSideStakeEntries(GRC::SideStake::FilterFlag::ALL, true).empty());
+
+    std::unique_ptr<interfaces::SideStakeManager> manager = interfaces::MakeSideStakeManager();
+    BOOST_REQUIRE(manager != nullptr);
+
+    BOOST_REQUIRE(manager->addLocal(addresses[0], 60.0, "a").status == interfaces::SideStakeEditStatus::OK);
+    BOOST_REQUIRE(manager->addLocal(addresses[1], 40.0, "b").status == interfaces::SideStakeEditStatus::OK);
+
+    // One percent over is refused, and the entry keeps its allocation.
+    BOOST_CHECK(manager->setAllocation(addresses[1], 41.0).status
+                == interfaces::SideStakeEditStatus::INVALID_ALLOCATION);
+    {
+        const auto entries = registry.Try(dests[1], GRC::SideStake::FilterFlag::LOCAL);
+        BOOST_REQUIRE_EQUAL(entries.size(), 1u);
+        BOOST_CHECK_CLOSE(entries.front()->GetAllocation().ToPercent(), 40.0, 1e-6);
+    }
+
+    // The edited entry's own allocation is left out of the total: 50% for the
+    // first entry is judged against the second's 40%, not against 100%.
+    BOOST_CHECK(manager->setAllocation(addresses[0], 50.0).status == interfaces::SideStakeEditStatus::OK);
+
+    // An edit up to exactly 100% is allowed.
+    BOOST_CHECK(manager->setAllocation(addresses[1], 50.0).status == interfaces::SideStakeEditStatus::OK);
+}
+
 // SaveLocalSideStakesToConfig() arms a flag so that LoadLocalSideStakesFromConfig()
 // skips the reload its own settings write triggers. RwSettingsUpdated is emitted
 // synchronously from inside updateRwSettings(), so the flag has to be armed before
