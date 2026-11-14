@@ -193,7 +193,13 @@ public: /* static methods */
      */
     static CDataStream SerializeForSend(const std::shared_ptr<CScraperManifest>& manifest);
 
-    /** Add new manifest object into list of known manifests */
+    /** Add new manifest object into list of known manifests
+     *
+     * This does not mark the converged stats cache dirty, because it runs with cs_mapParts held and
+     * cs_ConvergedScraperStatsCache is taken before cs_mapParts: a manifest destroyed while the cache is locked
+     * takes cs_mapParts in ~CSplitBlob. When this returns true the caller marks the cache dirty after it has
+     * released cs_mapParts and while it still holds cs_mapManifest, as ScraperSendFileManifestContents does.
+     */
     static bool addManifest(std::shared_ptr<CScraperManifest> m, CKey& keySign);
 
     /** Validate whether received manifest is authorized */

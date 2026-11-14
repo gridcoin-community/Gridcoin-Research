@@ -1297,7 +1297,7 @@ EXCLUSIVE_LOCKS_REQUIRED(CScraperManifest::cs_mapManifest, cs_mapParts)
     if (it.second == false)
         return false;
 
-    // Release lock on cs_manifest before taking a lock on cs_ConvergedScraperStatsCache to avoid potential deadlocks.
+    // Lock the manifest again to set its hash pointer and announce it.
     {
         CScraperManifest& manifest = *it.first->second;
 
@@ -1318,14 +1318,7 @@ EXCLUSIVE_LOCKS_REQUIRED(CScraperManifest::cs_mapManifest, cs_mapParts)
         manifest.Complete();
     }
 
-    // lock cs_ConvergedScraperStatsCache and mark ConvergedScraperStatsCache dirty because a new manifest is present,
-    // so the convergence may change.
-    {
-        LOCK(cs_ConvergedScraperStatsCache);
-
-        ConvergedScraperStatsCache.bClean = false;
-    }
-
+    // The caller marks ConvergedScraperStatsCache dirty after it has released cs_mapParts. See the declaration.
     return true;
 }
 
