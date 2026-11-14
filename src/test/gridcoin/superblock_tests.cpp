@@ -2528,6 +2528,83 @@ BOOST_AUTO_TEST_CASE(it_hashes_a_set_of_scraper_statistics_like_a_superblock)
     BOOST_CHECK(quorum_hash == superblock.GetHash());
 }
 
+BOOST_AUTO_TEST_CASE(it_converts_statistics_values_in_range_alike_before_and_from_version_15)
+{
+    const ScraperStatsMeta meta(3);
+
+    const ScraperStatsVerifiedBeaconsTotalCredits before = GetTestScraperStats(meta);
+    ScraperStatsVerifiedBeaconsTotalCredits from_v15 = before;
+    from_v15.m_checked_values = true;
+
+    BOOST_CHECK(!before.m_checked_values);
+    BOOST_CHECK(!before.m_total_credit_map.empty());
+
+    BOOST_CHECK(GRC::Superblock::FromStats(before, 3).GetHash() == GRC::Superblock::FromStats(from_v15, 3).GetHash());
+    BOOST_CHECK(GRC::QuorumHash::Hash(before) == GRC::QuorumHash::Hash(from_v15));
+}
+
+BOOST_AUTO_TEST_CASE(it_converts_statistics_values_out_of_range_from_version_15)
+{
+    const double not_a_number = std::numeric_limits<double>::quiet_NaN();
+    const double infinity = std::numeric_limits<double>::infinity();
+    const uint64_t largest = std::numeric_limits<uint64_t>::max();
+
+    const ScraperStatsMeta meta(3);
+
+    ScraperStatsVerifiedBeaconsTotalCredits stats = GetTestScraperStats(meta);
+    stats.m_checked_values = true;
+
+    ScraperObjectStatsKey project_1_key;
+    project_1_key.objecttype = statsobjecttype::byProject;
+    project_1_key.objectID = meta.project1;
+
+    ScraperObjectStatsKey project_2_key;
+    project_2_key.objecttype = statsobjecttype::byProject;
+    project_2_key.objectID = meta.project2;
+
+    BOOST_REQUIRE(stats.mScraperStats.count(project_1_key) == 1);
+    BOOST_REQUIRE(stats.mScraperStats.count(project_2_key) == 1);
+
+    stats.mScraperStats[project_1_key].statsvalue.dTC = -5.0;
+    stats.mScraperStats[project_1_key].statsvalue.dAvgRAC = not_a_number;
+    stats.mScraperStats[project_1_key].statsvalue.dRAC = infinity;
+
+    stats.mScraperStats[project_2_key].statsvalue.dTC = 18446744073709551616.0;
+    stats.mScraperStats[project_2_key].statsvalue.dAvgRAC = 123.0;
+    stats.mScraperStats[project_2_key].statsvalue.dRAC = -infinity;
+
+    stats.m_total_credit_map[meta.project1] = not_a_number;
+    stats.m_total_credit_map[meta.project2] = 1e30;
+
+    const GRC::Superblock superblock = GRC::Superblock::FromStats(stats, 3);
+
+    if (const auto project_1 = superblock.m_projects.Try(meta.project1)) {
+        BOOST_CHECK_EQUAL(project_1->m_total_credit, 0U);
+        BOOST_CHECK_EQUAL(project_1->m_average_rac, 0U);
+        BOOST_CHECK_EQUAL(project_1->m_rac, largest);
+    } else {
+        BOOST_FAIL("Project 1 not found in superblock.");
+    }
+
+    if (const auto project_2 = superblock.m_projects.Try(meta.project2)) {
+        BOOST_CHECK_EQUAL(project_2->m_total_credit, largest);
+        BOOST_CHECK_EQUAL(project_2->m_average_rac, 123U);
+        BOOST_CHECK_EQUAL(project_2->m_rac, 0U);
+    } else {
+        BOOST_FAIL("Project 2 not found in superblock.");
+    }
+
+    const auto& total_credits = superblock.m_projects_all_cpids_total_credits.m_projects_all_cpid_total_credits;
+
+    BOOST_REQUIRE(total_credits.count(meta.project1) == 1);
+    BOOST_REQUIRE(total_credits.count(meta.project2) == 1);
+    BOOST_CHECK_EQUAL(total_credits.at(meta.project1), 0U);
+    BOOST_CHECK_EQUAL(total_credits.at(meta.project2), largest);
+
+    // The hash made from the statistics alone converts the values the same way.
+    BOOST_CHECK(GRC::QuorumHash::Hash(stats) == superblock.GetHash());
+}
+
 BOOST_AUTO_TEST_CASE(it_parses_a_sha256_hash_string)
 {
     const std::vector<unsigned char> expected {

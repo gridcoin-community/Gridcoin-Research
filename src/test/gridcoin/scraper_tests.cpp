@@ -35,6 +35,8 @@
 #include <boost/signals2/connection.hpp>
 
 #include <algorithm>
+#include <cmath>
+#include <cstring>
 #include <functional>
 #include <limits>
 #include <list>
@@ -51,6 +53,7 @@
 // Defined in scraper.cpp, which declares them there rather than in a header.
 extern fs::path pathDataDir;
 extern ConvergedScraperStats ConvergedScraperStatsCache GUARDED_BY(cs_ConvergedScraperStatsCache);
+extern bool ProcessNetworkWideFromProjectStats(ScraperStats& mScraperStats);
 extern mmCSManifestsBinnedByScraper ScraperCullAndBinCScraperManifests();
 extern bool ScraperConstructConvergedManifestByProject(const GRC::WhitelistSnapshot& projectWhitelist,
                                                        mmCSManifestsBinnedByScraper& mMapCSManifestsBinnedByScraper,
@@ -66,6 +69,54 @@ const std::string CPID = "00010203040506070809101112131415";
 const uint32_t ACCOUNT_ID = 19100117;
 const std::string BEACON_KEY_HEX = "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890ab";
 const std::string OTHER_BEACON_KEY_HEX = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef01";
+
+const std::string STATS_PROJECT = "project_1";
+const double STATS_PROJECT_MAG = 1000.0;
+
+//! A project part as a scraper publishes it: gzip of TC,RAT,RAC,cpid records.
+SerializeData MakeProjectPart(const std::string& records)
+{
+    std::stringstream compressed;
+
+    {
+        boost::iostreams::filtering_ostream out;
+        out.push(boost::iostreams::gzip_compressor());
+        out.push(compressed);
+        out << records;
+    }
+
+    const std::string bytes = compressed.str();
+    SerializeData part(bytes.size());
+    std::memcpy(part.data(), bytes.data(), bytes.size());
+
+    return part;
+}
+
+ScraperStats LoadProjectPart(const std::string& records, const bool checked_values)
+{
+    ScraperStats stats;
+
+    BOOST_REQUIRE(LoadProjectObjectToStatsByCPID(
+        STATS_PROJECT, MakeProjectPart(records), STATS_PROJECT_MAG, stats, checked_values));
+
+    return stats;
+}
+
+const ScraperObjectStats* FindStats(const ScraperStats& stats, const statsobjecttype type, const std::string& id)
+{
+    ScraperObjectStatsKey key;
+    key.objecttype = type;
+    key.objectID = id;
+
+    const auto iter = stats.find(key);
+
+    return iter == stats.end() ? nullptr : &iter->second;
+}
+
+const ScraperObjectStats* FindRecord(const ScraperStats& stats, const std::string& cpid)
+{
+    return FindStats(stats, statsobjecttype::byCPIDbyProject, STATS_PROJECT + "," + cpid);
+}
 
 ScraperPendingBeaconEntry MakeCandidate(const std::string& master_url,
                                         uint32_t account_id,
@@ -692,7 +743,8 @@ public:
         const ConvergedScraperStats stats(NOW, of_one,
                                           GRC::GetWhitelist().Snapshot(
                                               GRC::GreylistState::PENDING,
-                                              GRC::ProjectEntry::ProjectFilterFlag::GREYLISTED));
+                                              GRC::ProjectEntry::ProjectFilterFlag::GREYLISTED),
+                                          false);
         GRC::Superblock superblock = GRC::Superblock::FromConvergence(stats, 2, false, nullptr);
 
         BOOST_REQUIRE(superblock.WellFormed());
@@ -1067,13 +1119,13 @@ BOOST_AUTO_TEST_CASE(a_project_part_that_cannot_be_read_to_its_end_is_refused)
 
     ScraperStats stats;
 
-    BOOST_CHECK(LoadProjectObjectToStatsByCPID("project", whole, 0.0, stats));
+    BOOST_CHECK(LoadProjectObjectToStatsByCPID("project", whole, 0.0, stats, false));
     // One entry for each CPID and one for the project.
     BOOST_CHECK_EQUAL(stats.size(), 3U);
 
     stats.clear();
 
-    BOOST_CHECK(!LoadProjectObjectToStatsByCPID("project", cut_short, 0.0, stats));
+    BOOST_CHECK(!LoadProjectObjectToStatsByCPID("project", cut_short, 0.0, stats, false));
     BOOST_CHECK(stats.empty());
 }
 
@@ -1766,6 +1818,146 @@ BOOST_AUTO_TEST_CASE(the_superblock_of_a_convergence_built_from_one_manifest_is_
                 manifests.first << ", place " << place);
         }
     }
+}
+
+BOOST_AUTO_TEST_CASE(project_statistics_in_range_load_alike_before_and_from_version_15)
+{
+    const std::string records = "1000,10,100,c1\n2000.5,20,300,c2\n0,0,0,c3\n";
+
+    const ScraperStats before = LoadProjectPart(records, false);
+    const ScraperStats from_v15 = LoadProjectPart(records, true);
+
+    // Three records and the project entry.
+    BOOST_REQUIRE_EQUAL(before.size(), 4U);
+    BOOST_REQUIRE_EQUAL(from_v15.size(), 4U);
+
+    for (const auto& entry : before) {
+        const ScraperObjectStats* const other = FindStats(from_v15, entry.first.objecttype, entry.first.objectID);
+
+        BOOST_REQUIRE(other != nullptr);
+        BOOST_CHECK_EQUAL(entry.second.statsvalue.dTC, other->statsvalue.dTC);
+        BOOST_CHECK_EQUAL(entry.second.statsvalue.dRAT, other->statsvalue.dRAT);
+        BOOST_CHECK_EQUAL(entry.second.statsvalue.dRAC, other->statsvalue.dRAC);
+        BOOST_CHECK_EQUAL(entry.second.statsvalue.dAvgRAC, other->statsvalue.dAvgRAC);
+        BOOST_CHECK_EQUAL(entry.second.statsvalue.dMag, other->statsvalue.dMag);
+    }
+
+    BOOST_CHECK_EQUAL(FindRecord(from_v15, "c1")->statsvalue.dMag, MagRound(100.0 / 400.0 * STATS_PROJECT_MAG));
+    BOOST_CHECK_EQUAL(FindRecord(from_v15, "c2")->statsvalue.dMag, MagRound(300.0 / 400.0 * STATS_PROJECT_MAG));
+    BOOST_CHECK_EQUAL(FindRecord(from_v15, "c3")->statsvalue.dMag, 0.0);
+}
+
+BOOST_AUTO_TEST_CASE(from_version_15_a_record_with_a_negative_value_is_passed_over)
+{
+    // c2 has a negative RAC, c3 a negative total credit and c4 a negative RAT.
+    const std::string records = "1000,0,100,c1\n1000,0,-50,c2\n-1,0,100,c3\n1000,-1,100,c4\n1000,0,100,c5\n";
+
+    const ScraperStats from_v15 = LoadProjectPart(records, true);
+
+    BOOST_CHECK_EQUAL(from_v15.size(), 3U);
+    BOOST_CHECK(FindRecord(from_v15, "c2") == nullptr);
+    BOOST_CHECK(FindRecord(from_v15, "c3") == nullptr);
+    BOOST_CHECK(FindRecord(from_v15, "c4") == nullptr);
+    BOOST_REQUIRE(FindRecord(from_v15, "c1") != nullptr);
+    BOOST_REQUIRE(FindRecord(from_v15, "c5") != nullptr);
+
+    // The two records left share the project between them.
+    BOOST_CHECK_EQUAL(FindRecord(from_v15, "c1")->statsvalue.dMag, STATS_PROJECT_MAG / 2);
+    BOOST_CHECK_EQUAL(FindRecord(from_v15, "c5")->statsvalue.dMag, STATS_PROJECT_MAG / 2);
+
+    const ScraperObjectStats* const project = FindStats(from_v15, statsobjecttype::byProject, STATS_PROJECT);
+
+    BOOST_REQUIRE(project != nullptr);
+    BOOST_CHECK_EQUAL(project->statsvalue.dRAC, 200.0);
+    BOOST_CHECK_EQUAL(project->statsvalue.dTC, 2000.0);
+}
+
+BOOST_AUTO_TEST_CASE(from_version_15_a_record_with_a_value_that_is_not_finite_is_passed_over)
+{
+    // The records for c1, c2 and c3 each carry a word in place of a finite number. None is in the result.
+    const std::string records = "nan,0,100,c1\n1000,0,inf,c2\n1000,infinity,100,c3\n1000,0,100,c4\n";
+
+    const ScraperStats from_v15 = LoadProjectPart(records, true);
+
+    BOOST_CHECK_EQUAL(from_v15.size(), 2U);
+    BOOST_REQUIRE(FindRecord(from_v15, "c4") != nullptr);
+    BOOST_CHECK_EQUAL(FindRecord(from_v15, "c4")->statsvalue.dMag, STATS_PROJECT_MAG);
+}
+
+BOOST_AUTO_TEST_CASE(from_version_15_a_project_with_no_rac_gives_no_magnitude)
+{
+    const std::string records = "1000,0,0,c1\n2000,0,0,c2\n";
+
+    ScraperStats from_v15 = LoadProjectPart(records, true);
+
+    BOOST_REQUIRE(FindRecord(from_v15, "c1") != nullptr);
+    BOOST_REQUIRE(FindRecord(from_v15, "c2") != nullptr);
+    BOOST_CHECK_EQUAL(FindRecord(from_v15, "c1")->statsvalue.dMag, 0.0);
+    BOOST_CHECK_EQUAL(FindRecord(from_v15, "c2")->statsvalue.dMag, 0.0);
+
+    BOOST_REQUIRE(ProcessNetworkWideFromProjectStats(from_v15));
+
+    const ScraperObjectStats* cpid_1 = FindStats(from_v15, statsobjecttype::byCPID, "c1");
+
+    BOOST_REQUIRE(cpid_1 != nullptr);
+    BOOST_CHECK_EQUAL(cpid_1->statsvalue.dMag, 0.0);
+}
+
+BOOST_AUTO_TEST_CASE(from_version_15_a_project_rac_total_too_large_to_be_finite_gives_no_magnitude)
+{
+    const std::string records = "0,0,1e308,c1\n0,0,1e308,c2\n0,0,5,c3\n";
+
+    const ScraperStats from_v15 = LoadProjectPart(records, true);
+
+    BOOST_CHECK_EQUAL(from_v15.size(), 4U);
+
+    for (const std::string cpid : {"c1", "c2", "c3"}) {
+        BOOST_REQUIRE(FindRecord(from_v15, cpid) != nullptr);
+        BOOST_CHECK_EQUAL(FindRecord(from_v15, cpid)->statsvalue.dMag, 0.0);
+    }
+}
+
+BOOST_AUTO_TEST_CASE(from_version_15_a_project_total_credit_that_is_not_usable_is_taken_as_zero)
+{
+    const std::map<std::string, double> total_credits {
+        { "project_1", 5000.5 },
+        { "project_2", -1.0 },
+        { "project_3", std::numeric_limits<double>::quiet_NaN() },
+        { "project_4", std::numeric_limits<double>::infinity() },
+    };
+
+    CDataStream stream(SER_NETWORK, 1);
+    stream << total_credits;
+
+    CSplitBlob::CPart beacon_list_part(uint256S("01"));
+
+    CSplitBlob::CPart total_credits_part(uint256S("02"));
+    total_credits_part.data.resize(stream.size());
+    std::memcpy(total_credits_part.data.data(), stream.data(), stream.size());
+
+    CSplitBlob::CPart project_part(uint256S("03"));
+    project_part.data = MakeProjectPart("1000,0,100,c1\n1000,0,-50,c2\n");
+
+    ConvergedManifest converged;
+    converged.ConvergedManifestPartPtrsMap.emplace("BeaconList", &beacon_list_part);
+    converged.ConvergedManifestPartPtrsMap.emplace("ProjectsAllCpidTotalCredits", &total_credits_part);
+    converged.ConvergedManifestPartPtrsMap.emplace(STATS_PROJECT, &project_part);
+
+    const GRC::WhitelistSnapshot no_greylist(std::make_shared<GRC::ProjectList>());
+
+    const ScraperStatsVerifiedBeaconsTotalCredits from_v15 =
+        GetScraperStatsByConvergedManifest(no_greylist, converged, true);
+
+    BOOST_CHECK(from_v15.m_checked_values);
+    BOOST_REQUIRE_EQUAL(from_v15.m_total_credit_map.size(), 4U);
+    BOOST_CHECK_EQUAL(from_v15.m_total_credit_map.at("project_1"), 5000.5);
+    BOOST_CHECK_EQUAL(from_v15.m_total_credit_map.at("project_2"), 0.0);
+    BOOST_CHECK_EQUAL(from_v15.m_total_credit_map.at("project_3"), 0.0);
+    BOOST_CHECK_EQUAL(from_v15.m_total_credit_map.at("project_4"), 0.0);
+
+    // The rules reach the project parts of the convergence as well.
+    BOOST_CHECK(FindRecord(from_v15.mScraperStats, "c1") != nullptr);
+    BOOST_CHECK(FindRecord(from_v15.mScraperStats, "c2") == nullptr);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

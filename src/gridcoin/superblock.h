@@ -28,7 +28,8 @@ class WhitelistSnapshot; // Forward for the greylist parameter threaded through 
 extern std::vector<uint160> GetVerifiedBeaconIDs(const ConvergedManifest& StructConvergedManifest);
 extern std::vector<uint160> GetVerifiedBeaconIDs(const ScraperPendingBeaconMap& VerifiedBeaconMap);
 extern ScraperStatsVerifiedBeaconsTotalCredits GetScraperStatsByConvergedManifest(const GRC::WhitelistSnapshot& greylist,
-                                                                                  const ConvergedManifest& StructConvergedManifest);
+                                                                                  const ConvergedManifest& StructConvergedManifest,
+                                                                                  const bool checked_values);
 
 class CBlockIndex;
 struct ConvergedScraperStats; // Forward for Superblock
@@ -1272,7 +1273,7 @@ public:
 
         std::map<std::string, uint64_t> m_projects_all_cpid_total_credits;
 
-        void Reset(const std::map<std::string, double>& projects_all_cpid_total_credits);
+        void Reset(const std::map<std::string, double>& projects_all_cpid_total_credits, const bool checked_values);
 
         ADD_SERIALIZE_METHODS;
 
@@ -1694,11 +1695,11 @@ struct ConvergedScraperStats
     //! internally) so this constructor's greylist dependency is explicit at the call site and
     //! carries the caller's GreylistState selection.
     ConvergedScraperStats(const int64_t nTime_in, const ConvergedManifest& Convergence,
-                          const GRC::WhitelistSnapshot& greylist) : Convergence(Convergence)
+                          const GRC::WhitelistSnapshot& greylist, const bool checked_values) : Convergence(Convergence)
     {
         nTime = nTime_in;
 
-        mScraperConvergedStats = GetScraperStatsByConvergedManifest(greylist, Convergence);
+        mScraperConvergedStats = GetScraperStatsByConvergedManifest(greylist, Convergence, checked_values);
     }
 
     // Flag to indicate cache is clean or dirty (i.e. state change of underlying statistics has occurred.

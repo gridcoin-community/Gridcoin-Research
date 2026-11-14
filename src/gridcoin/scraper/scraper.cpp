@@ -25,6 +25,7 @@
 #include "util/fsmodes.h"
 
 #include <zlib.h>
+#include <cmath>
 #include <limits>
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/algorithm/string/split.hpp>
@@ -290,6 +291,24 @@ double MagRound(double dMag)
     return round(dMag / MAG_ROUND) * MAG_ROUND;
 }
 
+//! \brief Whether a statistics value is one that the rules beginning with
+//! block version 15 accept: a finite number that is not negative.
+static bool IsUsableStatsValue(const double value)
+{
+    return std::isfinite(value) && value >= 0.0;
+}
+
+//! \brief Applies the rule for project total credits that begins with block
+//! version 15: a total that is not finite or is negative is taken as zero.
+static void ZeroUnusableTotalCredits(std::map<std::string, double>& total_credit_map)
+{
+    for (auto& entry : total_credit_map) {
+        if (!IsUsableStatsValue(entry.second)) {
+            entry.second = 0.0;
+        }
+    }
+}
+
 unsigned int NumScrapersForSupermajority(unsigned int nScraperCount)
 {
     LOCK(cs_ScraperGlobals);
@@ -444,7 +463,8 @@ ScraperStatsVerifiedBeaconsTotalCredits GetScraperStatsForExport(const GRC::Whit
  * @return ScraperStatsVerifiedBeaconsTotalCredits
  */
 ScraperStatsVerifiedBeaconsTotalCredits GetScraperStatsFromSingleManifest(const GRC::WhitelistSnapshot& greylist,
-                                                                          CScraperManifest_shared_ptr& manifest);
+                                                                          CScraperManifest_shared_ptr& manifest,
+                                                                          const bool checked_values);
 /**
  * @brief Loads a project manifest file from disk and computes statistics for that project
  * @param project
@@ -454,17 +474,21 @@ ScraperStatsVerifiedBeaconsTotalCredits GetScraperStatsFromSingleManifest(const 
  * @return bool true if successful
  */
 bool LoadProjectFileToStatsByCPID(const std::string& project, const fs::path& file, const double& projectmag,
-                                  ScraperStats& mScraperStats);
+                                  ScraperStats& mScraperStats, const bool checked_values);
 /**
  * @brief Computes statistics from a provided project data stream. This is used by LoadProjectFileToStatsByCPID.
  * @param project
  * @param sUncompressedIn
  * @param projectmag
  * @param mScraperStats
+ * @param checked_values Whether the rules for statistics values that begin with block version 15 apply. Under them a
+ * record with a value that is not finite or is negative is passed over, and a project whose RAC total is not above
+ * zero gives no magnitude.
  * @return bool true if successful
  */
 bool ProcessProjectStatsFromStreamByCPID(const std::string& project, boostio::filtering_istream& sUncompressedIn,
-                                         const double& projectmag, ScraperStats& mScraperStats);
+                                         const double& projectmag, ScraperStats& mScraperStats,
+                                         const bool checked_values);
 /**
  * @brief Once the project statistics have been computed for all of the whitelisted projects, this function is called
  * to compute network-wide statistics, and also compute the magnitudes, which cannot be computed until all projects are
@@ -3942,7 +3966,8 @@ bool StoreStats(const fs::path& file, const ScraperStats& mScraperStats)
 }
 
 bool LoadProjectFileToStatsByCPID(const std::string& project, const fs::path& file,
-                                  const double& projectmag, ScraperStats& mScraperStats)
+                                  const double& projectmag, ScraperStats& mScraperStats,
+                                  const bool checked_values)
 {
     fsbridge::ifstream ingzfile(file, std::ios_base::in | std::ios_base::binary);
 
@@ -3958,13 +3983,14 @@ bool LoadProjectFileToStatsByCPID(const std::string& project, const fs::path& fi
     in.push(boostio::gzip_decompressor());
     in.push(ingzfile);
 
-    bool bResult = ProcessProjectStatsFromStreamByCPID(project, in, projectmag, mScraperStats);
+    bool bResult = ProcessProjectStatsFromStreamByCPID(project, in, projectmag, mScraperStats, checked_values);
 
     return bResult;
 }
 
 bool LoadProjectObjectToStatsByCPID(const std::string& project, const SerializeData& ProjectData,
-                                    const double& projectmag, ScraperStats& mScraperStats)
+                                    const double& projectmag, ScraperStats& mScraperStats,
+                                    const bool checked_values)
 {
     boostio::basic_array_source<char> input_source((const char*)&ProjectData[0], ProjectData.size());
     boostio::stream<boostio::basic_array_source<char>> ingzss(input_source);
@@ -3973,7 +3999,7 @@ bool LoadProjectObjectToStatsByCPID(const std::string& project, const SerializeD
     in.push(boostio::gzip_decompressor());
     in.push(ingzss);
 
-    bool bResult = ProcessProjectStatsFromStreamByCPID(project, in, projectmag, mScraperStats);
+    bool bResult = ProcessProjectStatsFromStreamByCPID(project, in, projectmag, mScraperStats, checked_values);
 
     return bResult;
 }
@@ -4029,7 +4055,8 @@ static constexpr size_t MAX_PART_LINE_BYTES = 512;
 
 
 bool ProcessProjectStatsFromStreamByCPID(const std::string& project, boostio::filtering_istream& sUncompressedIn,
-                                         const double& projectmag, ScraperStats& mScraperStats)
+                                         const double& projectmag, ScraperStats& mScraperStats,
+                                         const bool checked_values)
 {
     std::vector<std::string> vXML;
 
@@ -4117,6 +4144,17 @@ bool ProcessProjectStatsFromStreamByCPID(const std::string& project, boostio::fi
             }
         }
 
+        // From block version 15 a record with a value that is not finite or is negative is passed over, as a
+        // record that does not parse is.
+        if (checked_values
+            && !(IsUsableStatsValue(statsentry.statsvalue.dTC)
+                 && IsUsableStatsValue(statsentry.statsvalue.dRAT)
+                 && IsUsableStatsValue(statsentry.statsvalue.dRAC)))
+        {
+            _log(logattribute::ERR, __func__, "Value out of range in the record for cpid " + cpid);
+            continue;
+        }
+
         // At the individual (byCPIDbyProject) level the AvgRAC is the same as the RAC.
         statsentry.statsvalue.dAvgRAC = statsentry.statsvalue.dRAC;
         // Mag is dealt with on the second pass, so is set to 0.0 on the first pass.
@@ -4167,9 +4205,15 @@ bool ProcessProjectStatsFromStreamByCPID(const std::string& project, boostio::fi
     // The mScraperStats here is scoped to only this project so we do not need project filtering here.
     ScraperStats::iterator entry;
 
+    // From block version 15 the share of a record is taken only of a project RAC total above zero. A project
+    // without one gives no magnitude: its records keep the zero of the first pass. The records that make up the
+    // total are finite and not negative by then, so the total is not negative and is a number; if it is too large
+    // to be finite, every share of it is zero by the arithmetic.
+    const bool project_total_usable = !checked_values || dProjectRAC > 0.0;
+
     // Statistics tracked for greylisted projects have zero project magnitude, so no need to go through
     // and update the CPID level mags. They are all zero if project magnitude is zero.
-    if (projectmag > 0) {
+    if (projectmag > 0 && project_total_usable) {
         for (auto const& entry : mScraperStats)
         {
             ScraperObjectStats statsentry;
@@ -4341,7 +4385,12 @@ ScraperStatsVerifiedBeaconsTotalCredits GetScraperStatsByCurrentFileManifestStat
     //Get the Consensus Beacon map and initialize mScraperStats.
     BeaconConsensus Consensus = GetConsensusBeaconList();
 
+    // This function has no block to go by, so the rules for statistics values are those of the chain height this node
+    // sees. GetConsensusBeaconList() above takes cs_main at the same point, so this adds no lock order.
+    const bool checked_values = WITH_LOCK(cs_main, return IsV15Enabled(nBestHeight));
+
     ScraperStatsVerifiedBeaconsTotalCredits stats_verified_beacons_tc;
+    stats_verified_beacons_tc.m_checked_values = checked_values;
 
     {
         LOCK(cs_StructScraperFileManifest);
@@ -4359,10 +4408,11 @@ ScraperStatsVerifiedBeaconsTotalCredits GetScraperStatsByCurrentFileManifestStat
                              "Processing stats for project: " + project);
 
                         if (!greylist.Contains(entry.second.project)) {
-                            LoadProjectFileToStatsByCPID(project, file, dMagnitudePerProject, mProjectScraperStats);
+                            LoadProjectFileToStatsByCPID(project, file, dMagnitudePerProject, mProjectScraperStats,
+                                                         checked_values);
                         } else {
                             // Project magnitude for a greylisted project is zero.
-                            LoadProjectFileToStatsByCPID(project, file, 0.0, mProjectScraperStats);
+                            LoadProjectFileToStatsByCPID(project, file, 0.0, mProjectScraperStats, checked_values);
                         }
 
                         // Insert into overall map.
@@ -4377,6 +4427,10 @@ ScraperStatsVerifiedBeaconsTotalCredits GetScraperStatsByCurrentFileManifestStat
                 stats_verified_beacons_tc.m_total_credit_map.insert(std::make_pair(entry.first, entry.second.all_cpid_total_credit));
             }
         }
+    }
+
+    if (checked_values) {
+        ZeroUnusableTotalCredits(stats_verified_beacons_tc.m_total_credit_map);
     }
 
     // Since this function uses the current project files for statistics, it also makes sense to use the current verified
@@ -4407,11 +4461,13 @@ ScraperStatsVerifiedBeaconsTotalCredits GetScraperStatsForExport(const GRC::Whit
 }
 
 ScraperStatsVerifiedBeaconsTotalCredits GetScraperStatsByConvergedManifest(const GRC::WhitelistSnapshot& greylist,
-                                                                           const ConvergedManifest& StructConvergedManifest)
+                                                                           const ConvergedManifest& StructConvergedManifest,
+                                                                           const bool checked_values)
 {
     _log(logattribute::INFO, "GetScraperStatsByConvergedManifest", "Beginning stats processing.");
 
     ScraperStatsVerifiedBeaconsTotalCredits stats_verified_beacons_tc;
+    stats_verified_beacons_tc.m_checked_values = checked_values;
 
     auto iter = StructConvergedManifest.ConvergedManifestPartPtrsMap.find("VerifiedBeacons");
     if (iter != StructConvergedManifest.ConvergedManifestPartPtrsMap.end())
@@ -4441,6 +4497,10 @@ ScraperStatsVerifiedBeaconsTotalCredits GetScraperStatsByConvergedManifest(const
         {
             _log(logattribute::WARNING, __func__, "failed to deserialize ProjectsAllCpidTotalCredits part: " + std::string(e.what()));
         }
+    }
+
+    if (checked_values) {
+        ZeroUnusableTotalCredits(stats_verified_beacons_tc.m_total_credit_map);
     }
 
     // Count the parts that are not projects, derived from the shared list rather
@@ -4495,10 +4555,11 @@ ScraperStatsVerifiedBeaconsTotalCredits GetScraperStatsByConvergedManifest(const
             _log(logattribute::INFO, "GetScraperStatsByConvergedManifest", "Processing stats for project: " + project);
 
             if (!greylist.Contains(project)) {
-                LoadProjectObjectToStatsByCPID(project, entry->second->data, dMagnitudePerProject, mProjectScraperStats);
+                LoadProjectObjectToStatsByCPID(project, entry->second->data, dMagnitudePerProject, mProjectScraperStats,
+                                               checked_values);
             } else {
                 // Project magnitude for a greylisted project is zero.
-                LoadProjectObjectToStatsByCPID(project, entry->second->data, 0.0, mProjectScraperStats);
+                LoadProjectObjectToStatsByCPID(project, entry->second->data, 0.0, mProjectScraperStats, checked_values);
             }
 
             // Insert into overall map.
@@ -4519,7 +4580,8 @@ ScraperStatsVerifiedBeaconsTotalCredits GetScraperStatsByConvergedManifest(const
 }
 
 ScraperStatsVerifiedBeaconsTotalCredits GetScraperStatsFromSingleManifest(const GRC::WhitelistSnapshot& greylist,
-                                                                          CScraperManifest_shared_ptr& manifest)
+                                                                          CScraperManifest_shared_ptr& manifest,
+                                                                          const bool checked_values)
 {
     _log(logattribute::INFO, "GetScraperStatsFromSingleManifest", "Beginning stats processing.");
 
@@ -4565,7 +4627,12 @@ ScraperStatsVerifiedBeaconsTotalCredits GetScraperStatsFromSingleManifest(const 
         }
     }
 
+    stats_verified_beacons_tc.m_checked_values = checked_values;
     stats_verified_beacons_tc.m_total_credit_map = projects_all_cpid_total_credits_map;
+
+    if (checked_values) {
+        ZeroUnusableTotalCredits(stats_verified_beacons_tc.m_total_credit_map);
+    }
 
     // Count the parts that are not projects, derived from the shared list rather
     // than named here.
@@ -4617,10 +4684,11 @@ ScraperStatsVerifiedBeaconsTotalCredits GetScraperStatsFromSingleManifest(const 
             _log(logattribute::INFO, "GetScraperStatsFromSingleManifest", "Processing stats for project: " + project);
 
             if (!greylist.Contains(project)) {
-                LoadProjectObjectToStatsByCPID(project, entry->second->data, dMagnitudePerProject, mProjectScraperStats);
+                LoadProjectObjectToStatsByCPID(project, entry->second->data, dMagnitudePerProject, mProjectScraperStats,
+                                               checked_values);
             } else {
                 // Project magnitude for a greylisted project is zero.
-                LoadProjectObjectToStatsByCPID(project, entry->second->data, 0.0, mProjectScraperStats);
+                LoadProjectObjectToStatsByCPID(project, entry->second->data, 0.0, mProjectScraperStats, checked_values);
             }
 
             // Insert into overall map.
@@ -6673,6 +6741,14 @@ ScraperStatsVerifiedBeaconsTotalCredits GetScraperStatsVerifiedBeaconsTotalCredi
 
     stats_verified_beacons_tc.mScraperStats = stats.mScraperConvergedStats.mScraperStats;
 
+    // The statistics were computed under one set of rules for statistics values. The total credits read again
+    // here follow the same set.
+    stats_verified_beacons_tc.m_checked_values = stats.mScraperConvergedStats.m_checked_values;
+
+    if (stats_verified_beacons_tc.m_checked_values) {
+        ZeroUnusableTotalCredits(stats_verified_beacons_tc.m_total_credit_map);
+    }
+
     return stats_verified_beacons_tc;
 }
 
@@ -6715,6 +6791,10 @@ Superblock ScraperGetSuperblockContract(bool bStoreConvergedStats, bool bContrac
     // validated with the rules of the height of the block it is in.
     int convergence_height = 0;
 
+    // Whether the rules for statistics values that begin with block version 15 apply. Like the contract version,
+    // this goes by the chain height this node sees when it computes the statistics.
+    bool checked_values = false;
+
     {
         LOCK(cs_main);
 
@@ -6723,6 +6803,8 @@ Superblock ScraperGetSuperblockContract(bool bStoreConvergedStats, bool bContrac
         }
 
         convergence_height = nBestHeight + 1;
+
+        checked_values = IsV15Enabled(nBestHeight);
     }
 
     Superblock empty_superblock(superblock_contract_version);
@@ -6776,7 +6858,8 @@ Superblock ScraperGetSuperblockContract(bool bStoreConvergedStats, bool bContrac
                 ScraperStatsVerifiedBeaconsTotalCredits mScraperConvergedStats
                         = GetScraperStatsByConvergedManifest(GetWhitelist().Snapshot(GreylistState::PENDING,
                                                                  GRC::ProjectEntry::ProjectFilterFlag::GREYLISTED),
-                                                             StructConvergedManifest);
+                                                             StructConvergedManifest,
+                                                             checked_values);
 
                 _log(logattribute::INFO, "ScraperGetSuperblockContract",
                      "mScraperStats has the following number of elements: "
@@ -7102,7 +7185,9 @@ UniValue ConvergedScraperStatsToJson(ConvergedScraperStats& ConvergedScraperStat
 
         const ConvergedScraperStats dummy_converged_stats(PastConvergence.timestamp, PastConvergence,
                                                           GetWhitelist().Snapshot(GreylistState::PENDING,
-                                                              GRC::ProjectEntry::ProjectFilterFlag::GREYLISTED));
+                                                              GRC::ProjectEntry::ProjectFilterFlag::GREYLISTED),
+                                                          anchor_index != nullptr
+                                                              && IsV15Enabled(anchor_index->nHeight));
 
         // A PAST convergence: update_pending_cache = false, so this diagnostic re-derivation
         // cannot clobber the live pending greylist state above the redesign gate.
@@ -7455,7 +7540,10 @@ UniValue testnewsb(const UniValue& params)
         ScraperStatsVerifiedBeaconsTotalCredits RandomPastSBStatsAndVerifiedBeacons =
                 GetScraperStatsByConvergedManifest(GetWhitelist().Snapshot(GreylistState::PENDING,
                                                        GRC::ProjectEntry::ProjectFilterFlag::GREYLISTED),
-                                                   RandomPastConvergedManifest);
+                                                   RandomPastConvergedManifest,
+                                                   // The validation calls below are given no block height, and
+                                                   // validate as at the default one.
+                                                   IsV15Enabled(std::numeric_limits<int>::max()));
 
         Superblock RandomPastSB = Superblock::FromStats(RandomPastSBStatsAndVerifiedBeacons);
 

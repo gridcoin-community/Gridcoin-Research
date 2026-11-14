@@ -354,6 +354,13 @@ struct ScraperStatsVerifiedBeaconsTotalCredits
     ScraperStats mScraperStats;
     ScraperPendingBeaconMap mVerifiedMap;
     std::map<std::string, double> m_total_credit_map;
+
+    //! Whether the statistics were computed under the rules for statistics
+    //! values that begin with block version 15 (see
+    //! ProcessProjectStatsFromStreamByCPID() in scraper.cpp). A superblock
+    //! built or hashed from the statistics converts its values under the same
+    //! rules.
+    bool m_checked_values = false;
 };
 
 #endif // GRIDCOIN_SCRAPER_FWD_H

@@ -22,6 +22,35 @@ extern ScraperStatsVerifiedBeaconsTotalCredits GetScraperStatsVerifiedBeaconsTot
 
 namespace {
 //!
+//! \brief Converts a statistics value to the integer that a superblock stores.
+//!
+//! Under the rules that begin with block version 15 a value that is not a
+//! number or is below zero gives zero, and a value at or above 2^64 gives the
+//! largest integer. Every other value is rounded (std::nearbyint). Below block
+//! version 15 the earlier conversion applies.
+//!
+//! \param value          Value from the scraper statistics.
+//! \param checked_values Whether the statistics follow the version 15 rules.
+//!
+//! \return The value as a superblock stores it.
+//!
+uint64_t RoundStatsValue(const double value, const bool checked_values)
+{
+    if (checked_values) {
+        if (!(value >= 0.0)) {
+            return 0;
+        }
+
+        // 2^64, which a double holds exactly.
+        if (value >= 18446744073709551616.0) {
+            return std::numeric_limits<uint64_t>::max();
+        }
+    }
+
+    return std::nearbyint(value);
+}
+
+//!
 //! \brief Loads a provided set of scraper statistics into a superblock.
 //!
 //! \tparam T A superblock-like object. For example, a ScraperStatsQuorumHasher
@@ -56,6 +85,8 @@ public:
     //!
     void BuildFromStats(const ScraperStatsVerifiedBeaconsTotalCredits& stats_verified_beacons_tc)
     {
+        const bool checked_values = stats_verified_beacons_tc.m_checked_values;
+
         for (const auto& entry : stats_verified_beacons_tc.mScraperStats) {
             // A CPID, project name, or project name/CPID pair that identifies
             // the current statistics record:
@@ -80,9 +111,9 @@ public:
                 m_superblock.m_projects.Add(
                     object_id,
                     Superblock::ProjectStats(
-                        std::nearbyint(entry.second.statsvalue.dTC),
-                        std::nearbyint(entry.second.statsvalue.dAvgRAC),
-                        std::nearbyint(entry.second.statsvalue.dRAC))
+                        RoundStatsValue(entry.second.statsvalue.dTC, checked_values),
+                        RoundStatsValue(entry.second.statsvalue.dAvgRAC, checked_values),
+                        RoundStatsValue(entry.second.statsvalue.dRAC, checked_values))
                     );
 
                 break;
@@ -105,7 +136,8 @@ public:
 
         // This is equivalent to superblock v3+ and doesn't require a lock on cs_main.
         if (!stats_verified_beacons_tc.m_total_credit_map.empty()) {
-            m_superblock.m_projects_all_cpids_total_credits.Reset(stats_verified_beacons_tc.m_total_credit_map);
+            m_superblock.m_projects_all_cpids_total_credits.Reset(stats_verified_beacons_tc.m_total_credit_map,
+                                                                  checked_values);
         }
     }
 private:
@@ -276,12 +308,13 @@ private:
                 m_hasher << key_ids;
             }
 
-            void Reset(const std::map<std::string, double>& projects_all_cpids_total_credits)
+            void Reset(const std::map<std::string, double>& projects_all_cpids_total_credits,
+                       const bool checked_values)
             {
                 std::map<std::string, uint64_t> tc_map;
 
                 for (const auto& entry : projects_all_cpids_total_credits) {
-                    tc_map.insert(std::make_pair(entry.first, std::nearbyint(entry.second)));
+                    tc_map.insert(std::make_pair(entry.first, RoundStatsValue(entry.second, checked_values)));
                 }
 
                 m_hasher << tc_map;
@@ -613,7 +646,8 @@ Superblock Superblock::FromConvergence(
     if (version > 2) {
         // Populate the total credits into the superblock object from the convergence. This must be done BEFORE
         // the auto greylist RefreshWithAndUpdateSuperblock is called.
-        superblock.m_projects_all_cpids_total_credits.Reset(stats.mScraperConvergedStats.m_total_credit_map);
+        superblock.m_projects_all_cpids_total_credits.Reset(stats.mScraperConvergedStats.m_total_credit_map,
+                                                            stats.mScraperConvergedStats.m_checked_values);
 
         // Refresh the auto greylist and refresh this superblock with the greylist status. The
         // convergence content hash keys the pending greylist state above the redesign gate.
@@ -1020,12 +1054,13 @@ void Superblock::VerifiedBeacons::Reset(
     std::sort(m_verified.begin(), m_verified.end());
 }
 
-void Superblock::ProjectsAllCpidTotalCredits::Reset(const std::map<std::string, double>& projects_all_cpid_total_credits)
+void Superblock::ProjectsAllCpidTotalCredits::Reset(const std::map<std::string, double>& projects_all_cpid_total_credits,
+                                                    const bool checked_values)
 {
     m_projects_all_cpid_total_credits.clear();
 
     for (const auto& entry : projects_all_cpid_total_credits) {
-        m_projects_all_cpid_total_credits.insert(make_pair(entry.first, std::nearbyint(entry.second)));
+        m_projects_all_cpid_total_credits.insert(make_pair(entry.first, RoundStatsValue(entry.second, checked_values)));
     }
 }
 

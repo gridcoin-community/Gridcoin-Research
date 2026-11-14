@@ -139,7 +139,8 @@ uint256 GetFileHash(const fs::path& inputfile);
  * @return ScraperStatsVerifiedBeaconsTotalCredits
  */
 ScraperStatsVerifiedBeaconsTotalCredits GetScraperStatsByConvergedManifest(const GRC::WhitelistSnapshot& greylist,
-                                                                           const ConvergedManifest& StructConvergedManifest);
+                                                                           const ConvergedManifest& StructConvergedManifest,
+                                                                           const bool checked_values);
 /**
  * @brief Gets a copy of the extended scrapers cache global. This global is an extension of the appcache in that it
  * retains deleted entries with a deleted flag.
@@ -276,7 +277,7 @@ double MagRound(double dMag);
  * @return bool true if successful. On false, mScraperStats is empty.
  */
 bool LoadProjectObjectToStatsByCPID(const std::string& project, const SerializeData& ProjectData, const double& projectmag,
-                                    ScraperStats& mScraperStats);
+                                    ScraperStats& mScraperStats, const bool checked_values);
 
 /**
  * @brief Returns the number of scrapers required for a supermajority when determining a convergence. This is a CONSENSUS

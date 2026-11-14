@@ -23,9 +23,11 @@ using namespace GRC;
 
 // TODO: use a header
 ScraperStatsVerifiedBeaconsTotalCredits  GetScraperStatsByConvergedManifest(const GRC::WhitelistSnapshot& greylist,
-                                                                            const ConvergedManifest& StructConvergedManifest);
+                                                                            const ConvergedManifest& StructConvergedManifest,
+                                                                            const bool checked_values);
 ScraperStatsVerifiedBeaconsTotalCredits  GetScraperStatsFromSingleManifest(const GRC::WhitelistSnapshot& greylist,
-                                                                           CScraperManifest_shared_ptr& manifest);
+                                                                           CScraperManifest_shared_ptr& manifest,
+                                                                           const bool checked_values);
 unsigned int NumScrapersForSupermajority(unsigned int nScraperCount);
 std::vector<ManifestAgreement> ManifestsAgreedBySupermajority(const mmCSManifestsBinnedByScraper& manifests_by_scraper);
 mmCSManifestsBinnedByScraper ScraperCullAndBinCScraperManifests();
@@ -876,16 +878,20 @@ private: // SuperblockValidator classes
         //! \brief Calculate a superblock hash from the supplied manifest data
         //! that matches the set of resolved project parts.
         //!
+        //! \param checked_values Whether the rules for statistics values that
+        //! begin with block version 15 apply to the superblock under validation.
+        //!
         //! \return A superblock hash generated from the convergence to compare
         //! to the superblock under validation.
         //!
-        QuorumHash ComputeQuorumHash() const
+        QuorumHash ComputeQuorumHash(const bool checked_values) const
         {
             // Validator recompute over convergence-derived data: the pending greylist is the
             // one that matches it (the data-source rule).
             const ScraperStatsVerifiedBeaconsTotalCredits stats_and_verified_beacons = GetScraperStatsByConvergedManifest(
                 GetWhitelist().Snapshot(GreylistState::PENDING, GRC::ProjectEntry::ProjectFilterFlag::GREYLISTED),
-                m_convergence);
+                m_convergence,
+                checked_values);
 
             return QuorumHash::Hash(stats_and_verified_beacons);
         }
@@ -1658,7 +1664,8 @@ private: // SuperblockValidator methods
     {
         const ScraperStatsVerifiedBeaconsTotalCredits stats_and_verified_beacons = GetScraperStatsFromSingleManifest(
             GetWhitelist().Snapshot(GreylistState::PENDING, GRC::ProjectEntry::ProjectFilterFlag::GREYLISTED),
-            manifest);
+            manifest,
+            IsV15Enabled(m_height));
 
         return QuorumHash::Hash(stats_and_verified_beacons) == m_quorum_hash;
     }
@@ -1704,7 +1711,7 @@ private: // SuperblockValidator methods
                  combiner.TotalCombinations());
 
         while (const auto combination_option = combiner.GetNextConvergence()) {
-            if (combination_option->ComputeQuorumHash() == m_quorum_hash) {
+            if (combination_option->ComputeQuorumHash(IsV15Enabled(m_height)) == m_quorum_hash) {
                 return true;
             }
         }
