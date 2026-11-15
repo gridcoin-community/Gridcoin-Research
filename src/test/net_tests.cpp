@@ -9,6 +9,7 @@
 #ifndef WIN32
 #include <sys/stat.h>
 #endif
+#include "gridcoin/scraper/scraper_net.h"
 #include "hash.h"
 #include "serialize.h"
 #include "streams.h"
@@ -582,6 +583,91 @@ BOOST_AUTO_TEST_CASE(psgt_entries_of_a_getdata_are_counted_across_passes_and_fro
     check_replies(sent);
 
     g_psgt_pool.Clear();
+    WITH_LOCK(cs_main, cPeerBlockCounts = peer_block_counts);
+}
+
+// A request queued for a scraper part is sent only while the part is needed: a
+// manifest here references it and its data has not arrived. The requests here
+// have no record in the map of request times. The request for the needed part
+// is sent all the same, and the other two are taken off the queue unsent.
+BOOST_AUTO_TEST_CASE(a_queued_request_for_a_part_is_sent_only_while_the_part_is_needed)
+{
+    BOOST_REQUIRE(g_peerman);
+    grc_test::StateGuard guard;
+    const CMedianFilter<int> peer_block_counts = WITH_LOCK(cs_main, return cPeerBlockCounts);
+
+    SetMockTime(1700000000);
+
+    // Allocated, not a local, for the reason given in the case above.
+    const auto peer = std::make_unique<CNode>(INVALID_SOCKET,
+                                              CAddress(CService(LookupNumeric("127.0.0.1", 0)), NODE_NONE),
+                                              "", true);
+    CNode& node = *peer;
+    node.CloseSocketDisconnect();
+    node.fDisconnect = false;
+
+    {
+        LOCK(node.cs_vRecvMsg);
+
+        const SerializeData version = VersionMessage(1700000000);
+        BOOST_REQUIRE(node.ReceiveMsgBytes(CharCast(UCharCast(version.data())), version.size()));
+        g_peerman->ProcessMessages(&node);
+        BOOST_REQUIRE(node.nVersion == PROTOCOL_VERSION);
+    }
+
+    auto manifest = std::shared_ptr<CScraperManifest>(new CScraperManifest());
+
+    // A part the manifest references whose data has not arrived.
+    const uint256 missing = Hash(std::string("a part that has not arrived"));
+    manifest->addPart(missing);
+
+    // A part the manifest references whose data is here.
+    CDataStream data(SER_NETWORK, PROTOCOL_VERSION);
+    data << std::string("a part that is here");
+    BOOST_REQUIRE_EQUAL(manifest->addPartData(std::move(data)), 1);
+
+    const uint256 held = WITH_LOCK(CSplitBlob::cs_mapParts, return WITH_LOCK(manifest->cs_manifest,
+                                                                             return manifest->vParts[1]->hash));
+
+    // A part that nothing references.
+    const uint256 unreferenced = Hash(std::string("a part nothing references"));
+
+    BOOST_REQUIRE(CSplitBlob::PartNeeded(missing));
+    BOOST_REQUIRE(!CSplitBlob::PartNeeded(held));
+    BOOST_REQUIRE(!CSplitBlob::PartNeeded(unreferenced));
+
+    // One request for each, due now.
+    for (const uint256& hash : {held, unreferenced, missing}) {
+        node.mapAskFor.insert(std::make_pair(int64_t{0}, CInv(MSG_PART, hash)));
+    }
+
+    {
+        // The locks the message handler calls SendMessages with.
+        LOCK2(cs_main, node.cs_vSend);
+
+        TakeSent(node);
+        g_peerman->SendMessages(&node, false);
+    }
+
+    BOOST_CHECK(node.mapAskFor.empty());
+
+    std::vector<CInv> asked;
+
+    for (const auto& message : TakeSent(node)) {
+        if (message.first != NetMsgType::GETDATA) continue;
+
+        std::vector<CInv> entries;
+        CDataStream payload(SER_NETWORK, PROTOCOL_VERSION);
+        payload.write(Span{message.second});
+        payload >> entries;
+
+        asked.insert(asked.end(), entries.begin(), entries.end());
+    }
+
+    BOOST_REQUIRE_EQUAL(asked.size(), 1U);
+    BOOST_CHECK(asked.front().type == MSG_PART);
+    BOOST_CHECK(asked.front().hash == missing);
+
     WITH_LOCK(cs_main, cPeerBlockCounts = peer_block_counts);
 }
 

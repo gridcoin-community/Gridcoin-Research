@@ -178,6 +178,7 @@ public: /* static methods */
     /** Check if we already have this object.
      * @returns false only if we need this object
      * Additionally sender node is used as fetch source if needed
+     * A part is needed as PartNeeded() says.
      */
     static bool AlreadyHave(CNode* pfrom, const CInv& inv);
 
