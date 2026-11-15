@@ -481,7 +481,14 @@ BOOST_AUTO_TEST_CASE(psgt_entries_of_a_getdata_are_counted_across_passes_and_fro
     // In units of 1000 bytes.
     gArgs.ForceSetArg("-maxsendbuffer", "1");
 
-    CNode node(INVALID_SOCKET, CAddress(CService(LookupNumeric("127.0.0.1", 0)), NODE_NONE), "", true);
+    // The peer is not a local of this function. ThreadSanitizer knows a mutex
+    // by its address and is not told when a local one goes out of scope, so a
+    // local peer's locks can be taken for those of an object that an earlier
+    // case had at the same place on the stack.
+    const auto peer = std::make_unique<CNode>(INVALID_SOCKET,
+                                              CAddress(CService(LookupNumeric("127.0.0.1", 0)), NODE_NONE),
+                                              "", true);
+    CNode& node = *peer;
     node.CloseSocketDisconnect();
     node.fDisconnect = false;
 
