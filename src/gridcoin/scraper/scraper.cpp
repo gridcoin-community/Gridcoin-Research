@@ -5376,10 +5376,25 @@ EXCLUSIVE_LOCKS_REQUIRED(cs_StructScraperFileManifest, CScraperManifest::cs_mapM
 
     // "Sign" and "send".
 
-    LOCK(CSplitBlob::cs_mapParts);
+    bool bAddManifestSuccessful = false;
 
-    // addManifest will also call Complete() after signing to send the manifest over the network.
-    bool bAddManifestSuccessful = CScraperManifest::addManifest(manifest, Key);
+    {
+        LOCK(CSplitBlob::cs_mapParts);
+
+        // addManifest will also call Complete() after signing to send the manifest over the network.
+        bAddManifestSuccessful = CScraperManifest::addManifest(manifest, Key);
+    }
+
+    // Mark ConvergedScraperStatsCache dirty because a new manifest is present, so the convergence may change. This
+    // is done after cs_mapParts is released, because cs_ConvergedScraperStatsCache is taken before cs_mapParts (see
+    // CScraperManifest::addManifest), and while the caller still holds cs_mapManifest, so that no convergence can be
+    // formed from the manifest map between the insertion and the mark.
+    if (bAddManifestSuccessful)
+    {
+        LOCK(cs_ConvergedScraperStatsCache);
+
+        ConvergedScraperStatsCache.bClean = false;
+    }
 
     if (bAddManifestSuccessful)
         _log(logattribute::INFO, "ScraperSendFileManifestContents", "addManifest (send) from this scraper (address "
