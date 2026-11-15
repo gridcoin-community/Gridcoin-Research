@@ -15,11 +15,15 @@
 #include "net.h"
 #include "net_processing.h"
 #include "netbase.h"
+#include "node/psgt_pool.h"
+#include "node/shutdown.h"
 #include "addrdb.h"
 #include "chain.h"
 #include "chainparams.h"
 #include "clientversion.h"
 #include "primitives/block.h"
+#include "primitives/transaction.h"
+#include "protocol.h"
 #include "test/state_guard.h"
 #include "util.h"
 #include "util/system.h"
@@ -311,6 +315,273 @@ BOOST_AUTO_TEST_CASE(version_time_checks_use_the_receive_time)
         BOOST_CHECK_MESSAGE(node.nTimeOffset == 30, "wait " << wait << ": time offset " << node.nTimeOffset.load());
     }
 
+    WITH_LOCK(cs_main, cPeerBlockCounts = peer_block_counts);
+}
+
+// A message as a peer sends it, header and checksum included.
+static SerializeData WireMessage(const char* command, const CDataStream& payload)
+{
+    CDataStream ss(SER_NETWORK, INIT_PROTO_VERSION);
+    ss << CMessageHeader(command, 0);
+    ss.write(Span{payload});
+
+    const unsigned int size = ss.size() - CMessageHeader::HEADER_SIZE;
+    memcpy(&ss[CMessageHeader::MESSAGE_SIZE_OFFSET], &size, sizeof(size));
+    const uint256 hash = Hash(Span{ss}.subspan(CMessageHeader::HEADER_SIZE));
+    memcpy(&ss[CMessageHeader::CHECKSUM_OFFSET], &hash, 4);
+
+    return SerializeData(ss.begin(), ss.end());
+}
+
+// Takes the messages queued for a peer off its send queue, as the socket does,
+// and gives the command and the payload of each in the order they were queued.
+static std::vector<std::pair<std::string, SerializeData>> TakeSent(CNode& node)
+{
+    std::vector<std::pair<std::string, SerializeData>> sent;
+
+    LOCK(node.cs_vSend);
+
+    for (const SerializeData& message : node.vSendMsg) {
+        BOOST_REQUIRE(message.size() >= CMessageHeader::HEADER_SIZE);
+
+        const char* const command = CharCast(UCharCast(message.data())) + CMessageHeader::MESSAGE_START_SIZE;
+
+        sent.emplace_back(std::string(command, strnlen(command, CMessageHeader::COMMAND_SIZE)),
+                          SerializeData(message.begin() + CMessageHeader::HEADER_SIZE, message.end()));
+    }
+
+    node.vSendMsg.clear();
+    node.nSendSize = 0;
+    node.nSendOffset = 0;
+
+    return sent;
+}
+
+// The entries of a getdata are served while the peer's send queue is under
+// -maxsendbuffer. The rest stay on the peer and are served, in the order asked,
+// as the queue is taken, and a message that came after the getdata is not
+// handled until they are gone. The peer here has no socket, so what the
+// handler queues for it stays in its send queue until the test takes it.
+BOOST_AUTO_TEST_CASE(getdata_entries_wait_for_room_in_the_send_queue_in_the_order_asked)
+{
+    BOOST_REQUIRE(g_peerman);
+    grc_test::StateGuard guard;
+    const CMedianFilter<int> peer_block_counts = WITH_LOCK(cs_main, return cPeerBlockCounts);
+
+    SetMockTime(1700000000);
+    // In units of 1000 bytes.
+    gArgs.ForceSetArg("-maxsendbuffer", "1");
+
+    CNode node(INVALID_SOCKET, CAddress(CService(LookupNumeric("127.0.0.1", 0)), NODE_NONE), "", true);
+    node.CloseSocketDisconnect();
+    node.fDisconnect = false;
+
+    LOCK(node.cs_vRecvMsg);
+
+    const SerializeData version = VersionMessage(1700000000);
+    BOOST_REQUIRE(node.ReceiveMsgBytes(CharCast(UCharCast(version.data())), version.size()));
+    g_peerman->ProcessMessages(&node);
+    BOOST_REQUIRE(node.nVersion == PROTOCOL_VERSION);
+    TakeSent(node);
+
+    // Transactions in relay memory, which a getdata is served from. Together
+    // they are several times the send queue's limit.
+    const size_t entries = 100;
+    std::vector<CInv> request;
+    std::vector<SerializeData> transactions;
+
+    for (size_t i = 0; i < entries; ++i) {
+        CMutableTransaction mtx;
+        mtx.nLockTime = i + 1;
+        const CTransaction tx(mtx);
+
+        CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
+        ss << tx;
+        RelayTransaction(tx, tx.GetHash(), ss);
+
+        request.emplace_back(MSG_TX, tx.GetHash());
+        transactions.emplace_back(ss.begin(), ss.end());
+    }
+
+    const uint64_t nonce = 7;
+    CDataStream getdata_payload(SER_NETWORK, INIT_PROTO_VERSION);
+    getdata_payload << request;
+    CDataStream ping_payload(SER_NETWORK, INIT_PROTO_VERSION);
+    ping_payload << nonce;
+
+    for (const SerializeData& message : {WireMessage(NetMsgType::GETDATA, getdata_payload),
+                                         WireMessage(NetMsgType::PING, ping_payload)}) {
+        BOOST_REQUIRE(node.ReceiveMsgBytes(CharCast(UCharCast(message.data())), message.size()));
+    }
+
+    // The first pass serves entries up to the limit. The rest are held, and
+    // the ping waits behind them.
+    g_peerman->ProcessMessages(&node);
+
+    std::vector<std::pair<std::string, SerializeData>> sent = TakeSent(node);
+
+    BOOST_CHECK(!sent.empty());
+    BOOST_CHECK(sent.size() < entries);
+    BOOST_CHECK_EQUAL(node.vRecvGetData.size(), entries - sent.size());
+    BOOST_CHECK_EQUAL(node.vRecvMsg.size(), 1U);
+
+    // A pass that serves nothing although the send queue has room: the entries
+    // are still held, so the ping is still not handled.
+    const size_t held = node.vRecvGetData.size();
+
+    SetShutdownInProgress(true);
+    g_peerman->ProcessMessages(&node);
+    SetShutdownInProgress(false);
+
+    BOOST_CHECK(TakeSent(node).empty());
+    BOOST_CHECK_EQUAL(node.vRecvGetData.size(), held);
+    BOOST_CHECK_EQUAL(node.vRecvMsg.size(), 1U);
+
+    // Each later pass serves more as the queue is taken, and then the ping.
+    for (size_t pass = 0; pass < entries && (!node.vRecvGetData.empty() || !node.vRecvMsg.empty()); ++pass) {
+        g_peerman->ProcessMessages(&node);
+
+        for (auto& message : TakeSent(node)) {
+            sent.push_back(std::move(message));
+        }
+    }
+
+    BOOST_CHECK(node.vRecvGetData.empty());
+    BOOST_CHECK(node.vRecvMsg.empty());
+    BOOST_REQUIRE_EQUAL(sent.size(), entries + 1);
+
+    for (size_t i = 0; i < entries; ++i) {
+        BOOST_CHECK_MESSAGE(sent[i].first == NetMsgType::TX && sent[i].second == transactions[i],
+                            "reply " << i << " is not the transaction asked for in that place");
+    }
+
+    BOOST_CHECK_EQUAL(sent.back().first, NetMsgType::PONG);
+    BOOST_CHECK(sent.back().second == SerializeData(ping_payload.begin(), ping_payload.end()));
+
+    for (const CInv& inv : request) {
+        RemoveFromRelayMemory(inv.hash);
+    }
+
+    WITH_LOCK(cs_main, cPeerBlockCounts = peer_block_counts);
+}
+
+// A getdata is answered with at most PSGTPool::MAX_ENTRIES PSGTs. The count is
+// kept on the peer with the entries held, so it runs on through the passes that
+// serve one getdata, and it starts from zero for the next getdata.
+BOOST_AUTO_TEST_CASE(psgt_entries_of_a_getdata_are_counted_across_passes_and_from_zero_for_the_next)
+{
+    BOOST_REQUIRE(g_peerman);
+    BOOST_REQUIRE_EQUAL(g_psgt_pool.Size(), 0U);
+    grc_test::StateGuard guard;
+    const CMedianFilter<int> peer_block_counts = WITH_LOCK(cs_main, return cPeerBlockCounts);
+
+    SetMockTime(1700000000);
+    // A node that is out of sync serves no PSGT.
+    g_previous_block_time.store(GetAdjustedTime());
+    // In units of 1000 bytes.
+    gArgs.ForceSetArg("-maxsendbuffer", "1");
+
+    // The peer is not a local of this function. ThreadSanitizer knows a mutex
+    // by its address and is not told when a local one goes out of scope, so a
+    // local peer's locks can be taken for those of an object that an earlier
+    // case had at the same place on the stack.
+    const auto peer = std::make_unique<CNode>(INVALID_SOCKET,
+                                              CAddress(CService(LookupNumeric("127.0.0.1", 0)), NODE_NONE),
+                                              "", true);
+    CNode& node = *peer;
+    node.CloseSocketDisconnect();
+    node.fDisconnect = false;
+
+    LOCK(node.cs_vRecvMsg);
+
+    const SerializeData version = VersionMessage(1700000000);
+    BOOST_REQUIRE(node.ReceiveMsgBytes(CharCast(UCharCast(version.data())), version.size()));
+    g_peerman->ProcessMessages(&node);
+    BOOST_REQUIRE(node.nVersion == PROTOCOL_VERSION);
+    TakeSent(node);
+
+    // One pooled revision. Its bytes are not a PSGT: a getdata is served from
+    // the bytes the pool stores, and they are not decoded on the way out. A few
+    // replies of this size are over the send queue's limit.
+    PSGTPoolEntry entry;
+    entry.serialized.assign(400, 0x5a);
+    entry.revision_hash = Hash(entry.serialized);
+    entry.image = CScriptID(uint160(std::vector<unsigned char>(20, 0x21)));
+    entry.tx_hash = uint256(std::vector<unsigned char>(32, 0x43));
+    entry.time_received = GetAdjustedTime();
+    entry.valid_keys_per_input.push_back({CKeyID(uint160(std::vector<unsigned char>(20, 0x65)))});
+    entry.valid_sigs = 1;
+    entry.sigs_required = 2;
+    entry.sigs_total = 3;
+
+    const CInv revision(MSG_PSGT, entry.revision_hash);
+
+    CDataStream reply_payload(SER_NETWORK, PROTOCOL_VERSION);
+    reply_payload << entry.serialized;
+    const SerializeData reply(reply_payload.begin(), reply_payload.end());
+
+    std::string reject_reason;
+    BOOST_REQUIRE_MESSAGE(g_psgt_pool.Add(std::move(entry), reject_reason) == PSGTPoolAddResult::ACCEPTED_NEW,
+                          reject_reason);
+
+    const auto receive_getdata = [&node](const std::vector<CInv>& request) EXCLUSIVE_LOCKS_REQUIRED(node.cs_vRecvMsg) {
+        CDataStream payload(SER_NETWORK, INIT_PROTO_VERSION);
+        payload << request;
+
+        const SerializeData message = WireMessage(NetMsgType::GETDATA, payload);
+        BOOST_REQUIRE(node.ReceiveMsgBytes(CharCast(UCharCast(message.data())), message.size()));
+    };
+
+    const auto check_replies = [&reply](const std::vector<std::pair<std::string, SerializeData>>& sent) {
+        for (size_t i = 0; i < sent.size(); ++i) {
+            BOOST_CHECK_MESSAGE(sent[i].first == NetMsgType::PSGT && sent[i].second == reply,
+                                "reply " << i << " is not the pooled revision");
+        }
+    };
+
+    // More entries for the one revision than a getdata is answered with.
+    const size_t limit = PSGTPool::MAX_ENTRIES;
+    const size_t asked = limit + 50;
+
+    receive_getdata(std::vector<CInv>(asked, revision));
+
+    // The first pass serves entries up to the send queue's limit and holds
+    // the rest. The count of those served is on the peer.
+    g_peerman->ProcessMessages(&node);
+
+    std::vector<std::pair<std::string, SerializeData>> sent = TakeSent(node);
+
+    BOOST_CHECK(!sent.empty());
+    BOOST_CHECK(sent.size() < limit);
+    BOOST_CHECK_EQUAL(node.vRecvGetData.size(), asked - sent.size());
+    BOOST_CHECK_EQUAL(node.nGetDataPsgtServed, sent.size());
+
+    // The later passes go on from that count: the getdata is answered with
+    // the limit and no more, however many passes it takes.
+    for (size_t pass = 0; pass < asked && !node.vRecvGetData.empty(); ++pass) {
+        g_peerman->ProcessMessages(&node);
+
+        for (auto& message : TakeSent(node)) {
+            sent.push_back(std::move(message));
+        }
+    }
+
+    BOOST_CHECK(node.vRecvGetData.empty());
+    BOOST_CHECK(node.vRecvMsg.empty());
+    BOOST_CHECK_EQUAL(sent.size(), limit);
+    check_replies(sent);
+
+    // The next getdata is counted from zero.
+    receive_getdata(std::vector<CInv>(2, revision));
+    g_peerman->ProcessMessages(&node);
+
+    sent = TakeSent(node);
+
+    BOOST_CHECK(node.vRecvGetData.empty());
+    BOOST_CHECK_EQUAL(sent.size(), 2U);
+    check_replies(sent);
+
+    g_psgt_pool.Clear();
     WITH_LOCK(cs_main, cPeerBlockCounts = peer_block_counts);
 }
 

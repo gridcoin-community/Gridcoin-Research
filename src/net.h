@@ -294,6 +294,14 @@ protected:
     // thin Misbehaving()/GetMisbehavior() wrappers below forward to them.
 
 public:
+    //! The entries of a getdata that have not been served yet, in the order
+    //! they were asked for. The message handler serves them as the send queue
+    //! has room and handles no further message from the peer until they are
+    //! gone, so they are the entries of one getdata: at most MAX_INV_SZ.
+    std::deque<CInv> vRecvGetData GUARDED_BY(cs_vRecvMsg);
+    //! How many PSGT entries of that getdata have been served.
+    size_t nGetDataPsgtServed GUARDED_BY(cs_vRecvMsg){0};
+
     uint256 hashContinue;
     CBlockIndex* pindexLastGetBlocksBegin;
     uint256 hashLastGetBlocksEnd;

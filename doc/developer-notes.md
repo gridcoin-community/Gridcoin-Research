@@ -799,10 +799,10 @@ The two sides are the socket handler (`grc-net`) and the message handler
 No cycle can close, because of two invariants the net code keeps:
 
 1. **A thread that holds `m_nodes_mutex` or `cs_main` takes `cs_vRecvMsg` only
-   with `TRY_LOCK`.** The only blocking `LOCK(cs_vRecvMsg)` in the tree is the
-   VERACK handler in `src/net_processing.cpp`, which runs inside
-   `ProcessMessages()` under the same lock, so it is a re-entrant acquisition
-   of a recursive mutex, never a wait.
+   with `TRY_LOCK`.** There is no blocking `LOCK(cs_vRecvMsg)` in the tree. The
+   message handlers in `src/net_processing.cpp` that need it run inside
+   `ProcessMessages()`, which is entered with the lock held, and are annotated
+   as requiring it.
 2. **A thread that holds `cs_vSend` never waits for `m_nodes_mutex` or
    `cs_main`.** `SendMessages()` and `SocketSendData()` take neither, and
    `PushMessage()` holds `cs_vSend` only around the message framing. The
