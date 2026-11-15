@@ -24,7 +24,7 @@ import os
 from decimal import Decimal
 
 from test_framework.test_framework import GridcoinTestFramework
-from test_framework.util import assert_equal, assert_greater_than
+from test_framework.util import assert_equal, assert_greater_than, assert_raises_rpc_error
 
 CPID = "00010203040506070809101112131415"
 
@@ -127,6 +127,19 @@ class MrcTest(GridcoinTestFramework):
 
         self.log.info("node1 requests an MRC for its accrued reward")
         self.advance_to_slot()
+        # A dry run on the empty queue: nothing pending, the request would be
+        # first, and the queue is short of the block's MRC limit. assert_equal
+        # takes 0 for False and 1 for True, so outstanding_request and
+        # mrcs_in_queue are also checked for their JSON type.
+        r0 = node1.createmrcrequest(True)
+        assert_equal(r0["outstanding_request"], False)
+        assert r0["outstanding_request"] is False, r0["outstanding_request"]
+        assert_equal(r0["mrcs_in_queue"], 0)
+        assert type(r0["mrcs_in_queue"]) is int, r0["mrcs_in_queue"]
+        assert_equal(r0["pos"], 1)
+        assert_equal(r0["head_fee"], 0)
+        assert_equal(r0["tail_fee"], 0)
+        assert_equal(r0["pay_limit_position_fee"], "N/A")
         request = node1.createmrcrequest()
         mrc = request["mrc"]
         assert_equal(mrc["cpid"], CPID)
@@ -139,6 +152,24 @@ class MrcTest(GridcoinTestFramework):
         txid = request["txid"]
         self.sync_mempools(flush_scheduler=False)
         assert txid in node0.getrawmempool()
+
+        # A dry run with the request pending: it is the queue's only entry, so
+        # it is first, head and tail are its fee, and the queue is short of the
+        # block's MRC limit (9 on regtest).
+        r1 = node1.createmrcrequest(True)
+        assert_equal(r1["outstanding_request"], True)
+        assert r1["outstanding_request"] is True, r1["outstanding_request"]
+        assert_equal(r1["mrcs_in_queue"], 1)
+        assert type(r1["mrcs_in_queue"]) is int, r1["mrcs_in_queue"]
+        assert_equal(r1["pos"], 1)
+        assert_equal(r1["limit"], 9)
+        assert_equal(r1["pay_limit_position_fee"], "N/A")
+        assert_equal(r1["head_fee"], fee)
+        assert_equal(r1["tail_fee"], fee)
+
+        # A second, non-dry request is refused while the first is pending.
+        assert_raises_rpc_error(-1, "Outstanding MRC request already present in the mempool for CPID.",
+                                node1.createmrcrequest)
 
         self.log.info("node0's next coinstake pays the request to node1's beacon address")
         paid = self.stake_and_sync()
