@@ -117,8 +117,10 @@ class NoMainnetSeedsOnRegtestTest(GridcoinTestFramework):
         self.log.info("the connection thread crosses the 60 second gate on an "
                       "empty addrman without injecting pnSeed")
 
-        assert CONN_STARTED in self.debug_log(1), \
-            "the connection thread never started, so nothing was tested"
+        # A node answers RPC before its connection thread has logged that it
+        # started. If the thread never starts, nothing below is tested, and the
+        # wait fails.
+        self.wait_until(lambda: CONN_STARTED in self.debug_log(1), timeout=60)
         assert_equal(seed_node.getnodeaddresses(1000), [])
         assert_equal(seed_node.getpeerinfo(), [])
 
