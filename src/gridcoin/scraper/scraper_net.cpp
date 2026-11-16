@@ -1056,6 +1056,8 @@ EXCLUSIVE_LOCKS_REQUIRED(CScraperManifest::cs_mapManifest)
 
         mapManifest.erase(nHash);
 
+        ++nManifestGeneration;
+
         // lock cs_ConvergedScraperStatsCache and mark ConvergedScraperStatsCache dirty because a manifest has been deleted
         // that could have been used in the cached convergence, so the convergence may change.
         {
@@ -1104,6 +1106,8 @@ CScraperManifest::DeleteManifest(std::map<uint256, std::shared_ptr<CScraperManif
     }
 
     iter = mapManifest.erase(iter);
+
+    ++nManifestGeneration;
 
     // lock cs_ConvergedScraperStatsCache and mark ConvergedScraperStatsCache dirty because a manifest has been deleted
     // that could have been used in the cached convergence, so the convergence may change. This is not conditional, because
@@ -1341,6 +1345,10 @@ EXCLUSIVE_LOCKS_REQUIRED(CScraperManifest::cs_mapManifest, cs_mapParts)
 void CScraperManifest::Complete() EXCLUSIVE_LOCKS_REQUIRED(CSplitBlob::cs_manifest, CSplitBlob::cs_mapParts)
 {
     m_publish_in_progress = false;
+
+    // The manifest is now one that a convergence is formed from. Nothing marks ConvergedScraperStatsCache dirty here,
+    // because its lock is taken before cs_mapParts. The count tells the cache that the manifests have changed.
+    ++nManifestGeneration;
 
     // phash may legitimately be null here: a manifest built/completed locally can reach
     // Complete() before it is inserted into mapManifest and has phash repointed at the

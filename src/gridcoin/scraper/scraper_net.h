@@ -6,6 +6,7 @@
 #define GRIDCOIN_SCRAPER_SCRAPER_NET_H
 
 #include <array>
+#include <atomic>
 #include <string>
 #include <string_view>
 
@@ -173,6 +174,17 @@ public: /* static methods */
     /** map of manifests that are pending deletion */
     // ------------ hash -------------- nTime ------- pointer to CScraperManifest
     static std::map<uint256, std::pair<int64_t, std::shared_ptr<CScraperManifest>>> mapPendingDeletedManifest GUARDED_BY(cs_mapManifest);
+
+    /** Counts the changes to the manifests held here with all of their parts, which are the manifests a convergence
+     * is formed from. Complete() and DeleteManifest() each add one, while they hold the lock under which the change
+     * is seen: cs_manifest for a manifest that is completed, cs_mapManifest for one that is deleted. A convergence
+     * formed from manifests binned at one count is the convergence for the manifests held for as long as the count
+     * stays the same.
+     *
+     * This is an atomic and is not guarded by cs_mapManifest, because the arrival of a manifest's last part completes
+     * the manifest without that lock.
+     */
+    static std::atomic<uint64_t> nManifestGeneration;
 
     /** Process a message containing Index of Scraper Data.
      * @returns whether the data was useful and valid

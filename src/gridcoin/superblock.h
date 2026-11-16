@@ -1706,6 +1706,10 @@ struct ConvergedScraperStats
     // statistics objects.
     bool bClean = false;
 
+    // The value of CScraperManifest::nManifestGeneration when the manifests were binned for the convergence held
+    // here. The cache is used as clean while bClean is true and that count still has this value.
+    uint64_t nManifestGeneration = 0;
+
     // This flag tracks the completion of at least one iteration of the housekeeping loop. The purpose of this flag
     // is to ensure enough time has gone by after a (re)start of the wallet that a complete set of manifests/parts
     // have been collected. Trying to form a contract too early may result in a local convergence that may not
