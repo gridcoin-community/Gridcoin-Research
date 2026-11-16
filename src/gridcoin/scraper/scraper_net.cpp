@@ -209,13 +209,13 @@ bool CSplitBlob::RecvPart(CNode* pfrom, CDataStream& vRecv)
                 ++split.cntPartsRcvd;
 
                 // Invariant: cntPartsRcvd <= vParts.size(). This is a theorem of
-                // the counter's two writers, not an assumption: addPart() pairs
-                // each new vParts slot with at most one immediate count (part
-                // already present) or exactly one refs entry, and this branch
-                // counts each ref exactly once, on the part's single
-                // absent-to-present transition (part data is never cleared while
-                // refs exist). So the count equals the number of slots whose
-                // parts are present.
+                // the counter's writers, not an assumption: addPart() and
+                // addPartData() pair each new vParts slot with one immediate
+                // count (part already present) or with one refs entry that
+                // this branch counts, and this branch counts each ref exactly
+                // once, on the part's single absent-to-present transition
+                // (part data is never cleared while refs exist). So the count
+                // equals the number of slots whose parts are present.
                 //
                 // Assume() rather than a bare assert: it halts in
                 // ABORT_ON_FAILED_ASSUME builds, so a future edit that breaks the
@@ -338,6 +338,13 @@ int CSplitBlob::addPartData(CDataStream&& vData, const bool& publish_in_progress
     {
         /* missing data; use the supplied data */
         CSplitBlob::RecvPart(nullptr, vData);
+    }
+    else
+    {
+        // The data is here already, because another object or an earlier slot of this one references the same
+        // part. RecvPart() counts a reference when the part's data arrives, so it does not count this one. It is
+        // counted here, as addPart() counts a part whose data is present.
+        ++cntPartsRcvd;
     }
 
     return n;

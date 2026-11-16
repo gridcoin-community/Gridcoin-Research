@@ -23,6 +23,7 @@
 #include "chainparams.h"
 #include "clientversion.h"
 #include "gridcoin/contract/contract.h"
+#include "gridcoin/scraper/fwd.h"
 #include "gridcoin/scraper/scraper_registry.h"
 #include "key.h"
 #include "key_io.h"
@@ -39,6 +40,10 @@ using namespace std;
 
 // Defined in validation.cpp; the VERSION handler feeds it the peer's height.
 extern CMedianFilter<int> cPeerBlockCounts GUARDED_BY(cs_main);
+
+// Defined in scraper.cpp; the complete manifests in the manifest map by scraper.
+extern mmCSManifestsBinnedByScraper BinCScraperManifestsByScraper()
+    EXCLUSIVE_LOCKS_REQUIRED(CScraperManifest::cs_mapManifest);
 
 BOOST_AUTO_TEST_SUITE(net_tests)
 
@@ -837,6 +842,44 @@ BOOST_AUTO_TEST_CASE(a_published_manifest_is_kept_under_the_hash_of_the_message_
                       manifests_before);
 
     WITH_LOCK(cs_main, cPeerBlockCounts = peer_block_counts);
+}
+
+// A scraper's manifest mostly repeats the parts of its last one. The manifest
+// is complete as published, and the node counts it once for its scraper along
+// with the one before.
+BOOST_AUTO_TEST_CASE(a_published_manifest_that_repeats_a_held_part_is_complete)
+{
+    grc_test::StateGuard guard;
+
+    SetMockTime(1700000000);
+
+    AuthorizedScraper scraper;
+    const std::string scraper_id = EncodeDestination(CTxDestination(scraper.Key().GetPubKey().GetID()));
+
+    const PublishedManifest first(scraper.Key(), {"a beacon list part", "a project part"},
+                                  GetAdjustedTime() - 600);
+    const PublishedManifest second(scraper.Key(), {"a beacon list part", "a later project part"},
+                                   GetAdjustedTime());
+
+    BOOST_REQUIRE(first.Published());
+    BOOST_REQUIRE(second.Published());
+
+    BOOST_CHECK(WITH_LOCK(first.Manifest()->cs_manifest, return first.Manifest()->isComplete()));
+    BOOST_CHECK(WITH_LOCK(second.Manifest()->cs_manifest, return second.Manifest()->isComplete()));
+
+    LOCK(CScraperManifest::cs_mapManifest);
+
+    const mmCSManifestsBinnedByScraper binned = BinCScraperManifestsByScraper();
+    const auto bin = binned.find(scraper_id);
+
+    BOOST_REQUIRE(bin != binned.end());
+    BOOST_REQUIRE_EQUAL(bin->second.size(), 2U);
+
+    // Newest first.
+    auto entry = bin->second.begin();
+    BOOST_CHECK(entry->second.first == second.Hash());
+    ++entry;
+    BOOST_CHECK(entry->second.first == first.Hash());
 }
 
 BOOST_AUTO_TEST_SUITE_END()

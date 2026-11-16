@@ -121,6 +121,10 @@ public:
      *
      * Returns the index of the new part, or -1 if \p vData is empty, in which
      * case nothing is registered.
+     *
+     * The part is counted as received. The caller completes the object when
+     * the last part is in, as CScraperManifest::addManifest() does: a part
+     * whose data was already here does not lead to a call of Complete().
      */
     int addPartData(CDataStream&& vData, const bool &publish_in_progress = false);
 
