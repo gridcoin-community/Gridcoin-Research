@@ -1188,8 +1188,9 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
                     // A node asks for the parts of the manifests it holds itself (CSplitBlob::UseAsSource), so a
                     // peer's announcement of a part is answered from the part store: only a part that a manifest
                     // here references and whose data has not arrived draws a request. The lookup takes
-                    // cs_mapParts alone, as the part handlers of this function do, and is made here and not in
-                    // CScraperManifest::AlreadyHave, which SendMessages also calls with the peer's cs_vSend held.
+                    // cs_mapParts alone, as the part handlers of this function do. CScraperManifest::AlreadyHave
+                    // gives the same answer for a part to SendMessages, which calls it with cs_main, the peer's
+                    // cs_vSend and cs_mapManifest held.
                     fAlreadyHave = !CSplitBlob::PartNeeded(inv.hash);
                 }
                 else
