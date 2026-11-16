@@ -791,9 +791,12 @@ static void ProcessGetData(CNode* pfrom) EXCLUSIVE_LOCKS_REQUIRED(pfrom->cs_vRec
                                 pubkey = manifest->pubkey;
                             }
 
-                            // Also don't send a manifest that is not current.
-                            if (CScraperManifest::IsManifestAuthorized(nTime, pubkey, banscore_out)
-                                    && WITH_LOCK(manifest->cs_manifest, return manifest->IsManifestCurrent()))
+                            // Also don't send a manifest that is not current, or one with parts still to arrive
+                            // here, because the peer would ask this node for those parts. These two are tested
+                            // before the authorization because they are the cheaper tests.
+                            if (WITH_LOCK(manifest->cs_manifest,
+                                          return manifest->IsManifestCurrent() && manifest->isComplete())
+                                    && CScraperManifest::IsManifestAuthorized(nTime, pubkey, banscore_out))
                             {
                                 // SerializeForSend takes its own lock on the manifest. It takes the smart
                                 // shared pointer to the manifest identified above, so no second lookup in

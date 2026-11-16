@@ -186,7 +186,7 @@ public: /* static methods */
      */
     static bool AlreadyHave(CNode* pfrom, const CInv& inv);
 
-    /** Send Inv to that node about data files we have.
+    /** Send Inv to that node about the manifests we have with all of their parts.
      * Called when a node connects.
      */
     static void PushInvTo(CNode* pto);

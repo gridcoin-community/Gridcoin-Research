@@ -477,10 +477,12 @@ bool CScraperManifest::AlreadyHave(CNode* pfrom, const CInv& inv) EXCLUSIVE_LOCK
 void CScraperManifest::PushInvTo(CNode* pto) EXCLUSIVE_LOCKS_REQUIRED(CScraperManifest::cs_mapManifest,
                                                                       CSplitBlob::cs_mapParts)
 {
-    /* send all keys from the index map as inventory */
-    /* FIXME: advertise only completed manifests */
+    // Announce the manifests whose parts are all here. A peer that takes a manifest from this node asks this node
+    // for the parts it lacks, so a manifest is announced when this node can supply every one of them.
     for (auto const& obj : mapManifest)
     {
+        if (!WITH_LOCK(obj.second->cs_manifest, return obj.second->isComplete())) continue;
+
         pto->PushInventory(CInv(MSG_SCRAPERINDEX, obj.first));
     }
 }
