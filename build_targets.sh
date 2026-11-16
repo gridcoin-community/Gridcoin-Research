@@ -45,6 +45,10 @@ print_help() {
     echo "                      Default: false. Native requires system capnproto (auto-installed"
     echo "                      by SKIP_DEPS=false) and libmultiprocess; depends builds also need"
     echo "                      the depends recipes built with MULTIPROCESS=1."
+    echo "  ENABLE_QML=<bool>   Build the QML front end's C++ module and its tests. Options: true, false."
+    echo "                      Default: false. TARGET=native or macos (or all on macOS) only (the"
+    echo "                      depends Qt has no Qt Quick); needs WITH_GUI=true and USE_QT6=true."
+    echo "                      Native installs the Qt Quick packages unless SKIP_DEPS=true."
     echo "  EXTRA_CMAKE_ARGS    Pass additional arguments to CMake (e.g. '-DBoost_USE_STATIC_LIBS=ON')"
     echo "  CC=<path>           Override C compiler (also read from the CC environment variable)."
     echo "  CXX=<path>          Override C++ compiler (also read from the CXX environment variable)."
@@ -123,8 +127,9 @@ get_current_git_state() {
     fi
 }
 
-# Git state captured by should_skip_build at skip-decision time (i.e., just
-# before a build starts) and recorded by write_build_state on success.
+# Build state captured by should_skip_build at skip-decision time (i.e.,
+# just before a build starts) and recorded by write_build_state on success:
+# the git state, with a +qml suffix when ENABLE_QML=true.
 CAPTURED_BUILD_STATE=""
 
 # Check if we can skip the build
@@ -154,6 +159,18 @@ should_skip_build() {
             return 1
             ;;
     esac
+
+    # ENABLE_QML changes the CMake configuration but not the sources, so the
+    # git state alone would let a rerun that only flips it skip as up to date.
+    # Fold it into the state compared below and recorded by write_build_state.
+    # Only the non-default value adds a suffix, so an ENABLE_QML=false run
+    # compares the git state alone. The suffix is added after the
+    # indeterminate-state check above, so an "unknown" or difffail state
+    # never becomes one that can match.
+    if [ "$ENABLE_QML" = "true" ]; then
+        CURRENT_STATE="${CURRENT_STATE}+qml"
+        CAPTURED_BUILD_STATE="$CURRENT_STATE"
+    fi
 
     # If explicit clean requested, never skip
     if [ "$CLEAN_BUILD" == "true" ] || [ "$CLEAN_BUILD" == "main" ]; then
@@ -261,6 +278,7 @@ WITH_GUI="true"
 WITH_DOCS="false"
 USE_QT6="true"
 ENABLE_MULTIPROCESS="false"
+ENABLE_QML="false"
 # Seed from the conventional CC/CXX environment variables; a positional
 # CC=/CXX= argument (parsed below) still overrides them.
 CC_OVERRIDE="${CC:-}"
@@ -307,6 +325,10 @@ for arg in "$@"; do
             ENABLE_MULTIPROCESS="${arg#*=}"
             shift
             ;;
+        ENABLE_QML=*)
+            ENABLE_QML="${arg#*=}"
+            shift
+            ;;
         PARALLEL=*)
             PARALLEL="${arg#*=}"
             shift
@@ -346,6 +368,18 @@ done
 # Validate Target
 if [[ ! "$TARGET" =~ ^(native|depends|win64|macos|all)$ ]]; then
     echo "Error: Invalid TARGET '$TARGET'. Must be one of: native, depends, win64, macos, all."
+    exit 1
+fi
+
+# The QML module needs a Qt with Qt Quick. The depends Qt has none, so only the
+# native and macOS targets, which use the system Qt, can build it. TARGET=all
+# is accepted on macOS, where it builds only the macOS target.
+if [ "$ENABLE_QML" = "true" ] && { [[ "$TARGET" =~ ^(depends|win64)$ ]] || { [ "$TARGET" = "all" ] && [ "$(uname -s)" != "Darwin" ]; }; }; then
+    echo "Error: ENABLE_QML=true needs TARGET=native or TARGET=macos (the depends Qt has no Qt Quick)."
+    exit 1
+fi
+if [ "$ENABLE_QML" = "true" ] && { [ "$WITH_GUI" != "true" ] || [ "$USE_QT6" != "true" ]; }; then
+    echo "Error: ENABLE_QML=true needs WITH_GUI=true and USE_QT6=true."
     exit 1
 fi
 
@@ -408,6 +442,14 @@ else
     MULTIPROCESS_CMAKE_FLAG="-DENABLE_MULTIPROCESS=OFF"
 fi
 
+# QML front end module. Passed only to the native and macOS CMake invocations
+# (see the ENABLE_QML target check above).
+if [ "$ENABLE_QML" = "true" ]; then
+    QML_CMAKE_FLAG="-DENABLE_QML=ON"
+else
+    QML_CMAKE_FLAG="-DENABLE_QML=OFF"
+fi
+
 # Determine Concurrency
 if [ -n "$PARALLEL" ]; then
     CORES="$PARALLEL"
@@ -436,6 +478,7 @@ echo "With Docs:    $WITH_DOCS"
 echo "Lock Order:   $DEBUG_LOCKORDER"
 echo "Qt6:          $USE_QT6"
 echo "Multiprocess: $ENABLE_MULTIPROCESS"
+echo "QML:          $ENABLE_QML"
 if [ -n "$MANUAL_QT_PATH" ]; then echo "Manual Qt:    $MANUAL_QT_PATH"; fi
 if [ -n "$EXTRA_ARGS" ]; then     echo "Extra Args:   $EXTRA_ARGS"; fi
 if [ -n "$CC_OVERRIDE" ]; then    echo "C Compiler:   $CC_OVERRIDE"; fi
@@ -457,8 +500,8 @@ else
     # Check if the dependency script exists
     if [ -f "./install_dependencies.sh" ]; then
         source ./install_dependencies.sh
-        # Pass TARGET, USE_QT6, and WITH_GUI to install_deps
-        install_deps "$TARGET" "$USE_QT6" "$WITH_GUI" "$ENABLE_MULTIPROCESS"
+        # Pass TARGET, USE_QT6, WITH_GUI, ENABLE_MULTIPROCESS and ENABLE_QML to install_deps
+        install_deps "$TARGET" "$USE_QT6" "$WITH_GUI" "$ENABLE_MULTIPROCESS" "$ENABLE_QML"
     else
         echo "Error: install_dependencies.sh not found. Cannot install dependencies."
         exit 1
@@ -494,6 +537,7 @@ if [[ "$TARGET" == "all" || "$TARGET" == "native" ]] && [[ "$(uname -s)" == "Lin
             $DOCS_CMAKE_FLAG \
             $LOCKORDER_CMAKE_FLAG \
             $MULTIPROCESS_CMAKE_FLAG \
+            $QML_CMAKE_FLAG \
             -DENABLE_QRENCODE=ON \
             -DUSE_DBUS=ON \
             -DENABLE_UPNP=ON \
@@ -816,6 +860,7 @@ if [[ "$TARGET" == "all" || "$TARGET" == "macos" ]] && [[ "$(uname -s)" == "Darw
             $DOCS_CMAKE_FLAG \
             $LOCKORDER_CMAKE_FLAG \
             $MULTIPROCESS_CMAKE_FLAG \
+            $QML_CMAKE_FLAG \
             -DENABLE_QRENCODE=ON \
             -DENABLE_UPNP=ON \
             -DENABLE_PIE=ON \

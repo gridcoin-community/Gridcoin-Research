@@ -9,6 +9,7 @@
 #include "bitcoinunits.h"
 #include "optionsmodel.h"
 #include "sendcoinsentry.h"
+#include "sendfeenegotiator.h"
 #include "guiutil.h"
 #include "askpassphrasedialog.h"
 
@@ -252,47 +253,39 @@ void SendCoinsDialog::on_sendButton_clicked()
     // The accepted fee only ratchets up, so re-prompts need a strictly
     // rising fee (e.g. randomized coin selection crossing a size tier);
     // the attempt cap keeps a pathological oscillation finite.
-    qint64 acceptedFee = 0;
-    for (int nFeePromptAttempt = 0; ; ++nFeePromptAttempt)
+    // The loop's state (the accepted fee, the prompt count and its cap) is
+    // SendFeeNegotiator's.
+    SendFeeNegotiator negotiator;
+    for (;;)
     {
-        sendstatus = model->sendCoins(recipients, coin_control, acceptedFee);
+        SendFeeNegotiator::Step step =
+            negotiator.onResult(model->sendCoins(recipients, coin_control, negotiator.acceptedFee()));
 
-        if (sendstatus.status != WalletModel::FeeConfirmationRequired)
+        if (step.kind == SendFeeNegotiator::Step::Confirm)
         {
-            break;
+            // Deliberate context pin: these strings shipped for years from
+            // BitcoinGUI::askFee, so every locale's translation lives under the
+            // BitcoinGUI context in src/qt/locale/*.ts. Look them up there
+            // rather than orphaning the translations with this dialog's own
+            // tr() context.
+            QString strMessage =
+                QCoreApplication::translate("BitcoinGUI",
+                   "This transaction is over the size limit.  You can still send it for a fee of %1, "
+                   "which goes to the nodes that process your transaction and helps to support the network.  "
+                   "Do you want to pay the fee?").arg(
+                        BitcoinUnits::formatWithUnit(BitcoinUnits::BTC, step.fee));
+            QMessageBox::StandardButton retval = QMessageBox::question(
+                  this, QCoreApplication::translate("BitcoinGUI", "Confirm transaction fee"), strMessage,
+                  QMessageBox::Yes|QMessageBox::Cancel, QMessageBox::Yes);
+
+            step = negotiator.onAnswer(retval == QMessageBox::Yes);
         }
 
-        if (nFeePromptAttempt >= 10)
+        if (step.kind == SendFeeNegotiator::Step::Done)
         {
-            // Surface a visible error rather than Aborted: the user has been
-            // explicitly confirming fees, so a silent no-op would read as a
-            // sent transaction. Nothing was committed.
-            sendstatus = WalletModel::TransactionCreationFailed;
+            sendstatus = step.result;
             break;
         }
-
-        // Deliberate context pin: these strings shipped for years from
-        // BitcoinGUI::askFee, so every locale's translation lives under the
-        // BitcoinGUI context in src/qt/locale/*.ts. Look them up there
-        // rather than orphaning the translations with this dialog's own
-        // tr() context.
-        QString strMessage =
-            QCoreApplication::translate("BitcoinGUI",
-               "This transaction is over the size limit.  You can still send it for a fee of %1, "
-               "which goes to the nodes that process your transaction and helps to support the network.  "
-               "Do you want to pay the fee?").arg(
-                    BitcoinUnits::formatWithUnit(BitcoinUnits::BTC, sendstatus.fee));
-        QMessageBox::StandardButton retval = QMessageBox::question(
-              this, QCoreApplication::translate("BitcoinGUI", "Confirm transaction fee"), strMessage,
-              QMessageBox::Yes|QMessageBox::Cancel, QMessageBox::Yes);
-
-        if (retval != QMessageBox::Yes)
-        {
-            sendstatus = WalletModel::Aborted;
-            break;
-        }
-
-        acceptedFee = sendstatus.fee;
     }
 
     switch(sendstatus.status)

@@ -31,8 +31,9 @@
 //! not exercised here.
 //!
 //! The Qt test main selects no chain, so each case selects its own with
-//! SelectParams(). A selection cannot be undone; that is harmless because no
-//! other class in this binary reads Params().
+//! SelectParams(). A selection cannot be undone; that is harmless because
+//! every later class in this binary that reads Params() selects its own chain
+//! first.
 //!
 
 #ifdef Q_OS_LINUX

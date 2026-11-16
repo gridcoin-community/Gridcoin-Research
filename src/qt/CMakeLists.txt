@@ -87,6 +87,7 @@ add_library(gridcoinqt STATIC
     sendcoinsdialog.cpp
     syncoverlay.cpp
     sendcoinsentry.cpp
+    sendfeenegotiator.cpp
     sidestaketablemodel.cpp
     signverifymessagedialog.cpp
     splashscreen.cpp
@@ -98,6 +99,7 @@ add_library(gridcoinqt STATIC
     transactiondescdialog.cpp
     transactiontablemodel.cpp
     transactionview.cpp
+    unlockscope.cpp
     updatedialog.cpp
     upgradeqt.cpp
     voting/additionalfieldstableview.cpp
@@ -537,6 +539,12 @@ if(APPLE)
         COMMENT "Deploying ${_dmg_name}.dmg via macdeployqtplus"
         DEPENDS gridcoinresearch ${_deploy_helper_depends}
     )
+endif()
+
+# The QML front end: its C++ module and the carried QML (opt-in, ENABLE_QML).
+if(ENABLE_QML)
+    add_subdirectory(quick)
+    add_subdirectory(qml)
 endif()
 
 # Tests

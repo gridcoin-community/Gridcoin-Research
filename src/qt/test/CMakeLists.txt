@@ -13,6 +13,8 @@ add_executable(test_gridcoin-qt
     guiutiltests.cpp
     guieventlooptests.cpp
     guifrontendtests.cpp
+    unlockscopetests.cpp
+    sendfeenegotiatortests.cpp
 )
 
 set_target_properties(test_gridcoin-qt PROPERTIES

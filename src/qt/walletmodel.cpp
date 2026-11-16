@@ -1,5 +1,6 @@
 #include "walletmodel.h"
 #include "qt/guilog.h"
+#include "qt/unlockscope.h"
 #include "guiconstants.h"
 #include "optionsmodel.h"
 #include "addresstablemodel.h"
@@ -678,53 +679,10 @@ WalletModel::UnlockContext::~UnlockContext()
 {
     if (!valid) return;
 
-    // Both arms cross IPC in the split build, and a destructor is implicitly
-    // noexcept: an exception escaping here -- a disconnect mid-call is the
-    // realistic one -- would terminate the GUI outright rather than leave it to
-    // the disconnect handling that already exists. Nothing here can be retried
-    // without the passphrase, so a record of what was left behind is all that
-    // can be owed.
-    try
-    {
-        if (restore_staking_only)
-        {
-            // Hand the elevation back rather than locking. Narrowing needs no
-            // passphrase: the master key stays installed and only the permission
-            // is removed.
-            //
-            // Not discarded: in the split build this crosses IPC and can fail,
-            // and a failure leaves the wallet FULLY unlocked, which is the
-            // unsafe direction.
-            //
-            // But false does NOT mean that on its own. It also means there was
-            // nothing to narrow -- a locked wallet or an unencrypted one -- and
-            // the locked case is ordinary here: the timed unlock can simply
-            // have run out while the operation was in progress. Warning on that
-            // would report a wallet left wide open when it had just closed
-            // itself, so read the state and warn only if it really is.
-            if (!wallet->wallet().restrictToStakingOnly()
-                    && wallet->getEncryptionStatus() == Unlocked) {
-                LogPrintf("WARN: %s: could not restore the staking-only scope; the wallet is left "
-                          "fully unlocked", __func__);
-            }
-            return;
-        }
-
-        if (relock)
-        {
-            wallet->setWalletLocked(true);
-        }
-    }
-    catch (const std::exception& e)
-    {
-        LogPrintf("WARN: %s: could not restore the wallet lock state (%s); it may be left more "
-                  "permissive than it was", __func__, e.what());
-    }
-    catch (...)
-    {
-        LogPrintf("WARN: %s: could not restore the wallet lock state; it may be left more "
-                  "permissive than it was", __func__);
-    }
+    // RestoreWalletScope makes the calls this destructor made, catches every
+    // exception (a destructor is implicitly noexcept) and logs under the name
+    // passed in, so the log lines still name this function.
+    RestoreWalletScope(wallet->wallet(), relock, restore_staking_only, __func__);
 }
 
 void WalletModel::UnlockContext::CopyFrom(const UnlockContext& rhs)

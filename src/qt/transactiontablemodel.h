@@ -60,7 +60,9 @@ public:
         /** Formatted amount, without brackets when unconfirmed */
         FormattedAmountRole,
         /** Transaction status (TransactionRecord::Status) */
-        StatusRole
+        StatusRole,
+        /** Mined type of a generated record (GRC::MinedType, as int) */
+        GeneratedTypeRole
     };
 
     //! Render \p role for \p rec at \p column (a ColumnIndex). The windowed

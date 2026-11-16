@@ -554,6 +554,8 @@ QVariant TransactionTableModel::formatRole(const TransactionRecord *rec, int col
         return formatTxAmount(rec, false);
     case StatusRole:
         return rec->status.status;
+    case GeneratedTypeRole:
+        return static_cast<int>(rec->status.generated_type);
     }
     return QVariant();
 }

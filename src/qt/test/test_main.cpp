@@ -13,7 +13,9 @@
 #include "optionsmodeltests.h"
 #include "psgttoastdamptests.h"
 #include "researcherwizardpagetests.h"
+#include "sendfeenegotiatortests.h"
 #include "sidestakemodeltests.h"
+#include "unlockscopetests.h"
 #include "uritests.h"
 
 #if defined(QT_STATICPLUGIN)
@@ -96,6 +98,14 @@ int main(int argc, char *argv[])
 
     AboutDialogTests test13;
     if (QTest::qExec(&test13) != 0)
+        fInvalid = true;
+
+    UnlockScopeTests test14;
+    if (QTest::qExec(&test14) != 0)
+        fInvalid = true;
+
+    SendFeeNegotiatorTests test15;
+    if (QTest::qExec(&test15) != 0)
         fInvalid = true;
 
     return fInvalid;
