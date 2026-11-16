@@ -5138,8 +5138,7 @@ unsigned int ScraperDeleteUnauthorizedCScraperManifests()
         }
         else
         {
-            LOCK(manifest->cs_manifest);
-
+            // Nothing of the manifest is read here.
             _log(logattribute::WARNING, "ScraperDeleteUnauthorizedCScraperManifests",
                  "Deleting unauthorized manifest with hash " + iter->first.GetHex());
             // Delete from CScraperManifest map (also advances iter to the next valid element). Immediate flag is set,
@@ -6559,9 +6558,10 @@ mmCSManifestsBinnedByScraper ScraperCullAndBinCScraperManifests(uint64_t& manife
     {
         CScraperManifest_shared_ptr manifest = iter->second;
 
-        LOCK(manifest->cs_manifest);
+        // The manifest's time is copied out here. cs_mapManifest stays held, so the iterator stays valid.
+        const int64_t manifest_time = WITH_LOCK(manifest->cs_manifest, return manifest->nTime);
 
-        if (GetAdjustedTime() - manifest->nTime > scraper_cmanifest_retention_time())
+        if (GetAdjustedTime() - manifest_time > scraper_cmanifest_retention_time())
         {
             _log(logattribute::INFO, "ScraperDeleteCScraperManifests",
                  "Deleting old CScraperManifest with hash " + iter->first.GetHex());
