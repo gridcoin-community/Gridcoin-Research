@@ -432,8 +432,8 @@ bool CScraperManifest::AlreadyHave(CNode* pfrom, const CInv& inv) EXCLUSIVE_LOCK
 {
     if (MSG_PART == inv.type)
     {
-        // The part store answers for a part, as it does for a peer's announcement of one. A request that
-        // SendMessages has queued for a part is sent while a manifest here references the part and its data
+        // The part store answers for a part, as it does for a peer's announcement of one. SendMessages sends
+        // a queued request for a part while a manifest object on this node references the part and its data
         // has not arrived. The reply to a request for any other part is of no use here.
         return !PartNeeded(inv.hash);
     }
