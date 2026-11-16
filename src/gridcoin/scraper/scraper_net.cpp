@@ -1274,12 +1274,16 @@ EXCLUSIVE_LOCKS_REQUIRED(CScraperManifest::cs_mapManifest, cs_mapParts)
         m->SerializeForManifestCompare(sscomp);
         m->nContentHash = Hash(sscomp);
 
-        // serialize and hash the object
+        // serialize the object without its signature and sign the hash of that
         m->SerializeWithoutSignature(ss);
 
-        // sign the serialized manifest and append the signature
+        keySign.Sign(Hash(ss), m->signature);
+
+        // The manifest is kept in the map under the hash of the message a peer is sent for it, which is the
+        // serialized object followed by the signature. RecvManifest() keeps a received manifest under the hash of
+        // the message it was given, so a peer that is sent this message keeps the manifest under this hash too.
+        ss << m->signature;
         hash = Hash(ss);
-        keySign.Sign(hash, m->signature);
 
         LogPrint(BCLog::LogFlags::MANIFEST, "INFO: CScraperManifest::addManifest: hash of manifest contents = %s",
                  m->nContentHash.ToString());
