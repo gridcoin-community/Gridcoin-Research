@@ -671,6 +671,31 @@ BOOST_AUTO_TEST_CASE(missing_password_message_has_no_password)
     BOOST_CHECK(!std::regex_search(message, generated));
 }
 
+// getblocksbatch reads a string start as a block number when lexical_cast<int>
+// accepts it, and as a block hash when it throws. A hash whose hex ends in
+// decimal digits still goes the hash route. Boost computes the place-value
+// products before it tests the digit and the fit, so eight or more trailing
+// digits can make a product wrap, and eight is the fewest that do. The wrap is
+// harmless, but the sanitizer job reports it unless suppressed. The input with
+// exactly eight trailing digits comes first, because the sanitizer job halts
+// on the first report.
+BOOST_AUTO_TEST_CASE(getblocksbatch_takes_a_hash_whose_hex_ends_in_digits)
+{
+    // Neither hash is in the block index.
+    for (const char* start : {"1d19666f111e304860f6c08ed2c39c177f0cfb88171d01a75f26b00a12345678",
+                              "1d19666f111e304860f6c08ed2c39c177f0cfb88171d01a75f26b00360244177"}) {
+        BOOST_TEST_CONTEXT("start " << start) {
+            UniValue params(UniValue::VARR);
+            params.push_back(start);
+            params.push_back(10);
+
+            BOOST_CHECK_EXCEPTION(getblocksbatch(params), UniValue, [](const UniValue& error) {
+                return find_value(error, "message").get_str() == "Starting block for batch not found.";
+            });
+        }
+    }
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 
 // dumpcontracts walks pprev from the chain tip to the requested heights. A height that is not on the chain used
