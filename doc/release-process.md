@@ -158,3 +158,14 @@ identity and no `APPLE_TEAM_ID` fails.
  - git push --tags
  - Edit CMakeLists.txt, increment version for development. Commit it.
  - git push
+
+### Mandatory release
+A mandatory release sets the activation height of a block version, and every node has to run it before that height. These steps are in addition to the ones above.
+ - Set the block version's height in src/chainparams.cpp, and set every feature height that the block version carries to the same height. The feature heights are separate fields so that regtest can drive them one at a time; their hidden override arguments are read on regtest only.
+ - Set the heights on testnet first, in a testnet release, and let testnet cross them before the mainnet release sets its own.
+ - Work the height out from the target date and the block rate observed on that network.
+ - A height that has been published in a release is not moved.
+ - Give PROTOCOL_VERSION in src/version.h its next value and set MIN_PEER_PROTO_VERSION to the previous mandatory release's protocol version. The static_assert beside the version check in src/net_processing.cpp stops the build when either value changes. Point the fork height read there at the new fork and update the assert's two values in the same change. MY_VERSION and MIN_PEER_PROTO_VERSION in test/functional/test_framework/messages.py and the cases in test/functional/p2p_version_floor.py change with them.
+ - ProtocolVersionGracePeriod in src/chainparams.cpp is the number of blocks past the height for which peers on the previous protocol version stay connected. Check it for each network.
+ - Put the heights in doc/consensus.md: the activation table and the block version's own section.
+ - Title the release as mandatory and state the height in the release notes.
