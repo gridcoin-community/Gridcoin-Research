@@ -6,13 +6,12 @@ export LC_ALL=C
 #
 # notarize-dmg.sh — Submit signed DMGs to Apple for notarization and staple.
 #
-# CI notarizes and staples release DMGs itself (the "Notarize and Staple
-# (best-effort)" step in .github/workflows/cmake_production.yml, on tag builds).
-# That step is deliberately non-fatal: if credentials are absent, if Apple's
-# notary does not finish inside the 45m wait, or if stapling fails after a
-# successful notarization, it warns and publishes the signed DMG rather than
-# failing the release. This script is how that DMG gets finished afterwards --
-# it is the fallback those warnings point at, not a replacement for the job.
+# CI notarizes and staples release DMGs itself (the "Notarize and Staple" step
+# in .github/workflows/cmake_production.yml, on tag builds), and a DMG signed
+# with the release identity that does not come out notarized and stapled fails
+# the job. Re-running the job is the normal remedy. This script is for the cases
+# a re-run does not cover: a submission Apple holds beyond the job's 45m wait,
+# or a signed DMG that was published without a ticket.
 #
 # Run it on a macOS machine with valid Apple Developer credentials.
 #
