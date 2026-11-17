@@ -52,7 +52,7 @@ struct Params {
       * 28800 blocks is ~30 days at mainnet ~90s spacing. Consensus-affecting:
       * nodes with differing values will disagree on POOL_REGISTER admission
       * across expiration boundaries and fork. Override via the hidden
-      * -pendingpoolretention arg (isolated-testnet / regtest only — see
+      * -pendingpoolretention arg (regtest only — see
       * init.cpp). See doc/consensus.md §11.
       */
     int PendingPoolRetention;
@@ -75,8 +75,7 @@ struct Params {
     int AutoGreylistAuditHeight;
     /** Height at which Whitelist::Snapshot deep-copies project entries before applying the
       * auto-greylist overlay. Set to std::numeric_limits<int>::max() on main/testnet until
-      * activation is scheduled; overridable via -autogreylistdeepcopyheight for testnet
-      * rollout. */
+      * activation is scheduled; overridable via -autogreylistdeepcopyheight on regtest. */
     int AutoGreylistDeepCopyHeight;
     /** Height at which the scraper stops emitting a (spurious zero) total-credit entry for a project
       * whose user-statistics export returned no usable records this cycle (the "no_records" condition).
@@ -84,7 +83,7 @@ struct Params {
       * in ProjectsAllCpidTotalCredits) so historical superblocks remain bit-identical; at/after it the
       * entry is omitted, so the auto-greylist baseline records nullopt (benefit-of-doubt) instead of a
       * hard zero that collapses WAS. Set to std::numeric_limits<int>::max() on main/testnet until
-      * activation is scheduled; overridable via -autogreylisttotalcreditfixheight for testnet rollout. */
+      * activation is scheduled; overridable via -autogreylisttotalcreditfixheight on regtest. */
     int AutoGreylistTotalCreditFixHeight;
     /**
       * @brief Single activation height for the remaining AutoGreylist correctness batch. Covers
@@ -107,7 +106,7 @@ struct Params {
       *
       * TBD: set coincident with BlockV15Height when v15 is scheduled. std::numeric_limits<int>::max()
       * on main/testnet until then; kept as its own field only so it can be driven independently
-      * during testing. Overridable via -autogreylistredesignheight for testnet rollout. */
+      * during testing. Overridable via -autogreylistredesignheight on regtest. */
     int AutoGreylistRedesignHeight;
     /**
      *  @brief The height that message contracts are no longer allowed on the chain. */

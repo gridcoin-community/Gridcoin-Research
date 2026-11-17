@@ -903,8 +903,8 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
                       "PROTOCOL_VERSION carries and set the floor to the previous mandatory release's version");
         const int nLocalBestHeight = WITH_LOCK(cs_main, return pindexBest ? pindexBest->nHeight : 0);
         // GetBlockV15Height() rather than the raw consensus field, so the
-        // -blockv15height override that activates v15 early on
-        // isolated-testnet/regtest also drives this disconnect.
+        // -blockv15height override that activates v15 early on regtest also
+        // drives this disconnect.
         const int fork_height = GetBlockV15Height();
         // Skipped while the fork is unscheduled (height == INT_MAX). int64_t
         // arithmetic: fork_height can come from a user-supplied -blockv15height

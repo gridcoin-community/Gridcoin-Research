@@ -257,7 +257,7 @@ The researcher and project table models were extended to deal appropriately with
 ## The V2 redesign (AutoGreylistRedesignHeight)
 
 At `AutoGreylistRedesignHeight` (set equal to `BlockV15Height` at release; independently
-overridable for testnet via the hidden `-autogreylistredesignheight` argument) the auto
+overridable on regtest via the hidden `-autogreylistredesignheight` argument) the auto
 greylist switches from the class described above (V1, frozen as the pre-gate consensus
 behavior) to a redesigned architecture. The full design of record is maintained in the
 development environment (`autogreylist_state_separation/DESIGN.md`); this section summarizes

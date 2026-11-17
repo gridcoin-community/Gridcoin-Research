@@ -69,8 +69,9 @@ in `src/chainparams.h`.
 > **Note:** "not yet activated" means that network's chain parameters set the
 > height to `std::numeric_limits<int>::max()`, so the gate never opens there.
 > Every row currently marked that way is inactive on **both** mainnet and
-> testnet. The feature is present in code; where a hidden height override
-> exists it can be activated ahead of schedule on an isolated testnet.
+> testnet. The feature is present in code. Where a hidden height override
+> exists, regtest can set the height with it. The overrides are ignored on
+> mainnet and testnet.
 
 ### Non-Height Parameters
 
@@ -92,7 +93,7 @@ consensus-critical at a specific block version activation height. The
 | `DefaultMagnitudeWeightFactor` | 100/567 (~0.1764) | `BlockV11Height` | Voting weight conversion factor; configurable from `BlockV13Height` |
 | `MaxMagnitudeWeightFactor` | 1 | `BlockV13Height` | Upper clamp for voting magnitude weight factor |
 | `StandardContractReplayLookback` | 180 days | `BlockV11Height` | Contract validity window for types without registry DB (not applicable v13+ for protocol entries) |
-| `PendingPoolRetention` | 28,800 blocks (~30 days at ~90s spacing) | `BlockV15Height` | PENDING pool registrations and POOL_APPROVE OPEN authorizations are query-time expired after this many blocks (issue #1783). Overridable on regtest and testnet (ignored on mainnet) via hidden `-pendingpoolretention`; consensus-affecting. See §11.3.1. |
+| `PendingPoolRetention` | 28,800 blocks (~30 days at ~90s spacing) | `BlockV15Height` | PENDING pool registrations and POOL_APPROVE OPEN authorizations are query-time expired after this many blocks (issue #1783). Overridable on regtest (ignored on mainnet and testnet) via hidden `-pendingpoolretention`; consensus-affecting. See §11.3.1. |
 
 > **Source:** `CMainParams` (mainnet), `CTestNetParams`
 > (testnet) in `src/chainparams.cpp`
@@ -605,11 +606,10 @@ Via protocol entry `"magnitudeweightfactor"`:
   refuses to start on that combination. The release sets all of these
   coincident with `BlockV15Height`
 
-> These four heights are separate fields so they can be driven independently
-> during testing (`-autogreylist{audit,deepcopy,totalcreditfix,redesign}height`).
-> On the isolated mesh the first three are overridden low and already crossed,
-> which is **not** the mainnet sequencing -- mainnet activates all of them in the
-> same block as v15.
+> The last three heights are separate fields so that regtest can drive them
+> independently (`-autogreylist{deepcopy,totalcreditfix,redesign}height`).
+> `AutoGreylistAuditHeight` has no override. Mainnet and testnet activate the
+> last three in the same block as v15.
 
 ### 9.7 Project v4
 
@@ -785,7 +785,7 @@ Both checks are pure functions of stored fields — no state mutation at the exp
 
 #### Hidden `-pendingpoolretention` override
 
-For isolated-testnet / regtest runs that need to exercise expiration boundaries without waiting ~30 days of mainnet-paced blocks, the hidden `-pendingpoolretention=N` arg (registered in `init.cpp`) shortens the window. Like every hidden consensus override, it is **ignored on mainnet** and honoured only on regtest and testnet (`ConsensusOverridesAllowed()` in `src/chainparams.h`). **CONSENSUS-AFFECTING where honoured:** nodes with differing values disagree on POOL_REGISTER admission across expiration boundaries, so a node on the public testnet with a different value **will fork off the network**. Mirrors the existing `-blockv15height` pattern in scope and warning.
+For regtest runs that need to exercise expiration boundaries without waiting ~30 days of mainnet-paced blocks, the hidden `-pendingpoolretention=N` arg (registered in `init.cpp`) shortens the window. Like every hidden consensus override, it is **ignored on mainnet and testnet** and honoured only on regtest (`ConsensusOverridesAllowed()` in `src/chainparams.h`). The value is **consensus-affecting:** nodes with differing values disagree on POOL_REGISTER admission across expiration boundaries, so a node on a shared network with a different value would fork off it. Mirrors the existing `-blockv15height` pattern in scope.
 
 > **Source:** `src/gridcoin/pool.cpp` `IsPendingExpired` / `IsAuthorizationExpired`; `src/chainparams.cpp` `GetPendingPoolRetention`; `src/init.cpp` hidden_args registration.
 

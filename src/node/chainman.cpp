@@ -702,8 +702,7 @@ EXCLUSIVE_LOCKS_REQUIRED(cs_main)
             // Inert until the height is scheduled: MessageContractDisableHeight is
             // INT_MAX on every network (chainparams.cpp), so IsMessageContractEnabled()
             // is always true and none of this runs. Only the hidden
-            // -messagecontractdisableheight arg lowers it, for isolated testnet and
-            // regtest exercise.
+            // -messagecontractdisableheight arg lowers it, for regtest exercise.
             // Retirement is deliberately IRREVERSIBLE, and that is a choice
             // rather than an oversight. If this block is later disconnected the
             // swept transactions are valid again, but they were never mined so

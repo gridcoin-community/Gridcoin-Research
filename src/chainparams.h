@@ -167,14 +167,13 @@ extern bool g_unit_test_consensus_overrides;
 
 /**
  * Whether the hidden consensus-override arguments are honoured. They exist for
- * testing on regtest and on isolated test networks such as the mesh, before
- * the real heights are set in chainparams, and are never honoured on mainnet.
- * Testnet stays in the condition until its heights are set in chainparams;
- * after that this becomes regtest only.
+ * testing on regtest and are never honoured on mainnet or testnet, whose
+ * heights are the ones in chainparams. A node on a shared network that ran a
+ * different height from its peers would fork off it.
  */
 inline bool ConsensusOverridesAllowed()
 {
-    return Params().IsMockableChain() || OnTestnet() || g_unit_test_consensus_overrides;
+    return Params().IsMockableChain() || g_unit_test_consensus_overrides;
 }
 
 //! The value of the hidden consensus-override argument \p arg where
@@ -252,8 +251,8 @@ inline bool IsProjectV2Enabled(int nHeight)
 
 inline bool IsPollMultiAddressEnabled(int nHeight)
 {
-    // The argument-driven override is temporary, to facilitate testing on the
-    // isolated testnet before the activation height is set in chainparams.
+    // The argument-driven override is for testing on regtest (see
+    // ConsensusOverridesAllowed()).
     return nHeight >= GetConsensusOverride("-pollmultiaddressheight", Params().GetConsensus().PollMultiAddressHeight);
 }
 
@@ -264,22 +263,22 @@ inline bool IsAutoGreylistAuditEnabled(int nHeight)
 
 inline bool IsAutoGreylistDeepCopyEnabled(int nHeight)
 {
-    // The argument-driven override is temporary, to facilitate testing on isolated
-    // test networks ahead of the v15 activation height (see ConsensusOverridesAllowed()).
+    // The argument-driven override is for testing on regtest (see
+    // ConsensusOverridesAllowed()).
     return nHeight >= GetConsensusOverride("-autogreylistdeepcopyheight", Params().GetConsensus().AutoGreylistDeepCopyHeight);
 }
 
 inline bool IsAutoGreylistTotalCreditFixEnabled(int nHeight)
 {
-    // The argument-driven override is temporary, to facilitate testing on isolated
-    // test networks ahead of the v15 activation height (see ConsensusOverridesAllowed()).
+    // The argument-driven override is for testing on regtest (see
+    // ConsensusOverridesAllowed()).
     return nHeight >= GetConsensusOverride("-autogreylisttotalcreditfixheight", Params().GetConsensus().AutoGreylistTotalCreditFixHeight);
 }
 
 inline bool IsAutoGreylistRedesignEnabled(int nHeight)
 {
-    // The argument-driven override is temporary, to facilitate testing on isolated
-    // test networks ahead of the v15 activation height (see ConsensusOverridesAllowed()).
+    // The argument-driven override is for testing on regtest (see
+    // ConsensusOverridesAllowed()).
     return nHeight >= GetConsensusOverride("-autogreylistredesignheight", Params().GetConsensus().AutoGreylistRedesignHeight);
 }
 
@@ -295,8 +294,8 @@ inline bool IsV14Enabled(int nHeight)
 
 //!
 //! \brief Effective V15 activation height. Returns the value passed via the
-//! hidden `-blockv15height` arg if present (used by isolated-testnet / regtest
-//! runs to activate POOL contracts at a low height), otherwise the consensus
+//! hidden `-blockv15height` arg if present (used by regtest runs to activate
+//! POOL contracts at a low height), otherwise the consensus
 //! value from chainparams (which defaults to std::numeric_limits<int>::max()
 //! until pinned by a follow-up release). Out-of-line so gArgs / util/system.h
 //! doesn't have to be pulled into this header.
@@ -325,7 +324,7 @@ inline bool IsMessageContractEnabled(int nHeight)
 //!
 //! \brief Effective PENDING / OPEN expiration window in blocks for POOL
 //! contracts (issue #1783). Returns the value passed via the hidden
-//! `-pendingpoolretention` arg if present (isolated-testnet / regtest only),
+//! `-pendingpoolretention` arg if present (regtest only),
 //! otherwise the consensus value from chainparams (28800 by default).
 //! Consensus-affecting; see init.cpp warning and doc/consensus.md §11.
 //! Out-of-line so gArgs / util/system.h doesn't have to be pulled into this

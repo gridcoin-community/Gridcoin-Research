@@ -195,7 +195,7 @@ public:
             //! full V15->tip contract replay on every startup — the very regression this clamp
             //! exists to prevent.
             //!
-            //! Uses GetBlockV15Height() so the `-blockv15height` isolated-testnet override is
+            //! Uses GetBlockV15Height() so the `-blockv15height` regtest override is
             //! honored consistently with IsV15Enabled and the startup log line.
             if ((iter.first == GRC::ContractType::POOL_REGISTER || iter.first == GRC::ContractType::POOL_APPROVE)
                 and db_height < GetBlockV15Height()) {

@@ -105,56 +105,57 @@ void SetConsensusOverrides()
 }
 } // anonymous namespace
 
-BOOST_AUTO_TEST_CASE(gridcoin_consensus_overrides_are_ignored_on_mainnet)
+BOOST_AUTO_TEST_CASE(gridcoin_consensus_overrides_are_ignored_on_mainnet_and_testnet)
 {
     // Restores the network and the forced settings.
     grc_test::StateGuard guard;
     NodeOverrideRules node_rules;
 
-    SelectParams(CBaseChainParams::MAIN);
-    SetConsensusOverrides();
-    const Consensus::Params& consensus = Params().GetConsensus();
+    for (const std::string& chain : {CBaseChainParams::MAIN, CBaseChainParams::TESTNET}) {
+        BOOST_TEST_MESSAGE("chain " << chain);
+        SelectParams(chain);
+        SetConsensusOverrides();
+        const Consensus::Params& consensus = Params().GetConsensus();
 
-    BOOST_CHECK(!ConsensusOverridesAllowed());
-    BOOST_CHECK_EQUAL(GetBlockV15Height(), consensus.BlockV15Height);
-    BOOST_CHECK_EQUAL(GetMessageContractDisableHeight(), consensus.MessageContractDisableHeight);
-    BOOST_CHECK_EQUAL(GetPendingPoolRetention(), consensus.PendingPoolRetention);
-    BOOST_CHECK_EQUAL(IsPollMultiAddressEnabled(5), 5 >= consensus.PollMultiAddressHeight);
-    BOOST_CHECK_EQUAL(IsAutoGreylistDeepCopyEnabled(5), 5 >= consensus.AutoGreylistDeepCopyHeight);
-    BOOST_CHECK_EQUAL(IsAutoGreylistTotalCreditFixEnabled(5), 5 >= consensus.AutoGreylistTotalCreditFixHeight);
-    BOOST_CHECK_EQUAL(IsAutoGreylistRedesignEnabled(5), 5 >= consensus.AutoGreylistRedesignHeight);
+        BOOST_CHECK(!ConsensusOverridesAllowed());
+        BOOST_CHECK_EQUAL(GetBlockV15Height(), consensus.BlockV15Height);
+        BOOST_CHECK_EQUAL(GetMessageContractDisableHeight(), consensus.MessageContractDisableHeight);
+        BOOST_CHECK_EQUAL(GetPendingPoolRetention(), consensus.PendingPoolRetention);
+        BOOST_CHECK_EQUAL(IsPollMultiAddressEnabled(5), 5 >= consensus.PollMultiAddressHeight);
+        BOOST_CHECK_EQUAL(IsAutoGreylistDeepCopyEnabled(5), 5 >= consensus.AutoGreylistDeepCopyHeight);
+        BOOST_CHECK_EQUAL(IsAutoGreylistTotalCreditFixEnabled(5), 5 >= consensus.AutoGreylistTotalCreditFixHeight);
+        BOOST_CHECK_EQUAL(IsAutoGreylistRedesignEnabled(5), 5 >= consensus.AutoGreylistRedesignHeight);
+    }
 
     // The unit-test opt-in is what lets the suites drive them on mainnet params.
+    SelectParams(CBaseChainParams::MAIN);
     g_unit_test_consensus_overrides = true;
     BOOST_CHECK(ConsensusOverridesAllowed());
     BOOST_CHECK_EQUAL(GetBlockV15Height(), 5);
 }
 
-BOOST_AUTO_TEST_CASE(gridcoin_consensus_overrides_apply_on_testnet_and_regtest)
+BOOST_AUTO_TEST_CASE(gridcoin_consensus_overrides_apply_on_regtest)
 {
     grc_test::StateGuard guard;
     NodeOverrideRules node_rules;
 
-    for (const std::string& chain : {CBaseChainParams::TESTNET, CBaseChainParams::REGTEST}) {
-        BOOST_TEST_MESSAGE("chain " << chain);
-        SelectParams(chain);
-        SetConsensusOverrides();
+    SelectParams(CBaseChainParams::REGTEST);
+    SetConsensusOverrides();
 
-        BOOST_CHECK(ConsensusOverridesAllowed());
-        BOOST_CHECK_EQUAL(GetBlockV15Height(), 5);
-        BOOST_CHECK_EQUAL(GetMessageContractDisableHeight(), 5);
-        BOOST_CHECK_EQUAL(GetPendingPoolRetention(), 5);
-        // Each gate opens at the override height, not the chainparams one
-        // (0 on regtest, unscheduled on testnet).
-        BOOST_CHECK(!IsPollMultiAddressEnabled(4));
-        BOOST_CHECK(IsPollMultiAddressEnabled(5));
-        BOOST_CHECK(!IsAutoGreylistDeepCopyEnabled(4));
-        BOOST_CHECK(IsAutoGreylistDeepCopyEnabled(5));
-        BOOST_CHECK(!IsAutoGreylistTotalCreditFixEnabled(4));
-        BOOST_CHECK(IsAutoGreylistTotalCreditFixEnabled(5));
-        BOOST_CHECK(!IsAutoGreylistRedesignEnabled(4));
-        BOOST_CHECK(IsAutoGreylistRedesignEnabled(5));
-    }
+    BOOST_CHECK(ConsensusOverridesAllowed());
+    BOOST_CHECK_EQUAL(GetBlockV15Height(), 5);
+    BOOST_CHECK_EQUAL(GetMessageContractDisableHeight(), 5);
+    BOOST_CHECK_EQUAL(GetPendingPoolRetention(), 5);
+    // Each gate opens at the override height, not the chainparams one, which
+    // is 0 on regtest.
+    BOOST_CHECK(!IsPollMultiAddressEnabled(4));
+    BOOST_CHECK(IsPollMultiAddressEnabled(5));
+    BOOST_CHECK(!IsAutoGreylistDeepCopyEnabled(4));
+    BOOST_CHECK(IsAutoGreylistDeepCopyEnabled(5));
+    BOOST_CHECK(!IsAutoGreylistTotalCreditFixEnabled(4));
+    BOOST_CHECK(IsAutoGreylistTotalCreditFixEnabled(5));
+    BOOST_CHECK(!IsAutoGreylistRedesignEnabled(4));
+    BOOST_CHECK(IsAutoGreylistRedesignEnabled(5));
 }
 
 BOOST_AUTO_TEST_SUITE_END()
