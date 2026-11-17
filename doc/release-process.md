@@ -105,6 +105,13 @@ who can reach the signing: the environment deploys only for tags shaped like a v
 "Release tags: admins only" lets only administrators create such a tag. Every other run, and every run in
 another repository, has no environment, signs ad hoc and is not notarized; the build does not fail.
 
+On a release tag the DMG must come out of the job notarized and stapled. If the notary refuses or does not
+finish, or the ticket cannot be stapled, the macOS job fails and the release job does not run, so no draft
+release is created. Read the notary's answer in the job log, deal with the cause and re-run the failed job. A
+refusal with HTTP 403 "A required agreement is missing or has expired" means Apple has published a new
+developer agreement that the account holder has yet to accept at developer.apple.com.
+`contrib/macdeploy/notarize-dmg.sh` notarizes and staples a signed DMG by hand.
+
 The environment holds these secrets, and the repository holds none of them:
 
  - `APPLE_CERTIFICATE_P12` and `APPLE_CERTIFICATE_PASSWORD`: the certificate and its key, base64 of a `.p12`;

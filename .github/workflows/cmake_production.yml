@@ -847,10 +847,17 @@ jobs:
           hdiutil detach "$MOUNT_POINT"
           echo "DMG verification: ALL CHECKS PASSED"
 
-      - name: Notarize and Staple (best-effort)
+      - name: Notarize and Staple
         # Release-only: this workflow runs on every push/PR, but notarization is
         # meaningful only for the published DMG. Gate to tag builds (same gate as
         # the deploy job) so we don't submit every macOS CI build to Apple's notary.
+        #
+        # A DMG signed with the release identity leaves this step notarized and
+        # stapled, or the job fails. A failed job uploads no artifact and the
+        # deploy job does not run, so no release is drafted from a DMG that is
+        # not notarized; re-run the job once the cause is dealt with. A tag build
+        # with no signing identity (another repository) is ad hoc signed and has
+        # nothing to notarize.
         if: ${{ !env.ACT && startsWith(github.ref, 'refs/tags/') }}
         env:
           APPLE_NOTARY_APPLE_ID: ${{ secrets.APPLE_NOTARY_APPLE_ID }}
@@ -864,9 +871,14 @@ jobs:
             exit 1
           fi
 
-          if [ -z "${APPLE_NOTARY_APPLE_ID:-}" ] || [ -z "${APPLE_NOTARY_PASSWORD:-}" ] || [ -z "${APPLE_TEAM_ID:-}" ]; then
-            echo "::warning::Notary credentials not configured — publishing the signed (un-notarized) DMG. Staple later via contrib/macdeploy/notarize-dmg.sh."
+          if [ -z "${APPLE_SIGNING_IDENTITY:-}" ]; then
+            echo "No signing identity configured: the DMG is ad hoc signed and is not notarized."
             exit 0
+          fi
+
+          if [ -z "${APPLE_NOTARY_APPLE_ID:-}" ] || [ -z "${APPLE_NOTARY_PASSWORD:-}" ] || [ -z "${APPLE_TEAM_ID:-}" ]; then
+            echo "::error::The DMG is signed with the release identity, but the notary credentials are not configured."
+            exit 1
           fi
 
           echo "=== Submitting $DMG to Apple notary ==="
@@ -875,50 +887,63 @@ jobs:
             --password "$APPLE_NOTARY_PASSWORD" \
             --team-id "$APPLE_TEAM_ID" \
             --output-format json 2>&1) || {
-            echo "::warning::notarytool submit failed — publishing the signed (un-notarized) DMG."
+            echo "::error::notarytool submit failed. The notary's answer follows; an HTTP 403 about an agreement means the account holder has a new Apple Developer agreement to accept."
             echo "$SUBMIT_OUTPUT"
-            exit 0
+            exit 1
           }
-          # Guarded: this step runs under the default `bash -e {0}`, so an
-          # unguarded failure here would fail the JOB, which skips Upload
-          # Artifacts and makes the deploy job skip with it -- losing the whole
-          # release over a notarization hiccup, the opposite of best-effort.
           SUBMISSION_ID=$(echo "$SUBMIT_OUTPUT" | python3 -c "import sys,json; print(json.load(sys.stdin)['id'])" 2>/dev/null) || SUBMISSION_ID=""
           if [ -z "$SUBMISSION_ID" ]; then
-            echo "::warning::Could not read a submission id from notarytool — publishing the signed (un-notarized) DMG. Staple later via contrib/macdeploy/notarize-dmg.sh."
+            echo "::error::Could not read a submission id from notarytool."
             echo "$SUBMIT_OUTPUT"
-            exit 0
+            exit 1
           fi
           echo "  Submission ID: $SUBMISSION_ID"
 
-          # Best-effort 45m wait: ample for Apple's automated path. A submission
-          # flagged for manual review (rare — typically only the first-ever for a
-          # Developer ID) will exceed this; we then ship the signed DMG and staple
-          # it later with contrib/macdeploy/notarize-dmg.sh. The step never fails
-          # the build, so the release always ships at least a signed DMG.
-          echo "=== Waiting for notarization (up to 45m) ==="
-          if xcrun notarytool wait "$SUBMISSION_ID" \
-            --apple-id "$APPLE_NOTARY_APPLE_ID" \
-            --password "$APPLE_NOTARY_PASSWORD" \
-            --team-id "$APPLE_TEAM_ID" \
-            --timeout 45m; then
-            echo "=== Stapling $DMG in place ==="
-            # Also guarded, for the same reason. Stapling can fail transiently
-            # after a successful notarization (the ticket takes a moment to
-            # propagate), and a signed, notarized-but-unstapled DMG is still a
-            # shippable artifact -- Gatekeeper falls back to an online check.
-            if xcrun stapler staple "$DMG" && xcrun stapler validate "$DMG"; then
-              echo "=== Notarized + stapled: $DMG ==="
-            else
-              echo "::warning::Notarization succeeded but stapling did not — publishing the signed, notarized DMG unstapled. The ticket exists; staple later via contrib/macdeploy/notarize-dmg.sh."
-            fi
-          else
-            echo "::warning::Notarization did not complete within 45m — publishing the signed (un-notarized) DMG. Diagnose with 'xcrun notarytool log $SUBMISSION_ID --apple-id ... --team-id ...'; staple later via contrib/macdeploy/notarize-dmg.sh."
+          # What the notary says about the submission, for the log of a failed step.
+          notary_report() {
+            xcrun notarytool info "$SUBMISSION_ID" \
+              --apple-id "$APPLE_NOTARY_APPLE_ID" \
+              --password "$APPLE_NOTARY_PASSWORD" \
+              --team-id "$APPLE_TEAM_ID" 2>&1 || true
             xcrun notarytool log "$SUBMISSION_ID" \
               --apple-id "$APPLE_NOTARY_APPLE_ID" \
               --password "$APPLE_NOTARY_PASSWORD" \
               --team-id "$APPLE_TEAM_ID" 2>&1 || true
+          }
+
+          # 45m is ample for Apple's automated path. A submission held for manual
+          # review (rare -- typically only the first-ever for a Developer ID)
+          # exceeds it and fails the job; contrib/macdeploy/notarize-dmg.sh can
+          # then finish a DMG by hand.
+          echo "=== Waiting for notarization (up to 45m) ==="
+          if ! xcrun notarytool wait "$SUBMISSION_ID" \
+            --apple-id "$APPLE_NOTARY_APPLE_ID" \
+            --password "$APPLE_NOTARY_PASSWORD" \
+            --team-id "$APPLE_TEAM_ID" \
+            --timeout 45m; then
+            echo "::error::notarytool wait failed: the notarization did not finish within 45m or could not be followed (submission $SUBMISSION_ID)."
+            notary_report
+            exit 1
           fi
+
+          # The stapled ticket is the proof the step is held to: only an accepted
+          # submission has one, whatever the wait above reported. The ticket can
+          # take a moment to reach the servers stapler reads, so a failure is
+          # retried for about ten minutes before it counts. The wait costs a
+          # passing run nothing, and a failed job costs a whole rebuild.
+          echo "=== Stapling $DMG in place ==="
+          ATTEMPT=1
+          until xcrun stapler staple "$DMG" && xcrun stapler validate "$DMG"; do
+            if [ "$ATTEMPT" -ge 11 ]; then
+              echo "::error::Could not staple a notarization ticket to the DMG after $ATTEMPT attempts (submission $SUBMISSION_ID)."
+              notary_report
+              exit 1
+            fi
+            echo "Stapling attempt $ATTEMPT failed; trying again in 60s."
+            ATTEMPT=$((ATTEMPT + 1))
+            sleep 60
+          done
+          echo "=== Notarized + stapled: $DMG ==="
 
       - name: Upload Artifacts
         if: ${{ !env.ACT }}
@@ -1300,10 +1325,17 @@ jobs:
           hdiutil detach "$MOUNT_POINT"
           echo "DMG verification: ALL CHECKS PASSED"
 
-      - name: Notarize and Staple (best-effort)
+      - name: Notarize and Staple
         # Release-only: this workflow runs on every push/PR, but notarization is
         # meaningful only for the published DMG. Gate to tag builds (same gate as
         # the deploy job) so we don't submit every macOS CI build to Apple's notary.
+        #
+        # A DMG signed with the release identity leaves this step notarized and
+        # stapled, or the job fails. A failed job uploads no artifact and the
+        # deploy job does not run, so no release is drafted from a DMG that is
+        # not notarized; re-run the job once the cause is dealt with. A tag build
+        # with no signing identity (another repository) is ad hoc signed and has
+        # nothing to notarize.
         if: ${{ !env.ACT && startsWith(github.ref, 'refs/tags/') }}
         env:
           APPLE_NOTARY_APPLE_ID: ${{ secrets.APPLE_NOTARY_APPLE_ID }}
@@ -1317,9 +1349,14 @@ jobs:
             exit 1
           fi
 
-          if [ -z "${APPLE_NOTARY_APPLE_ID:-}" ] || [ -z "${APPLE_NOTARY_PASSWORD:-}" ] || [ -z "${APPLE_TEAM_ID:-}" ]; then
-            echo "::warning::Notary credentials not configured — publishing the signed (un-notarized) DMG. Staple later via contrib/macdeploy/notarize-dmg.sh."
+          if [ -z "${APPLE_SIGNING_IDENTITY:-}" ]; then
+            echo "No signing identity configured: the DMG is ad hoc signed and is not notarized."
             exit 0
+          fi
+
+          if [ -z "${APPLE_NOTARY_APPLE_ID:-}" ] || [ -z "${APPLE_NOTARY_PASSWORD:-}" ] || [ -z "${APPLE_TEAM_ID:-}" ]; then
+            echo "::error::The DMG is signed with the release identity, but the notary credentials are not configured."
+            exit 1
           fi
 
           echo "=== Submitting $DMG to Apple notary ==="
@@ -1328,50 +1365,63 @@ jobs:
             --password "$APPLE_NOTARY_PASSWORD" \
             --team-id "$APPLE_TEAM_ID" \
             --output-format json 2>&1) || {
-            echo "::warning::notarytool submit failed — publishing the signed (un-notarized) DMG."
+            echo "::error::notarytool submit failed. The notary's answer follows; an HTTP 403 about an agreement means the account holder has a new Apple Developer agreement to accept."
             echo "$SUBMIT_OUTPUT"
-            exit 0
+            exit 1
           }
-          # Guarded: this step runs under the default `bash -e {0}`, so an
-          # unguarded failure here would fail the JOB, which skips Upload
-          # Artifacts and makes the deploy job skip with it -- losing the whole
-          # release over a notarization hiccup, the opposite of best-effort.
           SUBMISSION_ID=$(echo "$SUBMIT_OUTPUT" | python3 -c "import sys,json; print(json.load(sys.stdin)['id'])" 2>/dev/null) || SUBMISSION_ID=""
           if [ -z "$SUBMISSION_ID" ]; then
-            echo "::warning::Could not read a submission id from notarytool — publishing the signed (un-notarized) DMG. Staple later via contrib/macdeploy/notarize-dmg.sh."
+            echo "::error::Could not read a submission id from notarytool."
             echo "$SUBMIT_OUTPUT"
-            exit 0
+            exit 1
           fi
           echo "  Submission ID: $SUBMISSION_ID"
 
-          # Best-effort 45m wait: ample for Apple's automated path. A submission
-          # flagged for manual review (rare — typically only the first-ever for a
-          # Developer ID) will exceed this; we then ship the signed DMG and staple
-          # it later with contrib/macdeploy/notarize-dmg.sh. The step never fails
-          # the build, so the release always ships at least a signed DMG.
-          echo "=== Waiting for notarization (up to 45m) ==="
-          if xcrun notarytool wait "$SUBMISSION_ID" \
-            --apple-id "$APPLE_NOTARY_APPLE_ID" \
-            --password "$APPLE_NOTARY_PASSWORD" \
-            --team-id "$APPLE_TEAM_ID" \
-            --timeout 45m; then
-            echo "=== Stapling $DMG in place ==="
-            # Also guarded, for the same reason. Stapling can fail transiently
-            # after a successful notarization (the ticket takes a moment to
-            # propagate), and a signed, notarized-but-unstapled DMG is still a
-            # shippable artifact -- Gatekeeper falls back to an online check.
-            if xcrun stapler staple "$DMG" && xcrun stapler validate "$DMG"; then
-              echo "=== Notarized + stapled: $DMG ==="
-            else
-              echo "::warning::Notarization succeeded but stapling did not — publishing the signed, notarized DMG unstapled. The ticket exists; staple later via contrib/macdeploy/notarize-dmg.sh."
-            fi
-          else
-            echo "::warning::Notarization did not complete within 45m — publishing the signed (un-notarized) DMG. Diagnose with 'xcrun notarytool log $SUBMISSION_ID --apple-id ... --team-id ...'; staple later via contrib/macdeploy/notarize-dmg.sh."
+          # What the notary says about the submission, for the log of a failed step.
+          notary_report() {
+            xcrun notarytool info "$SUBMISSION_ID" \
+              --apple-id "$APPLE_NOTARY_APPLE_ID" \
+              --password "$APPLE_NOTARY_PASSWORD" \
+              --team-id "$APPLE_TEAM_ID" 2>&1 || true
             xcrun notarytool log "$SUBMISSION_ID" \
               --apple-id "$APPLE_NOTARY_APPLE_ID" \
               --password "$APPLE_NOTARY_PASSWORD" \
               --team-id "$APPLE_TEAM_ID" 2>&1 || true
+          }
+
+          # 45m is ample for Apple's automated path. A submission held for manual
+          # review (rare -- typically only the first-ever for a Developer ID)
+          # exceeds it and fails the job; contrib/macdeploy/notarize-dmg.sh can
+          # then finish a DMG by hand.
+          echo "=== Waiting for notarization (up to 45m) ==="
+          if ! xcrun notarytool wait "$SUBMISSION_ID" \
+            --apple-id "$APPLE_NOTARY_APPLE_ID" \
+            --password "$APPLE_NOTARY_PASSWORD" \
+            --team-id "$APPLE_TEAM_ID" \
+            --timeout 45m; then
+            echo "::error::notarytool wait failed: the notarization did not finish within 45m or could not be followed (submission $SUBMISSION_ID)."
+            notary_report
+            exit 1
           fi
+
+          # The stapled ticket is the proof the step is held to: only an accepted
+          # submission has one, whatever the wait above reported. The ticket can
+          # take a moment to reach the servers stapler reads, so a failure is
+          # retried for about ten minutes before it counts. The wait costs a
+          # passing run nothing, and a failed job costs a whole rebuild.
+          echo "=== Stapling $DMG in place ==="
+          ATTEMPT=1
+          until xcrun stapler staple "$DMG" && xcrun stapler validate "$DMG"; do
+            if [ "$ATTEMPT" -ge 11 ]; then
+              echo "::error::Could not staple a notarization ticket to the DMG after $ATTEMPT attempts (submission $SUBMISSION_ID)."
+              notary_report
+              exit 1
+            fi
+            echo "Stapling attempt $ATTEMPT failed; trying again in 60s."
+            ATTEMPT=$((ATTEMPT + 1))
+            sleep 60
+          done
+          echo "=== Notarized + stapled: $DMG ==="
 
       - name: Upload Artifacts
         if: ${{ !env.ACT }}
@@ -1766,10 +1816,11 @@ jobs:
   # and artifact upload -- a standalone job would have to re-download the DMG,
   # re-sign nothing, and upload it again.
   #
-  # The step is best-effort by design: on a timeout, a submit failure, or absent
-  # credentials it warns and ships the signed but un-notarized DMG rather than
-  # failing the release, and contrib/macdeploy/notarize-dmg.sh staples it
-  # afterwards.
+  # The step fails its job when a DMG signed with the release identity does not
+  # come out notarized and stapled: on a submit failure, a timeout, absent
+  # notary credentials or a ticket that cannot be stapled. The deploy job needs
+  # both macOS jobs, so no release is drafted until the failed job is re-run
+  # and passes.
   # ----------------------------------------------------------------------
 
   # ----------------------------------------------------------------------
