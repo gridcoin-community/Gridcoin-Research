@@ -1104,7 +1104,7 @@ BOOST_AUTO_TEST_CASE(an_unrestrictable_backup_directory_is_kept_and_reported)
         BOOST_CHECK(!check.not_writable);
         BOOST_REQUIRE(fs::is_directory(backups));
         if (ModeOf(backups) == 0700U) {
-            BOOST_CHECK_MESSAGE(!check.not_owner_only, *check.not_owner_only);
+            BOOST_CHECK_MESSAGE(!check.not_owner_only, check.not_owner_only.value_or(""));
         } else {
             BOOST_REQUIRE_MESSAGE(check.not_owner_only, "pass " << pass);
             BOOST_TEST_MESSAGE("not owner-only: " << *check.not_owner_only);

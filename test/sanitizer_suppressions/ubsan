@@ -13,6 +13,7 @@
 # ------------
 # Suppressions in dependencies that are developed outside this repository.
 unsigned-integer-overflow:*/include/boost/interprocess/
+unsigned-integer-overflow:*/include/boost/lexical_cast/
 unsigned-integer-overflow:*/include/c++/
 unsigned-integer-overflow:leveldb/
 unsigned-integer-overflow:secp256k1/
