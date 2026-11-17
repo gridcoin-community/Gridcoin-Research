@@ -122,6 +122,11 @@ jobs:
           # fail its test with one of the timeouts test_runner.py retries, and a
           # retry that passes would hide the report.
           #
+          # FUNCTIONAL_TEST_TIMEOUT_FACTOR=8: a node has 240 s to answer one
+          # RPC call, twice what the functional_tests case gives it elsewhere.
+          # On a slow runner this build's node has taken longer than 120 s
+          # over a single consolidateunspent of 600 inputs.
+          #
           # The Debug build type defines DEBUG_LOCKORDER (and
           # ABORT_ON_FAILED_ASSUME); ENABLE_DEBUG_LOCKORDER is spelled out
           # because this is the only job whose tests run with it. It turns on
@@ -155,6 +160,7 @@ jobs:
             -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address,float-divide-by-zero,integer,undefined" \
             -DCMAKE_SHARED_LINKER_FLAGS="-fsanitize=address,float-divide-by-zero,integer,undefined" \
             -DFUNCTIONAL_TEST_ATTEMPTS=1 \
+            -DFUNCTIONAL_TEST_TIMEOUT_FACTOR=8 \
             -DCMAKE_C_COMPILER_LAUNCHER=ccache \
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
 
