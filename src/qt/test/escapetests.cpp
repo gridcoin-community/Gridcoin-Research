@@ -124,7 +124,15 @@ void EscapeTests::anAbortAfterAnEarlierClassEndsTheChildOnce()
     const ChildRun run = RunChild(QStringLiteral("abort"));
     QVERIFY2(run.finished, "the child did not finish within the bound");
     QCOMPARE(run.status, QProcess::CrashExit);
-    QCOMPARE((run.out + run.err).count(QStringLiteral("Received signal")), 1);
+    // QTest in Qt 6.4 and later handles SIGABRT and reports it, once here. Qt
+    // 5.15 leaves SIGABRT alone and reports nothing, and Qt 6.2 and 6.3 were not
+    // checked, so before 6.4 the bound is at most one report.
+    const auto reports = (run.out + run.err).count(QStringLiteral("Received signal"));
+#if QT_VERSION >= QT_VERSION_CHECK(6, 4, 0)
+    QCOMPARE(reports, 1);
+#else
+    QVERIFY2(reports <= 1, qPrintable(run.out + run.err));
+#endif
 #endif
 }
 
