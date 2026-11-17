@@ -28,7 +28,7 @@ all prior rules unless explicitly changed.
 8. [Block Version 12 — Manual Research Claims](#8-block-version-12)
 9. [Block Version 13 — Mandatory Sidestakes and Configurable Parameters](#9-block-version-13)
 10. [Block Version 14 — Script Timelocks and V3 Beacons](#10-block-version-14)
-11. [Block Version 15 — On-Chain Pool Registration](#11-block-version-15)
+11. [Block Version 15 — Block Spacing, Stricter Validation and On-Chain Pool Registration](#11-block-version-15)
 12. [Cross-Cutting Consensus Rules](#12-cross-cutting-consensus-rules)
 13. [Coinstake Output Structure Summary](#13-coinstake-output-structure-summary)
 14. [Contract Payload Version Matrix](#14-contract-payload-version-matrix)
@@ -65,6 +65,8 @@ in `src/chainparams.h`.
 | `AutoGreylistDeepCopyHeight` | _not yet activated_ | _not yet activated_ | `IsAutoGreylistDeepCopyEnabled()` (>= height) |
 | `AutoGreylistTotalCreditFixHeight` | _not yet activated_ | _not yet activated_ | `IsAutoGreylistTotalCreditFixEnabled()` (>= height) |
 | `AutoGreylistRedesignHeight` | _not yet activated_ | _not yet activated_ | `IsAutoGreylistRedesignEnabled()` (>= height) |
+| `PollMultiAddressHeight` | _not yet activated_ | _not yet activated_ | `IsPollMultiAddressEnabled()` (>= height) |
+| `MessageContractDisableHeight` | _not yet activated_ | _not yet activated_ | `IsMessageContractEnabled()` (< height) |
 
 > **Note:** "not yet activated" means that network's chain parameters set the
 > height to `std::numeric_limits<int>::max()`, so the gate never opens there.
@@ -72,6 +74,11 @@ in `src/chainparams.h`.
 > testnet. The feature is present in code. Where a hidden height override
 > exists, regtest can set the height with it. The overrides are ignored on
 > mainnet and testnet.
+>
+> `BlockV15Height`, `PollMultiAddressHeight`, `MessageContractDisableHeight`
+> and the three `AutoGreylist...Height` rows marked that way are set together,
+> to one height, by the release that schedules block version 15 (see
+> [Section 11](#11-block-version-15)).
 
 ### Non-Height Parameters
 
@@ -699,9 +706,56 @@ for trustless atomic operations.
 
 ---
 
-## 11. Block Version 15 — On-Chain Pool Registration
+## 11. Block Version 15 — Block Spacing, Stricter Validation and On-Chain Pool Registration
 
 **Activation:** Mainnet _not yet activated_, Testnet _not yet activated_
+
+Block version 15 carries the rules in the table below. All of them are in the
+code and inactive: `BlockV15Height` and the five heights set with it are
+`std::numeric_limits<int>::max()` on mainnet and testnet until a mandatory
+release sets them.
+
+| Rule from the activation height | Gate | Section |
+|---|---|---|
+| A block at or above the height is version 15, and a block below it is not | `BlockV15Height` | §12.2 |
+| The pool registration contracts `POOL_REGISTER` and `POOL_APPROVE` are valid | `BlockV15Height` | §11.1 to §11.5 |
+| Staked input from the block's own history | `BlockV15Height` | §11.6 |
+| Script verification adds six flags | `BlockV15Height` | §11.7 |
+| A claim contract is in the coinbase and nowhere else | block version 15 | §11.8 |
+| Block and transaction size are measured without the superblock | block version 15 | §11.9 |
+| A block's timestamp is at most 48 seconds before its parent's | `BlockV15Height` | §11.10 |
+| The retarget is log-linear in the parent spacing, and the kernel target eases after a long gap | `BlockV15Height` | §11.10 |
+| A new mandatory sidestake allocation is positive and in basis points, and the total is judged on what the contract would leave | `BlockV15Height` | §11.11 |
+| A new `magnitudeunit` or `magnitudeweightfactor` protocol entry is validated on entry | `BlockV15Height` | §11.11 |
+| A transaction that carries a MESSAGE contract is invalid | `MessageContractDisableHeight` | §11.12 |
+| A poll's eligibility claim is version 2 | `PollMultiAddressHeight` | §11.13 |
+| A poll's eligibility claim names each address key and each output once | `BlockV15Height` | §11.13 |
+| AutoGreylist deep copy, total credit and project status record | the three `AutoGreylist...Height` gates | §9.6 |
+| The scraper manifest project limit allows for the pseudo-projects (a network rule) | `BlockV15Height` | §11.14 |
+
+A rule gated on "block version 15" reads the version of the block being
+checked. A block's version follows from its height (§12.2), so on an accepted
+chain this is the same gate.
+
+### Heights Set With `BlockV15Height`
+
+| Parameter | Regtest default | Hidden override (regtest only) |
+|---|---|---|
+| `BlockV15Height` | not set | `-blockv15height` |
+| `MessageContractDisableHeight` | not set | `-messagecontractdisableheight` |
+| `PollMultiAddressHeight` | 0 | `-pollmultiaddressheight` |
+| `AutoGreylistDeepCopyHeight` | 0 | `-autogreylistdeepcopyheight` |
+| `AutoGreylistTotalCreditFixHeight` | 0 | `-autogreylisttotalcreditfixheight` |
+| `AutoGreylistRedesignHeight` | 0 | `-autogreylistredesignheight` |
+
+On mainnet and testnet the release that schedules block version 15 sets the six
+to one height. They are separate fields so that regtest can drive them one at a
+time. "Not set" is `std::numeric_limits<int>::max()`: regtest mines version 14
+blocks unless `-blockv15height` is given.
+
+> **Source:** `CMainParams`, `CTestNetParams` and `CRegTestParams` in `src/chainparams.cpp`; the predicates and `ConsensusOverridesAllowed()` in `src/chainparams.h`.
+
+### On-Chain Pool Registration (§11.1 to §11.5)
 
 Issue [#1783](https://github.com/gridcoin-community/Gridcoin-Research/issues/1783) replaces the hardcoded `MiningPools` list with an on-chain registry so pool operators can self-register without a binary release. The V15 hard-fork machinery is present in code from the time of this PR; the activation height itself is a follow-up consensus decision and defaults to `std::numeric_limits<int>::max()` in `CMainParams` / `CTestNetParams` until pinned.
 
@@ -833,6 +887,251 @@ At every height (ungated), when the transaction index has no entry for the stake
 
 > **Source:** `src/gridcoin/staking/kernel.cpp` `ReadStakedInput`, `TakeStakedInputFromOwnHistory`.
 
+### 11.7 Script Verification Flags
+
+From `BlockV15Height`, `GetBlockScriptFlags()` adds `V15_SCRIPT_VERIFY_FLAGS` to
+the consensus script flags:
+
+| Flag | Requirement |
+|---|---|
+| `SCRIPT_VERIFY_DERSIG` | A signature is strictly DER encoded |
+| `SCRIPT_VERIFY_LOW_S` | A signature's S value is in the lower half of the curve order |
+| `SCRIPT_VERIFY_STRICTENC` | A signature carries a defined hash type, and a public key is in compressed or uncompressed encoding |
+| `SCRIPT_VERIFY_NULLDUMMY` | The extra element that `OP_CHECKMULTISIG` removes from the stack is empty |
+| `SCRIPT_VERIFY_MINIMALDATA` | A data push uses the shortest push operator, and the operands of `OP_CHECKLOCKTIMEVERIFY` and `OP_CHECKSEQUENCEVERIFY` are minimally encoded. Other numeric operands are not checked for minimal encoding |
+| `SCRIPT_VERIFY_CLEANSTACK` | Exactly one element is left on the stack after evaluation. For a pay-to-script-hash spend the stack judged is the redeem script's |
+
+A block is judged with the flags of its own height. A transaction entering the
+mempool, and a transaction the miner selects, is judged with the flags of the
+tip's next height, the first height at which it can be mined. Relay and block
+validity therefore change at the same height.
+
+> **Source:** `GetBlockScriptFlags()` and `ConnectInputs()` in `src/validation.cpp`; `V15_SCRIPT_VERIFY_FLAGS` in `src/policy/policy.h`; `VerifyScript()` and `EvalScript()` in `src/script/interpreter.cpp`. See also §12.1.
+
+### 11.8 Claim Contract Placement
+
+Since block version 11 the coinbase, a block's first transaction, carries
+exactly one contract, the block's claim (§7.5). In a version 15 block no other
+transaction may carry a `CLAIM` contract. `CheckBlock()` rejects a block that
+has one (DoS 100, "claim contract outside the coinbase").
+
+The mempool applies the rule at the height the transaction could be mined at.
+When the tip's next height is at or above `BlockV15Height`,
+`AcceptToMemoryPool()` refuses a transaction that carries a `CLAIM` contract
+(DoS 100, `claim-outside-coinbase`). The wallet's revalidation of its own
+transactions follows the mempool rule. The miner leaves out a pooled
+transaction that carries one, because a transaction accepted before the height
+can still be in the pool after it.
+
+> **Source:** `CheckBlock()` and `AcceptToMemoryPool()` in `src/validation.cpp`; `CWalletTx::RevalidateTransaction()` in `src/wallet/wallet.cpp`; `CreateRestOfTheBlock()` in `src/miner.cpp`.
+
+### 11.9 Size Accounting Without the Superblock
+
+Below block version 15 the serialized block, its superblock included, must not
+exceed `MAX_BLOCK_SIZE` (1,000,000 bytes).
+
+In a version 15 block:
+
+- When the block's superblock is well formed, the block's size is measured
+  without the superblock (`SER_SKIPSUPERBLOCK`). That size must not exceed
+  `MAX_BLOCK_SIZE`.
+- Each transaction's size is measured without the superblock in the same way,
+  against the same limit.
+
+At every block version the superblock alone must not exceed
+`Superblock::MAX_SIZE` (4,000,000 bytes). Violations are rejected with DoS 100
+("size limits failed").
+
+> **Source:** `CheckBlock()` and `CheckTransaction()` in `src/validation.cpp`; `Superblock::MAX_SIZE` in `src/gridcoin/superblock.h`.
+
+### 11.10 Block Spacing
+
+Four changes act together from `BlockV15Height`. The first three are validity
+rules. The fourth is how the miner stamps a block.
+
+| Constant | Value | Meaning |
+|---|---|---|
+| `V15_TARGET_SPACING` | 90 s | Target block spacing |
+| `V15_RETARGET_TIME_CONSTANT` | 990 s | Time constant of the retarget |
+| `V15_SPACING_CAP` | 2,500 s | Largest spacing, of either sign, that the retarget reads |
+| `V15_EASING_THRESHOLD` | 300 s | Time since the parent after which the kernel target eases |
+| `V15_EASING_DOUBLING` | 256 s | Time over which the eased target doubles |
+| `V15_EASING_MAX_DOUBLINGS` | 64 | Limit on the easing |
+| `V15_PAST_TIME_BOUND` | 48 s | How far a block's timestamp may be before its parent's |
+| `V15_FUTURE_TIME_BOUND` | 48 s | How far a block's timestamp may be ahead of the receiver's adjusted time |
+
+#### Timestamp window
+
+`CheckBlockTime()` applies to blocks of version 12 and above.
+
+| | Below `BlockV15Height` | From `BlockV15Height` |
+|---|---|---|
+| Earliest timestamp | 128 s before the parent's | 48 s before the parent's |
+| Latest timestamp | 128 s ahead of the receiver's adjusted time | 48 s ahead of the receiver's adjusted time |
+
+The earliest timestamp depends only on the parent, so every node gives the same
+answer; a block before it is rejected with DoS 50. The latest timestamp depends
+on the receiver's clock. From the height, a block more than 48 s and up to
+128 s ahead is rejected without a misbehavior score (`REJECT_TIME_TOO_NEW`)
+and is acceptable once the receiver's clock reaches the window. A block more
+than 128 s ahead is rejected with DoS 25 at every height.
+
+Timestamps of version 12 and later blocks are on the 16 second grid (§12.5), and
+48 seconds is three steps of it.
+
+#### Retarget
+
+From the height the next block's base target is
+
+```
+next_target = parent_target * exp(2 * (spacing - 90) / 990)
+```
+
+- `spacing` is the parent's time minus the time of the block before it. It is
+  signed, and is limited to the range -2,500 to 2,500 seconds.
+- The arithmetic is fixed point. The exponent of two is
+  `floor((spacing - 90) * 2 * 65536 * 1000000 / (990 * 693147))` in units of
+  1/65536, and the fractional power of two uses the cubic approximation of
+  aserti3-2d.
+- The result is limited to the range 1 to `PROOF_OF_STAKE_LIMIT`.
+
+A spacing of 90 seconds leaves the target unchanged.
+
+The rule of §12.3, its difficulty resets included, does not apply from the
+height.
+
+#### Kernel target easing
+
+The target that a block's kernel hash is checked against is eased by the time
+since the parent:
+
+```
+elapsed       = block_time - parent_time
+kernel_target = base_target * 2^((elapsed - 300) / 256)    if elapsed > 300
+kernel_target = base_target                                otherwise
+```
+
+`base_target` is the target in the block's `nBits`. `elapsed` is signed, so a
+timestamp before the parent's gets no easing. `elapsed` is read up to
+300 + 256 * 64 = 16,684 seconds, and the eased target is limited to
+`PROOF_OF_STAKE_LIMIT`. The miner's kernel search and `CheckProofOfStakeV8()`
+use the same function.
+
+#### Stake time (miner)
+
+The miner stamps a block with
+`max(parent_time - 48, MaskStakeTime(adjusted_now))`. A node whose clock is
+behind the parent therefore stamps the earliest valid time. When its clock is
+more than 96 seconds behind the parent, that timestamp is outside the node's
+own acceptance window; the miner skips the attempt and raises the clock
+warning.
+
+> **Source:** the constants, `RetargetLogLinear()`, `EaseTarget()`, `ScaleTargetExp2()` and `GetNextTargetRequired()` in `src/gridcoin/staking/difficulty.h` and `difficulty.cpp`; `GetKernelTarget()`, `GetStakeTime()` and `CheckProofOfStakeV8()` in `src/gridcoin/staking/kernel.cpp`; `CheckBlockTime()` and `AcceptBlock()` in `src/validation.cpp`; `StakeMiner()` in `src/miner.cpp`.
+
+### 11.11 Sidestake and Protocol Entry Values
+
+Both rules are judged at the tip's next height for the mempool and at the
+block's height in a block. A contract that fails either is refused with DoS 25.
+Entries accepted before the height are not judged again.
+
+**Mandatory sidestake contracts.** From `BlockV15Height`:
+
+- An ADD's allocation, reduced to lowest terms, must be positive, and its
+  denominator must divide 10,000. That is a whole number of basis points.
+- An ADD is refused when the total of the active mandatory allocations, with
+  the destination's current allocation left out, plus the new allocation
+  exceeds `MaxMandatorySideStakeTotalAlloc` (25%). A REMOVE is not judged on the
+  total.
+
+Below the height the contract's allocation is added to the active total
+whatever its action or destination, and the sum is compared with the same
+maximum.
+
+**Protocol entries.** From `BlockV15Height` an ADD of a `magnitudeunit` or
+`magnitudeweightfactor` entry must carry a value that:
+
+- parses as a fraction, written `n/d` or `n`;
+- is positive;
+- has a reduced numerator and denominator of at most 1,000,000 each
+  (`MAX_MAGNITUDE_ENTRY_TERM`).
+
+A value outside the clamp ranges of §9.3 and §9.4 passes this check and is
+clamped where it is used.
+
+> **Source:** `SideStakeRegistry::ValidateAtHeight()` in `src/gridcoin/sidestake.cpp`; `ProtocolRegistry::ValidateAtHeight()`, `IsMagnitudeProtocolKey()` and `CheckMagnitudeEntryValue()` in `src/gridcoin/protocol.cpp`; `MAX_MAGNITUDE_ENTRY_TERM` in `src/gridcoin/protocol.h`.
+
+### 11.12 MESSAGE Contracts Disabled
+
+`IsMessageContractEnabled(height)` is true below `MessageContractDisableHeight`.
+
+- **Validity.** `CheckContracts()` rejects a transaction that carries a contract
+  of type `MESSAGE`, whatever the contract's action, when the height it is
+  judged at is at or above the gate (DoS 100). A transaction in a block is
+  judged at the block's height. A transaction entering the mempool is judged at
+  the tip's next height.
+- **Mempool.** When the block before the gate height connects, the pooled
+  transactions that carry a MESSAGE contract are removed with their
+  descendants. The wallet abandons its own among them, which releases their
+  inputs. A reorganization back across the height does not restore them.
+- **Not consensus.** The miner leaves such a transaction out of a block at or
+  above the height. From the same height `sendtoaddress`, `sendfrom`,
+  `rainbymagnitude` and the GUI send no longer attach a message.
+
+> **Source:** `IsMessageContractEnabled()` in `src/chainparams.h`; `CheckContracts()` in `src/validation.cpp`; the mempool sweep in `src/node/chainman.cpp`; `CreateRestOfTheBlock()` in `src/miner.cpp`.
+
+### 11.13 Poll Eligibility Claims
+
+A poll contract carries a `PollEligibilityClaim`, by which the poll's creator
+shows ownership of a balance. Version 1 of the claim covers one address.
+Version 2 carries a balance claim over one or more addresses.
+
+- From `PollMultiAddressHeight` a poll's claim must be version 2. Below the
+  height a version 2 claim is refused. Both are block rules (DoS 25).
+- From `BlockV15Height` a poll's claim names each address key and each output
+  once (`PollEligibilityClaim::EntriesDistinct()`). A block with a poll that
+  does not is rejected (DoS 25). The mempool applies the rule when the tip's
+  next height is at or above the gate (DoS 25, `bad-poll-claim`).
+
+> **Source:** `PollRegistry::BlockValidate()` in `src/gridcoin/voting/registry.cpp`; `PollEligibilityClaim` in `src/gridcoin/voting/claims.h`; `AcceptToMemoryPool()` in `src/validation.cpp`.
+
+### 11.14 Scraper Manifest Project Limit
+
+This is a rule of the scraper network, not of block validity.
+
+A received scraper manifest may list at most
+
+```
+nMaxProjects = ceil(W / max(0.5, CONVERGENCE_BY_PROJECT_RATIO)) + 2
+```
+
+project entries, where `W` is the number of whitelist entries that are not
+deleted. A manifest also lists three pseudo-projects (`VerifiedBeacons`,
+`ProjectsAllCpidTotalCredits`, `ProjectPublicKeys`), which are not whitelist
+entries. Below `BlockV15Height` they count against `nMaxProjects`. When the
+receiver's tip is at or above the height the limit is `nMaxProjects + 3`.
+
+A node that is in sync refuses a manifest over the limit.
+
+> **Source:** `CScraperManifest::UnserializeCheck()` and `RecvManifest()` in `src/gridcoin/scraper/scraper_net.cpp`; `MANIFEST_PSEUDO_PROJECTS` in `src/gridcoin/scraper/scraper_net.h`.
+
+### 11.15 Not Consensus, Switched at the Same Height
+
+- **Peer protocol version.** The release that sets `BlockV15Height` uses
+  `PROTOCOL_VERSION` 180331. `MIN_PEER_PROTO_VERSION` is 180329, the protocol
+  version of the block version 14 mandatory release. 180330 is the version of
+  the releases that carry the version 15 code with its height unset. A peer
+  below 180329 is disconnected at the handshake. A peer below 180331 is
+  disconnected once the node's tip is more than `ProtocolVersionGracePeriod`
+  blocks above `BlockV15Height`. The grace period is set per network in
+  `src/chainparams.cpp`.
+- **PSGT pool.** When the tip is at or above the height and the node is in
+  sync, `psgt` messages are processed, and pooled PSGTs are announced to peers
+  at `PSGT_PROTO_VERSION` (180330) or above.
+- **Pool RPCs.** The RPCs of §11.1 that send pool contracts refuse below the
+  height.
+
+> **Source:** `src/version.h`; the version handshake and the PSGT handlers in `src/net_processing.cpp`; `EnsurePoolRegistrationActive()` in `src/rpc/blockchain.cpp`.
+
 ---
 
 ## 12. Cross-Cutting Consensus Rules
@@ -860,8 +1159,18 @@ Blocks must meet the minimum version required at their height. Blocks below
 the mandatory version for their height are rejected:
 - Version 8 mandatory after `BlockV8Height`
 - Each subsequent version mandatory after its activation height
+- A block below the version its height requires is rejected with DoS 20
+  ("reject too old")
+- A block below a version's activation height must not carry that version or
+  a later one (DoS 100, "reject too new")
+- The miner stamps the version that its block's height requires
+
+> **Source:** `AcceptBlock()` in `src/validation.cpp`; `ComputeBlockVersion()` in `src/miner.cpp`
 
 ### 12.3 Difficulty Retargeting
+
+The rule in this section applies below `BlockV15Height`. From that height the
+retarget is log-linear in the parent spacing (§11.10).
 
 - Target block spacing: **90 seconds** (post-protocol v2), **60 seconds**
   (pre-protocol v2)
@@ -1005,6 +1314,8 @@ and when each version was introduced:
 | **Superblock** | Legacy string | v11+ (SHA256 hash) | v13+ (SuperblockV3Height) | — |
 | **MRC** | v12+ | — | — | — |
 | **Sidestake** | v13+ | — | — | — |
+| **Pool register** | v15+ | — | — | — |
+| **Pool approve** | v15+ | — | — | — |
 
 For most payloads, v1 is the pre-binary legacy form (string or appcache K-V)
 that gets parsed into a v1 instance, and v2 is the first native-binary format.
@@ -1027,6 +1338,9 @@ Notes:
   miner unconditionally emits v3 for pre-v12 blocks (`CreateGridcoinReward()` in `src/miner.cpp`),
   and there is no consensus rule keying claim version to height; v2 remains
   only as a serialization branch retained for completeness.
+- The pool payloads are native binary at v1, like MRC and Sidestake.
+- The poll payload's eligibility claim has its own version, 1 or 2, set by
+  `PollMultiAddressHeight` (§11.13).
 - ‡ Vote v1 is native binary, introduced at v11 alongside the binary contract
   system. Unlike the other "v1 is the legacy form" payloads, pre-v11 votes
   are represented by a separate `LegacyVote` class (`src/gridcoin/voting/vote.h`)
@@ -1047,6 +1361,8 @@ Current `CURRENT_VERSION` constants:
 | Superblock | 3 | `Superblock::CURRENT_VERSION` (`src/gridcoin/superblock.h`) |
 | MRC | 1 | `MRC::CURRENT_VERSION` (`src/gridcoin/mrc.h`) |
 | Sidestake (SideStakePayload) | 1 | `SideStakePayload::CURRENT_VERSION` (`src/gridcoin/sidestake.h`) |
+| Pool register (PoolRegisterPayload) | 1 | `PoolRegisterPayload::CURRENT_VERSION` (`src/gridcoin/pool.h`) |
+| Pool approve (PoolApprovePayload) | 1 | `PoolApprovePayload::CURRENT_VERSION` (`src/gridcoin/pool.h`) |
 
 ---
 
@@ -1132,6 +1448,10 @@ When a researcher submits an MRC:
 | `src/gridcoin/staking/kernel.cpp` | `CalculateStakeHashV8`, `CalculateStakeWeightV8`, stake modifier computation |
 | `src/gridcoin/staking/reward.cpp` | `GetConstantBlockReward`, `GetProofOfStakeReward`, coin-year schedule |
 | `src/gridcoin/staking/difficulty.cpp` | `GetNextTargetRequired`, retargeting algorithm |
+| `src/gridcoin/staking/difficulty.h` | Block version 15 spacing constants, `RetargetLogLinear`, `EaseTarget` |
+| `src/policy/policy.h` | `V15_SCRIPT_VERIFY_FLAGS` |
+| `src/gridcoin/pool.h` | `PoolRegisterPayload`, `PoolApprovePayload`, `PoolRegistry` |
+| `src/gridcoin/voting/claims.h` | `PollEligibilityClaim` |
 | `src/gridcoin/accrual/research_age.h` | `GetMaxResearchSubsidy`, `ResearchAgeComputer` |
 | `src/gridcoin/accrual/snapshot.h` | `SnapshotCalculator`, magnitude unit computation |
 | `src/gridcoin/claim.h` | `Claim` class, version history |
