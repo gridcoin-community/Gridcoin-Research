@@ -252,6 +252,8 @@ CCriticalSection CScraperManifest::cs_mapManifest;
 std::map<uint256, CSplitBlob::CPart> CSplitBlob::mapParts;
 /** Global that stores published/received manifests via smart shared pointers indexed by manifest hash */
 std::map<uint256, std::shared_ptr<CScraperManifest>> CScraperManifest::mapManifest;
+/** Counts the changes to the manifests held with all of their parts. See the declaration. */
+std::atomic<uint64_t> CScraperManifest::nManifestGeneration{0};
 
 /** Global cache for converged scraper stats. */
 ConvergedScraperStats ConvergedScraperStatsCache GUARDED_BY(cs_ConvergedScraperStatsCache) = {};
@@ -505,6 +507,14 @@ mmCSManifestsBinnedByScraper BinCScraperManifestsByScraper() EXCLUSIVE_LOCKS_REQ
  */
 mmCSManifestsBinnedByScraper ScraperCullAndBinCScraperManifests();
 /**
+ * @brief As ScraperCullAndBinCScraperManifests(), and also gives the count of changes to the manifests held complete
+ * that the binned manifests go with.
+ * @param manifest_generation (out parameter) the value of CScraperManifest::nManifestGeneration read after the cull
+ * and before the manifests were binned, under the hold of cs_mapManifest in which they are binned
+ * @return mmCSManifestsBinnedByScraper
+ */
+mmCSManifestsBinnedByScraper ScraperCullAndBinCScraperManifests(uint64_t& manifest_generation);
+/**
  * @brief A DoS prevention function that deletes manifests received that are not authorized.
  * @return unsigned int of the number of unauthorized manifests deleted
  *
@@ -521,10 +531,20 @@ unsigned int ScraperDeleteUnauthorizedCScraperManifests();
 /**
  * @brief Attempts to construct a converged manifest from the inventory of CScraperManifests on the node
  * @param StructConvergedManifest (out parameter)
+ * @param manifest_generation (out parameter) the count of changes to the manifests held complete that the manifests
+ * binned for this attempt go with. See ScraperCullAndBinCScraperManifests(uint64_t&).
  * @return bool true if successful
  */
 bool ScraperConstructConvergedManifest(const GRC::WhitelistSnapshot& projectWhitelist,
-                                       ConvergedManifest& StructConvergedManifest);
+                                       ConvergedManifest& StructConvergedManifest,
+                                       uint64_t& manifest_generation);
+/**
+ * @brief Whether a cache of converged statistics holds the convergence for the manifests held now: it was marked
+ * clean, and no manifest was completed or deleted since the manifests were binned for it.
+ * @param stats the cache, with its lock held by the caller if it is ConvergedScraperStatsCache
+ * @return bool true if the cache can be used as it is
+ */
+bool IsConvergedScraperStatsCacheClean(const ConvergedScraperStats& stats);
 /**
  * @brief Attempts to construct a converged manifest at the project level from the projects which are contained in the
  * inventory of CScraperManifests on the node. Note that this function is called by ScraperConstructConvergedManifest if the
@@ -5503,15 +5523,22 @@ void ConvergedManifest::ComputeConvergedContentHash()
     nContentHash = Hash(ss);
 }
 
-// ------------------------------------ This an out parameter.
+bool IsConvergedScraperStatsCacheClean(const ConvergedScraperStats& stats)
+{
+    return stats.bClean && stats.nManifestGeneration == CScraperManifest::nManifestGeneration.load();
+}
+
+// ------------------------------------ These are out parameters.
 bool ScraperConstructConvergedManifest(const GRC::WhitelistSnapshot& projectWhitelist,
-                                       ConvergedManifest& StructConvergedManifest)
+                                       ConvergedManifest& StructConvergedManifest,
+                                       uint64_t& manifest_generation)
 {
     bool bConvergenceSuccessful = false;
 
     // Call ScraperDeleteCScraperManifests() to ensure we have culled old manifests. This will
     // return a map of manifests binned by Scraper after the culling.
-    mmCSManifestsBinnedByScraper mMapCSManifestsBinnedByScraper = ScraperCullAndBinCScraperManifests();
+    mmCSManifestsBinnedByScraper mMapCSManifestsBinnedByScraper
+            = ScraperCullAndBinCScraperManifests(manifest_generation);
 
     // Do a map for unique manifest times ordered by descending time then content hash.
     std::multimap<int64_t, uint256, std::greater<int64_t>> mManifestsBinnedByTime;
@@ -6255,6 +6282,13 @@ mmCSManifestsBinnedByScraper BinCScraperManifestsByScraper() EXCLUSIVE_LOCKS_REQ
 
 mmCSManifestsBinnedByScraper ScraperCullAndBinCScraperManifests()
 {
+    uint64_t manifest_generation = 0;
+
+    return ScraperCullAndBinCScraperManifests(manifest_generation);
+}
+
+mmCSManifestsBinnedByScraper ScraperCullAndBinCScraperManifests(uint64_t& manifest_generation)
+{
     // Apply the SCRAPER_CMANIFEST_RETAIN_NONCURRENT bool and if false delete any existing
     // CScraperManifests other than the current one for each scraper.
 
@@ -6346,6 +6380,11 @@ mmCSManifestsBinnedByScraper ScraperCullAndBinCScraperManifests()
          "Permanently deleted " + ToString(nPendingDeleted) + " manifest(s) pending permanent deletion.");
     _log(logattribute::INFO, "ScraperDeleteCScraperManifests", "Size of mapPendingDeletedManifest = "
          + ToString(CScraperManifest::mapPendingDeletedManifest.size()));
+
+    // The count is read after the deletions above, which add to it, and before the manifests are binned for the
+    // caller. A manifest that is completed or deleted after it was passed over or binned below adds to the count
+    // after this read, so the count no longer has this value.
+    manifest_generation = CScraperManifest::nManifestGeneration.load();
 
     // Reload mMapCSManifestsBinnedByScraper after deletions. This is not particularly efficient, but the map is not
     // that large. (The lock on CScraperManifest::cs_mapManifest is still held from above.)
@@ -6554,7 +6593,7 @@ Superblock ScraperGetSuperblockContract(bool bStoreConvergedStats, bool bContrac
 
         // If the cache is less than nScraperSleep in minutes old OR not dirty...
         if (GetAdjustedTime() - ConvergedScraperStatsCache.nTime < (scraper_sleep() / 1000)
-                || ConvergedScraperStatsCache.bClean)
+                || IsConvergedScraperStatsCacheClean(ConvergedScraperStatsCache))
         {
             bConvergenceUpdateNeeded = false;
             _log(logattribute::INFO, __func__, "Cached convergence is fresh, convergence update not needed.");
@@ -6562,6 +6601,7 @@ Superblock ScraperGetSuperblockContract(bool bStoreConvergedStats, bool bContrac
     }
 
     ConvergedManifest StructConvergedManifest;
+    uint64_t manifest_generation = 0;
     ScraperBeaconMap mBeaconMap;
     Superblock superblock;
 
@@ -6581,7 +6621,7 @@ Superblock ScraperGetSuperblockContract(bool bStoreConvergedStats, bool bContrac
             // to make sure the BeaconMap has been populated properly.
             if (ScraperConstructConvergedManifest(GetWhitelist().Snapshot(GreylistState::PENDING,
                                                       GRC::ProjectEntry::ProjectFilterFlag::ALL_BUT_DELETED),
-                                                  StructConvergedManifest)
+                                                  StructConvergedManifest, manifest_generation)
                     && LoadBeaconListFromConvergedManifest(StructConvergedManifest, mBeaconMap))
             {
                 ScraperStatsVerifiedBeaconsTotalCredits mScraperConvergedStats
@@ -6639,8 +6679,11 @@ Superblock ScraperGetSuperblockContract(bool bStoreConvergedStats, bool bContrac
 
                     ConvergedScraperStatsCache.NewFormatSuperblock = superblock;
 
-                    // Mark the cache clean, because it was just updated.
+                    // Mark the cache clean, because it was just updated, and record the count of manifest changes
+                    // that the convergence goes with. A manifest completed or deleted since the manifests were binned
+                    // for this convergence has moved the count on, and the cache is then not used as clean.
                     ConvergedScraperStatsCache.bClean = true;
+                    ConvergedScraperStatsCache.nManifestGeneration = manifest_generation;
 
                     // If called from housekeeping, mark bMinHousekeepingComplete true
                     if (bFromHousekeeping) ConvergedScraperStatsCache.bMinHousekeepingComplete = true;
@@ -6881,7 +6924,8 @@ UniValue ConvergedScraperStatsToJson(ConvergedScraperStats& ConvergedScraperStat
 
     UniValue current_convergence(UniValue::VOBJ);
 
-    current_convergence.pushKV("current_cache_clean_flag", ConvergedScraperStatsIn.bClean);
+    current_convergence.pushKV("current_cache_clean_flag",
+                               IsConvergedScraperStatsCacheClean(ConvergedScraperStatsIn));
     current_convergence.pushKV("current_cache_timestamp", ConvergedScraperStatsIn.nTime);
     current_convergence.pushKV("current_cache_datetime",
                                DateTimeStrFormat("%x %H:%M:%S UTC",  ConvergedScraperStatsIn.nTime));
@@ -6961,7 +7005,7 @@ UniValue convergencereport(const UniValue& params)
         LOCK(cs_ConvergedScraperStatsCache);
 
         if (GetAdjustedTime() - ConvergedScraperStatsCache.nTime < (scraper_sleep() / 1000)
-                || ConvergedScraperStatsCache.bClean)
+                || IsConvergedScraperStatsCacheClean(ConvergedScraperStatsCache))
         {
             bConvergenceUpdateNeeded = false;
         }

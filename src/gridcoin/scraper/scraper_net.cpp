@@ -209,13 +209,13 @@ bool CSplitBlob::RecvPart(CNode* pfrom, CDataStream& vRecv)
                 ++split.cntPartsRcvd;
 
                 // Invariant: cntPartsRcvd <= vParts.size(). This is a theorem of
-                // the counter's two writers, not an assumption: addPart() pairs
-                // each new vParts slot with at most one immediate count (part
-                // already present) or exactly one refs entry, and this branch
-                // counts each ref exactly once, on the part's single
-                // absent-to-present transition (part data is never cleared while
-                // refs exist). So the count equals the number of slots whose
-                // parts are present.
+                // the counter's writers, not an assumption: addPart() and
+                // addPartData() pair each new vParts slot with one immediate
+                // count (part already present) or with one refs entry that
+                // this branch counts, and this branch counts each ref exactly
+                // once, on the part's single absent-to-present transition
+                // (part data is never cleared while refs exist). So the count
+                // equals the number of slots whose parts are present.
                 //
                 // Assume() rather than a bare assert: it halts in
                 // ABORT_ON_FAILED_ASSUME builds, so a future edit that breaks the
@@ -338,6 +338,13 @@ int CSplitBlob::addPartData(CDataStream&& vData, const bool& publish_in_progress
     {
         /* missing data; use the supplied data */
         CSplitBlob::RecvPart(nullptr, vData);
+    }
+    else
+    {
+        // The data is here already, because another object or an earlier slot of this one references the same
+        // part. RecvPart() counts a reference when the part's data arrives, so it does not count this one. It is
+        // counted here, as addPart() counts a part whose data is present.
+        ++cntPartsRcvd;
     }
 
     return n;
@@ -470,10 +477,12 @@ bool CScraperManifest::AlreadyHave(CNode* pfrom, const CInv& inv) EXCLUSIVE_LOCK
 void CScraperManifest::PushInvTo(CNode* pto) EXCLUSIVE_LOCKS_REQUIRED(CScraperManifest::cs_mapManifest,
                                                                       CSplitBlob::cs_mapParts)
 {
-    /* send all keys from the index map as inventory */
-    /* FIXME: advertise only completed manifests */
+    // Announce the manifests whose parts are all here. A peer that takes a manifest from this node asks this node
+    // for the parts it lacks, so a manifest is announced when this node can supply every one of them.
     for (auto const& obj : mapManifest)
     {
+        if (!WITH_LOCK(obj.second->cs_manifest, return obj.second->isComplete())) continue;
+
         pto->PushInventory(CInv(MSG_SCRAPERINDEX, obj.first));
     }
 }
@@ -1047,6 +1056,8 @@ EXCLUSIVE_LOCKS_REQUIRED(CScraperManifest::cs_mapManifest)
 
         mapManifest.erase(nHash);
 
+        ++nManifestGeneration;
+
         // lock cs_ConvergedScraperStatsCache and mark ConvergedScraperStatsCache dirty because a manifest has been deleted
         // that could have been used in the cached convergence, so the convergence may change.
         {
@@ -1095,6 +1106,8 @@ CScraperManifest::DeleteManifest(std::map<uint256, std::shared_ptr<CScraperManif
     }
 
     iter = mapManifest.erase(iter);
+
+    ++nManifestGeneration;
 
     // lock cs_ConvergedScraperStatsCache and mark ConvergedScraperStatsCache dirty because a manifest has been deleted
     // that could have been used in the cached convergence, so the convergence may change. This is not conditional, because
@@ -1274,12 +1287,16 @@ EXCLUSIVE_LOCKS_REQUIRED(CScraperManifest::cs_mapManifest, cs_mapParts)
         m->SerializeForManifestCompare(sscomp);
         m->nContentHash = Hash(sscomp);
 
-        // serialize and hash the object
+        // serialize the object without its signature and sign the hash of that
         m->SerializeWithoutSignature(ss);
 
-        // sign the serialized manifest and append the signature
+        keySign.Sign(Hash(ss), m->signature);
+
+        // The manifest is kept in the map under the hash of the message a peer is sent for it, which is the
+        // serialized object followed by the signature. RecvManifest() keeps a received manifest under the hash of
+        // the message it was given, so a peer that is sent this message keeps the manifest under this hash too.
+        ss << m->signature;
         hash = Hash(ss);
-        keySign.Sign(hash, m->signature);
 
         LogPrint(BCLog::LogFlags::MANIFEST, "INFO: CScraperManifest::addManifest: hash of manifest contents = %s",
                  m->nContentHash.ToString());
@@ -1328,6 +1345,10 @@ EXCLUSIVE_LOCKS_REQUIRED(CScraperManifest::cs_mapManifest, cs_mapParts)
 void CScraperManifest::Complete() EXCLUSIVE_LOCKS_REQUIRED(CSplitBlob::cs_manifest, CSplitBlob::cs_mapParts)
 {
     m_publish_in_progress = false;
+
+    // The manifest is now one that a convergence is formed from. Nothing marks ConvergedScraperStatsCache dirty here,
+    // because its lock is taken before cs_mapParts. The count tells the cache that the manifests have changed.
+    ++nManifestGeneration;
 
     // phash may legitimately be null here: a manifest built/completed locally can reach
     // Complete() before it is inserted into mapManifest and has phash repointed at the

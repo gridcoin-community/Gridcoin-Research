@@ -3,6 +3,7 @@
 // file COPYING or https://www.opensource.org/licenses/mit-license.php.
 #include "addrman.h"
 #include "addrman_impl.h"
+#include <algorithm>
 #include <string>
 #include <boost/test/unit_test.hpp>
 
@@ -22,6 +23,11 @@
 #include "chain.h"
 #include "chainparams.h"
 #include "clientversion.h"
+#include "gridcoin/contract/contract.h"
+#include "gridcoin/scraper/fwd.h"
+#include "gridcoin/scraper/scraper_registry.h"
+#include "key.h"
+#include "key_io.h"
 #include "primitives/block.h"
 #include "primitives/transaction.h"
 #include "protocol.h"
@@ -35,6 +41,10 @@ using namespace std;
 
 // Defined in validation.cpp; the VERSION handler feeds it the peer's height.
 extern CMedianFilter<int> cPeerBlockCounts GUARDED_BY(cs_main);
+
+// Defined in scraper.cpp; the complete manifests in the manifest map by scraper.
+extern mmCSManifestsBinnedByScraper BinCScraperManifestsByScraper()
+    EXCLUSIVE_LOCKS_REQUIRED(CScraperManifest::cs_mapManifest);
 
 BOOST_AUTO_TEST_SUITE(net_tests)
 
@@ -667,6 +677,319 @@ BOOST_AUTO_TEST_CASE(a_queued_request_for_a_part_is_sent_only_while_the_part_is_
     BOOST_REQUIRE_EQUAL(asked.size(), 1U);
     BOOST_CHECK(asked.front().type == MSG_PART);
     BOOST_CHECK(asked.front().hash == missing);
+
+    WITH_LOCK(cs_main, cPeerBlockCounts = peer_block_counts);
+}
+
+// A key the scraper registry holds as an authorized scraper, until the object
+// goes.
+class AuthorizedScraper
+{
+public:
+    AuthorizedScraper()
+    {
+        m_key.MakeNewKey(true);
+
+        CMutableTransaction mtx;
+        mtx.vContracts.push_back(GRC::MakeContract<GRC::ScraperEntryPayload>(
+            uint32_t {3}, GRC::ContractAction::ADD, uint32_t {2}, m_key.GetPubKey().GetID(),
+            GRC::ScraperEntryStatus::AUTHORIZED));
+        m_tx = CTransaction(mtx);
+
+        LOCK(cs_main);
+        GRC::GetScraperRegistry().Add({m_tx.vContracts[0], m_tx, &m_index});
+    }
+
+    AuthorizedScraper(const AuthorizedScraper&) = delete;
+    AuthorizedScraper& operator=(const AuthorizedScraper&) = delete;
+
+    CKey& Key() { return m_key; }
+
+private:
+    grc_test::RegistryReset m_scrapers{GRC::ContractType::SCRAPER};
+    CKey m_key;
+    CTransaction m_tx;
+    CBlockIndex m_index{};
+};
+
+// A manifest published as a scraper publishes one: each part goes in as data
+// while the publish is in progress, and addManifest() signs the manifest and
+// puts it in the manifest map. The manifest is taken out of the map when the
+// object goes. The constructor checks nothing, so that it always completes and
+// the destructor always runs; a case checks Published() first.
+class PublishedManifest
+{
+public:
+    PublishedManifest(CKey& key, const std::vector<std::string>& parts, const int64_t time)
+        : m_manifest(std::make_shared<CScraperManifest>())
+    {
+        bool parts_added = true;
+
+        for (const std::string& text : parts) {
+            CDataStream part(SER_NETWORK, 1);
+            part << text;
+
+            if (m_manifest->addPartData(std::move(part), true) < 0) parts_added = false;
+        }
+
+        {
+            LOCK(m_manifest->cs_manifest);
+
+            m_manifest->sCManifestName = EncodeDestination(CTxDestination(key.GetPubKey().GetID()));
+            m_manifest->nTime = time;
+            m_manifest->BeaconList = 0;
+            m_manifest->BeaconList_c = 0;
+
+            for (unsigned int n = 1; n < parts.size(); ++n) {
+                CScraperManifest::dentry project;
+                project.project = "project " + ToString(n);
+                project.part1 = n;
+                project.LastModified = time;
+                project.current = true;
+                m_manifest->projects.push_back(project);
+            }
+        }
+
+        LOCK2(CScraperManifest::cs_mapManifest, CSplitBlob::cs_mapParts);
+
+        m_published = parts_added && CScraperManifest::addManifest(m_manifest, key);
+
+        if (m_published) m_hash = WITH_LOCK(m_manifest->cs_manifest, return *m_manifest->phash);
+    }
+
+    ~PublishedManifest()
+    {
+        if (!m_published) return;
+
+        LOCK(CScraperManifest::cs_mapManifest);
+        CScraperManifest::DeleteManifest(m_hash, true);
+    }
+
+    PublishedManifest(const PublishedManifest&) = delete;
+    PublishedManifest& operator=(const PublishedManifest&) = delete;
+
+    bool Published() const { return m_published; }
+    //! The hash the manifest map holds the manifest under.
+    const uint256& Hash() const { return m_hash; }
+    const std::shared_ptr<CScraperManifest>& Manifest() const { return m_manifest; }
+
+    //! The message a peer is sent for the manifest.
+    CDataStream Message() const
+    {
+        LOCK2(CScraperManifest::cs_mapManifest, CSplitBlob::cs_mapParts);
+
+        return CScraperManifest::SerializeForSend(m_manifest);
+    }
+
+private:
+    std::shared_ptr<CScraperManifest> m_manifest;
+    bool m_published{false};
+    uint256 m_hash;
+};
+
+// A scraper keeps the manifest it publishes under the hash of the message a
+// peer is sent for it, which is the hash the peer keeps the manifest under. So
+// the publisher has the manifest already when a peer sends the message back.
+BOOST_AUTO_TEST_CASE(a_published_manifest_is_kept_under_the_hash_of_the_message_sent_for_it)
+{
+    BOOST_REQUIRE(g_peerman);
+    grc_test::StateGuard guard;
+    const CMedianFilter<int> peer_block_counts = WITH_LOCK(cs_main, return cPeerBlockCounts);
+
+    SetMockTime(1700000000);
+
+    // Allocated, not a local, for the reason given in the cases above.
+    const auto peer = std::make_unique<CNode>(INVALID_SOCKET,
+                                              CAddress(CService(LookupNumeric("127.0.0.1", 0)), NODE_NONE),
+                                              "", true);
+    CNode& node = *peer;
+    node.CloseSocketDisconnect();
+    node.fDisconnect = false;
+
+    const size_t manifests_before = WITH_LOCK(CScraperManifest::cs_mapManifest,
+                                              return CScraperManifest::mapManifest.size());
+
+    {
+        AuthorizedScraper scraper;
+        const PublishedManifest published(scraper.Key(), {"a beacon list part", "a project part"}, GetAdjustedTime());
+
+        BOOST_REQUIRE(published.Published());
+
+        CDataStream message = published.Message();
+        const uint256 message_hash = Hash(message);
+
+        BOOST_CHECK(published.Hash() == message_hash);
+
+        {
+            LOCK(CScraperManifest::cs_mapManifest);
+
+            BOOST_CHECK_EQUAL(CScraperManifest::mapManifest.size(), manifests_before + 1);
+
+            const auto entry = CScraperManifest::mapManifest.find(message_hash);
+
+            BOOST_REQUIRE(entry != CScraperManifest::mapManifest.end());
+            BOOST_CHECK(entry->second == published.Manifest());
+        }
+
+        // A peer sends the manifest back. The node has it, and takes no second
+        // copy of it.
+        BOOST_CHECK(!CScraperManifest::RecvManifest(&node, message));
+
+        BOOST_CHECK_EQUAL(WITH_LOCK(CScraperManifest::cs_mapManifest, return CScraperManifest::mapManifest.size()),
+                          manifests_before + 1);
+    }
+
+    BOOST_CHECK_EQUAL(WITH_LOCK(CScraperManifest::cs_mapManifest, return CScraperManifest::mapManifest.size()),
+                      manifests_before);
+
+    WITH_LOCK(cs_main, cPeerBlockCounts = peer_block_counts);
+}
+
+// A scraper's manifest mostly repeats the parts of its last one. The manifest
+// is complete as published, and the node counts it once for its scraper along
+// with the one before.
+BOOST_AUTO_TEST_CASE(a_published_manifest_that_repeats_a_held_part_is_complete)
+{
+    grc_test::StateGuard guard;
+
+    SetMockTime(1700000000);
+
+    AuthorizedScraper scraper;
+    const std::string scraper_id = EncodeDestination(CTxDestination(scraper.Key().GetPubKey().GetID()));
+
+    const PublishedManifest first(scraper.Key(), {"a beacon list part", "a project part"},
+                                  GetAdjustedTime() - 600);
+    const PublishedManifest second(scraper.Key(), {"a beacon list part", "a later project part"},
+                                   GetAdjustedTime());
+
+    BOOST_REQUIRE(first.Published());
+    BOOST_REQUIRE(second.Published());
+
+    BOOST_CHECK(WITH_LOCK(first.Manifest()->cs_manifest, return first.Manifest()->isComplete()));
+    BOOST_CHECK(WITH_LOCK(second.Manifest()->cs_manifest, return second.Manifest()->isComplete()));
+
+    LOCK(CScraperManifest::cs_mapManifest);
+
+    const mmCSManifestsBinnedByScraper binned = BinCScraperManifestsByScraper();
+    const auto bin = binned.find(scraper_id);
+
+    BOOST_REQUIRE(bin != binned.end());
+    BOOST_REQUIRE_EQUAL(bin->second.size(), 2U);
+
+    // Newest first.
+    auto entry = bin->second.begin();
+    BOOST_CHECK(entry->second.first == second.Hash());
+    ++entry;
+    BOOST_CHECK(entry->second.first == first.Hash());
+}
+
+// A node announces a manifest to a peer that connects, and sends it when asked,
+// only when it holds every part of it: the peer asks the node it took a manifest
+// from for the parts. The node here holds one manifest it published, with its
+// parts, and one it received with no part of it here.
+BOOST_AUTO_TEST_CASE(a_manifest_is_announced_and_sent_only_with_all_of_its_parts_here)
+{
+    BOOST_REQUIRE(g_peerman);
+    grc_test::StateGuard guard;
+    const CMedianFilter<int> peer_block_counts = WITH_LOCK(cs_main, return cPeerBlockCounts);
+
+    SetMockTime(1700000000);
+
+    AuthorizedScraper scraper;
+
+    // The message for a manifest whose publisher's copy is gone, and its parts
+    // with it.
+    CDataStream message(SER_NETWORK, PROTOCOL_VERSION);
+    {
+        const PublishedManifest gone(scraper.Key(), {"a beacon list part not here", "a project part not here"},
+                                     GetAdjustedTime() - 600);
+        BOOST_REQUIRE(gone.Published());
+
+        message = gone.Message();
+    }
+
+    const uint256 incomplete_hash = Hash(message);
+
+    // Takes the received manifest out of the map when the case ends, however it
+    // ends.
+    struct Removal
+    {
+        const uint256 hash;
+
+        ~Removal()
+        {
+            LOCK(CScraperManifest::cs_mapManifest);
+            CScraperManifest::DeleteManifest(hash, true);
+        }
+    } removal{incomplete_hash};
+
+    BOOST_REQUIRE(CScraperManifest::RecvManifest(nullptr, message));
+
+    const PublishedManifest complete(scraper.Key(), {"a beacon list part", "a project part"}, GetAdjustedTime());
+    BOOST_REQUIRE(complete.Published());
+    BOOST_REQUIRE(complete.Hash() != incomplete_hash);
+
+    {
+        LOCK(CScraperManifest::cs_mapManifest);
+
+        const auto incomplete = CScraperManifest::mapManifest.find(incomplete_hash);
+
+        BOOST_REQUIRE(incomplete != CScraperManifest::mapManifest.end());
+        BOOST_REQUIRE(!WITH_LOCK(incomplete->second->cs_manifest, return incomplete->second->isComplete()));
+        BOOST_REQUIRE(WITH_LOCK(complete.Manifest()->cs_manifest, return complete.Manifest()->isComplete()));
+    }
+
+    // A node that is out of sync sends no manifest.
+    g_previous_block_time.store(GetAdjustedTime());
+
+    // Allocated, not a local, for the reason given in the cases above.
+    const auto peer = std::make_unique<CNode>(INVALID_SOCKET,
+                                              CAddress(CService(LookupNumeric("127.0.0.1", 0)), NODE_NONE),
+                                              "", true);
+    CNode& node = *peer;
+    node.CloseSocketDisconnect();
+    node.fDisconnect = false;
+
+    LOCK(node.cs_vRecvMsg);
+
+    // The peer connects, and is announced what the node holds.
+    const SerializeData version = VersionMessage(1700000000);
+    BOOST_REQUIRE(node.ReceiveMsgBytes(CharCast(UCharCast(version.data())), version.size()));
+    g_peerman->ProcessMessages(&node);
+    BOOST_REQUIRE(node.nVersion == PROTOCOL_VERSION);
+    TakeSent(node);
+
+    {
+        LOCK(node.cs_inventory);
+
+        const auto announced = [&node](const uint256& hash) EXCLUSIVE_LOCKS_REQUIRED(node.cs_inventory) {
+            return std::count_if(node.vInventoryToSend.begin(), node.vInventoryToSend.end(), [&hash](const CInv& inv) {
+                return inv.type == MSG_SCRAPERINDEX && inv.hash == hash;
+            });
+        };
+
+        BOOST_CHECK_EQUAL(announced(complete.Hash()), 1);
+        BOOST_CHECK_EQUAL(announced(incomplete_hash), 0);
+    }
+
+    // The peer asks for both.
+    CDataStream getdata_payload(SER_NETWORK, INIT_PROTO_VERSION);
+    getdata_payload << std::vector<CInv>{CInv(MSG_SCRAPERINDEX, incomplete_hash),
+                                         CInv(MSG_SCRAPERINDEX, complete.Hash())};
+
+    const SerializeData getdata = WireMessage(NetMsgType::GETDATA, getdata_payload);
+    BOOST_REQUIRE(node.ReceiveMsgBytes(CharCast(UCharCast(getdata.data())), getdata.size()));
+    g_peerman->ProcessMessages(&node);
+
+    std::vector<uint256> sent;
+
+    for (const auto& reply : TakeSent(node)) {
+        if (reply.first == NetMsgType::SCRAPERINDEX) sent.push_back(Hash(reply.second));
+    }
+
+    // The message sent hashes to the hash the peer asked for.
+    BOOST_REQUIRE_EQUAL(sent.size(), 1U);
+    BOOST_CHECK(sent.front() == complete.Hash());
 
     WITH_LOCK(cs_main, cPeerBlockCounts = peer_block_counts);
 }

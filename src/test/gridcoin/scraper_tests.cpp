@@ -8,20 +8,31 @@
 #include "gridcoin/scraper/scraper.h"
 #include "gridcoin/scraper/scraper_net.h"
 #include "gridcoin/scraper/scraper_registry.h"
+#include "gridcoin/superblock.h"
+#include "hash.h"
+#include "key.h"
 #include "key_io.h"
+#include "node/ui_interface.h"
 #include "primitives/transaction.h"
+#include "rpc/server.h"
+#include "streams.h"
 #include "test/gridcoin/rsa_test_vectors.h"
 #include "test/staking_test_peers.h"
 #include "test/state_guard.h"
 #include <util/strencodings.h>
 #include <util/string.h>
 #include <util/system.h>
+#include <util/time.h>
+#include <version.h>
 
 #include <boost/iostreams/copy.hpp>
 #include <boost/iostreams/filter/gzip.hpp>
 #include <boost/iostreams/filtering_stream.hpp>
 #include <boost/test/unit_test.hpp>
 
+#include <boost/signals2/connection.hpp>
+
+#include <functional>
 #include <map>
 #include <memory>
 #include <sstream>
@@ -30,6 +41,7 @@
 
 // Defined in scraper.cpp, which declares them there rather than in a header.
 extern fs::path pathDataDir;
+extern ConvergedScraperStats ConvergedScraperStatsCache GUARDED_BY(cs_ConvergedScraperStatsCache);
 extern bool ScraperConstructConvergedManifestByProject(const GRC::WhitelistSnapshot& projectWhitelist,
                                                        mmCSManifestsBinnedByScraper& mMapCSManifestsBinnedByScraper,
                                                        ConvergedManifest& StructConvergedManifest);
@@ -128,6 +140,247 @@ public:
 private:
     double m_saved{0.0};
 };
+
+//! Gzip of the text, as a scraper compresses the files it publishes.
+std::string Gzip(const std::string& text)
+{
+    std::istringstream in(text);
+    std::ostringstream out;
+
+    boost::iostreams::filtering_istream filter;
+    filter.push(boost::iostreams::gzip_compressor());
+    filter.push(in);
+    boost::iostreams::copy(filter, out);
+
+    return out.str();
+}
+
+//! New keys, each registered as an authorized scraper. The scraper registry is emptied when the object goes.
+class AuthorizedScrapers
+{
+public:
+    explicit AuthorizedScrapers(const size_t count) : m_keys(count), m_txs(count)
+    {
+        for (size_t n = 0; n < count; ++n) {
+            m_keys[n].MakeNewKey(true);
+
+            CMutableTransaction mtx;
+            mtx.vContracts.push_back(GRC::MakeContract<GRC::ScraperEntryPayload>(
+                uint32_t {3}, GRC::ContractAction::ADD, uint32_t {2}, m_keys[n].GetPubKey().GetID(),
+                GRC::ScraperEntryStatus::AUTHORIZED));
+            m_txs[n] = CTransaction(mtx);
+
+            LOCK(cs_main);
+            GRC::GetScraperRegistry().Add({m_txs[n].vContracts[0], m_txs[n], &m_index});
+        }
+    }
+
+    AuthorizedScrapers(const AuthorizedScrapers&) = delete;
+    AuthorizedScrapers& operator=(const AuthorizedScrapers&) = delete;
+
+    CKey& Key(const size_t n) { return m_keys[n]; }
+
+private:
+    grc_test::RegistryReset m_scrapers{GRC::ContractType::SCRAPER};
+    std::vector<CKey> m_keys;
+    std::vector<CTransaction> m_txs;
+    CBlockIndex m_index{};
+};
+
+//! The statistics of the one project in every manifest a case publishes, one record of total credit, the time of
+//! the average credit, the average credit and the CPID.
+const std::string PROJECT_STATISTICS = "100,1700000000,10,00010203040506070809101112131415\n";
+
+//! A manifest published as a scraper publishes one, with a beacon list as its first part and the statistics of one
+//! project as its second, and the cache of the converged statistics marked as ScraperSendFileManifestContents()
+//! marks it. The project part is the same in every one of these manifests. The manifest is taken out of the manifest
+//! map when the object goes. The constructor checks nothing, so that it always completes and the destructor always
+//! runs; a case checks Published() first.
+class PublishedBeaconList
+{
+public:
+    PublishedBeaconList(CKey& key, const std::string& beacon_list, const int64_t time)
+        : m_part(Gzip(beacon_list))
+        , m_manifest(std::make_shared<CScraperManifest>())
+    {
+        CDataStream part(MakeUCharSpan(m_part), SER_NETWORK, 1);
+
+        const std::string project_statistics = Gzip(PROJECT_STATISTICS);
+        CDataStream project_part(MakeUCharSpan(project_statistics), SER_NETWORK, 1);
+
+        const bool parts_added = m_manifest->addPartData(std::move(part), true) == 0
+            && m_manifest->addPartData(std::move(project_part), true) == 1;
+
+        {
+            LOCK(m_manifest->cs_manifest);
+
+            m_manifest->sCManifestName = EncodeDestination(CTxDestination(key.GetPubKey().GetID()));
+            m_manifest->nTime = time;
+            m_manifest->BeaconList = 0;
+            m_manifest->BeaconList_c = 0;
+
+            CScraperManifest::dentry project;
+
+            project.project = "project";
+            project.LastModified = static_cast<unsigned int>(time);
+            project.part1 = 1;
+            project.partc = 0;
+            project.current = true;
+            project.last = true;
+
+            m_manifest->projects.push_back(project);
+        }
+
+        LOCK(CScraperManifest::cs_mapManifest);
+
+        {
+            LOCK(CSplitBlob::cs_mapParts);
+
+            m_published = parts_added && CScraperManifest::addManifest(m_manifest, key);
+        }
+
+        if (!m_published) return;
+
+        m_hash = WITH_LOCK(m_manifest->cs_manifest, return *m_manifest->phash);
+
+        LOCK(cs_ConvergedScraperStatsCache);
+
+        ConvergedScraperStatsCache.bClean = false;
+    }
+
+    ~PublishedBeaconList()
+    {
+        if (!m_published) return;
+
+        LOCK(CScraperManifest::cs_mapManifest);
+        CScraperManifest::DeleteManifest(m_hash, true);
+    }
+
+    PublishedBeaconList(const PublishedBeaconList&) = delete;
+    PublishedBeaconList& operator=(const PublishedBeaconList&) = delete;
+
+    bool Published() const { return m_published; }
+    //! The hash the manifest map holds the manifest under.
+    const uint256& Hash() const { return m_hash; }
+
+    //! The message a peer is sent for the manifest.
+    CDataStream Message() const
+    {
+        LOCK2(CScraperManifest::cs_mapManifest, CSplitBlob::cs_mapParts);
+
+        return CScraperManifest::SerializeForSend(m_manifest);
+    }
+
+    //! The message a peer is sent for the manifest's beacon list part.
+    CDataStream PartMessage() const
+    {
+        return CDataStream(MakeUCharSpan(m_part), SER_NETWORK, PROTOCOL_VERSION);
+    }
+
+private:
+    const std::string m_part;
+    std::shared_ptr<CScraperManifest> m_manifest;
+    bool m_published{false};
+    uint256 m_hash;
+};
+
+//! Takes a received manifest out of the manifest map when the object goes.
+class ReceivedManifestRemoval
+{
+public:
+    explicit ReceivedManifestRemoval(const uint256& hash) : m_hash(hash) {}
+
+    ~ReceivedManifestRemoval()
+    {
+        LOCK(CScraperManifest::cs_mapManifest);
+        CScraperManifest::DeleteManifest(m_hash, true);
+    }
+
+private:
+    const uint256 m_hash;
+};
+
+//! Gives a case an empty cache of the converged statistics, and the time of the last block it found. Both are put
+//! back when the object goes.
+class ConvergedStatsCacheReset
+{
+public:
+    ConvergedStatsCacheReset() : m_previous_block_time(g_previous_block_time.load())
+    {
+        LOCK(cs_ConvergedScraperStatsCache);
+
+        m_cache = ConvergedScraperStatsCache;
+        ConvergedScraperStatsCache = ConvergedScraperStats();
+    }
+
+    ~ConvergedStatsCacheReset()
+    {
+        g_previous_block_time.store(m_previous_block_time);
+
+        LOCK(cs_ConvergedScraperStatsCache);
+
+        ConvergedScraperStatsCache = m_cache;
+    }
+
+private:
+    const int64_t m_previous_block_time;
+    ConvergedScraperStats m_cache;
+};
+
+//! The count of scrapers in the convergence the cache holds.
+size_t ScrapersInCachedConvergence()
+{
+    LOCK(cs_ConvergedScraperStatsCache);
+
+    return ConvergedScraperStatsCache.Convergence.vIncludedScrapers.size();
+}
+
+//! Moves the clock on past the time for which the cache is used whatever has changed, with the node still in sync.
+int64_t PastTheScraperSleep(const int64_t now)
+{
+    const int64_t later = now + WITH_LOCK(cs_ScraperGlobals, return nScraperSleep) / 1000 + 1;
+
+    SetMockTime(later);
+    g_previous_block_time.store(later);
+
+    return later;
+}
+
+//! Counts the passes that set out to form a convergence from the manifests, and the passes that formed one. The
+//! scraper event for a convergence is sent after the manifests were binned and before the result goes into the
+//! cache, with no lock held. \p in_first_pass runs there in the first pass.
+class ConvergencePasses
+{
+public:
+    explicit ConvergencePasses(std::function<void()> in_first_pass = {})
+        : m_in_first_pass(std::move(in_first_pass))
+        , m_connection(uiInterface.NotifyScraperEvent_connect(
+              [this](const scrapereventtypes& type, ChangeType status, const std::string&) {
+                  if (type != scrapereventtypes::Convergence) return;
+
+                  ++m_tried;
+
+                  if (status == CT_NEW) ++m_formed;
+
+                  if (m_tried == 1 && m_in_first_pass) m_in_first_pass();
+              }))
+    {
+    }
+
+    ConvergencePasses(const ConvergencePasses&) = delete;
+    ConvergencePasses& operator=(const ConvergencePasses&) = delete;
+
+    int Tried() const { return m_tried; }
+    int Formed() const { return m_formed; }
+
+private:
+    const std::function<void()> m_in_first_pass;
+    int m_tried{0};
+    int m_formed{0};
+    const boost::signals2::scoped_connection m_connection;
+};
+
+const std::string BEACON_LIST_HEADER = "CPID,time,key\n";
 
 } // anonymous namespace
 
@@ -411,6 +664,283 @@ BOOST_AUTO_TEST_CASE(a_plain_file_name_part_keeps_the_characters_of_a_file_name)
     BOOST_CHECK_EQUAL(ToPlainFileNamePart("project:stream"), "projectstream");
     BOOST_CHECK_EQUAL(ToPlainFileNamePart("a*b?c\"d<e>f|g"), "abcdefg");
     BOOST_CHECK_EQUAL(ToPlainFileNamePart(std::string("a\0b\tc\nd\x7f" "e", 9)), "abcde");
+}
+
+//! The convergence in the cache is used again while the manifests it was formed from are the manifests this node
+//! holds complete. A manifest that is published after the manifests were binned for a convergence, and before that
+//! convergence went into the cache, is not in it. So the next pass forms the convergence again, and the pass after
+//! that, with nothing changed, uses the cache.
+//!
+//! In these cases no project is whitelisted: a convergence is formed from whole manifests when every whitelisted
+//! project is in them, and the manifests here carry a beacon list only.
+BOOST_AUTO_TEST_CASE(a_convergence_is_formed_again_when_a_manifest_was_published_while_it_was_formed)
+{
+    ScraperLogInDataDir log_in_data_dir;
+    grc_test::StateGuard guard;
+    const grc_test::RegistryReset no_projects{GRC::ContractType::PROJECT};
+    ConvergedStatsCacheReset cache_reset;
+
+    int64_t now = 1700000000;
+
+    SetMockTime(now);
+    g_previous_block_time.store(now);
+
+    AuthorizedScrapers scrapers(2);
+
+    const PublishedBeaconList first(scrapers.Key(0), BEACON_LIST_HEADER, now - 60);
+    const PublishedBeaconList second(scrapers.Key(1), BEACON_LIST_HEADER, now - 30);
+
+    BOOST_REQUIRE(first.Published());
+    BOOST_REQUIRE(second.Published());
+
+    // In the first pass, the first scraper publishes its next manifest.
+    std::unique_ptr<PublishedBeaconList> published_meanwhile;
+
+    const ConvergencePasses passes([&]() {
+        published_meanwhile = std::make_unique<PublishedBeaconList>(
+            scrapers.Key(0), BEACON_LIST_HEADER + "a cpid,1700000000,a key\n", now);
+    });
+
+    ScraperGetSuperblockContract();
+
+    BOOST_REQUIRE_EQUAL(passes.Tried(), 1);
+    BOOST_REQUIRE_EQUAL(passes.Formed(), 1);
+    BOOST_REQUIRE(published_meanwhile && published_meanwhile->Published());
+    BOOST_REQUIRE_EQUAL(ScrapersInCachedConvergence(), 2U);
+
+    now = PastTheScraperSleep(now);
+    ScraperGetSuperblockContract();
+
+    BOOST_CHECK_EQUAL(passes.Tried(), 2);
+    BOOST_CHECK_EQUAL(passes.Formed(), 2);
+    BOOST_CHECK_EQUAL(ScrapersInCachedConvergence(), 2U);
+
+    now = PastTheScraperSleep(now);
+    ScraperGetSuperblockContract();
+
+    BOOST_CHECK_EQUAL(passes.Tried(), 2);
+}
+
+//! A manifest that is deleted after the manifests were binned for a convergence, and before that convergence went
+//! into the cache, may be in it. So the next pass forms the convergence again. The manifest is deleted by its hash and
+//! then, in a second run, by its place in the manifest map.
+BOOST_AUTO_TEST_CASE(a_convergence_is_formed_again_when_a_manifest_was_deleted_while_it_was_formed)
+{
+    for (const bool by_place : {false, true}) {
+        ScraperLogInDataDir log_in_data_dir;
+        grc_test::StateGuard guard;
+        const grc_test::RegistryReset no_projects{GRC::ContractType::PROJECT};
+        ConvergedStatsCacheReset cache_reset;
+
+        int64_t now = 1700000000;
+
+        SetMockTime(now);
+        g_previous_block_time.store(now);
+
+        AuthorizedScrapers scrapers(2);
+
+        const PublishedBeaconList first(scrapers.Key(0), BEACON_LIST_HEADER, now - 60);
+        const PublishedBeaconList second(scrapers.Key(1), BEACON_LIST_HEADER, now - 30);
+        const PublishedBeaconList deleted_meanwhile(scrapers.Key(0), BEACON_LIST_HEADER + "a cpid,1700000000,a key\n",
+                                                    now);
+
+        BOOST_REQUIRE(first.Published());
+        BOOST_REQUIRE(second.Published());
+        BOOST_REQUIRE(deleted_meanwhile.Published());
+
+        bool deleted = false;
+
+        const ConvergencePasses passes([&]() {
+            LOCK(CScraperManifest::cs_mapManifest);
+
+            if (by_place) {
+                auto place = CScraperManifest::mapManifest.find(deleted_meanwhile.Hash());
+
+                if (place == CScraperManifest::mapManifest.end()) return;
+
+                CScraperManifest::DeleteManifest(place, true);
+                deleted = true;
+            } else {
+                deleted = CScraperManifest::DeleteManifest(deleted_meanwhile.Hash(), true);
+            }
+        });
+
+        ScraperGetSuperblockContract();
+
+        BOOST_REQUIRE_EQUAL(passes.Tried(), 1);
+        BOOST_REQUIRE_EQUAL(passes.Formed(), 1);
+        BOOST_REQUIRE(deleted);
+        BOOST_REQUIRE_EQUAL(ScrapersInCachedConvergence(), 2U);
+
+        now = PastTheScraperSleep(now);
+        ScraperGetSuperblockContract();
+
+        BOOST_CHECK_EQUAL(passes.Tried(), 2);
+        BOOST_CHECK_EQUAL(passes.Formed(), 2);
+
+        now = PastTheScraperSleep(now);
+        ScraperGetSuperblockContract();
+
+        BOOST_CHECK_EQUAL(passes.Tried(), 2);
+    }
+}
+
+//! A pass deletes the manifests that are past their retention time before it bins the rest. Those deletions are
+//! in the convergence the pass forms, so the next pass uses the cache.
+BOOST_AUTO_TEST_CASE(a_convergence_is_used_again_when_its_own_pass_deleted_an_old_manifest)
+{
+    ScraperLogInDataDir log_in_data_dir;
+    grc_test::StateGuard guard;
+    const grc_test::RegistryReset no_projects{GRC::ContractType::PROJECT};
+    ConvergedStatsCacheReset cache_reset;
+
+    int64_t now = 1700000000;
+
+    SetMockTime(now);
+    g_previous_block_time.store(now);
+
+    AuthorizedScrapers scrapers(2);
+
+    const PublishedBeaconList first(scrapers.Key(0), BEACON_LIST_HEADER, now - 60);
+    const PublishedBeaconList second(scrapers.Key(1), BEACON_LIST_HEADER, now - 30);
+    const PublishedBeaconList old(scrapers.Key(0), BEACON_LIST_HEADER + "a cpid,1700000000,a key\n",
+                                  now - WITH_LOCK(cs_ScraperGlobals, return SCRAPER_CMANIFEST_RETENTION_TIME) - 3600);
+
+    BOOST_REQUIRE(first.Published());
+    BOOST_REQUIRE(second.Published());
+    BOOST_REQUIRE(old.Published());
+
+    // A manifest deleted for its age is kept for a time as pending deletion. Takes it from there when the case ends,
+    // as DeletePendingDeletedManifests() does.
+    struct PendingRemoval
+    {
+        const uint256 hash;
+
+        ~PendingRemoval()
+        {
+            LOCK(CScraperManifest::cs_mapManifest);
+
+            const auto pending = CScraperManifest::mapPendingDeletedManifest.find(hash);
+
+            if (pending == CScraperManifest::mapPendingDeletedManifest.end()) return;
+
+            {
+                const CScraperManifest_shared_ptr manifest = pending->second.second;
+
+                LOCK(manifest->cs_manifest);
+
+                manifest->phash = nullptr;
+            }
+
+            CScraperManifest::mapPendingDeletedManifest.erase(pending);
+        }
+    } pending_removal{old.Hash()};
+
+    const ConvergencePasses passes;
+
+    ScraperGetSuperblockContract();
+
+    BOOST_REQUIRE_EQUAL(passes.Tried(), 1);
+    BOOST_REQUIRE_EQUAL(passes.Formed(), 1);
+    BOOST_REQUIRE_EQUAL(ScrapersInCachedConvergence(), 2U);
+    BOOST_REQUIRE(WITH_LOCK(CScraperManifest::cs_mapManifest,
+                            return CScraperManifest::mapManifest.count(old.Hash())) == 0);
+
+    now = PastTheScraperSleep(now);
+    ScraperGetSuperblockContract();
+
+    BOOST_CHECK_EQUAL(passes.Tried(), 1);
+}
+
+namespace {
+
+//! A manifest whose last part arrives after a convergence went into the cache is not in that convergence, so the next
+//! pass forms the convergence again. A pass is a call of \p pass.
+void FormedAgainWhenAManifestWasCompletedAfterIt(const std::function<void()>& pass)
+{
+    ScraperLogInDataDir log_in_data_dir;
+    grc_test::StateGuard guard;
+    const grc_test::RegistryReset no_projects{GRC::ContractType::PROJECT};
+    ConvergedStatsCacheReset cache_reset;
+
+    int64_t now = 1700000000;
+
+    SetMockTime(now);
+    g_previous_block_time.store(now);
+
+    AuthorizedScrapers scrapers(2);
+
+    // The first scraper's next manifest, as a peer sends it: the manifest first, and its beacon list part later. Its
+    // project part is here before that, from the manifests published below.
+    CDataStream manifest_message(SER_NETWORK, PROTOCOL_VERSION);
+    CDataStream part_message(SER_NETWORK, PROTOCOL_VERSION);
+    {
+        const PublishedBeaconList elsewhere(scrapers.Key(0), BEACON_LIST_HEADER + "a cpid,1700000000,a key\n", now);
+
+        BOOST_REQUIRE(elsewhere.Published());
+
+        manifest_message = elsewhere.Message();
+        part_message = elsewhere.PartMessage();
+    }
+
+    const uint256 received_hash = Hash(manifest_message);
+    const ReceivedManifestRemoval removal(received_hash);
+
+    BOOST_REQUIRE(CScraperManifest::RecvManifest(nullptr, manifest_message));
+
+    const auto received_is_complete = [&received_hash]() {
+        LOCK(CScraperManifest::cs_mapManifest);
+
+        const auto received = CScraperManifest::mapManifest.find(received_hash);
+
+        BOOST_REQUIRE(received != CScraperManifest::mapManifest.end());
+
+        return WITH_LOCK(received->second->cs_manifest, return received->second->isComplete());
+    };
+
+    BOOST_REQUIRE(!received_is_complete());
+
+    const PublishedBeaconList first(scrapers.Key(0), BEACON_LIST_HEADER, now - 60);
+    const PublishedBeaconList second(scrapers.Key(1), BEACON_LIST_HEADER, now - 30);
+
+    BOOST_REQUIRE(first.Published());
+    BOOST_REQUIRE(second.Published());
+
+    const ConvergencePasses passes;
+
+    pass();
+
+    BOOST_REQUIRE_EQUAL(passes.Tried(), 1);
+    BOOST_REQUIRE_EQUAL(passes.Formed(), 1);
+    BOOST_REQUIRE_EQUAL(ScrapersInCachedConvergence(), 2U);
+
+    // With nothing changed, the cache is used.
+    now = PastTheScraperSleep(now);
+    pass();
+
+    BOOST_REQUIRE_EQUAL(passes.Tried(), 1);
+
+    BOOST_REQUIRE(CSplitBlob::RecvPart(nullptr, part_message));
+    BOOST_REQUIRE(received_is_complete());
+
+    now = PastTheScraperSleep(now);
+    pass();
+
+    BOOST_CHECK_EQUAL(passes.Tried(), 2);
+    BOOST_CHECK_EQUAL(passes.Formed(), 2);
+}
+
+} // anonymous namespace
+
+BOOST_AUTO_TEST_CASE(a_convergence_is_formed_again_when_a_manifest_was_completed_after_it)
+{
+    FormedAgainWhenAManifestWasCompletedAfterIt([]() { ScraperGetSuperblockContract(); });
+}
+
+//! convergencereport makes the same test of the cache before it reports from it.
+BOOST_AUTO_TEST_CASE(convergencereport_forms_the_convergence_again_when_a_manifest_was_completed_after_it)
+{
+    FormedAgainWhenAManifestWasCompletedAfterIt([]() { convergencereport(UniValue(UniValue::VARR)); });
 }
 
 BOOST_AUTO_TEST_SUITE_END()

@@ -585,6 +585,45 @@ BOOST_AUTO_TEST_CASE(a_part_is_needed_only_while_referenced_and_missing)
     BOOST_CHECK(CSplitBlob::PartNeeded(unreferenced) == false);
 }
 
+//!
+//! A part added as data is counted as received whether its data arrives with
+//! the call or is here already. A scraper's manifest mostly repeats the parts of
+//! its last one, and it is complete when the last part has been added.
+//!
+BOOST_AUTO_TEST_CASE(a_part_added_as_data_is_counted_when_its_data_is_already_here)
+{
+    const auto data = [](const std::string& text) {
+        CDataStream stream(SER_NETWORK, PROTOCOL_VERSION);
+        stream << text;
+        return stream;
+    };
+
+    // An earlier manifest holds the shared part.
+    auto earlier = std::shared_ptr<CScraperManifest>(new CScraperManifest());
+    BOOST_REQUIRE_EQUAL(earlier->addPartData(data("a part two manifests share")), 0);
+
+    auto manifest = std::shared_ptr<CScraperManifest>(new CScraperManifest());
+
+    // A part another manifest holds, a part of its own, and that part a second
+    // time.
+    BOOST_REQUIRE_EQUAL(manifest->addPartData(data("a part two manifests share"), true), 0);
+    BOOST_REQUIRE_EQUAL(manifest->addPartData(data("a part of its own"), true), 1);
+    BOOST_REQUIRE_EQUAL(manifest->addPartData(data("a part of its own"), true), 2);
+
+    // The order production uses: cs_mapParts, then cs_manifest.
+    LOCK2(CSplitBlob::cs_mapParts, manifest->cs_manifest);
+
+    BOOST_CHECK_EQUAL(manifest->vParts.size(), 3u);
+    BOOST_CHECK_EQUAL(manifest->cntPartsRcvd, 3u);
+
+    // Not while the publish is in progress.
+    BOOST_CHECK(!manifest->isComplete());
+
+    manifest->Complete();
+
+    BOOST_CHECK(manifest->isComplete());
+}
+
 //! A manifest ends at its signature. A message with more after it is refused.
 //!
 BOOST_AUTO_TEST_CASE(recvmanifest_refuses_data_after_the_signature)
