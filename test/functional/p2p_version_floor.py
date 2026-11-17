@@ -4,34 +4,41 @@
 # file COPYING or https://opensource.org/licenses/mit-license.php.
 """The VERSION handshake's protocol floor.
 
-The node always accepts a peer on the previous release's protocol version
-(PROTOCOL_VERSION - 1) and always disconnects anything older. A peer on the
-previous version is disconnected only once the grace period past the
-activation height of the fork the current PROTOCOL_VERSION carries has
-elapsed. That fork, v15, is unscheduled on regtest, so node0 checks the floor
-itself: PROTOCOL_VERSION and PROTOCOL_VERSION - 1 complete the handshake, and
-PROTOCOL_VERSION - 2 and an old version are dropped -- by the floor check, which
-each dropped case asserts from the node's log, not by some earlier check.
+The node always accepts a peer on MIN_PEER_PROTO_VERSION, the previous
+mandatory release's protocol version, and always disconnects anything older. A
+peer from that version up to PROTOCOL_VERSION - 1 is disconnected only once
+the grace period past the activation height of the fork the current
+PROTOCOL_VERSION carries has elapsed.
+
+PROTOCOL_VERSION is 180331, the block v15 mandatory. The floor is 180329, the
+block v14 mandatory. 180330 lies between them: the releases that carry the v15
+code with its height unset use it, so the floor is two below PROTOCOL_VERSION
+and both older versions stay connected until the v15 grace period has elapsed.
+
+v15 is unscheduled on regtest, so node0 checks the floor itself: 180331,
+180330 and 180329 complete the handshake, and 180328 and an old version are
+dropped -- by the floor check, which each dropped case asserts from the node's
+log, not by some earlier check.
 
 node1 and node2 check the post-grace rung at height 0, which a v15 height of
 minus the grace period puts at its boundary (the regtest grace is 6,300 blocks;
 the disconnect needs the tip above the v15 height plus the grace). node1's v15
-height is one block further back, so the grace has elapsed and it drops
-PROTOCOL_VERSION - 1 too. node2's is exactly at the boundary, so it still
-accepts PROTOCOL_VERSION - 1.
+height is one block further back, so the grace has elapsed and it drops 180330
+and 180329 too. node2's is exactly at the boundary, so it still accepts both.
+node2 then mines one block. Its tip is past the boundary after that and it
+drops both, which shows that the node judges the grace against its own tip.
 
 The old version is 180325, the oldest one that sends the current VERSION
 layout. At 180324 and below the node reads five legacy strings before
 nServices, and this framework always sends the current layout, so such a peer
 would be misparsed and dropped by the time-drift check instead.
 
-The floor used to be a literal that was not bumped with PROTOCOL_VERSION. On
-regtest, where the v14 grace period has not elapsed at height 0,
-PROTOCOL_VERSION - 2 then passed.
+Each node's getnetworkinfo is checked against the framework's MY_VERSION first,
+so the versions the cases are built from are the node's own.
 """
 
 from test_framework.test_framework import GridcoinTestFramework
-from test_framework.messages import MY_VERSION
+from test_framework.messages import MIN_PEER_PROTO_VERSION, MY_VERSION
 from test_framework.p2p import P2PInterface
 from test_framework.util import assert_equal, p2p_port
 
@@ -124,19 +131,33 @@ class P2PVersionFloorTest(GridcoinTestFramework):
                 assert_equal(self.connect(node, version), expected)
 
     def run_test(self):
-        current = ("PROTOCOL_VERSION", MY_VERSION)
-        previous = ("PROTOCOL_VERSION - 1, the previous release", MY_VERSION - 1)
-        older = ("PROTOCOL_VERSION - 2", MY_VERSION - 2)
+        # The cases below name the versions outright, so a change to either
+        # constant has to come here and say what each version then is.
+        assert_equal(MY_VERSION, 180331)
+        assert_equal(MIN_PEER_PROTO_VERSION, 180329)
+        for node in self.nodes:
+            assert_equal(node.getnetworkinfo()["protocolversion"], MY_VERSION)
+
+        current = ("PROTOCOL_VERSION, the v15 mandatory", 180331)
+        between = ("the releases with v15 unset", 180330)
+        floor = ("MIN_PEER_PROTO_VERSION, the v14 mandatory", 180329)
+        below = ("MIN_PEER_PROTO_VERSION - 1", 180328)
         oldest = ("the oldest version with the current VERSION layout", 180325)
 
         self.log.info("v15 unscheduled: the floor")
-        self.check(self.nodes[0], ((*current, True), (*previous, True), (*older, False), (*oldest, False)))
+        self.check(self.nodes[0], ((*current, True), (*between, True), (*floor, True),
+                                   (*below, False), (*oldest, False)))
 
-        self.log.info("v15 grace elapsed at height 0: the previous release is dropped")
-        self.check(self.nodes[1], ((*current, True), (*previous, False), (*older, False)))
+        self.log.info("v15 grace elapsed at height 0: everything below PROTOCOL_VERSION is dropped")
+        self.check(self.nodes[1], ((*current, True), (*between, False), (*floor, False), (*below, False)))
 
-        self.log.info("height 0 at the end of the v15 grace: the previous release is still accepted")
-        self.check(self.nodes[2], ((*current, True), (*previous, True), (*older, False)))
+        self.log.info("height 0 at the end of the v15 grace: the older versions are still accepted")
+        self.check(self.nodes[2], ((*current, True), (*between, True), (*floor, True), (*below, False)))
+
+        self.log.info("one block later the v15 grace has elapsed on that node")
+        self.nodes[2].generatetoaddress(1, self.nodes[2].getnewaddress())
+        assert_equal(self.nodes[2].getblockcount(), 1)
+        self.check(self.nodes[2], ((*current, True), (*between, False), (*floor, False)))
 
 
 if __name__ == "__main__":

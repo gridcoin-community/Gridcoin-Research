@@ -174,8 +174,9 @@ BASE_SCRIPTS = [
     # p2p_version_timedrift.py: the VERSION handshake's 480 s clock-drift gate,
     # including a crafted nTime that overflowed the old abs() check.
     'p2p_version_timedrift.py',
-    # p2p_version_floor.py: the VERSION handshake accepts the previous release's
-    # protocol version and drops anything older.
+    # p2p_version_floor.py: the VERSION handshake accepts the previous mandatory
+    # release's protocol version and drops anything older; past the v15 grace
+    # period it drops everything below the current version.
     'p2p_version_floor.py',
     # p2p_version_fields.py: getpeerinfo answers through a hundred handshakes
     # while three threads poll it; under ThreadSanitizer, the check that the

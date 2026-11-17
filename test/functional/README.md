@@ -100,7 +100,7 @@ this table mirrors it.
 | `feature_rpc_bind_conflict.py` | a loopback RPC address held by another program disables RPC with a logged error and a warning, and the node keeps running; an unrelated loopback address changes nothing (skipped on Windows) |
 | `p2p_version_handshake.py` | version/verack + ping/pong wire handshake |
 | `p2p_version_timedrift.py` | the VERSION handshake's 480 s clock-drift gate: both edges, one second past each, and a crafted `nTime` that overflowed the old `abs()` check |
-| `p2p_version_floor.py` | the VERSION handshake's protocol floor: `PROTOCOL_VERSION` and `PROTOCOL_VERSION - 1` complete the handshake, `PROTOCOL_VERSION - 2` and an old version are dropped, and each drop is checked in the node's log to come from the floor check |
+| `p2p_version_floor.py` | the VERSION handshake's protocol floor: 180331 (`PROTOCOL_VERSION`), 180330 and 180329 (`MIN_PEER_PROTO_VERSION`) complete the handshake, 180328 and an old version are dropped, and each drop is checked in the node's log to come from the floor check; past the v15 grace period 180330 and 180329 are dropped too, and at its last block they are still accepted until the node mines the next block |
 | `p2p_time_votes.py` | an outbound peer's time vote is cast on connect (`AddTimeData`) and withdrawn when the connection is deleted (`RemoveTimeData`) |
 | `p2p_block_tx_relay.py` | tx + block relay over P2P (wire serialization) |
 | `p2p_psgt_relay.py` | PSGT pool relay: `MSG_PSGT` inv/getdata/`psgt` end to end, the connect-time push, no `MSG_PSGT` inventory to a pre-PSGT peer, repeated and garbage messages not relayed |

@@ -24,7 +24,7 @@ and adapted to Gridcoin's proof-of-stake wire format. Differences from upstream
   have legacy aliases `gridaddr`/`encrypt`. We map all aliases on receive.
   (src/protocol.cpp:33-39, src/net.cpp:518)
 - The version payload has NO `fRelay` byte and skips the pre-180324 legacy boinc
-  fields (we advertise 180329). Both the top-level `nServices` and the `nServices`
+  fields (we advertise MY_VERSION). Both the top-level `nServices` and the `nServices`
   *inside* a CAddress are little-endian uint64 (CustomUintFormatter<8> defaults to
   BigEndian=false; src/serialize.h:587). Only the CAddress IP and port are
   big-endian (network order). The version-message CAddresses include `nTime`
@@ -43,8 +43,8 @@ MAX_BLOCK_BASE_SIZE = 1000000
 COIN = 100000000  # 1 GRC in halflings
 
 # Protocol constants (src/version.h)
-MY_VERSION = 180330          # PROTOCOL_VERSION
-MIN_PEER_PROTO_VERSION = MY_VERSION - 1  # the previous release's protocol version
+MY_VERSION = 180331          # PROTOCOL_VERSION
+MIN_PEER_PROTO_VERSION = 180329  # the previous mandatory release's protocol version
 INIT_PROTO_VERSION = 180275
 PSGT_PROTO_VERSION = 180330  # peers below this never receive MSG_PSGT invs
 

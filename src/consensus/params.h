@@ -56,9 +56,11 @@ struct Params {
       * init.cpp). See doc/consensus.md §11.
       */
     int PendingPoolRetention;
-    /** Grace period in blocks after BlockV14Height before peers on the old
-      * protocol version are disconnected. Network-specific to allow testnet
-      * a longer window when the fork has already passed before deployment.
+    /** Grace period in blocks after the activation height of the fork that
+      * the current PROTOCOL_VERSION carries (BlockV15Height) before peers
+      * below PROTOCOL_VERSION are disconnected. Network-specific to allow
+      * testnet a longer window when the fork has already passed before
+      * deployment.
       */
     int ProtocolVersionGracePeriod;
     /** Block height at which poll v3 contract payloads are valid */
