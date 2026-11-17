@@ -5,8 +5,10 @@
 """Tests for the decision in ci-gate.py. They need no network."""
 
 import copy
+import glob
 import importlib.util
 import os
+import re
 import unittest
 
 _PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ci-gate.py")
@@ -69,11 +71,78 @@ PULLS_KEY = "repos/o/r/commits/%s/pulls" % MERGE
 FILES_KEY = "repos/o/r/pulls/7/files?per_page=100&page=1"
 
 
+DEPENDS_CACHE = "os-depends-mp-host-" + "d" * 64
+FLATPAK_CACHE = "flatpak-builder-" + "f" * 64
+CACHES_ENV = dict(PUSH_ENV, CI_GATE_SEEDED_CACHES="%s\n  %s\n" % (DEPENDS_CACHE, FLATPAK_CACHE))
+
+
+def cache_key(key):
+    return ("repos/o/r/actions/caches?key=%s&ref=refs%%2Fheads%%2Fdevelopment"
+            "&per_page=100&page=1" % key)
+
+
+def cache_entry(key, ref="refs/heads/development"):
+    return {"key": key, "ref": ref}
+
+
+def replies_with_caches():
+    """The API replies of the case that skips with both seeded caches present."""
+    table = replies()
+    table[cache_key(DEPENDS_CACHE)] = {"actions_caches": [cache_entry(DEPENDS_CACHE)]}
+    table[cache_key(FLATPAK_CACHE)] = {"actions_caches": [cache_entry(FLATPAK_CACHE)]}
+    return table
+
+
 class SkipTests(unittest.TestCase):
     def test_identical_tree_and_green_runs_skip(self):
         run, reason, tested = decide()
         self.assertFalse(run, reason)
         self.assertIsNone(tested)
+
+    def test_skips_when_the_branch_holds_every_seeded_cache(self):
+        run, reason, tested = decide(CACHES_ENV, replies_with_caches())
+        self.assertFalse(run, reason)
+        self.assertIsNone(tested)
+
+    def test_no_seeded_caches_named_asks_for_none(self):
+        # replies() has no cache listing, so a query would raise.
+        self.assertFalse(decide(dict(PUSH_ENV, CI_GATE_SEEDED_CACHES=" \n"))[0])
+
+
+class SeededCacheTests(unittest.TestCase):
+    def assert_runs(self, table, needle):
+        run, reason, _ = decide(CACHES_ENV, table)
+        self.assertTrue(run, reason)
+        self.assertIn(needle, reason)
+
+    def test_missing_cache_runs(self):
+        for key in (DEPENDS_CACHE, FLATPAK_CACHE):
+            table = replies_with_caches()
+            table[cache_key(key)] = {"actions_caches": []}
+            self.assert_runs(table, "holds no cache " + key)
+
+    def test_longer_key_with_the_same_prefix_does_not_count(self):
+        table = replies_with_caches()
+        table[cache_key(FLATPAK_CACHE)] = {"actions_caches": [cache_entry(FLATPAK_CACHE + "-x")]}
+        self.assert_runs(table, "holds no cache " + FLATPAK_CACHE)
+
+    def test_cache_of_another_ref_does_not_count(self):
+        table = replies_with_caches()
+        table[cache_key(DEPENDS_CACHE)] = {
+            "actions_caches": [cache_entry(DEPENDS_CACHE, "refs/pull/7/merge")]}
+        self.assert_runs(table, "holds no cache " + DEPENDS_CACHE)
+
+    def test_run_decided_earlier_asks_for_no_cache(self):
+        # No cache listing in the table: a query would raise.
+        table = replies()
+        table[ARTIFACTS_KEY]["artifacts"][0]["name"] = "ci-tested-tree-" + "u" * 40
+        self.assert_runs(table, "recorded tree " + "u" * 40)
+
+    def test_cache_listing_error_is_not_swallowed_by_decide(self):
+        table = replies_with_caches()
+        del table[cache_key(FLATPAK_CACHE)]
+        with self.assertRaises(KeyError):
+            decide(CACHES_ENV, table)
 
 
 class AlwaysRunTests(unittest.TestCase):
@@ -177,6 +246,44 @@ class AlwaysRunTests(unittest.TestCase):
         del table[ARTIFACTS_KEY]
         with self.assertRaises(KeyError):
             decide(table=table)
+
+
+class WorkflowTests(unittest.TestCase):
+    """Every cache a workflow keys by a hash of files is named to its gate."""
+
+    def test_gate_names_every_hash_keyed_cache(self):
+        workflows = os.path.join(os.path.dirname(_PATH), "..", "..", ".github", "workflows")
+        paths = sorted(glob.glob(os.path.join(workflows, "*.yml")))
+        self.assertTrue(paths)
+        named_somewhere = False
+        for path in paths:
+            with open(path, encoding="utf8") as handle:
+                lines = handle.read().splitlines()
+            hosts = sorted({match.group(1) for match in
+                            (re.match(r"\s+host: (\S+)$", line) for line in lines) if match})
+            expected = set()
+            for line in lines:
+                match = re.match(r"\s+key: (.*hashFiles\(.*)$", line)
+                if not match:
+                    continue
+                key = match.group(1)
+                if "${{ matrix.host }}" in key:
+                    self.assertTrue(hosts, path)
+                    expected.update(key.replace("${{ matrix.host }}", host) for host in hosts)
+                else:
+                    expected.add(key)
+            named = set()
+            for index, line in enumerate(lines):
+                if line.strip() != "CI_GATE_SEEDED_CACHES: |":
+                    continue
+                indent = len(line) - len(line.lstrip())
+                for entry in lines[index + 1:]:
+                    if len(entry) - len(entry.lstrip()) <= indent:
+                        break
+                    named.add(entry.strip())
+            self.assertEqual(named, expected, path)
+            named_somewhere = named_somewhere or bool(named)
+        self.assertTrue(named_somewhere)
 
 
 class PullRequestTests(unittest.TestCase):

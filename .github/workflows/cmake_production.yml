@@ -66,13 +66,28 @@ jobs:
     steps:
       - uses: actions/checkout@v5
         with:
-          sparse-checkout: contrib/devtools/ci-gate.py
+          # The gate, and the files the cache keys below are hashed from.
+          sparse-checkout: |
+            contrib/devtools/ci-gate.py
+            contrib/flatpak/us.gridcoin.GridcoinResearch.yml
+            depends/Makefile
+            depends/packages
+            depends/qt.include
           sparse-checkout-cone-mode: false
       - name: Decide
         id: gate
         env:
           GH_TOKEN: ${{ github.token }}
           CI_GATE_RECORD: ${{ runner.temp }}/ci-tested-tree.txt
+          # The caches of this workflow that later pull requests can restore only from
+          # this branch, by the keys of the "Cache Depends" step (one per matrix host)
+          # and the "Cache flatpak-builder" step below. A run that would be skipped does
+          # its work when the branch does not hold one of them, which saves it again.
+          # A key or a host added to those steps is added here.
+          CI_GATE_SEEDED_CACHES: |
+            ${{ env.os_ref }}-depends-mp-x86_64-pc-linux-gnu-${{ hashFiles('depends/packages/*', 'depends/Makefile', 'depends/qt.include') }}
+            ${{ env.os_ref }}-depends-mp-x86_64-w64-mingw32-${{ hashFiles('depends/packages/*', 'depends/Makefile', 'depends/qt.include') }}
+            flatpak-builder-${{ hashFiles('contrib/flatpak/us.gridcoin.GridcoinResearch.yml') }}
         run: python3 -I contrib/devtools/ci-gate.py
       - name: Record the tested tree
         if: steps.gate.outputs.tested-tree != ''

@@ -21,7 +21,12 @@ On a push to the gated branch it answers "skip" only when all of these hold:
     commit completed with success (a cancelled, failed, timed out or still
     running one does not count), and this workflow is among them,
   - this workflow's pull request run recorded a tree, the record has not
-    expired, and it equals the tree of the pushed commit.
+    expired, and it equals the tree of the pushed commit,
+  - the gated branch holds every cache the workflow names in
+    CI_GATE_SEEDED_CACHES (cache keys separated by white space). Those are the
+    caches later pull requests can restore only from this branch. The cache
+    store evicts them when it is full, and only a run that does its work saves
+    them again.
 
 Everything else runs: tags, manual and scheduled runs, other branches, direct
 pushes, local runs, and any error or doubt while deciding.
@@ -34,6 +39,7 @@ import json
 import os
 import subprocess
 import sys
+import urllib.parse
 from typing import Any, Callable, Dict, List, Mapping, Optional, Tuple
 
 GATED_REF = "refs/heads/development"
@@ -42,6 +48,7 @@ ARTIFACT_PREFIX = "ci-tested-tree-"
 # Caches keyed by a hash of these paths are readable by later pull requests
 # only when a run on the base branch saved them.
 CACHE_SEED_PREFIXES = ("depends/", "contrib/flatpak/")
+SEEDED_CACHES_ENV = "CI_GATE_SEEDED_CACHES"
 
 PER_PAGE = 100
 MAX_PAGES = 50
@@ -74,6 +81,18 @@ def touches_cache_seed(files: List[Mapping[str, Any]]) -> Optional[str]:
         for name in (entry.get("filename"), entry.get("previous_filename")):
             if name and name.startswith(CACHE_SEED_PREFIXES):
                 return name
+    return None
+
+
+def missing_seeded_cache(env: Mapping[str, str], api: Api, repo: str) -> Optional[str]:
+    """The first named cache key the gated branch does not hold, or None."""
+    for key in env.get(SEEDED_CACHES_ENV, "").split():
+        # The listing matches the key as a prefix, so compare each entry.
+        caches = paged(api, "repos/%s/actions/caches?key=%s&ref=%s" % (
+            repo, urllib.parse.quote(key, safe=""), urllib.parse.quote(GATED_REF, safe="")),
+            "actions_caches")
+        if not any(cache.get("key") == key and cache.get("ref") == GATED_REF for cache in caches):
+            return key
     return None
 
 
@@ -139,6 +158,11 @@ def decide(env: Mapping[str, str], api: Api) -> Decision:
     if recorded != [tree]:
         return True, "#%d run recorded tree %s, this commit has %s" % (
             number, ",".join(recorded) or "none", tree), None
+
+    missing = missing_seeded_cache(env, api, repo)
+    if missing is not None:
+        return True, "#%d run %d tested this tree, but %s holds no cache %s" % (
+            number, latest[own]["id"], GATED_REF, missing), None
 
     return False, "#%d run %d tested this tree (%s) and every run on %s succeeded" % (
         number, latest[own]["id"], tree, head), None
