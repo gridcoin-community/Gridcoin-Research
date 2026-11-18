@@ -714,13 +714,24 @@ private:
     CBlockIndex m_index{};
 };
 
+// The layout of a manifest. The beacon list begins at part 0. Each project has
+// the part it begins at and how many parts come after that one.
+struct ManifestLayout
+{
+    //! How many parts of the beacon list come after part 0.
+    unsigned int beacon_list_parts_after{0};
+    std::vector<std::pair<int, unsigned int>> projects;
+};
+
 // A manifest published as a scraper publishes one: each part goes in as data
 // while the publish is in progress, and addManifest() signs the manifest and
 // puts it in the manifest map. The manifest is taken out of the map when the
 // object goes. The constructor checks nothing, so that it always completes and
 // the destructor always runs; a case checks Published() first. The manifest is
 // named as a scraper names one, with the address of its key, unless the case
-// gives another name.
+// gives another name. It is in the layout a scraper publishes, one part for the
+// beacon list and then one for each project, unless the case gives another
+// layout.
 class PublishedManifest
 {
 public:
@@ -728,7 +739,8 @@ public:
         CKey& key,
         const std::vector<std::string>& parts,
         const int64_t time,
-        const std::optional<std::string>& name = std::nullopt)
+        const std::optional<std::string>& name = std::nullopt,
+        const std::optional<ManifestLayout>& layout = std::nullopt)
         : m_manifest(std::make_shared<CScraperManifest>())
     {
         bool parts_added = true;
@@ -748,12 +760,21 @@ public:
                 : EncodeDestination(CTxDestination(key.GetPubKey().GetID()));
             m_manifest->nTime = time;
             m_manifest->BeaconList = 0;
-            m_manifest->BeaconList_c = 0;
+            m_manifest->BeaconList_c = layout ? layout->beacon_list_parts_after : 0;
+
+            ManifestLayout as_published;
 
             for (unsigned int n = 1; n < parts.size(); ++n) {
+                as_published.projects.emplace_back(n, 0);
+            }
+
+            const ManifestLayout& used = layout ? *layout : as_published;
+
+            for (size_t n = 0; n < used.projects.size(); ++n) {
                 CScraperManifest::dentry project;
-                project.project = "project " + ToString(n);
-                project.part1 = n;
+                project.project = "project " + ToString(n + 1);
+                project.part1 = used.projects[n].first;
+                project.partc = used.projects[n].second;
                 project.LastModified = time;
                 project.current = true;
                 m_manifest->projects.push_back(project);
@@ -1123,6 +1144,146 @@ BOOST_AUTO_TEST_CASE(a_manifest_is_taken_only_when_named_with_the_address_of_its
 
         BOOST_CHECK(!manifest->UnserializeCheck(stream, banscore));
         BOOST_CHECK_NE(banscore, not_set);
+    }
+
+    WITH_LOCK(cs_main, cPeerBlockCounts = peer_block_counts);
+}
+
+// A scraper publishes a manifest in one layout: the beacon list is part 0
+// alone, each project is the next part alone, in the order of the projects,
+// and there is no other part. A node refuses a manifest in another layout, in
+// sync and out of sync, and does not score the peer that sent it. It takes a
+// manifest in that layout. The number of projects of a manifest is tested
+// before its layout.
+BOOST_AUTO_TEST_CASE(a_manifest_is_taken_only_in_the_layout_a_scraper_publishes)
+{
+    BOOST_REQUIRE(g_peerman);
+    grc_test::StateGuard guard;
+    const CMedianFilter<int> peer_block_counts = WITH_LOCK(cs_main, return cPeerBlockCounts);
+
+    SetMockTime(1700000000);
+
+    // Allocated, not a local, for the reason given in the cases above. The
+    // address is not one of the node's own, so a score for the peer is kept.
+    const auto peer = std::make_unique<CNode>(INVALID_SOCKET,
+                                              CAddress(CService(LookupNumeric("192.0.2.1", 0)), NODE_NONE),
+                                              "", true);
+    CNode& node = *peer;
+    node.CloseSocketDisconnect();
+    node.fDisconnect = false;
+
+    BOOST_REQUIRE(!node.addr.IsLocal());
+
+    AuthorizedScraper scraper;
+
+    // The message for a manifest of so many parts in a layout. The publisher's
+    // copy of each is gone, and its parts with it.
+    const auto message_for = [&scraper](const std::string& text, const size_t part_count,
+                                        const std::optional<ManifestLayout>& layout) {
+        std::vector<std::string> parts;
+
+        for (size_t n = 0; n < part_count; ++n) {
+            parts.push_back("part " + ToString(n) + " of a manifest " + text);
+        }
+
+        const PublishedManifest gone(scraper.Key(), parts, GetAdjustedTime(), std::nullopt, layout);
+        BOOST_REQUIRE(gone.Published());
+
+        return gone.Message();
+    };
+
+    // Each manifest in another layout names every one of its parts and no part
+    // it does not have.
+    const CDataStream as_published = message_for("as a scraper publishes it", 3, std::nullopt);
+    const CDataStream with_three_parts_and_one_project = message_for(
+        "with three parts and one project", 3, ManifestLayout{0, {{1, 1}}});
+    const CDataStream with_a_beacon_list_of_two_parts = message_for(
+        "with a beacon list of two parts", 3, ManifestLayout{1, {{1, 0}, {2, 0}}});
+    const CDataStream with_a_project_of_two_parts = message_for(
+        "with a project of two parts", 3, ManifestLayout{0, {{1, 1}, {2, 0}}});
+    const CDataStream with_the_projects_in_another_order = message_for(
+        "with the projects in another order", 3, ManifestLayout{0, {{2, 0}, {1, 0}}});
+    const CDataStream with_two_projects_for_one_part = message_for(
+        "with two projects for one part", 2, ManifestLayout{0, {{1, 0}, {1, 0}}});
+
+    const uint256 taken_hash = Hash(as_published);
+
+    // Takes the received manifest out of the map when the case ends, however it
+    // ends.
+    struct Removal
+    {
+        const uint256 hash;
+
+        ~Removal()
+        {
+            LOCK(CScraperManifest::cs_mapManifest);
+            CScraperManifest::DeleteManifest(hash, true);
+        }
+    } removal{taken_hash};
+
+    const auto manifests_held = [] {
+        return WITH_LOCK(CScraperManifest::cs_mapManifest, return CScraperManifest::mapManifest.size());
+    };
+    const auto parts_held = [] {
+        return WITH_LOCK(CSplitBlob::cs_mapParts, return CSplitBlob::mapParts.size());
+    };
+
+    const size_t manifests_before = manifests_held();
+    const size_t parts_before = parts_held();
+
+    for (const bool in_sync : {false, true}) {
+        // A node that is in sync also tests that the key is an authorized
+        // scraper's, which this one is.
+        g_previous_block_time.store(in_sync ? GetAdjustedTime() : 0);
+        BOOST_REQUIRE_EQUAL(OutOfSyncByAge(), !in_sync);
+
+        for (const CDataStream* const message : {&with_three_parts_and_one_project,
+                                                 &with_a_beacon_list_of_two_parts,
+                                                 &with_a_project_of_two_parts,
+                                                 &with_the_projects_in_another_order,
+                                                 &with_two_projects_for_one_part}) {
+            CDataStream received(*message);
+
+            BOOST_CHECK(!CScraperManifest::RecvManifest(&node, received));
+            BOOST_CHECK_EQUAL(manifests_held(), manifests_before);
+            BOOST_CHECK_EQUAL(parts_held(), parts_before);
+            BOOST_CHECK_EQUAL(node.GetMisbehavior(), 0);
+        }
+    }
+
+    // The node is in sync here.
+    CDataStream received(as_published);
+
+    BOOST_CHECK(CScraperManifest::RecvManifest(nullptr, received));
+    BOOST_CHECK_EQUAL(manifests_held(), manifests_before + 1);
+    BOOST_CHECK_EQUAL(parts_held(), parts_before + 3);
+
+    {
+        LOCK(CScraperManifest::cs_mapManifest);
+
+        BOOST_CHECK_EQUAL(CScraperManifest::mapManifest.count(taken_hash), 1U);
+    }
+
+    // The number of projects is tested before the layout. A node that is in
+    // sync sets the score for a manifest of more projects than it takes,
+    // whatever layout the manifest is in.
+    {
+        ManifestLayout layout;
+
+        for (int n = 1; n <= 60; ++n) {
+            layout.projects.emplace_back(n, 0);
+        }
+
+        std::swap(layout.projects[0], layout.projects[1]);
+
+        CDataStream stream = message_for("with too many projects in another order", 61, layout);
+        const auto manifest = std::make_shared<CScraperManifest>();
+        unsigned int banscore = 12345;
+
+        LOCK2(CScraperManifest::cs_mapManifest, manifest->cs_manifest);
+
+        BOOST_CHECK(!manifest->UnserializeCheck(stream, banscore));
+        BOOST_CHECK_EQUAL(banscore, gArgs.GetArg("-banscore", 100));
     }
 
     WITH_LOCK(cs_main, cPeerBlockCounts = peer_block_counts);
