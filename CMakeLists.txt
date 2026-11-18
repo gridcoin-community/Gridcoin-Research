@@ -1045,6 +1045,16 @@ if(ENABLE_TESTS AND ENABLE_DAEMON)
     # one of those signatures, and a retry that passes would hide it.
     set(FUNCTIONAL_TEST_ATTEMPTS 3 CACHE STRING "test_runner.py --attempts for the functional_tests ctest case")
 
+    # The --timeout-factor the functional_tests case passes to test_runner.py.
+    # Empty leaves it to --ci, whose factor of 4 gives a node 120 s to answer
+    # one RPC call. The CI sanitizer job sets a larger factor, because a node
+    # built with its checks answers several times slower.
+    set(FUNCTIONAL_TEST_TIMEOUT_FACTOR "" CACHE STRING "test_runner.py --timeout-factor for the functional_tests ctest case (empty: the --ci factor)")
+    set(_functional_timeout_factor "")
+    if(FUNCTIONAL_TEST_TIMEOUT_FACTOR)
+        set(_functional_timeout_factor "--timeout-factor=${FUNCTIONAL_TEST_TIMEOUT_FACTOR}")
+    endif()
+
     find_package(Python3 COMPONENTS Interpreter)
     if(Python3_Interpreter_FOUND)
         set(PACKAGE_NAME "${PROJECT_NAME}")
@@ -1083,6 +1093,7 @@ if(ENABLE_TESTS AND ENABLE_DAEMON)
                         "${CMAKE_SOURCE_DIR}/test/functional/test_runner.py"
                         "--configfile=${CMAKE_BINARY_DIR}/test/config.ini"
                         --ci --quiet --combinedlogslen=4000 --attempts=${FUNCTIONAL_TEST_ATTEMPTS}
+                        ${_functional_timeout_factor}
             )
             set_tests_properties(functional_tests PROPERTIES
                 ENVIRONMENT "${_functional_env}"
