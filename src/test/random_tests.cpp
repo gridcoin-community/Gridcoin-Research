@@ -9,9 +9,14 @@
 #include <boost/test/unit_test.hpp>
 
 #include "test/state_guard.h"
+#include "test/test_gridcoin.h"
+#include "fs.h"
+#include "util/system.h"
 
 #include <algorithm>
+#include <cstdlib>
 #include <random>
+#include <string>
 
 extern bool g_mock_deterministic_tests;
 
@@ -140,6 +145,62 @@ BOOST_AUTO_TEST_CASE(shuffle_stat_test)
     BOOST_CHECK(chi_score > 58.1411); // 99.9999% confidence interval
     BOOST_CHECK(chi_score < 210.275);
     BOOST_CHECK_EQUAL(sum, 12000U);
+}
+
+// The InsecureRand*() helpers restart at the start of every test case, from a
+// stream keyed by the run's seed (RANDOM_CTX_SEED) and the case's full name.
+BOOST_AUTO_TEST_CASE(case_seeds_differ_by_name)
+{
+    // Two names give two streams, so no two cases draw the same values.
+    BOOST_CHECK(grc_test::CaseRngSeed("random_tests/a") != grc_test::CaseRngSeed("random_tests/b"));
+}
+
+BOOST_AUTO_TEST_CASE(insecure_rand_restarts_from_the_case_seed)
+{
+    const uint32_t first = InsecureRand32();
+    BOOST_TEST_MESSAGE("first draw " << first);
+    const std::string name = boost::unit_test::framework::current_test_case().full_name();
+    FastRandomContext expected(grc_test::CaseRngSeed(name));
+    BOOST_CHECK_EQUAL(first, expected.rand32());
+}
+
+BOOST_AUTO_TEST_CASE(the_datadir_is_not_drawn_from_the_seed)
+{
+    const std::string leaf = fs::path(gArgs.GetArg("-datadir", "")).filename().string();
+    BOOST_TEST_MESSAGE("datadir leaf " << leaf);
+    BOOST_CHECK_EQUAL(leaf.size(), 64U);
+    FastRandomContext seeded(grc_test::TestRngSeed());
+    BOOST_CHECK_NE(leaf, seeded.rand256().ToString());
+}
+
+BOOST_AUTO_TEST_CASE(seed_from_env_parses_and_falls_back)
+{
+    // uint256 has no operator<<, so these compare with BOOST_CHECK or as hex.
+    BOOST_CHECK(grc_test::SeedFromEnv("42") == uint256S("42"));
+    BOOST_CHECK_EQUAL(grc_test::SeedFromEnv("42").GetHex(),
+                      "0000000000000000000000000000000000000000000000000000000000000042");
+    const uint256 unset = grc_test::SeedFromEnv(nullptr);
+    const uint256 empty = grc_test::SeedFromEnv("");
+    const uint256 zero = grc_test::SeedFromEnv("0");
+    BOOST_CHECK(!unset.IsNull());
+    BOOST_CHECK(!empty.IsNull());
+    BOOST_CHECK(!zero.IsNull());
+    BOOST_CHECK(unset != empty);
+    BOOST_CHECK(unset != zero);
+    BOOST_CHECK(empty != zero);
+    // The printed form reads back as the same seed.
+    BOOST_CHECK(uint256S(grc_test::TestRngSeed().GetHex()) == grc_test::TestRngSeed());
+}
+
+BOOST_AUTO_TEST_CASE(the_seed_comes_from_the_environment)
+{
+    const char* env = std::getenv("RANDOM_CTX_SEED");
+    if (env == nullptr || uint256S(env).IsNull()) {
+        BOOST_TEST_MESSAGE("RANDOM_CTX_SEED is not set; the run drew a fresh seed");
+        BOOST_CHECK(!grc_test::TestRngSeed().IsNull());
+        return;
+    }
+    BOOST_CHECK_EQUAL(grc_test::TestRngSeed().GetHex(), uint256S(env).GetHex());
 }
 
 BOOST_AUTO_TEST_SUITE_END()
