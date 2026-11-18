@@ -5,6 +5,7 @@
 #include "chain.h"
 #include "gridcoin/contract/contract.h"
 #include "gridcoin/project.h"
+#include "gridcoin/quorum.h"
 #include "gridcoin/scraper/scraper.h"
 #include "gridcoin/scraper/scraper_net.h"
 #include "gridcoin/scraper/scraper_registry.h"
@@ -32,9 +33,11 @@
 
 #include <boost/signals2/connection.hpp>
 
+#include <algorithm>
 #include <functional>
 #include <map>
 #include <memory>
+#include <optional>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -381,6 +384,278 @@ private:
 };
 
 const std::string BEACON_LIST_HEADER = "CPID,time,key\n";
+
+//! A manifest published as a scraper publishes one, with a beacon list and the statistics of one project under a
+//! project name. The manifest is taken out of the manifest map when the object goes.
+class PublishedStats
+{
+public:
+    PublishedStats(CKey& key, const std::string& records, const int64_t time,
+                   const std::string& project_name = "project_a")
+        : m_manifest(std::make_shared<CScraperManifest>())
+    {
+        bool parts_added = true;
+
+        for (const std::string& text : {Gzip(BEACON_LIST_HEADER), Gzip(records)}) {
+            CDataStream part(MakeUCharSpan(text), SER_NETWORK, 1);
+
+            if (m_manifest->addPartData(std::move(part), true) < 0) parts_added = false;
+        }
+
+        {
+            LOCK(m_manifest->cs_manifest);
+
+            m_manifest->sCManifestName = EncodeDestination(CTxDestination(key.GetPubKey().GetID()));
+            m_manifest->nTime = time;
+            m_manifest->BeaconList = 0;
+            m_manifest->BeaconList_c = 0;
+
+            CScraperManifest::dentry project;
+            project.project = project_name;
+            project.part1 = 1;
+            project.LastModified = time;
+            project.current = true;
+            project.last = true;
+            m_manifest->projects.push_back(project);
+        }
+
+        LOCK2(CScraperManifest::cs_mapManifest, CSplitBlob::cs_mapParts);
+
+        m_published = parts_added && CScraperManifest::addManifest(m_manifest, key);
+
+        if (m_published) m_hash = WITH_LOCK(m_manifest->cs_manifest, return *m_manifest->phash);
+    }
+
+    ~PublishedStats()
+    {
+        if (!m_published) return;
+
+        LOCK(CScraperManifest::cs_mapManifest);
+        CScraperManifest::DeleteManifest(m_hash, true);
+    }
+
+    PublishedStats(const PublishedStats&) = delete;
+    PublishedStats& operator=(const PublishedStats&) = delete;
+
+    bool Published() const { return m_published; }
+    std::shared_ptr<CScraperManifest>& Manifest() { return m_manifest; }
+    uint256 ContentHash() const { return WITH_LOCK(m_manifest->cs_manifest, return m_manifest->nContentHash); }
+
+private:
+    std::shared_ptr<CScraperManifest> m_manifest;
+    bool m_published{false};
+    uint256 m_hash;
+};
+
+//! The message a peer is sent for \p manifest, with \p stated in the place of the hash of its contents, and the
+//! signature of the scraper's key over that.
+CDataStream MessageStating(const std::shared_ptr<CScraperManifest>& manifest, const uint256& stated, CKey& key)
+{
+    CDataStream message(SER_NETWORK, 1);
+
+    LOCK2(CSplitBlob::cs_mapParts, manifest->cs_manifest);
+
+    const uint256 computed = manifest->nContentHash;
+
+    manifest->nContentHash = stated;
+    manifest->SerializeWithoutSignature(message);
+    manifest->nContentHash = computed;
+
+    std::vector<unsigned char> signature;
+
+    BOOST_REQUIRE(key.Sign(Hash(message), signature));
+
+    message << signature;
+
+    return message;
+}
+
+//! The content hash a manifest states.
+uint256 StatedContentHash(const std::shared_ptr<CScraperManifest>& manifest)
+{
+    return WITH_LOCK(manifest->cs_manifest, return manifest->nContentHash);
+}
+
+//! The height v15 is set to in a case of the validation by manifest.
+const int V15_HEIGHT = 100;
+
+//! The statistics of the project in a case of the validation by manifest, and other statistics of it.
+const std::string AGREED_STATISTICS =
+    "100,1700000000,10,00010203040506070809101112131415\n"
+    "200,1700000000,20,15141312111009080706050403020100\n";
+const std::string OTHER_STATISTICS =
+    "100,1700000000,1000000,00010203040506070809101112131415\n"
+    "200,1700000000,20,15141312111009080706050403020100\n";
+
+//! What a node did with a superblock it was given.
+struct GivenSuperblockOutcome
+{
+    bool accepted;       //!< Whether ValidateSuperblock() accepted the superblock.
+    bool own_formed;     //!< Whether the node made a superblock of its own.
+    bool own_by_project; //!< Whether the node's own superblock was converged by project.
+    size_t own_scrapers; //!< The count of scrapers in the node's own convergence.
+};
+
+//! Three authorized scrapers and a node for a case of the validation by manifest. The scrapers are numbered in the
+//! order of their IDs, which is the order the manifests are counted in, and with three scrapers the supermajority is
+//! two. The node is in sync and past its first housekeeping, its cache of the converged statistics is empty, the
+//! project of the statistics is on the whitelist, and v15 is at V15_HEIGHT. All of it is put back when the object
+//! goes.
+class ThreeScrapers
+{
+public:
+    ThreeScrapers()
+    {
+        SetMockTime(NOW);
+        g_previous_block_time.store(NOW);
+
+        // The node is past its first housekeeping.
+        WITH_LOCK(cs_ConvergedScraperStatsCache, ConvergedScraperStatsCache.bMinHousekeepingComplete = true);
+
+        const auto id = [this](const size_t n) {
+            return EncodeDestination(CTxDestination(m_scrapers.Key(n).GetPubKey().GetID()));
+        };
+
+        std::sort(m_by_id.begin(), m_by_id.end(), [&id](const size_t a, const size_t b) { return id(a) < id(b); });
+
+        CMutableTransaction mtx;
+
+        mtx.vContracts.push_back(GRC::MakeContract<GRC::Project>(
+            uint32_t {3}, GRC::ContractAction::ADD, uint32_t {4}, std::string {"project_a"}, PROJECT_A, false, false,
+            GRC::ProjectEntryStatus::UNKNOWN));
+        m_project_tx = CTransaction(mtx);
+
+        LOCK(cs_main);
+        GRC::GetWhitelist().Add({m_project_tx.vContracts[0], m_project_tx, &m_project_index});
+    }
+
+    ThreeScrapers(const ThreeScrapers&) = delete;
+    ThreeScrapers& operator=(const ThreeScrapers&) = delete;
+
+    //! Scraper \p n publishes a manifest with the statistics under the project name.
+    std::shared_ptr<CScraperManifest> Publishes(const size_t n, const std::string& statistics,
+                                                const std::string& project_name = "project_a")
+    {
+        m_published.push_back(std::make_unique<PublishedStats>(Key(n), statistics, NextManifestTime(), project_name));
+
+        BOOST_REQUIRE(m_published.back()->Published());
+
+        return m_published.back()->Manifest();
+    }
+
+    //! A peer sends a manifest of scraper \p n with the statistics under the project name, and then the statistics
+    //! part when no manifest here has it. The manifest states \p stated as the hash of its contents, or the hash of
+    //! its contents when none is given.
+    std::shared_ptr<CScraperManifest> IsSent(const size_t n, const std::string& statistics,
+                                             const std::string& project_name = "project_a",
+                                             const std::optional<uint256>& stated = std::nullopt)
+    {
+        // The scraper made the manifest elsewhere.
+        CDataStream manifest_message(SER_NETWORK, 1);
+        uint256 states;
+        {
+            PublishedStats elsewhere(Key(n), statistics, NextManifestTime(), project_name);
+
+            BOOST_REQUIRE(elsewhere.Published());
+
+            states = stated ? *stated : elsewhere.ContentHash();
+            manifest_message = MessageStating(elsewhere.Manifest(), states, Key(n));
+        }
+
+        const uint256 hash = Hash(manifest_message);
+
+        m_received.push_back(std::make_unique<ReceivedManifestRemoval>(hash));
+
+        BOOST_REQUIRE(CScraperManifest::RecvManifest(nullptr, manifest_message));
+
+        std::shared_ptr<CScraperManifest> received;
+        {
+            LOCK(CScraperManifest::cs_mapManifest);
+
+            const auto found = CScraperManifest::mapManifest.find(hash);
+
+            BOOST_REQUIRE(found != CScraperManifest::mapManifest.end());
+
+            received = found->second;
+        }
+
+        if (!WITH_LOCK(received->cs_manifest, return received->isComplete())) {
+            const std::string statistics_part = Gzip(statistics);
+            CDataStream part_message(MakeUCharSpan(statistics_part), SER_NETWORK, PROTOCOL_VERSION);
+
+            BOOST_REQUIRE(CSplitBlob::RecvPart(nullptr, part_message));
+        }
+
+        LOCK(received->cs_manifest);
+
+        BOOST_REQUIRE(received->isComplete());
+        BOOST_REQUIRE(received->nContentHash == states);
+
+        return received;
+    }
+
+    //! Gives the node the superblock made from \p manifest alone, in a block at \p height or with no height. With
+    //! \p use_cache false the node does not look for the superblock among the convergences in its cache. With
+    //! \p another_hint the superblock has another hint for the manifest's content hash, which is not in the hash of
+    //! the superblock.
+    GivenSuperblockOutcome IsGivenTheSuperblockOf(std::shared_ptr<CScraperManifest> manifest,
+                                                  const std::optional<int> height, const bool use_cache = true,
+                                                  const bool another_hint = false)
+    {
+        ConvergedManifest of_one(manifest);
+        const ConvergedScraperStats stats(NOW, of_one,
+                                          GRC::GetWhitelist().Snapshot(
+                                              GRC::GreylistState::PENDING,
+                                              GRC::ProjectEntry::ProjectFilterFlag::GREYLISTED));
+        GRC::Superblock superblock = GRC::Superblock::FromConvergence(stats, 2, false, nullptr);
+
+        BOOST_REQUIRE(superblock.WellFormed());
+        BOOST_REQUIRE(!superblock.ConvergedByProject());
+
+        if (another_hint) superblock.m_manifest_content_hint ^= 1;
+
+        CBlockIndex index;
+        index.nTime = NOW;
+        index.nHeight = height.value_or(V15_HEIGHT);
+
+        const GRC::SuperblockPtr incoming = GRC::SuperblockPtr::BindShared(std::move(superblock), &index);
+
+        GivenSuperblockOutcome outcome{};
+
+        outcome.accepted = height
+            ? GRC::Quorum::ValidateSuperblock(incoming, use_cache, 32, *height)
+            : GRC::Quorum::ValidateSuperblock(incoming, use_cache);
+        outcome.own_scrapers = ScrapersInCachedConvergence();
+
+        LOCK(cs_ConvergedScraperStatsCache);
+
+        outcome.own_formed = ConvergedScraperStatsCache.NewFormatSuperblock.WellFormed();
+        outcome.own_by_project = ConvergedScraperStatsCache.NewFormatSuperblock.ConvergedByProject();
+
+        return outcome;
+    }
+
+private:
+    static constexpr int64_t NOW = 1700000000;
+
+    CKey& Key(const size_t n) { return m_scrapers.Key(m_by_id[n]); }
+
+    //! Each manifest of a case has a time of its own.
+    int64_t NextManifestTime() { return NOW - 600 + 10 * m_manifests++; }
+
+    ScraperLogInDataDir m_log_in_data_dir;
+    grc_test::StateGuard m_guard;
+    grc_test::RegistryReset m_projects{GRC::ContractType::PROJECT};
+    ConvergedStatsCacheReset m_cache_reset;
+    grc_test::V15HeightGuard m_v15_height{V15_HEIGHT};
+    AuthorizedScrapers m_scrapers{3};
+    std::vector<size_t> m_by_id{0, 1, 2};
+    CTransaction m_project_tx;
+    CBlockIndex m_project_index{};
+    int m_manifests{0};
+    std::vector<std::unique_ptr<PublishedStats>> m_published;
+    std::vector<std::unique_ptr<ReceivedManifestRemoval>> m_received;
+};
 
 } // anonymous namespace
 
@@ -941,6 +1216,29 @@ BOOST_AUTO_TEST_CASE(a_convergence_is_formed_again_when_a_manifest_was_completed
 BOOST_AUTO_TEST_CASE(convergencereport_forms_the_convergence_again_when_a_manifest_was_completed_after_it)
 {
     FormedAgainWhenAManifestWasCompletedAfterIt([]() { convergencereport(UniValue(UniValue::VARR)); });
+}
+
+//! Below v15 and from it, a superblock rebuilt from the manifest that two of three scrapers hold is valid by manifest,
+//! wherever the scraper with other statistics is in the order. The hint in the superblock selects the manifests that
+//! are counted, so the same superblock with another hint is not.
+BOOST_AUTO_TEST_CASE(validation_by_manifest_accepts_the_manifest_of_two_of_three_scrapers)
+{
+    for (const int height : {V15_HEIGHT - 1, V15_HEIGHT}) {
+        for (size_t place = 0; place < 3; ++place) {
+            ThreeScrapers scrapers;
+
+            const std::shared_ptr<CScraperManifest> agreed = scrapers.Publishes((place + 1) % 3, AGREED_STATISTICS);
+
+            scrapers.Publishes((place + 2) % 3, AGREED_STATISTICS);
+            scrapers.Publishes(place, OTHER_STATISTICS);
+
+            // Not from the cache, where it is the node's own superblock.
+            BOOST_CHECK_MESSAGE(scrapers.IsGivenTheSuperblockOf(agreed, height, false).accepted,
+                                "height " << height << " place " << place);
+            BOOST_CHECK_MESSAGE(!scrapers.IsGivenTheSuperblockOf(agreed, height, false, true).accepted,
+                                "height " << height << " place " << place);
+        }
+    }
 }
 
 BOOST_AUTO_TEST_SUITE_END()
