@@ -79,6 +79,9 @@ if [ "${#failed[@]}" -gt 0 ]; then
     for suite in "${failed[@]}"; do
         echo
         echo "---- $suite (last 40 lines)"
+        # test_gridcoin prints the seed of its InsecureRand draws when the
+        # tests start, so a long log would otherwise drop it from the report.
+        grep -m1 -o 'RANDOM_CTX_SEED=[0-9a-f]*' "$suite.log" || true
         tail -n 40 "$suite.log"
     done
     exit 1
