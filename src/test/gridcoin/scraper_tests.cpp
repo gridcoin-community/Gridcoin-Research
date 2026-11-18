@@ -13,6 +13,7 @@
 #include "hash.h"
 #include "key.h"
 #include "key_io.h"
+#include "logging.h"
 #include "node/ui_interface.h"
 #include "primitives/transaction.h"
 #include "rpc/server.h"
@@ -35,11 +36,15 @@
 
 #include <algorithm>
 #include <functional>
+#include <list>
 #include <map>
 #include <memory>
+#include <numeric>
 #include <optional>
 #include <sstream>
 #include <string>
+#include <unordered_map>
+#include <utility>
 #include <vector>
 
 // Defined in scraper.cpp, which declares them there rather than in a header.
@@ -385,18 +390,26 @@ private:
 
 const std::string BEACON_LIST_HEADER = "CPID,time,key\n";
 
-//! A manifest published as a scraper publishes one, with a beacon list and the statistics of one project under a
-//! project name. The manifest is taken out of the manifest map when the object goes.
+//! The projects of a manifest in their order, each a project name and the statistics published under it.
+using ProjectStatistics = std::vector<std::pair<std::string, std::string>>;
+
+//! A manifest published as a scraper publishes one, with a beacon list, then the statistics of each project under
+//! its project name, and a consensus block. The manifest is taken out of the manifest map when the object goes.
 class PublishedStats
 {
 public:
-    PublishedStats(CKey& key, const std::string& records, const int64_t time,
-                   const std::string& project_name = "project_a")
+    PublishedStats(CKey& key, const ProjectStatistics& projects, const int64_t time,
+                   const uint256& consensus_block = uint256())
         : m_manifest(std::make_shared<CScraperManifest>())
     {
         bool parts_added = true;
+        std::vector<std::string> texts{Gzip(BEACON_LIST_HEADER)};
 
-        for (const std::string& text : {Gzip(BEACON_LIST_HEADER), Gzip(records)}) {
+        for (const auto& project : projects) {
+            texts.push_back(Gzip(project.second));
+        }
+
+        for (const std::string& text : texts) {
             CDataStream part(MakeUCharSpan(text), SER_NETWORK, 1);
 
             if (m_manifest->addPartData(std::move(part), true) < 0) parts_added = false;
@@ -407,16 +420,19 @@ public:
 
             m_manifest->sCManifestName = EncodeDestination(CTxDestination(key.GetPubKey().GetID()));
             m_manifest->nTime = time;
+            m_manifest->ConsensusBlock = consensus_block;
             m_manifest->BeaconList = 0;
             m_manifest->BeaconList_c = 0;
 
-            CScraperManifest::dentry project;
-            project.project = project_name;
-            project.part1 = 1;
-            project.LastModified = time;
-            project.current = true;
-            project.last = true;
-            m_manifest->projects.push_back(project);
+            for (size_t n = 0; n < projects.size(); ++n) {
+                CScraperManifest::dentry project;
+                project.project = projects[n].first;
+                project.part1 = static_cast<int>(n + 1);
+                project.LastModified = time;
+                project.current = true;
+                project.last = true;
+                m_manifest->projects.push_back(project);
+            }
         }
 
         LOCK2(CScraperManifest::cs_mapManifest, CSplitBlob::cs_mapParts);
@@ -496,16 +512,45 @@ struct GivenSuperblockOutcome
     size_t own_scrapers; //!< The count of scrapers in the node's own convergence.
 };
 
-//! Three authorized scrapers and a node for a case of the validation by manifest. The scrapers are numbered in the
-//! order of their IDs, which is the order the manifests are counted in, and with three scrapers the supermajority is
-//! two. The node is in sync and past its first housekeeping, its cache of the converged statistics is empty, the
-//! project of the statistics is on the whitelist, and v15 is at V15_HEIGHT. All of it is put back when the object
-//! goes.
-class ThreeScrapers
+//! Keeps the result that Quorum::ValidateSuperblock() logs, for the life of the object.
+class LoggedValidationResult
 {
 public:
-    ThreeScrapers()
+    LoggedValidationResult()
+        : m_callback(LogInstance().PushBackCallback([this](const std::string& line) {
+              for (const char* const result : {"UNKNOWN", "INVALID", "HISTORICAL", "VALID_CURRENT", "VALID_PAST",
+                                               "VALID_BY_MANIFEST", "VALID_BY_PROJECT"}) {
+                  if (line.find(std::string("ValidateSuperblock(): ") + result + " - ") != std::string::npos) {
+                      m_result = result;
+                  }
+              }
+          }))
     {
+    }
+
+    ~LoggedValidationResult() { LogInstance().DeleteCallback(m_callback); }
+
+    LoggedValidationResult(const LoggedValidationResult&) = delete;
+    LoggedValidationResult& operator=(const LoggedValidationResult&) = delete;
+
+    const std::string& Result() const { return m_result; }
+
+private:
+    std::string m_result;
+    const std::list<std::function<void(const std::string&)>>::iterator m_callback;
+};
+
+//! Authorized scrapers and a node for a case of the validation by manifest. The scrapers are numbered in the order
+//! of their IDs, which is the order the manifests are counted in. The node is in sync and past its first
+//! housekeeping, its cache of the converged statistics is empty, project_a is on the whitelist, and v15 is at
+//! V15_HEIGHT. All of it is put back when the object goes.
+class ScrapersAndNode
+{
+public:
+    explicit ScrapersAndNode(const size_t count) : m_scrapers(count), m_by_id(count)
+    {
+        std::iota(m_by_id.begin(), m_by_id.end(), size_t {0});
+
         SetMockTime(NOW);
         g_previous_block_time.store(NOW);
 
@@ -529,32 +574,48 @@ public:
         GRC::GetWhitelist().Add({m_project_tx.vContracts[0], m_project_tx, &m_project_index});
     }
 
-    ThreeScrapers(const ThreeScrapers&) = delete;
-    ThreeScrapers& operator=(const ThreeScrapers&) = delete;
+    ScrapersAndNode(const ScrapersAndNode&) = delete;
+    ScrapersAndNode& operator=(const ScrapersAndNode&) = delete;
 
-    //! Scraper \p n publishes a manifest with the statistics under the project name.
-    std::shared_ptr<CScraperManifest> Publishes(const size_t n, const std::string& statistics,
-                                                const std::string& project_name = "project_a")
+    //! Scraper \p n publishes a manifest with the statistics of each project under its project name, and with the
+    //! consensus block.
+    std::shared_ptr<CScraperManifest> Publishes(const size_t n, const ProjectStatistics& projects,
+                                                const uint256& consensus_block = uint256())
     {
-        m_published.push_back(std::make_unique<PublishedStats>(Key(n), statistics, NextManifestTime(), project_name));
+        m_published.push_back(
+            std::make_unique<PublishedStats>(Key(n), projects, NextManifestTime(), consensus_block));
 
         BOOST_REQUIRE(m_published.back()->Published());
 
         return m_published.back()->Manifest();
     }
 
-    //! A peer sends a manifest of scraper \p n with the statistics under the project name, and then the statistics
-    //! part when no manifest here has it. The manifest states \p stated as the hash of its contents, or the hash of
-    //! its contents when none is given.
+    //! Scraper \p n publishes a manifest with the statistics under the project name.
+    std::shared_ptr<CScraperManifest> Publishes(const size_t n, const std::string& statistics,
+                                                const std::string& project_name = "project_a")
+    {
+        return Publishes(n, ProjectStatistics{{project_name, statistics}});
+    }
+
+    //! A peer sends a manifest of scraper \p n with the statistics under the project name, as below.
     std::shared_ptr<CScraperManifest> IsSent(const size_t n, const std::string& statistics,
                                              const std::string& project_name = "project_a",
+                                             const std::optional<uint256>& stated = std::nullopt)
+    {
+        return IsSent(n, ProjectStatistics{{project_name, statistics}}, stated);
+    }
+
+    //! A peer sends a manifest of scraper \p n with the statistics of each project under its project name, and then
+    //! each statistics part that no manifest here has. The manifest states \p stated as the hash of its contents, or
+    //! the hash of its contents when none is given.
+    std::shared_ptr<CScraperManifest> IsSent(const size_t n, const ProjectStatistics& projects,
                                              const std::optional<uint256>& stated = std::nullopt)
     {
         // The scraper made the manifest elsewhere.
         CDataStream manifest_message(SER_NETWORK, 1);
         uint256 states;
         {
-            PublishedStats elsewhere(Key(n), statistics, NextManifestTime(), project_name);
+            PublishedStats elsewhere(Key(n), projects, NextManifestTime());
 
             BOOST_REQUIRE(elsewhere.Published());
 
@@ -579,11 +640,22 @@ public:
             received = found->second;
         }
 
-        if (!WITH_LOCK(received->cs_manifest, return received->isComplete())) {
-            const std::string statistics_part = Gzip(statistics);
+        for (const auto& project : projects) {
+            const std::string statistics_part = Gzip(project.second);
             CDataStream part_message(MakeUCharSpan(statistics_part), SER_NETWORK, PROTOCOL_VERSION);
+            const uint256 part_hash = Hash(part_message);
+            bool held;
+            {
+                LOCK(CSplitBlob::cs_mapParts);
 
-            BOOST_REQUIRE(CSplitBlob::RecvPart(nullptr, part_message));
+                const auto part = CSplitBlob::mapParts.find(part_hash);
+
+                BOOST_REQUIRE(part != CSplitBlob::mapParts.end());
+
+                held = part->second.present();
+            }
+
+            if (!held) BOOST_REQUIRE(CSplitBlob::RecvPart(nullptr, part_message));
         }
 
         LOCK(received->cs_manifest);
@@ -621,10 +693,20 @@ public:
         const GRC::SuperblockPtr incoming = GRC::SuperblockPtr::BindShared(std::move(superblock), &index);
 
         GivenSuperblockOutcome outcome{};
+        std::string result;
+        {
+            LoggedValidationResult logged;
 
-        outcome.accepted = height
-            ? GRC::Quorum::ValidateSuperblock(incoming, use_cache, 32, *height)
-            : GRC::Quorum::ValidateSuperblock(incoming, use_cache);
+            outcome.accepted = height
+                ? GRC::Quorum::ValidateSuperblock(incoming, use_cache, 32, *height)
+                : GRC::Quorum::ValidateSuperblock(incoming, use_cache);
+            result = logged.Result();
+        }
+
+        // In these cases a superblock is valid by manifest or it is not valid. Any other result fails the case.
+        BOOST_REQUIRE_MESSAGE(result == (outcome.accepted ? "VALID_BY_MANIFEST" : "INVALID"),
+                              "the result of the validation is " << result);
+
         outcome.own_scrapers = ScrapersInCachedConvergence();
 
         LOCK(cs_ConvergedScraperStatsCache);
@@ -648,14 +730,75 @@ private:
     grc_test::RegistryReset m_projects{GRC::ContractType::PROJECT};
     ConvergedStatsCacheReset m_cache_reset;
     grc_test::V15HeightGuard m_v15_height{V15_HEIGHT};
-    AuthorizedScrapers m_scrapers{3};
-    std::vector<size_t> m_by_id{0, 1, 2};
+    AuthorizedScrapers m_scrapers;
+    std::vector<size_t> m_by_id;
     CTransaction m_project_tx;
     CBlockIndex m_project_index{};
     int m_manifests{0};
     std::vector<std::unique_ptr<PublishedStats>> m_published;
     std::vector<std::unique_ptr<ReceivedManifestRemoval>> m_received;
 };
+
+//! Three scrapers, of which the supermajority is two.
+class ThreeScrapers : public ScrapersAndNode
+{
+public:
+    ThreeScrapers() : ScrapersAndNode(3) {}
+};
+
+//! Five scrapers, of which the supermajority is three.
+class FiveScrapers : public ScrapersAndNode
+{
+public:
+    FiveScrapers() : ScrapersAndNode(5) {}
+};
+
+//! The hint a superblock has for a content hash.
+uint32_t HintOf(const uint256& content_hash)
+{
+    return content_hash.GetUint64(0) >> 32;
+}
+
+//! The hash of a part with the data.
+uint256 PartHash(const std::string& data)
+{
+    return Hash(CDataStream(MakeUCharSpan(data), SER_NETWORK, 1));
+}
+
+//! The content hash of a manifest with parts of the hashes, in their order, and the consensus block. A case that
+//! uses it requires the manifest it publishes to state this hash.
+uint256 ContentHashOf(const std::vector<uint256>& part_hashes, const uint256& consensus_block)
+{
+    CDataStream ss(SER_NETWORK, 1);
+
+    WriteCompactSize(ss, part_hashes.size());
+
+    for (const uint256& part_hash : part_hashes) {
+        ss << part_hash;
+    }
+
+    ss << consensus_block;
+
+    return Hash(ss);
+}
+
+//! The first two numbers below \p count, counting from 0, for which \p content_hash_of gives content hashes with the
+//! same hint. A hint is 32 bits of the hash, so two are found in some tens of thousands of numbers.
+std::pair<uint64_t, uint64_t> TwoWithTheSameHint(const uint64_t count,
+                                                 const std::function<uint256(uint64_t)>& content_hash_of)
+{
+    std::unordered_map<uint32_t, uint64_t> numbers_by_hint;
+
+    for (uint64_t n = 0; n < count; ++n) {
+        const auto inserted = numbers_by_hint.emplace(HintOf(content_hash_of(n)), n);
+
+        if (!inserted.second) return {inserted.first->second, n};
+    }
+
+    BOOST_FAIL("no two content hashes with the same hint");
+
+    return {0, 0};
+}
 
 } // anonymous namespace
 
@@ -1238,6 +1381,145 @@ BOOST_AUTO_TEST_CASE(validation_by_manifest_accepts_the_manifest_of_two_of_three
             BOOST_CHECK_MESSAGE(!scrapers.IsGivenTheSuperblockOf(agreed, height, false, true).accepted,
                                 "height " << height << " place " << place);
         }
+    }
+}
+
+//! Manifests with other contents are counted apart, below v15 and from it, when the hint in the superblock is the
+//! hint of each of them. They are manifests with other statistics and the same consensus block, and manifests with
+//! the same statistics and another consensus block.
+BOOST_AUTO_TEST_CASE(validation_by_manifest_counts_manifests_with_other_contents_and_the_same_hint_apart)
+{
+    const auto block = [](const uint64_t n) { return (CHashWriter(SER_GETHASH, 0) << n).GetHash(); };
+    const auto statistics = [](const uint64_t n) {
+        return "100,1700000000," + ToString(2000000 + n) + ",00010203040506070809101112131415\n"
+               "200,1700000000,20,15141312111009080706050403020100\n";
+    };
+
+    const uint256 beacon_list_hash = PartHash(Gzip(BEACON_LIST_HEADER));
+    const uint256 agreed_hash = PartHash(Gzip(AGREED_STATISTICS));
+
+    // A manifest of two projects has two of a thousand statistics, so a million manifests with other statistics
+    // take a thousand statistics parts.
+    const uint64_t thousand = 1000;
+    std::vector<uint256> statistics_hashes;
+
+    for (uint64_t n = 0; n < thousand; ++n) {
+        statistics_hashes.push_back(PartHash(Gzip(statistics(n))));
+    }
+
+    const auto two_statistics = [&statistics](const uint64_t n) {
+        return ProjectStatistics{{"project_a", statistics(n / thousand)}, {"project_b", statistics(n % thousand)}};
+    };
+
+    const std::pair<uint64_t, uint64_t> of_statistics = TwoWithTheSameHint(thousand * thousand, [&](const uint64_t n) {
+        return ContentHashOf({beacon_list_hash, statistics_hashes[n / thousand], statistics_hashes[n % thousand]},
+                             block(0));
+    });
+    const std::pair<uint64_t, uint64_t> of_blocks = TwoWithTheSameHint(4000000, [&](const uint64_t n) {
+        return ContentHashOf({beacon_list_hash, agreed_hash}, block(n));
+    });
+
+    // The projects and the consensus block of a manifest.
+    using Contents = std::pair<ProjectStatistics, uint256>;
+
+    const ProjectStatistics agreed{{"project_a", AGREED_STATISTICS}};
+    const std::vector<std::pair<Contents, Contents>> pairs{
+        {{two_statistics(of_statistics.first), block(0)}, {two_statistics(of_statistics.second), block(0)}},
+        {{agreed, block(of_blocks.first)}, {agreed, block(of_blocks.second)}},
+    };
+
+    // The content hash of a manifest with the contents.
+    const auto content_hash_of = [&beacon_list_hash](const Contents& contents) {
+        std::vector<uint256> part_hashes{beacon_list_hash};
+
+        for (const auto& project : contents.first) {
+            part_hashes.push_back(PartHash(Gzip(project.second)));
+        }
+
+        return ContentHashOf(part_hashes, contents.second);
+    };
+
+    for (size_t which = 0; which < pairs.size(); ++which) {
+        const Contents& first = pairs[which].first;
+        const Contents& second = pairs[which].second;
+
+        for (const int height : {V15_HEIGHT - 1, V15_HEIGHT}) {
+            // The first scraper has a manifest of the first contents and the second scraper has one of the second.
+            // The third scraper has one of the second contents or none. Then each scraper publishes the same
+            // manifest of other statistics, which the node's own convergence is of.
+            for (const bool third_has_the_second : {false, true}) {
+                ThreeScrapers scrapers;
+
+                const std::shared_ptr<CScraperManifest> of_first = scrapers.Publishes(0, first.first, first.second);
+                const std::shared_ptr<CScraperManifest> of_second =
+                    scrapers.Publishes(1, second.first, second.second);
+
+                if (third_has_the_second) {
+                    scrapers.Publishes(2, second.first, second.second);
+                }
+
+                BOOST_REQUIRE(StatedContentHash(of_first) == content_hash_of(first));
+                BOOST_REQUIRE(StatedContentHash(of_second) == content_hash_of(second));
+                BOOST_REQUIRE(StatedContentHash(of_first) != StatedContentHash(of_second));
+                BOOST_REQUIRE_EQUAL(HintOf(StatedContentHash(of_first)), HintOf(StatedContentHash(of_second)));
+
+                for (size_t n = 0; n < 3; ++n) {
+                    const std::shared_ptr<CScraperManifest> of_all = scrapers.Publishes(n, OTHER_STATISTICS);
+
+                    BOOST_REQUIRE(HintOf(StatedContentHash(of_all)) != HintOf(StatedContentHash(of_second)));
+                }
+
+                // The node is given the superblock made from the second manifest, not from its cache. It is valid by
+                // manifest when the third scraper holds a manifest of the second contents.
+                BOOST_CHECK_MESSAGE(
+                    scrapers.IsGivenTheSuperblockOf(of_second, height, false).accepted == third_has_the_second,
+                    "pair " << which << " height " << height << " third has the second " << third_has_the_second);
+            }
+        }
+    }
+}
+
+//! The supermajority is of the scrapers that hold manifests. With five scrapers of which three hold manifests it is
+//! two, below v15 and from it.
+BOOST_AUTO_TEST_CASE(validation_by_manifest_takes_the_supermajority_of_the_scrapers_that_hold_manifests)
+{
+    for (const int height : {V15_HEIGHT - 1, V15_HEIGHT}) {
+        FiveScrapers scrapers;
+
+        scrapers.Publishes(0, OTHER_STATISTICS);
+
+        const std::shared_ptr<CScraperManifest> of_two = scrapers.Publishes(1, AGREED_STATISTICS);
+
+        scrapers.Publishes(2, AGREED_STATISTICS);
+
+        // Not from the cache, where it is the node's own superblock.
+        BOOST_CHECK_MESSAGE(scrapers.IsGivenTheSuperblockOf(of_two, height, false).accepted, "height " << height);
+    }
+}
+
+//! When the superblock is not the one rebuilt from the manifest at which a count reaches the supermajority, the
+//! count goes on with the manifests after it, below v15 and from it.
+BOOST_AUTO_TEST_CASE(validation_by_manifest_goes_on_after_a_manifest_that_does_not_give_the_superblock)
+{
+    for (const int height : {V15_HEIGHT - 1, V15_HEIGHT}) {
+        ThreeScrapers scrapers;
+
+        // Two scrapers each have a manifest with the statistics under project_b and a later one with the same parts
+        // under project_a. A scraper's manifests are counted from the latest, so from v15 the count of the
+        // manifests under project_a reaches the supermajority first.
+        const std::shared_ptr<CScraperManifest> earlier = scrapers.Publishes(0, AGREED_STATISTICS, "project_b");
+
+        scrapers.Publishes(1, AGREED_STATISTICS, "project_b");
+
+        const std::shared_ptr<CScraperManifest> later = scrapers.Publishes(0, AGREED_STATISTICS, "project_a");
+
+        scrapers.Publishes(1, AGREED_STATISTICS, "project_a");
+        scrapers.Publishes(2, OTHER_STATISTICS);
+
+        BOOST_REQUIRE(StatedContentHash(later) == StatedContentHash(earlier));
+
+        // The node is given the superblock made from a manifest under project_b, not from its cache.
+        BOOST_CHECK_MESSAGE(scrapers.IsGivenTheSuperblockOf(earlier, height, false).accepted, "height " << height);
     }
 }
 
