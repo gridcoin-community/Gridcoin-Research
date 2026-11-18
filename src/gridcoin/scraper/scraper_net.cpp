@@ -758,6 +758,18 @@ EXCLUSIVE_LOCKS_REQUIRED(CScraperManifest::cs_mapManifest, CSplitBlob::cs_manife
         return error("CScraperManifest::UnserializeCheck: Unapproved scraper ID");
     }
 
+    // A scraper names a manifest with the address of the key it signs the
+    // manifest with. A manifest whose name is not that address is refused. This
+    // does not depend on the sync state. banscore_out is not written.
+    // IsManifestAuthorized() may have set it above.
+    const std::string key_address = EncodeDestination(CTxDestination(pubkey.GetID()));
+
+    if (sCManifestName != key_address)
+    {
+        return error("CScraperManifest::UnserializeCheck: manifest named \"%s\" is not named with the "
+                     "address of its key, %s", SanitizeString(sCManifestName), key_address);
+    }
+
     // We need to do an additional check here for non-current manifests, because the sending node may not
     // be filtering it on the send side, depending on the version on the sending node. Also, the
     // AlreadyHave only checks for whether the manifest is current if it is already in the map.

@@ -6,6 +6,7 @@
 
 #include "hash.h"
 #include "key.h"
+#include "key_io.h"
 #include "serialize.h"
 #include "streams.h"
 #include "util.h"
@@ -219,8 +220,9 @@ namespace {
 //! Build a manifest stream as far as the structural checks read it. The part
 //! list, the beacon-list reference and the project dentries are all that those
 //! checks consult, and they run before signature verification, so no key and no
-//! valid signature are needed. nTime is current so IsManifestCurrent() passes,
-//! and a chainless test process is out of sync by age, which skips
+//! valid signature are needed. The manifest is named with the address of the
+//! key it carries, as a manifest is. nTime is current so IsManifestCurrent()
+//! passes, and a chainless test process is out of sync by age, which skips
 //! authorization.
 CDataStream ManifestPrefix(size_t part_count, int beacon_list,
                            const std::vector<int>& project_part1s,
@@ -244,7 +246,7 @@ CDataStream ManifestPrefix(size_t part_count, int beacon_list,
 
     ss << vph;
     ss << CPubKey();
-    ss << std::string("test-manifest");
+    ss << EncodeDestination(CTxDestination(CPubKey().GetID()));
     ss << static_cast<int64_t>(GetAdjustedTime());
     ss << uint256();
     ss << beacon_list << static_cast<unsigned int>(0);
@@ -647,7 +649,7 @@ BOOST_AUTO_TEST_CASE(recvmanifest_refuses_data_after_the_signature)
     {
         LOCK2(CSplitBlob::cs_mapParts, publisher->cs_manifest);
 
-        publisher->sCManifestName = "signature-test-scraper";
+        publisher->sCManifestName = EncodeDestination(CTxDestination(key.GetPubKey().GetID()));
         publisher->pubkey = key.GetPubKey();
         publisher->nTime = GetAdjustedTime();
         publisher->BeaconList = 0;

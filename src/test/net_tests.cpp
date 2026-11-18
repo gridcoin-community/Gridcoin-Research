@@ -4,6 +4,7 @@
 #include "addrman.h"
 #include "addrman_impl.h"
 #include <algorithm>
+#include <optional>
 #include <string>
 #include <boost/test/unit_test.hpp>
 
@@ -35,6 +36,7 @@
 #include "util.h"
 #include "util/system.h"
 #include "util/time.h"
+#include "validation.h"
 #include "version.h"
 
 using namespace std;
@@ -716,11 +718,17 @@ private:
 // while the publish is in progress, and addManifest() signs the manifest and
 // puts it in the manifest map. The manifest is taken out of the map when the
 // object goes. The constructor checks nothing, so that it always completes and
-// the destructor always runs; a case checks Published() first.
+// the destructor always runs; a case checks Published() first. The manifest is
+// named as a scraper names one, with the address of its key, unless the case
+// gives another name.
 class PublishedManifest
 {
 public:
-    PublishedManifest(CKey& key, const std::vector<std::string>& parts, const int64_t time)
+    PublishedManifest(
+        CKey& key,
+        const std::vector<std::string>& parts,
+        const int64_t time,
+        const std::optional<std::string>& name = std::nullopt)
         : m_manifest(std::make_shared<CScraperManifest>())
     {
         bool parts_added = true;
@@ -735,7 +743,9 @@ public:
         {
             LOCK(m_manifest->cs_manifest);
 
-            m_manifest->sCManifestName = EncodeDestination(CTxDestination(key.GetPubKey().GetID()));
+            m_manifest->sCManifestName = name
+                ? *name
+                : EncodeDestination(CTxDestination(key.GetPubKey().GetID()));
             m_manifest->nTime = time;
             m_manifest->BeaconList = 0;
             m_manifest->BeaconList_c = 0;
@@ -990,6 +1000,130 @@ BOOST_AUTO_TEST_CASE(a_manifest_is_announced_and_sent_only_with_all_of_its_parts
     // The message sent hashes to the hash the peer asked for.
     BOOST_REQUIRE_EQUAL(sent.size(), 1U);
     BOOST_CHECK(sent.front() == complete.Hash());
+
+    WITH_LOCK(cs_main, cPeerBlockCounts = peer_block_counts);
+}
+
+// A scraper names a manifest with the address of the key it signs the manifest
+// with. A node takes a manifest that is named so and refuses one that is not,
+// in sync and out of sync. It does not score the peer that sent it. The key of
+// a manifest is tested before its name.
+BOOST_AUTO_TEST_CASE(a_manifest_is_taken_only_when_named_with_the_address_of_its_key)
+{
+    BOOST_REQUIRE(g_peerman);
+    grc_test::StateGuard guard;
+    const CMedianFilter<int> peer_block_counts = WITH_LOCK(cs_main, return cPeerBlockCounts);
+
+    SetMockTime(1700000000);
+
+    // Allocated, not a local, for the reason given in the cases above. The
+    // address is not one of the node's own, so a score for the peer is kept.
+    const auto peer = std::make_unique<CNode>(INVALID_SOCKET,
+                                              CAddress(CService(LookupNumeric("192.0.2.1", 0)), NODE_NONE),
+                                              "", true);
+    CNode& node = *peer;
+    node.CloseSocketDisconnect();
+    node.fDisconnect = false;
+
+    BOOST_REQUIRE(!node.addr.IsLocal());
+
+    AuthorizedScraper scraper;
+
+    CKey another_key;
+    another_key.MakeNewKey(true);
+
+    // The messages for three manifests, named as the case describes. The
+    // publisher's copy of each is gone, and its parts with it.
+    const auto message_for = [](CKey& key, const std::string& text, const std::optional<std::string>& name) {
+        const PublishedManifest gone(key, {"a beacon list part " + text, "a project part " + text},
+                                     GetAdjustedTime(), name);
+        BOOST_REQUIRE(gone.Published());
+
+        return gone.Message();
+    };
+
+    const std::string address = EncodeDestination(CTxDestination(scraper.Key().GetPubKey().GetID()));
+    const std::string another_address = EncodeDestination(CTxDestination(another_key.GetPubKey().GetID()));
+
+    const CDataStream named_with_its_address = message_for(scraper.Key(), "named with its address", std::nullopt);
+    const CDataStream named_with_another_address = message_for(
+        scraper.Key(), "named with another address", another_address);
+    const CDataStream named_with_its_address_and_a_space = message_for(
+        scraper.Key(), "named with its address and a space", address + " ");
+    const CDataStream named_with_no_address = message_for(scraper.Key(), "named with no address", "a scraper");
+
+    // A manifest of a key that is not an authorized scraper's.
+    const CDataStream of_another_key = message_for(another_key, "of another key", address);
+
+    const uint256 taken_hash = Hash(named_with_its_address);
+
+    // Takes the received manifest out of the map when the case ends, however it
+    // ends.
+    struct Removal
+    {
+        const uint256 hash;
+
+        ~Removal()
+        {
+            LOCK(CScraperManifest::cs_mapManifest);
+            CScraperManifest::DeleteManifest(hash, true);
+        }
+    } removal{taken_hash};
+
+    const auto manifests_held = [] {
+        return WITH_LOCK(CScraperManifest::cs_mapManifest, return CScraperManifest::mapManifest.size());
+    };
+    const auto parts_held = [] {
+        return WITH_LOCK(CSplitBlob::cs_mapParts, return CSplitBlob::mapParts.size());
+    };
+
+    const size_t manifests_before = manifests_held();
+    const size_t parts_before = parts_held();
+
+    for (const bool in_sync : {false, true}) {
+        // A node that is in sync also tests that the key is an authorized
+        // scraper's, which this one is.
+        g_previous_block_time.store(in_sync ? GetAdjustedTime() : 0);
+        BOOST_REQUIRE_EQUAL(OutOfSyncByAge(), !in_sync);
+
+        for (const CDataStream* const message : {&named_with_another_address,
+                                                 &named_with_its_address_and_a_space,
+                                                 &named_with_no_address}) {
+            CDataStream received(*message);
+
+            BOOST_CHECK(!CScraperManifest::RecvManifest(&node, received));
+            BOOST_CHECK_EQUAL(manifests_held(), manifests_before);
+            BOOST_CHECK_EQUAL(parts_held(), parts_before);
+            BOOST_CHECK_EQUAL(node.GetMisbehavior(), 0);
+        }
+    }
+
+    // The node is in sync here.
+    CDataStream received(named_with_its_address);
+
+    BOOST_CHECK(CScraperManifest::RecvManifest(nullptr, received));
+    BOOST_CHECK_EQUAL(manifests_held(), manifests_before + 1);
+    BOOST_CHECK_EQUAL(parts_held(), parts_before + 2);
+
+    {
+        LOCK(CScraperManifest::cs_mapManifest);
+
+        BOOST_CHECK_EQUAL(CScraperManifest::mapManifest.count(taken_hash), 1U);
+    }
+
+    // IsManifestAuthorized() sets the score for a manifest of a key that is not
+    // an authorized scraper's, whatever the manifest is named.
+    {
+        CDataStream stream(of_another_key);
+        const auto manifest = std::make_shared<CScraperManifest>();
+        const unsigned int not_set = 12345;
+        unsigned int banscore = not_set;
+
+        LOCK2(CScraperManifest::cs_mapManifest, manifest->cs_manifest);
+
+        BOOST_CHECK(!manifest->UnserializeCheck(stream, banscore));
+        BOOST_CHECK_NE(banscore, not_set);
+    }
 
     WITH_LOCK(cs_main, cPeerBlockCounts = peer_block_counts);
 }
