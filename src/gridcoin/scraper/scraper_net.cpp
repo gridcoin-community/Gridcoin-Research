@@ -977,6 +977,30 @@ EXCLUSIVE_LOCKS_REQUIRED(CScraperManifest::cs_mapManifest, CSplitBlob::cs_manife
         return error("CScraperManifest::UnserializeCheck: Too many projects in the manifest.");
     }
 
+    // A scraper publishes a manifest in one layout. The beacon list is part 0
+    // alone, project n is part n + 1 alone, counting the projects from 0, and
+    // there is no other part. A manifest in another layout is refused. This does
+    // not depend on the sync state. banscore_out is not written. The tests above
+    // may have set it. This test is after them, so a manifest that one of them
+    // refuses is refused as it was. A scraper that is to publish another layout
+    // needs this test changed on the nodes first.
+    if (BeaconList != 0 || BeaconList_c != 0 || vph.size() != projects.size() + 1)
+    {
+        return error("CScraperManifest::UnserializeCheck: manifest is not in the layout of a published "
+                     "manifest: beacon list at part %i and %u parts after it, %u parts, %u projects",
+                     BeaconList, BeaconList_c, vph.size(), projects.size());
+    }
+
+    for (size_t n = 0; n < projects.size(); ++n)
+    {
+        if (static_cast<int64_t>(projects[n].part1) != static_cast<int64_t>(n) + 1 || projects[n].partc != 0)
+        {
+            return error("CScraperManifest::UnserializeCheck: manifest is not in the layout of a published "
+                         "manifest: project %u at part %i and %u parts after it",
+                         n, projects[n].part1, projects[n].partc);
+        }
+    }
+
     ss >> nContentHash;
 
     uint256 hash = Hash(Span<const std::byte>{(std::byte*)&pbegin[0], (std::byte*)&ss.begin()[0]});
