@@ -311,7 +311,9 @@ BOOST_AUTO_TEST_CASE(every_registered_option_is_itself_and_its_no_form_is_its_ne
 
 //! The registered options whose own names begin with "no". Such a name is read as the option and not as the
 //! negation of another one, so a new one is added here on purpose, with a case of its own in util_tests
-//! (args_an_option_named_with_a_leading_no_is_itself_on_the_command_line).
+//! (args_an_option_named_with_a_leading_no_is_itself_on_the_command_line). Two places model the rule without
+//! this table and are read again when a name is added: refused_as_read in contrib/init/gridcoin_service.py.in
+//! and ConfSettings in src/winsvc/layout.cpp.
 BOOST_AUTO_TEST_CASE(the_options_named_with_a_leading_no_are_these_three)
 {
     ServerOptionTable table;
