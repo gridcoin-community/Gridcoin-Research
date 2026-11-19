@@ -1560,6 +1560,16 @@ Researcher::Researcher(
 
 void Researcher::Initialize()
 {
+    if (NoncruncherSwitchesOffAnEmail()) {
+        LogPrintf(
+            "WARNING: noncruncher is set and switches off the email that is "
+            "also set, so this node does not claim research rewards. Earlier "
+            "releases, from 5.3.2.0, did not read a noncruncher line in "
+            "gridcoinresearch.conf. Remove the noncruncher setting to claim "
+            "research rewards, or remove the email setting to decline them "
+            "without this warning.");
+    }
+
     LOCK2(cs_main, pwalletMain->cs_wallet);
     Reload();
 }
@@ -1651,6 +1661,21 @@ bool Researcher::ConfiguredForNoncruncherMode(bool log)
     }
 
     return false;
+}
+
+bool Researcher::NoncruncherSwitchesOffAnEmail()
+{
+    if (!gArgs.GetBoolArg("-noncruncher", false)) return false;
+
+    // The settings file was read by its key all along, and so was the legacy
+    // investor flag. Neither is new to a node that sets it.
+    if (!getRwSetting("noncruncher").isNull()) return false;
+    if (gArgs.GetBoolArg("-investor", false)) return false;
+
+    // Email() is empty in non-cruncher mode, so this reads the setting itself.
+    const std::string email = ToLower(gArgs.GetArg("-email", ""));
+
+    return !email.empty() && email != "noncruncher" && email != "investor";
 }
 
 ResearcherPtr Researcher::Get()

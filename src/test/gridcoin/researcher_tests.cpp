@@ -1167,6 +1167,91 @@ BOOST_FIXTURE_TEST_CASE(a_failed_mode_change_leaves_a_config_investor_flag_in_fo
     }
 }
 
+//!
+//! \brief The mode-change setup as a node reads it at startup: nothing is forced
+//! for -email or -noncruncher, so the values a case puts in the config file or
+//! in the settings file are the ones in effect.
+//!
+struct ResearcherStartupFixture : ResearcherModeChangeFixture
+{
+    ResearcherStartupFixture()
+    {
+        gArgs.ClearForcedArg("-email");
+        gArgs.ClearForcedArg("-noncruncher");
+    }
+};
+
+BOOST_FIXTURE_TEST_CASE(a_config_file_noncruncher_that_switches_off_an_email_is_reported, ResearcherStartupFixture)
+{
+    SetConfigFileValue("noncruncher", "1");
+    SetConfigFileValue("email", m_email);
+
+    // The node is a non-cruncher and does not use the email.
+    BOOST_REQUIRE(GRC::Researcher::ConfiguredForNoncruncherMode());
+    BOOST_REQUIRE(GRC::Researcher::Email().empty());
+    BOOST_REQUIRE_EQUAL(gArgs.GetArg("-email", ""), m_email);
+
+    BOOST_CHECK(GRC::Researcher::NoncruncherSwitchesOffAnEmail());
+}
+
+BOOST_FIXTURE_TEST_CASE(a_noncruncher_with_no_email_to_switch_off_is_not_reported, ResearcherStartupFixture)
+{
+    // Nothing set.
+    BOOST_CHECK(!GRC::Researcher::NoncruncherSwitchesOffAnEmail());
+
+    // An email alone is a researcher.
+    SetConfigFileValue("email", m_email);
+    BOOST_CHECK(!GRC::Researcher::NoncruncherSwitchesOffAnEmail());
+
+    // An email with noncruncher=0 is a researcher too.
+    SetConfigFileValue("noncruncher", "0");
+    BOOST_REQUIRE(!GRC::Researcher::ConfiguredForNoncruncherMode());
+    BOOST_CHECK(!GRC::Researcher::NoncruncherSwitchesOffAnEmail());
+
+    // noncruncher alone has no email to switch off.
+    SetConfigFileValue("noncruncher", "1");
+    SetConfigFileValue("email", "");
+    BOOST_REQUIRE(GRC::Researcher::ConfiguredForNoncruncherMode());
+    BOOST_CHECK(!GRC::Researcher::NoncruncherSwitchesOffAnEmail());
+
+    // An email value that itself asks for non-cruncher mode did so before
+    // -noncruncher was read from the config file.
+    for (const std::string email : {"investor", "noncruncher", "NonCruncher"}) {
+        SetConfigFileValue("email", email);
+        BOOST_CHECK_MESSAGE(!GRC::Researcher::NoncruncherSwitchesOffAnEmail(), email);
+    }
+
+    // So did the legacy investor flag.
+    SetConfigFileValue("email", m_email);
+    BOOST_REQUIRE(GRC::Researcher::NoncruncherSwitchesOffAnEmail());
+    SetConfigFileValue("investor", "1");
+    BOOST_CHECK(!GRC::Researcher::NoncruncherSwitchesOffAnEmail());
+}
+
+BOOST_FIXTURE_TEST_CASE(a_noncruncher_mode_held_in_the_settings_file_is_not_reported, ResearcherStartupFixture)
+{
+    // What a switch to non-cruncher mode in the researcher wizard, or a
+    // changesettings noncruncher=1, leaves for the next start, with an email
+    // still in the config file. The settings file was read by its key all along.
+    SetConfigFileValue("email", m_email);
+    BOOST_REQUIRE(updateRwSetting("noncruncher", util::SettingsValue{"1"}, /*apply_to_running_args=*/false));
+    BOOST_REQUIRE_EQUAL(Forced("noncruncher"), "<absent>");
+    BOOST_REQUIRE(GRC::Researcher::ConfiguredForNoncruncherMode());
+    BOOST_REQUIRE_EQUAL(gArgs.GetArg("-email", ""), m_email);
+
+    BOOST_CHECK(!GRC::Researcher::NoncruncherSwitchesOffAnEmail());
+
+    // The same with the line in the config file as well.
+    SetConfigFileValue("noncruncher", "1");
+    BOOST_CHECK(!GRC::Researcher::NoncruncherSwitchesOffAnEmail());
+
+    // A settings file that holds noncruncher=0 outranks the config file line,
+    // and the node is a researcher.
+    BOOST_REQUIRE(updateRwSetting("noncruncher", util::SettingsValue{"0"}, /*apply_to_running_args=*/false));
+    BOOST_REQUIRE(!GRC::Researcher::ConfiguredForNoncruncherMode());
+    BOOST_CHECK(!GRC::Researcher::NoncruncherSwitchesOffAnEmail());
+}
+
 BOOST_AUTO_TEST_CASE(it_provides_access_to_a_global_researcher_singleton)
 {
     GRC::ResearcherPtr researcher(GRC::Researcher::Get());

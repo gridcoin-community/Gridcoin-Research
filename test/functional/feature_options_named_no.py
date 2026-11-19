@@ -19,6 +19,7 @@ from test_framework.test_node import ErrorMatch
 NONCRUNCHER = "Non-cruncher mode configured. Skipping CPID import."
 NO_EMAIL = "Please set 'email=<your BOINC account email>' in gridcoinresearch.conf or 'noncruncher=1'"
 HARDENED = "HardenProcess: NO_NEW_PRIVS set"
+EMAIL_OFF = "noncruncher is set and switches off the email that is also set"
 UNKNOWN_IN_CONFIG = ["Ignoring unknown configuration value noncruncher",
                      "Ignoring unknown configuration value nonewprivs"]
 
@@ -68,7 +69,7 @@ class OptionsNamedNoTest(GridcoinTestFramework):
         self.restart([], [NO_EMAIL] + hardened, [NONCRUNCHER])
 
         self.log.info("-noncruncher on the command line, bare and with a value")
-        self.restart(["-noncruncher"], [NONCRUNCHER], [NO_EMAIL])
+        self.restart(["-noncruncher"], [NONCRUNCHER], [NO_EMAIL, EMAIL_OFF])
         self.restart(["-noncruncher=1"], [NONCRUNCHER], [NO_EMAIL])
         self.restart(["-noncruncher=0"], [NO_EMAIL], [NONCRUNCHER])
 
@@ -96,12 +97,23 @@ class OptionsNamedNoTest(GridcoinTestFramework):
         self.stop_node(0)
         with open(self.network_config(), "a", encoding="utf-8") as config:
             config.write("noncruncher=1\nnonewprivs=0\n")
-        with self.nodes[0].assert_debug_log([NONCRUNCHER], unexpected_msgs=[NO_EMAIL, HARDENED] + UNKNOWN_IN_CONFIG,
+        with self.nodes[0].assert_debug_log([NONCRUNCHER],
+                                            unexpected_msgs=[NO_EMAIL, HARDENED, EMAIL_OFF] + UNKNOWN_IN_CONFIG,
                                             timeout=60):
             self.start_node(0)
 
         self.log.info("the command line is ahead of the config file")
         self.restart(["-noncruncher=0", "-nonewprivs=1"], [NO_EMAIL] + hardened, [NONCRUNCHER])
+
+        self.log.info("a config file with noncruncher and an email: the node says the email is not used")
+        self.stop_node(0)
+        with open(self.network_config(), "a", encoding="utf-8") as config:
+            config.write("email=researcher@example.com\n")
+        with self.nodes[0].assert_debug_log([NONCRUNCHER, EMAIL_OFF], unexpected_msgs=[NO_EMAIL], timeout=60):
+            self.start_node(0)
+
+        self.log.info("with noncruncher off the node is a researcher and says nothing of it")
+        self.restart(["-noncruncher=0"], [], [NONCRUNCHER, NO_EMAIL, EMAIL_OFF])
 
 
 if __name__ == "__main__":

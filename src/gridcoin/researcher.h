@@ -536,6 +536,22 @@ public:
     static bool ConfiguredForNoncruncherMode(bool log = false);
 
     //!
+    //! \brief Determine whether a -noncruncher that the settings file does not
+    //! hold switches off an email address that is also set.
+    //!
+    //! Releases from 5.3.2.0 until the one that reads -noncruncher by its name
+    //! did not read a noncruncher line in the configuration file. A node with
+    //! that line and an email was a researcher there and is a non-cruncher
+    //! here. Initialize() logs a warning for it. A mode chosen in the researcher
+    //! wizard or with changesettings is held in the settings file, was read all
+    //! along, and is not reported.
+    //!
+    //! \return \c true if non-cruncher mode comes from -noncruncher outside the
+    //! settings file while an email address is set.
+    //!
+    static bool NoncruncherSwitchesOffAnEmail();
+
+    //!
     //! \brief Get the current global researcher context.
     //!
     //! \return A smart pointer around the current \c Researcher object.
