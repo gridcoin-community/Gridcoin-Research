@@ -19,7 +19,14 @@
  * entry, hiding the block-index progress. A plain top-level QWidget is treated
  * as a normal window (the app's first window gets initial focus and is placed
  * on top), which behaves correctly under Xwayland while still working natively.
- * It keeps the frameless, always-on-top look of the old splash.
+ * It keeps the frameless, always-on-top look of the old splash, so the loading
+ * progress comes up in front. A window manager may open a new program's window
+ * behind the one the user is working in, and the always-on-top hint is what
+ * puts the splash in front then.
+ *
+ * A click on the splash releases it: it stops asking to be kept above other
+ * windows and is minimised. Shown again from the taskbar it is an ordinary
+ * window that other windows can cover.
  */
 class SplashScreen : public QWidget
 {
@@ -33,6 +40,8 @@ public:
 
 protected:
     void paintEvent(QPaintEvent* event) override;
+    //! Release the splash and minimise it.
+    void mousePressEvent(QMouseEvent* event) override;
 
 public Q_SLOTS:
     //! Show a status message on the splash. Arg types (QString, int) match the

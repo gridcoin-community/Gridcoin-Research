@@ -27,6 +27,7 @@
 #include "rpcconsoletests.h"
 #include "sendcoinsdialogtests.h"
 #include "sidestakemodeltests.h"
+#include "splashscreentests.h"
 #include "tablemodelindextests.h"
 #include "uritests.h"
 #include "walletmodeltests.h"
@@ -283,6 +284,10 @@ int main(int argc, char *argv[])
 
     TableModelIndexTests test25;
     if (QTest::qExec(&test25) != 0)
+        fInvalid = true;
+
+    SplashScreenTests test26;
+    if (QTest::qExec(&test26) != 0)
         fInvalid = true;
 
     return fInvalid;

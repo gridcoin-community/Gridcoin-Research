@@ -5,7 +5,10 @@
 
 #include "qt/splashscreen.h"
 
+#include <QCoreApplication>
 #include <QGuiApplication>
+#include <QIcon>
+#include <QMouseEvent>
 #include <QPainter>
 #include <QPaintEvent>
 #include <QRect>
@@ -16,9 +19,18 @@ SplashScreen::SplashScreen(QWidget* parent)
 {
     m_pixmap = QPixmap(":/images/splash");
 
-    // Normal top-level window (NOT Qt::SplashScreen), frameless and above the
-    // other windows -- see the class comment for the Xwayland rationale.
-    setWindowFlags(Qt::Window | Qt::FramelessWindowHint | Qt::WindowStaysOnTopHint);
+    // Normal top-level window (NOT Qt::SplashScreen) without a frame, kept above
+    // the other windows until the user clicks it -- see the class comment. The
+    // minimise hint is there because a frameless window has no minimise button
+    // of its own for a window manager to go by.
+    setWindowFlags(Qt::Window | Qt::FramelessWindowHint | Qt::WindowStaysOnTopHint | Qt::WindowMinimizeButtonHint);
+
+    // A title and an icon for the taskbar entry. The main window sets the
+    // application's icon, and it does not exist yet. The application name
+    // carries the network, so a testnet splash can be told from a mainnet one.
+    setWindowTitle(QCoreApplication::applicationName());
+    setWindowIcon(QIcon(QPixmap(":/images/gridcoin")));
+    setToolTip(tr("Click to minimize this window. The wallet keeps loading."));
 
     if (!m_pixmap.isNull()) {
         setFixedSize(m_pixmap.size());
@@ -32,6 +44,19 @@ SplashScreen::SplashScreen(QWidget* parent)
 void SplashScreen::finish()
 {
     hide();
+}
+
+void SplashScreen::mousePressEvent(QMouseEvent* event)
+{
+    Q_UNUSED(event);
+
+    // Changing the flags of a window hides it, so the flag goes first and the
+    // window is then shown minimised.
+    if (windowFlags().testFlag(Qt::WindowStaysOnTopHint)) {
+        setWindowFlag(Qt::WindowStaysOnTopHint, false);
+    }
+
+    showMinimized();
 }
 
 void SplashScreen::showMessage(const QString& message, int alignment)
