@@ -286,6 +286,20 @@ bool LoadProjectObjectToStatsByCPID(const std::string& project, const SerializeD
  */
 unsigned int NumScrapersForSupermajority(unsigned int nScraperCount);
 
+/**
+ * @brief Gives the manifests that a supermajority of the scrapers agree on. This is a CONSENSUS critical function. From
+ * v15 the construction of a convergence takes the first agreement it gives, and the validation of a superblock by
+ * manifest takes the agreements that have the hint of the superblock.
+ *
+ * Manifests agree when they have the same part hashes in the same order, the same consensus block and the same project
+ * names in the same order. A manifest whose content hash is not the hash of its part hashes and its consensus block is
+ * in no agreement. An agreement is of a supermajority of the scrapers in manifests_by_scraper: that many scrapers each
+ * hold a manifest in it.
+ * @param manifests_by_scraper The manifests binned by scraper, as ScraperCullAndBinCScraperManifests() gives them.
+ * @return The agreements, ordered by the time of the latest manifest of each, latest first.
+ */
+std::vector<ManifestAgreement> ManifestsAgreedBySupermajority(const mmCSManifestsBinnedByScraper& manifests_by_scraper);
+
 /** Gets a vector of projects that require an external adapter for the scrapers to pull statistics. */
 std::vector<std::string> GetProjectsExternalAdapterRequired();
 
