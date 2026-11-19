@@ -243,6 +243,9 @@ Then alice logs in again (a new group membership takes effect at the next login)
 gridcoinresearch -multiprocess -ipcdir=/run/gridcoinresearchd -ipcserviceuser=gridcoin
 ```
 
+KDE Plasma lists the actions when the Gridcoin entry is right-clicked in its launcher. A desktop that does not show
+a launcher's actions, such as Xfce with its applications menu, needs the command typed in a terminal instead.
+
 The GUI connects only to a core running as `gridcoin`, in an IPC directory owned by `gridcoin` or root that nobody
 else can write.
 
