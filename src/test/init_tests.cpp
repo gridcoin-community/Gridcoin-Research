@@ -19,6 +19,7 @@
 
 #include <algorithm>
 #include <iterator>
+#include <map>
 #include <set>
 #include <sstream>
 #include <string>
@@ -229,6 +230,121 @@ BOOST_AUTO_TEST_CASE(every_registered_argument_has_its_settings_class)
     for (const char* name : {"-blocknotify", "-walletnotify", "-projectnotify", "-pollnotify", "-psgtnotify",
                              "-alertnotify", "-startupnotify", "-shutdownnotify", "-rpcuser", "-rpcpassword"}) {
         BOOST_CHECK_MESSAGE(all_flags.at(name) & ArgsManager::SENSITIVE, name);
+    }
+}
+
+namespace {
+//! The node's option table, copied into an ArgsManager of its own. gArgs carries values the test setup forces
+//! (-datadir, -printtoconsole and others), and a forced value is ahead of the command line, so the parser is
+//! run on a copy that holds the same names and flags and nothing else.
+struct ServerOptionTable
+{
+    ArgsManager m_args;
+    std::map<std::string, unsigned int> m_registered;
+
+    ServerOptionTable()
+    {
+        gArgs.ClearArgs();
+        SetupServerArgs();
+        m_registered = gArgs.GetRegisteredArgFlags();
+        gArgs.ClearArgs();
+
+        for (const auto& [name, flags] : m_registered) {
+            m_args.AddArg(name, "", flags, OptionsCategory::OPTIONS);
+        }
+    }
+
+    //! Parse one command line argument.
+    bool ParseOne(const std::string& arg, std::string& error)
+    {
+        const char* const argv[]{"testgridcoin", arg.c_str()};
+        return m_args.ParseParameters(2, argv, error);
+    }
+};
+} // namespace
+
+//! Every option the node registers is taken by its own name, and "-no" in front of that name is its negation.
+//! This runs the parser over the whole option table, so a change to how a leading "no" is read cannot pass
+//! by being right for a few names only.
+BOOST_AUTO_TEST_CASE(every_registered_option_is_itself_and_its_no_form_is_its_negation)
+{
+    ServerOptionTable table;
+    ArgsManager& args = table.m_args;
+    unsigned int checked = 0;
+
+    for (const auto& [name, flags] : table.m_registered) {
+        if (flags & ArgsManager::COMMAND) continue;
+        BOOST_REQUIRE_MESSAGE(name.size() > 1 && name[0] == '-', name);
+        const std::string key = name.substr(1);
+        std::string error;
+
+        // The option by its own name. -includeconf alone is refused on a command line.
+        if (name == "-includeconf") {
+            BOOST_CHECK(!table.ParseOne(name + "=other.conf", error));
+        } else {
+            BOOST_CHECK_MESSAGE(table.ParseOne(name, error), name + ": " + error);
+            BOOST_CHECK_MESSAGE(args.IsArgSet(name), name);
+            BOOST_CHECK_MESSAGE(!args.IsArgNegated(name), name);
+        }
+
+        // "-no" in front of the name.
+        const std::string negation = "-no" + key;
+        if (flags & ArgsManager::ALLOW_BOOL) {
+            BOOST_CHECK_MESSAGE(table.ParseOne(negation, error), negation + ": " + error);
+            BOOST_CHECK_MESSAGE(args.IsArgNegated(name), negation);
+
+            // The double negative is the option again.
+            BOOST_CHECK_MESSAGE(table.ParseOne(negation + "=0", error), negation + "=0: " + error);
+            BOOST_CHECK_MESSAGE(!args.IsArgNegated(name), negation + "=0");
+            BOOST_CHECK_MESSAGE(args.IsArgSet(name), negation + "=0");
+        } else {
+            BOOST_CHECK_MESSAGE(!table.ParseOne(negation, error), negation);
+            BOOST_CHECK_EQUAL(error, "Negating of -" + key + " is meaningless and therefore forbidden");
+        }
+
+        ++checked;
+    }
+
+    // The table was there to walk.
+    BOOST_CHECK_GT(checked, 150U);
+}
+
+//! The registered options whose own names begin with "no". Such a name is read as the option and not as the
+//! negation of another one, so a new one is added here on purpose, with a case of its own in util_tests
+//! (args_an_option_named_with_a_leading_no_is_itself_on_the_command_line).
+BOOST_AUTO_TEST_CASE(the_options_named_with_a_leading_no_are_these_three)
+{
+    ServerOptionTable table;
+    ArgsManager& args = table.m_args;
+    const std::map<std::string, unsigned int>& registered = table.m_registered;
+
+    std::set<std::string> named_no;
+    for (const auto& [name, flags] : registered) {
+        if (name.rfind("-no", 0) == 0) named_no.insert(name);
+    }
+
+    const std::set<std::string> expected{"-nobuildwarn", "-noncruncher", "-nonewprivs"};
+    BOOST_CHECK_EQUAL_COLLECTIONS(named_no.begin(), named_no.end(), expected.begin(), expected.end());
+
+    // None of them hides another option: the name with its "no" taken off is not an option, so no other
+    // option loses its "-no" form.
+    for (const std::string& name : named_no) {
+        BOOST_CHECK_MESSAGE(registered.count("-" + name.substr(3)) == 0, name);
+    }
+
+    // Each is taken by its own name, with and without a value, and is negated by a second "no".
+    for (const std::string& name : named_no) {
+        std::string error;
+        BOOST_CHECK_MESSAGE(table.ParseOne(name, error), name + ": " + error);
+        BOOST_CHECK_MESSAGE(args.GetBoolArg(name, false), name);
+
+        BOOST_CHECK_MESSAGE(table.ParseOne(name + "=0", error), name + "=0: " + error);
+        BOOST_CHECK_MESSAGE(!args.GetBoolArg(name, true), name + "=0");
+
+        const std::string negation = "-no" + name.substr(1);
+        BOOST_CHECK_MESSAGE(table.ParseOne(negation, error), negation + ": " + error);
+        BOOST_CHECK_MESSAGE(args.IsArgNegated(name), negation);
+        BOOST_CHECK_MESSAGE(!args.GetBoolArg(name, true), negation);
     }
 }
 

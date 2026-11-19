@@ -239,6 +239,9 @@ BASE_SCRIPTS = [
     # feature_settings_file_refused.py: refused keys in the settings file are ignored at
     # startup, logged, listed by listsettings, and still erasable with changesettings.
     'feature_settings_file_refused.py',
+    # feature_options_named_no.py: -noncruncher, -nonewprivs and -nobuildwarn are
+    # taken by their own names on the command line and in the config file.
+    'feature_options_named_no.py',
     # interface_cli_listener_check.py: the RPC client identifies the owner of the RPC
     # listener before it sends credentials; -rpcserviceuser and -rpcskiplistenercheck.
     'interface_cli_listener_check.py',
