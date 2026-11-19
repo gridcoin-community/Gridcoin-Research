@@ -36,6 +36,7 @@
 
 #include <algorithm>
 #include <functional>
+#include <limits>
 #include <list>
 #include <map>
 #include <memory>
@@ -50,6 +51,7 @@
 // Defined in scraper.cpp, which declares them there rather than in a header.
 extern fs::path pathDataDir;
 extern ConvergedScraperStats ConvergedScraperStatsCache GUARDED_BY(cs_ConvergedScraperStatsCache);
+extern mmCSManifestsBinnedByScraper ScraperCullAndBinCScraperManifests();
 extern bool ScraperConstructConvergedManifestByProject(const GRC::WhitelistSnapshot& projectWhitelist,
                                                        mmCSManifestsBinnedByScraper& mMapCSManifestsBinnedByScraper,
                                                        ConvergedManifest& StructConvergedManifest);
@@ -486,6 +488,14 @@ CDataStream MessageStating(const std::shared_ptr<CScraperManifest>& manifest, co
     return message;
 }
 
+//! The hash of a manifest.
+uint256 ManifestHash(const std::shared_ptr<CScraperManifest>& manifest)
+{
+    LOCK(manifest->cs_manifest);
+
+    return *manifest->phash;
+}
+
 //! The content hash a manifest states.
 uint256 StatedContentHash(const std::shared_ptr<CScraperManifest>& manifest)
 {
@@ -510,6 +520,15 @@ struct GivenSuperblockOutcome
     bool own_formed;     //!< Whether the node made a superblock of its own.
     bool own_by_project; //!< Whether the node's own superblock was converged by project.
     size_t own_scrapers; //!< The count of scrapers in the node's own convergence.
+};
+
+//! The convergence a node formed of its own.
+struct OwnConvergence
+{
+    bool formed;                //!< Whether the node made a superblock of its own.
+    bool by_project;            //!< Whether the node's own superblock was converged by project.
+    size_t scrapers;            //!< The count of scrapers in the convergence.
+    GRC::Superblock superblock; //!< The node's own superblock.
 };
 
 //! Keeps the result that Quorum::ValidateSuperblock() logs, for the life of the object.
@@ -666,13 +685,8 @@ public:
         return received;
     }
 
-    //! Gives the node the superblock made from \p manifest alone, in a block at \p height or with no height. With
-    //! \p use_cache false the node does not look for the superblock among the convergences in its cache. With
-    //! \p another_hint the superblock has another hint for the manifest's content hash, which is not in the hash of
-    //! the superblock.
-    GivenSuperblockOutcome IsGivenTheSuperblockOf(std::shared_ptr<CScraperManifest> manifest,
-                                                  const std::optional<int> height, const bool use_cache = true,
-                                                  const bool another_hint = false)
+    //! The superblock made from \p manifest alone.
+    GRC::Superblock SuperblockOf(std::shared_ptr<CScraperManifest> manifest)
     {
         ConvergedManifest of_one(manifest);
         const ConvergedScraperStats stats(NOW, of_one,
@@ -683,6 +697,57 @@ public:
 
         BOOST_REQUIRE(superblock.WellFormed());
         BOOST_REQUIRE(!superblock.ConvergedByProject());
+
+        return superblock;
+    }
+
+    //! The best block is the block below \p height, and the node forms its own convergence, which is then for a
+    //! superblock in a block at \p height.
+    OwnConvergence FormsItsOwnConvergenceFor(const int height)
+    {
+        WITH_LOCK(cs_main, nBestHeight = height - 1);
+
+        ScraperGetSuperblockContract();
+
+        OwnConvergence own{};
+
+        own.scrapers = ScrapersInCachedConvergence();
+
+        LOCK(cs_ConvergedScraperStatsCache);
+
+        own.superblock = ConvergedScraperStatsCache.NewFormatSuperblock;
+        own.formed = own.superblock.WellFormed();
+        own.by_project = own.superblock.ConvergedByProject();
+
+        return own;
+    }
+
+    //! Gives the node \p superblock in a block at \p height, not from the convergences in its cache, and tells the
+    //! result of the validation that the node logs.
+    std::string ResultNotFromTheCacheFor(GRC::Superblock superblock, const int height)
+    {
+        CBlockIndex index;
+        index.nTime = NOW;
+        index.nHeight = height;
+
+        const GRC::SuperblockPtr incoming = GRC::SuperblockPtr::BindShared(std::move(superblock), &index);
+
+        LoggedValidationResult logged;
+
+        GRC::Quorum::ValidateSuperblock(incoming, false, 32, height);
+
+        return logged.Result();
+    }
+
+    //! Gives the node the superblock made from \p manifest alone, in a block at \p height or with no height. With
+    //! \p use_cache false the node does not look for the superblock among the convergences in its cache. With
+    //! \p another_hint the superblock has another hint for the manifest's content hash, which is not in the hash of
+    //! the superblock.
+    GivenSuperblockOutcome IsGivenTheSuperblockOf(std::shared_ptr<CScraperManifest> manifest,
+                                                  const std::optional<int> height, const bool use_cache = true,
+                                                  const bool another_hint = false)
+    {
+        GRC::Superblock superblock = SuperblockOf(manifest);
 
         if (another_hint) superblock.m_manifest_content_hint ^= 1;
 
@@ -716,6 +781,9 @@ public:
 
         return outcome;
     }
+
+    //! The ID of scraper \p n.
+    ScraperID Id(const size_t n) { return EncodeDestination(CTxDestination(Key(n).GetPubKey().GetID())); }
 
 private:
     static constexpr int64_t NOW = 1700000000;
@@ -1520,6 +1588,183 @@ BOOST_AUTO_TEST_CASE(validation_by_manifest_goes_on_after_a_manifest_that_does_n
 
         // The node is given the superblock made from a manifest under project_b, not from its cache.
         BOOST_CHECK_MESSAGE(scrapers.IsGivenTheSuperblockOf(earlier, height, false).accepted, "height " << height);
+    }
+}
+
+//! From v15 ManifestsAgreedBySupermajority() gives the manifests that a supermajority of the scrapers agree on, to the
+//! construction of a convergence and to the validation of a superblock by manifest. The agreements are given latest
+//! first, an agreement holds the latest of the agreeing manifests of each of its scrapers, and manifests of fewer
+//! scrapers than the supermajority are no agreement.
+BOOST_AUTO_TEST_CASE(manifests_agreed_by_supermajority_are_given_latest_first_with_one_manifest_of_each_scraper)
+{
+    ThreeScrapers scrapers;
+
+    const std::shared_ptr<CScraperManifest> earlier = scrapers.Publishes(0, OTHER_STATISTICS);
+
+    scrapers.Publishes(1, OTHER_STATISTICS);
+
+    const uint256 earlier_of_2 = ManifestHash(scrapers.Publishes(2, OTHER_STATISTICS));
+
+    scrapers.Publishes(0, AGREED_STATISTICS);
+
+    const uint256 later_of_0 = ManifestHash(scrapers.Publishes(0, AGREED_STATISTICS));
+    const std::shared_ptr<CScraperManifest> later = scrapers.Publishes(1, AGREED_STATISTICS);
+
+    // The manifest of one scraper of the three.
+    scrapers.Publishes(2, AGREED_STATISTICS, "project_b");
+
+    mmCSManifestsBinnedByScraper manifests_by_scraper = ScraperCullAndBinCScraperManifests();
+
+    BOOST_REQUIRE(manifests_by_scraper.size() == 3);
+
+    // A manifest that was deleted after the manifests were binned.
+    manifests_by_scraper[scrapers.Id(2)].emplace(
+        std::numeric_limits<int64_t>::max(),
+        std::make_pair(uint256S("01"), StatedContentHash(later)));
+
+    const std::vector<ManifestAgreement> agreements = ManifestsAgreedBySupermajority(manifests_by_scraper);
+
+    BOOST_REQUIRE(agreements.size() == 2);
+
+    BOOST_CHECK(agreements[0].m_content_hash == StatedContentHash(later));
+    BOOST_REQUIRE(agreements[0].m_manifests.size() == 2);
+    BOOST_CHECK(agreements[0].m_manifests.at(scrapers.Id(0)) == later_of_0);
+    BOOST_CHECK(agreements[0].m_manifests.at(scrapers.Id(1)) == ManifestHash(later));
+
+    BOOST_CHECK(agreements[1].m_content_hash == StatedContentHash(earlier));
+    BOOST_REQUIRE(agreements[1].m_manifests.size() == 3);
+    BOOST_CHECK(agreements[1].m_manifests.at(scrapers.Id(0)) == ManifestHash(earlier));
+    BOOST_CHECK(agreements[1].m_manifests.at(scrapers.Id(2)) == earlier_of_2);
+}
+
+//! An agreement has the time of the latest of its manifests, whichever scraper holds that one. Here the latest
+//! manifest of the first scraper is of the earlier agreement.
+BOOST_AUTO_TEST_CASE(manifests_agreed_by_supermajority_have_the_time_of_their_latest_manifest)
+{
+    ThreeScrapers scrapers;
+
+    const std::shared_ptr<CScraperManifest> of_0_and_2 = scrapers.Publishes(0, OTHER_STATISTICS);
+
+    scrapers.Publishes(1, AGREED_STATISTICS);
+
+    const std::shared_ptr<CScraperManifest> of_0_and_1 = scrapers.Publishes(0, AGREED_STATISTICS);
+
+    scrapers.Publishes(2, OTHER_STATISTICS);
+
+    const std::vector<ManifestAgreement> agreements =
+        ManifestsAgreedBySupermajority(ScraperCullAndBinCScraperManifests());
+
+    BOOST_REQUIRE(agreements.size() == 2);
+    BOOST_CHECK(agreements[0].m_content_hash == StatedContentHash(of_0_and_2));
+    BOOST_CHECK(agreements[1].m_content_hash == StatedContentHash(of_0_and_1));
+}
+
+//! The supermajority is of the scrapers that hold manifests. Two of five agree, and each of the three others holds a
+//! manifest with the same parts that states another content hash, which is in no agreement.
+BOOST_AUTO_TEST_CASE(manifests_agreed_by_supermajority_are_of_a_supermajority_of_the_scrapers_that_hold_manifests)
+{
+    FiveScrapers scrapers;
+
+    const std::shared_ptr<CScraperManifest> of_two = scrapers.Publishes(0, AGREED_STATISTICS);
+
+    scrapers.Publishes(1, AGREED_STATISTICS);
+
+    uint256 another = StatedContentHash(of_two);
+    *(another.end() - 1) ^= 0x01;
+
+    for (const size_t n : {2, 3, 4}) {
+        scrapers.IsSent(n, AGREED_STATISTICS, "project_a", another);
+    }
+
+    const mmCSManifestsBinnedByScraper manifests_by_scraper = ScraperCullAndBinCScraperManifests();
+
+    BOOST_REQUIRE(manifests_by_scraper.size() == 5);
+    BOOST_CHECK(ManifestsAgreedBySupermajority(manifests_by_scraper).empty());
+}
+
+//! A convergence is built from the latest of the agreements. A node that validates a superblock can hold later
+//! manifests than the node that staked it, so the validation by manifest takes each of the agreements.
+BOOST_AUTO_TEST_CASE(a_convergence_is_built_from_the_latest_agreement_and_a_superblock_is_valid_by_each)
+{
+    for (const int height : {V15_HEIGHT - 1, V15_HEIGHT}) {
+        ThreeScrapers scrapers;
+
+        const std::shared_ptr<CScraperManifest> earlier = scrapers.Publishes(0, OTHER_STATISTICS);
+
+        scrapers.Publishes(1, OTHER_STATISTICS);
+        scrapers.Publishes(2, OTHER_STATISTICS);
+
+        const std::shared_ptr<CScraperManifest> later = scrapers.Publishes(1, AGREED_STATISTICS);
+
+        scrapers.Publishes(2, AGREED_STATISTICS);
+
+        const OwnConvergence own = scrapers.FormsItsOwnConvergenceFor(height);
+
+        BOOST_REQUIRE_MESSAGE(own.formed, "height " << height);
+        BOOST_CHECK_MESSAGE(!own.by_project, "height " << height);
+        BOOST_CHECK_MESSAGE(own.scrapers == 2, "height " << height);
+        BOOST_CHECK_MESSAGE(own.superblock.GetHash() == scrapers.SuperblockOf(later).GetHash(), "height " << height);
+
+        BOOST_CHECK_MESSAGE(scrapers.IsGivenTheSuperblockOf(later, height, false).accepted, "height " << height);
+        BOOST_CHECK_MESSAGE(scrapers.IsGivenTheSuperblockOf(earlier, height, false).accepted, "height " << height);
+    }
+}
+
+//! From v15 the construction and the validation by manifest both take the agreements that
+//! ManifestsAgreedBySupermajority() gives, so the superblock of the convergence a node builds from one manifest is
+//! valid by manifest for a node with the same manifests.
+BOOST_AUTO_TEST_CASE(the_superblock_of_a_convergence_built_from_one_manifest_is_valid_by_manifest_from_v15)
+{
+    const ProjectStatistics agreed{{"project_a", AGREED_STATISTICS}, {"project_b", OTHER_STATISTICS}};
+    const ProjectStatistics renamed{{"project_b", AGREED_STATISTICS}, {"project_a", OTHER_STATISTICS}};
+
+    using Manifests = std::function<void(ThreeScrapers&, size_t)>;
+
+    const std::vector<std::pair<std::string, Manifests>> held{
+        {"the manifests of three scrapers that agree",
+         [&](ThreeScrapers& scrapers, const size_t place) {
+             scrapers.Publishes(place, agreed);
+             scrapers.Publishes((place + 1) % 3, agreed);
+             scrapers.Publishes((place + 2) % 3, agreed);
+         }},
+        {"one of three with other project names",
+         [&](ThreeScrapers& scrapers, const size_t place) {
+             scrapers.Publishes((place + 1) % 3, agreed);
+             scrapers.Publishes((place + 2) % 3, agreed);
+             scrapers.IsSent(place, renamed);
+         }},
+        {"one of three that states another content hash",
+         [&](ThreeScrapers& scrapers, const size_t place) {
+             const std::shared_ptr<CScraperManifest> of_two = scrapers.Publishes((place + 1) % 3, agreed);
+
+             scrapers.Publishes((place + 2) % 3, agreed);
+             scrapers.IsSent(place, ProjectStatistics{{"project_a", OTHER_STATISTICS}, {"project_b", AGREED_STATISTICS}},
+                             StatedContentHash(of_two));
+         }},
+        {"an earlier agreement of three and a later one of two",
+         [&](ThreeScrapers& scrapers, const size_t place) {
+             scrapers.Publishes(0, AGREED_STATISTICS);
+             scrapers.Publishes(1, AGREED_STATISTICS);
+             scrapers.Publishes(2, AGREED_STATISTICS);
+             scrapers.Publishes((place + 1) % 3, agreed);
+             scrapers.Publishes((place + 2) % 3, agreed);
+         }},
+    };
+
+    for (const auto& manifests : held) {
+        for (size_t place = 0; place < 3; ++place) {
+            ThreeScrapers scrapers;
+
+            manifests.second(scrapers, place);
+
+            const OwnConvergence own = scrapers.FormsItsOwnConvergenceFor(V15_HEIGHT);
+
+            BOOST_REQUIRE_MESSAGE(own.formed, manifests.first << ", place " << place);
+            BOOST_REQUIRE_MESSAGE(!own.by_project, manifests.first << ", place " << place);
+            BOOST_CHECK_MESSAGE(
+                scrapers.ResultNotFromTheCacheFor(own.superblock, V15_HEIGHT) == "VALID_BY_MANIFEST",
+                manifests.first << ", place " << place);
+        }
     }
 }
 
