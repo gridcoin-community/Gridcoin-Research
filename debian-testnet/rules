@@ -124,6 +124,10 @@ endif
 # snippets: not enabled or started on install, and stopped on removal. The core is neither stopped
 # nor restarted by them on an upgrade (--no-stop-on-upgrade): the postinst try-restarts a running
 # one once the switch-over has run, and leaves one whose switch-over failed as it runs.
+# Only the socket of the helper's two units is named to dh_installsystemd for snippets,
+# so a running socket is restarted after an upgrade. The service is installed by the
+# same call and named in no snippet. It is started only through the socket and refuses
+# a manual start (RefuseManualStart=), so a try-restart of it is refused with a message.
 execute_before_dh_installsystemd:
 	cp $(UNITDIR)/gridcointestnetd.service debian/gridcointestnetd.gridcointestnetd.service
 ifeq ($(AUTOUNLOCK),ON)
@@ -134,7 +138,8 @@ endif
 override_dh_installsystemd:
 	dh_installsystemd -pgridcointestnetd --name=gridcointestnetd --no-enable --no-start --no-stop-on-upgrade
 ifeq ($(AUTOUNLOCK),ON)
-	dh_installsystemd -pgridcointestnetd --name=gridcointestnet-autounlock --no-enable --no-start --restart-after-upgrade
+	dh_installsystemd -pgridcointestnetd --name=gridcointestnet-autounlock --no-enable --no-start --restart-after-upgrade \
+		gridcointestnet-autounlock.socket
 endif
 
 # The daemon is execute-only (0711), as CMake installs it; dh_fixperms makes it 0755.

@@ -793,6 +793,19 @@ class RulesTests(unittest.TestCase):
             self.assertIn("dh_installsystemd -p%s --name=%s --no-enable --no-start --no-stop-on-upgrade\n"
                           % (net["package"], net["daemon"]), rules)
 
+    def test_debhelper_restarts_the_helper_socket_and_never_the_helper_service(self):
+        # The helper's service refuses a manual start, so a try-restart of it in the postinst is
+        # refused with a message at every upgrade. Only the socket is named for snippets.
+        for net in NETWORKS.values():
+            with open(os.path.join(SOURCE_ROOT, net["tree"], "rules"), encoding="utf8") as f:
+                rules = f.read()
+            calls = re.findall(r"^\tdh_installsystemd [^\n]*--name=%s(?:[^\n]*\\\n)*[^\n]*\n" % net["autounlock"],
+                               rules, re.M)
+            self.assertEqual(len(calls), 1, rules)
+            self.assertEqual(calls[0].replace("\\\n", " ").split(),
+                             ["dh_installsystemd", "-p" + net["package"], "--name=" + net["autounlock"], "--no-enable",
+                              "--no-start", "--restart-after-upgrade", net["autounlock"] + ".socket"])
+
     def test_the_build_hosts_systemd_decides_the_private_pids_line(self):
         # An older systemd logs an unknown key at every load of a unit that carries PrivatePIDs=.
         for net in NETWORKS.values():
