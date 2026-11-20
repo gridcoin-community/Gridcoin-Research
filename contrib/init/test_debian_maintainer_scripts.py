@@ -793,6 +793,19 @@ class RulesTests(unittest.TestCase):
             self.assertIn("dh_installsystemd -p%s --name=%s --no-enable --no-start --no-stop-on-upgrade\n"
                           % (net["package"], net["daemon"]), rules)
 
+    def test_the_build_hosts_systemd_decides_the_private_pids_line(self):
+        # An older systemd logs an unknown key at every load of a unit that carries PrivatePIDs=.
+        for net in NETWORKS.values():
+            with open(os.path.join(SOURCE_ROOT, net["tree"], "rules"), encoding="utf8") as f:
+                rules = f.read()
+            self.assertIn('PRIVATE_PIDS := $(shell [ "$(SYSTEMD_MAJOR)" -ge 257 ] 2>/dev/null && echo ON || echo OFF)\n',
+                          rules)
+            self.assertIn("\t\t-DGRC_UNIT_PRIVATE_PIDS=$(PRIVATE_PIDS) \\\n", rules)
+        with open(os.path.join(SOURCE_ROOT, "cmake", "systemd_units.cmake"), encoding="utf8") as f:
+            cmake = f.read()
+        self.assertRegex(cmake, r'if\(GRC_UNIT_PRIVATE_PIDS\)\s+set\(GRC_UNIT_PRIVATE_PIDS_OFF ""\)\s+else\(\)\s+'
+                                r'set\(GRC_UNIT_PRIVATE_PIDS_OFF "#"\)\s+endif\(\)')
+
 
 class NewsTests(unittest.TestCase):
     def test_news_says_the_system_service_keeps_its_data(self):

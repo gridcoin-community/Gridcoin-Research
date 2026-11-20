@@ -47,6 +47,9 @@ endif
 # them, and gridcointestnet-service then knows there are none.
 SYSTEMD_MAJOR := $(shell systemctl --version 2>/dev/null | sed -n '1s/^systemd \([0-9]*\).*/\1/p')
 AUTOUNLOCK := $(shell [ "$(SYSTEMD_MAJOR)" -ge 251 ] 2>/dev/null && echo ON || echo OFF)
+# PrivatePIDs= needs systemd 257, and an older one logs an unknown key at every load
+# of a core unit, so the same systemd decides whether the core units carry the line.
+PRIVATE_PIDS := $(shell [ "$(SYSTEMD_MAJOR)" -ge 257 ] 2>/dev/null && echo ON || echo OFF)
 UNITDIR := debian/tmp/usr/lib/systemd/system
 
 %:
@@ -70,6 +73,7 @@ override_dh_auto_configure:
 		-DCMAKE_BUILD_TYPE=RelWithDebInfo \
 		-DGRC_UNIT_NETWORK=test \
 		-DINSTALL_SYSTEMD_AUTOUNLOCK=$(AUTOUNLOCK) \
+		-DGRC_UNIT_PRIVATE_PIDS=$(PRIVATE_PIDS) \
 		$(CMAKE_ARCH_FLAGS)
 
 ifeq ($(DEB_HOST_ARCH),armhf)
