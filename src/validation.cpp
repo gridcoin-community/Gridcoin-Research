@@ -90,6 +90,45 @@ bool OutOfSyncByAge()
     return GetAdjustedTime() - g_previous_block_time >= maxAge;
 }
 
+bool EvaluateScraperSync()
+{
+    // The age at which OutOfSyncByAge() changes.
+    constexpr int64_t enter_age = 90 * 10;
+
+    constexpr int64_t leave_age = 60 * 60;
+
+    const int64_t age = GetAdjustedTime() - g_previous_block_time;
+
+    if (age >= leave_age) {
+        g_scraper_sync_latched = true;
+
+        return true;
+    }
+
+    if (age < enter_age) {
+        g_scraper_sync_latched = false;
+
+        return false;
+    }
+
+    return g_scraper_sync_latched;
+}
+
+bool ScraperOutOfSync(const int height)
+{
+    // The state is kept on both sides of block version 15. Only its use begins there.
+    const bool out_of_sync = EvaluateScraperSync();
+
+    return IsV15Enabled(height) ? out_of_sync : OutOfSyncByAge();
+}
+
+bool ScraperOutOfSync()
+{
+    const bool out_of_sync = EvaluateScraperSync();
+
+    return g_scraper_sync_in_force ? out_of_sync : OutOfSyncByAge();
+}
+
 static constexpr CAmount nGenesisSupply = 340569880;
 bool fColdBoot = true;
 

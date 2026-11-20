@@ -39,5 +39,11 @@ extern std::atomic<bool> g_reorg_in_progress;
 // OutOfSyncByAge() (main.cpp).
 extern std::atomic<int64_t> g_previous_block_time;
 extern std::atomic<int64_t> g_nTimeBestReceived;
+// The scraper sync state, kept by EvaluateScraperSync() (validation.cpp). The
+// first is the side the state was last on, true for out of sync. The second is
+// whether block version 15 applies to the block after the best block, set by
+// UpdateSyncTime().
+extern std::atomic<bool> g_scraper_sync_latched;
+extern std::atomic<bool> g_scraper_sync_in_force;
 
 #endif // BITCOIN_CHAIN_H

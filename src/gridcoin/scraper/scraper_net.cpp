@@ -569,8 +569,8 @@ EXCLUSIVE_LOCKS_REQUIRED(CSplitBlob::cs_manifest, CSplitBlob::cs_mapParts)
 // This is the complement to IsScraperAuthorizedToBroadcastManifests in the scraper.
 // It is used to determine whether received manifests are authorized.
 //
-// This check is SKIPPED while the receiving node is out of sync by age, at the
-// OutOfSyncByAge() branch in UnserializeCheck(). That is deliberate and is
+// This check is SKIPPED while the receiving node is out of sync, at the
+// ScraperOutOfSync() branch in UnserializeCheck(). That is deliberate and is
 // documented there. It is safe because of a design property that is easy to miss
 // when reading this function alone:
 //
@@ -741,12 +741,12 @@ EXCLUSIVE_LOCKS_REQUIRED(CScraperManifest::cs_mapManifest, CSplitBlob::cs_manife
     // exposure is point to point rather than network wide. The bounds checks in
     // this function are what actually limit what an unauthenticated sender can
     // cost us.
-    if (OutOfSyncByAge())
+    if (ScraperOutOfSync())
     {
         bCheckedAuthorized = false;
 
         LogPrint(BCLog::LogFlags::MANIFEST, "CScraperManifest::UnserializeCheck: accepting manifest "
-                 "\"%s\" without an authorization check: this node is out of sync by age. See the "
+                 "\"%s\" without an authorization check: this node is out of sync. See the "
                  "comment above for why this is deliberate.", sCManifestName);
     }
     else if (IsManifestAuthorized(nTime, pubkey, banscore_out))

@@ -118,6 +118,9 @@ struct ChainTipRestorer
     //! that mines leaves it at a fresh block's time, and every later suite then
     //! believes the node is in sync.
     int64_t m_previous_block_time;
+    //! The scraper sync state, which UpdateSyncTime keeps on every connect too.
+    bool m_scraper_sync_latched;
+    bool m_scraper_sync_in_force;
     //! Whatever an earlier suite left in mapBlockIndex, held aside for the
     //! fixture's lifetime. LoadBlockIndex() only creates genesis into an empty
     //! map, and which suites leave entries behind depends on link order: the
@@ -135,6 +138,8 @@ struct ChainTipRestorer
         m_hash_best = hashBestChain;
         m_best_height = nBestHeight;
         m_previous_block_time = g_previous_block_time.load();
+        m_scraper_sync_latched = g_scraper_sync_latched.load();
+        m_scraper_sync_in_force = g_scraper_sync_in_force.load();
         m_preexisting_index = std::move(mapBlockIndex);
         mapBlockIndex.clear();
 
@@ -161,6 +166,8 @@ struct ChainTipRestorer
         hashBestChain = m_hash_best;
         nBestHeight = m_best_height;
         g_previous_block_time.store(m_previous_block_time);
+        g_scraper_sync_latched.store(m_scraper_sync_latched);
+        g_scraper_sync_in_force.store(m_scraper_sync_in_force);
     }
 };
 

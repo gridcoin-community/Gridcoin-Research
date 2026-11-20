@@ -9,6 +9,7 @@
 #include "key_io.h"
 #include "serialize.h"
 #include "streams.h"
+#include "test/state_guard.h"
 #include "util.h"
 #include "version.h"
 
@@ -18,7 +19,9 @@
 #include <memory>
 #include <vector>
 
-BOOST_AUTO_TEST_SUITE(scraper_net_tests)
+// The receive check reads the scraper sync state, and a read keeps the state.
+// The guard puts it back.
+BOOST_AUTO_TEST_SUITE(scraper_net_tests, *boost::unit_test::fixture<grc_test::StateGuard>())
 
 //!
 //! An empty part is a peer or filesystem condition, not a programming error.

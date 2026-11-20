@@ -52,11 +52,19 @@ extern CWallet* pwalletMain;
 
 void UpdateSyncTime(const CBlockIndex* const pindexBest)
 {
+    // The scraper sync state is given the age it had reached before the block
+    // time changes, and the new age after.
+    EvaluateScraperSync();
+
     if (pindexBest && pindexBest->pprev) {
         g_previous_block_time.store(pindexBest->pprev->GetBlockTime());
     } else {
         g_previous_block_time.store(0);
     }
+
+    g_scraper_sync_in_force.store(pindexBest != nullptr && IsV15Enabled(pindexBest->nHeight + 1));
+
+    EvaluateScraperSync();
 
     if (!OutOfSyncByAge()) {
         g_nTimeBestReceived.store(GetAdjustedTime());

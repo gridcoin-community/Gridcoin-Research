@@ -27,6 +27,8 @@ uint256 hashBestChain GUARDED_BY(cs_main);
 CBlockIndex* pindexBest GUARDED_BY(cs_main) = nullptr;
 std::atomic<int64_t> g_previous_block_time;
 std::atomic<int64_t> g_nTimeBestReceived;
+std::atomic<bool> g_scraper_sync_latched = true;
+std::atomic<bool> g_scraper_sync_in_force = false;
 std::atomic<bool> g_reorg_in_progress = false;
 
 arith_uint256 CBlockIndex::GetBlockTrust() const

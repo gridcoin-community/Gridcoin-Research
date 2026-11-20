@@ -5657,7 +5657,7 @@ bool ScraperConstructConvergedManifest(const GRC::WhitelistSnapshot& projectWhit
     // actually publishing is what keeps convergence possible in that state.
     //
     // This is also why manifest ingest must not be gated on sync state (see the
-    // OutOfSyncByAge branch in CScraperManifest::UnserializeCheck): a partial
+    // ScraperOutOfSync branch in CScraperManifest::UnserializeCheck): a partial
     // manifest set reaching housekeeping would shrink this denominator and let a
     // minority view self-converge.
     unsigned int nScraperCount = mMapCSManifestsBinnedByScraper.size();
@@ -6442,7 +6442,7 @@ mmCSManifestsBinnedByScraper ScraperCullAndBinCScraperManifests(uint64_t& manife
 
     // First check for unauthorized manifests just in case a scraper has been deauthorized.
     // This is only done if in sync.
-    if (!OutOfSyncByAge())
+    if (!ScraperOutOfSync())
     {
         unsigned int nDeleted = ScraperDeleteUnauthorizedCScraperManifests();
         if (nDeleted)
@@ -6730,7 +6730,7 @@ Superblock ScraperGetSuperblockContract(bool bStoreConvergedStats, bool bContrac
     auto scraper_sleep = []() { LOCK(cs_ScraperGlobals); return nScraperSleep; };
 
     // If not in sync then immediately bail with an empty superblock.
-    if (OutOfSyncByAge()) return empty_superblock;
+    if (ScraperOutOfSync(convergence_height)) return empty_superblock;
 
     // Check the age of the ConvergedScraperStats cache. If less than nScraperSleep / 1000 old (for seconds) or clean,
     // then simply report back the cache contents. This prevents the relatively heavyweight stats computations from

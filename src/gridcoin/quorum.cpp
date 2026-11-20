@@ -660,7 +660,7 @@ public:
         {
             LOCK(cs_ConvergedScraperStatsCache);
 
-            if (OutOfSyncByAge() || !ConvergedScraperStatsCache.bMinHousekeepingComplete) {
+            if (ScraperOutOfSync(m_height) || !ConvergedScraperStatsCache.bMinHousekeepingComplete) {
                 LogPrintf("ValidateSuperblock(): No validation achieved, but node is"
                           "not in sync or minimum housekeeping is not complete"
                           " - skipping validation.");

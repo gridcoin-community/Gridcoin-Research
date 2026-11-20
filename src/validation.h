@@ -61,6 +61,23 @@ bool IsInitialBlockDownload();
 //! Heuristic: the tip is older than ten target block spacings.
 bool OutOfSyncByAge();
 
+//! The sync state the scraper and superblock code uses from block version 15.
+//! The age is that of the block before the best block, the one OutOfSyncByAge()
+//! reads. The node is out of sync when the age is one hour or more and in sync
+//! when it is under fifteen minutes. Between the two it stays on the side it
+//! was last on, and it starts out of sync. Each call applies this to the age at
+//! the time of the call and keeps the result. Returns true for out of sync.
+bool EvaluateScraperSync();
+
+//! Whether the scraper and superblock code treats the node as out of sync when
+//! it works on a block of the given height. This is the state of
+//! EvaluateScraperSync() from block version 15 and OutOfSyncByAge() below it.
+bool ScraperOutOfSync(int height);
+
+//! The same for code that has no block in hand and does not hold cs_main. The
+//! height is that of the block after the best block.
+bool ScraperOutOfSync();
+
 bool ReadTxFromDisk(CTransaction& tx, CDiskTxPos pos, FILE** pfileRet = nullptr);
 bool ReadTxFromDisk(CTransaction& tx, CTxDB& txdb, COutPoint prevout, CTxIndex& txindexRet);
 bool ReadTxFromDisk(CTransaction& tx, CTxDB& txdb, COutPoint prevout);

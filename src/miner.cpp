@@ -1529,7 +1529,7 @@ void AddSuperblockContractOrVote(CMutableTransaction& mtxCoinbase, int64_t nBloc
         superblock = std::move(*g_regtest_staged_superblock);
         g_regtest_staged_superblock.reset();
     } else {
-        if (OutOfSyncByAge()) {
+        if (ScraperOutOfSync(nBestHeight + 1)) {
             LogPrintf("AddSuperblockContractOrVote: Out of sync.");
             return;
         }
