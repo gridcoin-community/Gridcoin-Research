@@ -358,7 +358,12 @@ UniValue dumpcontracts(const UniValue& params)
 
     if (params.size() > 4)
     {
-        high_height = std::max(low_height, params[4].get_int());
+        const int requested_high_height = params[4].get_int();
+
+        // A negative high_height is kept so the range check below refuses it; std::max would turn it into
+        // low_height, and 0 means the tip.
+        high_height = requested_high_height < 0 ? requested_high_height
+                                                : std::max(low_height, requested_high_height);
     }
 
     UniValue report(UniValue::VOBJ);
@@ -371,10 +376,31 @@ UniValue dumpcontracts(const UniValue& params)
 
     LOCK(cs_main);
 
+    if (!pindexBest)
+    {
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "There is no chain tip to dump contracts from.");
+    }
+
     // Set default high_height here if not specified above now that lock on cs_main is taken.
     if (!high_height)
     {
         high_height = pindexBest->nHeight;
+    }
+
+    // Both heights must be on the chain, otherwise the rewind loops below run off the end of the chain
+    // and dereference a null block index. This is checked before the output file is created.
+    if (low_height < 0 || low_height > pindexBest->nHeight)
+    {
+        throw JSONRPCError(RPC_INVALID_PARAMETER,
+                           strprintf("low_height %d is not on the chain: heights run from 0 to %d",
+                                     low_height, pindexBest->nHeight));
+    }
+
+    if (high_height < 0 || high_height > pindexBest->nHeight)
+    {
+        throw JSONRPCError(RPC_INVALID_PARAMETER,
+                           strprintf("high_height %d is not on the chain: heights run from 0 to %d",
+                                     high_height, pindexBest->nHeight));
     }
 
     CBlockIndex* pblockindex = pindexBest;
@@ -933,7 +959,8 @@ UniValue getdifficulty(const UniValue& params)
 static const RPCHelpMan settxfee_help{
     "settxfee",
     "Set the transaction fee per kB (rounded to the nearest 0.00000001 GRC). "
-    "Overwrites the paytxfee parameter.",
+    "Overwrites the paytxfee parameter. "
+    "At most 0.1 GRC per kB.",
     {
         {"amount", RPCArg::Type::AMOUNT, RPCArg::Optional::NO,
             "The transaction fee in GRC/kB."},
@@ -956,6 +983,13 @@ UniValue settxfee(const UniValue& params)
         throw JSONRPCError(RPC_INVALID_PARAMETER,
             strprintf("txfee %s below minimum %s",
                       FormatMoney(amount), FormatMoney(nMinFee)));
+    }
+
+    const CAmount max_rate = MaxTxFeeRate();
+    if (amount > max_rate) {
+        throw JSONRPCError(RPC_INVALID_PARAMETER,
+            strprintf("txfee %s above maximum %s",
+                      FormatMoney(amount), FormatMoney(max_rate)));
     }
 
     nTransactionFee = amount;
@@ -1174,6 +1208,14 @@ UniValue getblocksbatch(const UniValue& params)
         if (mapBlockIndex.count(hash) == 0)
         {
             throw JSONRPCError(RPC_INVALID_PARAMETER, "Starting block for batch not found.");
+        }
+
+        // The batch is walked along the main chain from the starting block, so
+        // a block that is in the index but off the main chain (a stale fork)
+        // has no next block to go to.
+        if (!mapBlockIndex[hash]->IsInMainChain())
+        {
+            throw JSONRPCError(RPC_INVALID_PARAMETER, "Starting block for batch is not in the main chain.");
         }
     }
 
@@ -1591,7 +1633,7 @@ UniValue advertisebeacon(const UniValue& params)
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
-    GRC::AdvertiseBeaconResult result = GRC::Researcher::Get()->AdvertiseBeacon(force);
+    GRC::AdvertiseBeaconResult result = GRC::Researcher::Get()->AdvertiseBeacon(force, /*renewal_access=*/nullptr);
 
     if (auto public_key_option = result.TryPublicKey()) {
         const GRC::Beacon beacon(std::move(*public_key_option));

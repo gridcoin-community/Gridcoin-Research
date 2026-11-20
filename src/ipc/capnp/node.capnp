@@ -63,6 +63,8 @@ interface Node $Proxy.wrap("interfaces::Node") {
     handlePSGTPoolChanged @40 (context :Proxy.Context, callback :PSGTPoolChangedCallback) -> (result :Handler.Handler);
     handleNotifyScraperEvent @41 (context :Proxy.Context, callback :NotifyScraperEventCallback) -> (result :Handler.Handler);
     isMainNet @42 (context :Proxy.Context) -> (result :Bool);
+    executeRpcConsoleSecretCommand @43 (context :Proxy.Context, method :Text, passphrases :List(Data), args :List(Text)) -> (result :RpcConsoleResult);
+    getCorePaths @44 (context :Proxy.Context) -> (result :CorePaths);
 }
 
 # --- Notification callbacks (interfaces::Node::*Fn std::function types) ---
@@ -132,9 +134,18 @@ struct PeerInfo $Proxy.wrap("interfaces::PeerInfo") {
     minPing @17 :Float64 $Proxy.name("min_ping");
 }
 
+struct CorePaths $Proxy.wrap("interfaces::CorePaths") {
+    datadir @0 :Text;
+    debugLog @1 :Text $Proxy.name("debug_log");
+    configFile @2 :Text $Proxy.name("config_file");
+    settingsFile @3 :Text $Proxy.name("settings_file");
+    walletFile @4 :Text $Proxy.name("wallet_file");
+}
+
 struct RpcConsoleResult $Proxy.wrap("interfaces::RpcConsoleResult") {
     ok @0 :Bool;
     output @1 :Text;
+    walletUnlockNeeded @2 :Bool $Proxy.name("wallet_unlock_needed");
 }
 
 struct SettingChangeResult $Proxy.wrap("interfaces::SettingChangeResult") {
@@ -145,6 +156,7 @@ struct SettingChangeResult $Proxy.wrap("interfaces::SettingChangeResult") {
     noChange @4 :List(Text) $Proxy.name("no_change");
     immediate @5 :List(Text);
     requiresRestartSettings @6 :List(Text) $Proxy.name("requires_restart_settings");
+    elevationRequired @7 :Bool $Proxy.name("elevation_required");
 }
 
 struct ScraperConvergenceSnapshot $Proxy.wrap("interfaces::ScraperConvergenceSnapshot") {

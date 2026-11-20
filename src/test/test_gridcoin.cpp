@@ -18,6 +18,7 @@
 #include "wallet/db.h"
 #include "random.h"
 #include "wallet/wallet.h"
+#include "util/tls_libraries.h"
 
 #include <cerrno>
 #include <cstdio>
@@ -108,6 +109,10 @@ static void ReportSetupThrow()
 }
 
 struct TestingSetup {
+    //! First, so that it is built before anything here can reach OpenSSL or
+    //! libcurl, as in the programs' main().
+    const util::TlsLibrariesScope m_tls_libraries;
+
     //! The suite's data directory. It has to exist: GetDataDir() returns an
     //! empty path for a -datadir that is not a directory, so everything placed
     //! under it -- banlist.dat, which BanMan writes when it is destroyed --
@@ -153,6 +158,12 @@ struct TestingSetup {
         assert(leveldb::DB::Open(db_options, "", &txdb).ok());
         noui_connect();
         bitdb.MakeMock();
+        // No background wallet flush in the unit tests. The flush thread runs
+        // until a shutdown is requested, which a test run never does, and keeps
+        // a reference to this wallet's file name. Deleting the wallet at teardown
+        // while the thread flushes, two seconds after any wallet's last write,
+        // is a use-after-free that ThreadSanitizer reports. No test relies on it.
+        gArgs.ForceSetArg("-flushwallet", "0");
         bool fFirstRun;
         pwalletMain = new CWallet("wallet.dat");
         pwalletMain->LoadWallet(fFirstRun);

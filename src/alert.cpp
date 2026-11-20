@@ -8,6 +8,7 @@
 #include <util/string.h>
 
 #include "alert.h"
+#include <rpc/bind_policy.h>
 #include "chainparams.h"
 #include "clientversion.h"
 #include "key.h"
@@ -326,6 +327,11 @@ string GetWarnings(string strFor)
 
     if (strFor == "statusbar")
     {
+        // RPC bind conflicts are shown alongside whatever else is being reported.
+        if (const std::string rpc_warning = GetRPCBindWarning(); !rpc_warning.empty()) {
+            strStatusBar = strStatusBar.empty() ? rpc_warning : strStatusBar + "; " + rpc_warning;
+        }
+
         return strStatusBar;
     }
 

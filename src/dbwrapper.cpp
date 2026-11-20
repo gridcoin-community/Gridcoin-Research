@@ -667,7 +667,7 @@ bool CTxDB::LoadBlockIndex() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
             // designed to detect and recover from.
             //
             // The legacy behaviour was to return error() here, which
-            // propagates up to init.cpp:1330 and surfaces the modal
+            // propagates up to AppInit2 in init.cpp and surfaces the modal
             // "Error loading blkindex.dat" -- aborting init BEFORE the
             // Phase 2 hook gets a chance to run. That made Phase 2 a no-op
             // for the very condition it was designed to handle.

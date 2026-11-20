@@ -342,9 +342,9 @@ CNode* CConnman::FindNode(const CService& addr)
 
 void AddressCurrentlyConnected(const CService& addr)
 {
-    // Defensive null check matching the `if (g_connman)` pattern every other
-    // external g_connman consumer uses (net.cpp:114 / 1251 / 2277 / 2285). This
-    // was the one free-function consumer still dereferencing g_connman
+    // Defensive null check matching the `if (g_connman)` pattern the other
+    // guarded g_connman consumers use (e.g. CNode::PushGetBlocks, MapPort,
+    // StartNode, StopNode). This free function dereferenced g_connman
     // unguarded. No null window is reachable today -- its only caller is
     // ProcessMessage on the message-handler thread, which Shutdown() joins (via
     // StopNode() -> CConnman::Stop()) before g_connman.reset() (init.cpp) -- so
@@ -617,8 +617,10 @@ bool CNode::ReceiveMsgBytes(const char *pch, unsigned int nBytes)
         pch += handled;
         nBytes -= handled;
 
+        // The mockable clock, the one the VERSION handler compares the peer's
+        // time against, as Bitcoin Core stamps it.
         if (msg.complete())
-            msg.nTime = GetTimeMicros();
+            msg.nTime = GetTime<std::chrono::microseconds>().count();
     }
 
     return true;
@@ -685,6 +687,11 @@ void SocketSendData(CNode *pnode) EXCLUSIVE_LOCKS_REQUIRED(pnode->cs_vSend)
     while (it != pnode->vSendMsg.end())
     {
         const SerializeData &data = *it;
+        // Invariant: only EndMessage() queues messages, each a complete message
+        // with its header, and nSendOffset returns to 0 when a message is fully
+        // sent, so it stays below the size of the message at the front. Guards
+        // against a change that queues an empty message or carries the offset
+        // across messages.
         assert(data.size() > pnode->nSendOffset);
         int nBytes = sock->Send(&data[pnode->nSendOffset], data.size() - pnode->nSendOffset, MSG_NOSIGNAL | MSG_DONTWAIT);
         if (nBytes > 0) {
@@ -718,6 +725,9 @@ void SocketSendData(CNode *pnode) EXCLUSIVE_LOCKS_REQUIRED(pnode->cs_vSend)
     }
 
     if (it == pnode->vSendMsg.end()) {
+        // Invariants: with every queued message sent, the offset was reset by the
+        // last one, and nSendSize, the sum EndMessage() adds to and the loop above
+        // subtracts from, is zero. Guards against a change to either update.
         assert(pnode->nSendOffset == 0);
         assert(pnode->nSendSize == 0);
     }

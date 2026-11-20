@@ -1074,6 +1074,8 @@ int SideStakeRegistry::Initialize()
     // Add the local sidestakes specified in the config file(s) to the local sidestakes map.
     LoadLocalSideStakesFromConfig();
 
+    LogLocalSideStakes();
+
     m_local_entry_already_saved_to_config.store(false, std::memory_order_relaxed);
 
     return height;
@@ -1300,6 +1302,32 @@ void SideStakeRegistry::LoadLocalSideStakesFromConfig()
     // INACTIVE (above) does not, so bump once here to guarantee any reload
     // advances the revision (over-counting coalesces on the consumer side).
     ++m_local_sidestake_revision;
+}
+
+void SideStakeRegistry::LogLocalSideStakes() const
+{
+    std::vector<LocalSideStake_ptr> active;
+
+    {
+        LOCK(cs_lock);
+
+        for (const auto& entry : m_local_sidestake_entries) {
+            if (entry.second->m_status == LocalSideStake::LocalSideStakeStatus::ACTIVE) {
+                active.push_back(entry.second);
+            }
+        }
+    }
+
+    LogPrintf("Local side stakes at start (side staking %s): %u",
+              gArgs.GetBoolArg("-enablesidestaking") ? "enabled" : "disabled",
+              active.size());
+
+    for (const auto& entry : active) {
+        LogPrintf("Local side stake: %s %.4f%% \"%s\"",
+                  EncodeDestination(entry->m_destination),
+                  entry->m_allocation.ToPercent(),
+                  SanitizeString(entry->m_description));
+    }
 }
 
 bool SideStakeRegistry::SaveLocalSideStakesToConfig()

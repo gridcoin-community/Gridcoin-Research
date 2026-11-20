@@ -118,6 +118,14 @@ modules:
       # matching the other release artifacts. The capnproto module above supplies
       # Cap'n Proto; libmultiprocess is a vendored subtree in this repository.
       - -DENABLE_MULTIPROCESS=ON
+      # The Flatpak ships the daemon: inside the sandbox it is the RPC command-line
+      # client (flatpak run --command=gridcoinresearchd ...), and the only way to run a
+      # core there for a hand-started multiprocess setup. It ships no systemd units,
+      # sysusers.d or tmpfiles.d entries and no gridcoin-service, and its launcher
+      # offers no core actions (cmake/desktop_file.cmake): the sandbox reaches neither a
+      # core run outside it nor the system service in /run.
+      - -DINSTALL_SYSTEMD_UNITS=OFF
+      - -DGRC_DESKTOP_CORE_ACTIONS=OFF
       # ENABLE_PIE defaults OFF and OFF now genuinely disables PIE rather than
       # deferring to the toolchain, so a shipped artifact has to ask for it.
       - -DENABLE_PIE=ON

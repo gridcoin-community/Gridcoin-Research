@@ -97,7 +97,7 @@ this table mirrors it.
 | `feature_stop_node_twice.py` | framework: a repeated `TestNode.stop_node()` of a node that exited non-zero reports that exit, not a `ValueError` from the closed stderr (a killed connected node, a never-connected node stopped twice); a CLI stop that cannot connect still falls back to SIGTERM (that case skipped on Windows) |
 | `feature_regtest_staking.py` | premine discovery, `generatetoaddress`, `stakelimit` get/set |
 | `feature_shutdown.py` | `stop` does not hang on an in-service RPC connection whose worker is parked in a blocking read (#3123) |
-| `feature_rpc_bind_v4_conflict.py` | an IPv4 RPC listener that cannot bind (127.0.0.1 already held) is logged, not swallowed, and the node still serves over `[::1]` (skipped on Windows or without a usable IPv6 loopback) |
+| `feature_rpc_bind_conflict.py` | a loopback RPC address held by another program disables RPC with a logged error and a warning, and the node keeps running; an unrelated loopback address changes nothing (skipped on Windows) |
 | `p2p_version_handshake.py` | version/verack + ping/pong wire handshake |
 | `p2p_version_timedrift.py` | the VERSION handshake's 480 s clock-drift gate: both edges, one second past each, and a crafted `nTime` that overflowed the old `abs()` check |
 | `p2p_version_floor.py` | the VERSION handshake's protocol floor: `PROTOCOL_VERSION` and `PROTOCOL_VERSION - 1` complete the handshake, `PROTOCOL_VERSION - 2` and an old version are dropped, and each drop is checked in the node's log to come from the floor check |

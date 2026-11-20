@@ -1,0 +1,502 @@
+// Copyright (c) 2026 The Gridcoin developers
+// Distributed under the MIT software license, see the accompanying
+// file COPYING or https://opensource.org/licenses/mit-license.php.
+
+#include "util/transfer_file.h"
+
+#include "interfaces/file_transfer.h"
+#include "logging.h"
+#include "random.h"
+#include "tinyformat.h"
+#include "util/dir_permissions.h"
+#include "util/fsmodes.h"
+#include "util/strencodings.h"
+#include "util/syserror.h"
+
+#include <algorithm>
+#include <cerrno>
+#include <exception>
+#include <limits>
+#include <utility>
+
+#ifdef WIN32
+#include <windows.h>
+#else
+#include <fcntl.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <unistd.h>
+#ifdef __APPLE__
+#include <stdio.h>
+#endif
+#ifdef __linux__
+#include <sys/syscall.h>
+#endif
+#endif
+
+namespace util {
+namespace {
+
+// True unless removing p failed. A name that is already gone is not a failure.
+bool RemoveFile(const fs::path& p)
+{
+    boost::system::error_code ec;
+    fs::remove(p, ec);
+    return !ec;
+}
+
+#ifndef WIN32
+// Make the rename durable. This is best effort: by now the destination has already
+// been replaced, so a filesystem that cannot sync a directory must not turn a
+// completed transfer into a reported failure.
+void SyncDirectory(const fs::path& dir)
+{
+    const fs::path d = dir.empty() ? fs::path(".") : dir;
+    const int fd = ::open(d.c_str(), O_RDONLY | O_DIRECTORY | O_CLOEXEC);
+
+    if (fd < 0) {
+        return;
+    }
+
+    (void)::fsync(fd);
+    ::close(fd);
+}
+
+//! An errno from link() that says the filesystem keeps no hard links (FAT, a share that refuses
+//! them), rather than that the name is taken. EPERM is what such a filesystem gives; a link refused
+//! with it for another reason is taken the same way, and the name is then checked before the rename.
+bool NoHardLinks(int err)
+{
+    switch (err) {
+    case EPERM:
+    case ENOSYS:
+    case ENOTSUP:
+#if defined(EOPNOTSUPP) && EOPNOTSUPP != ENOTSUP
+    case EOPNOTSUPP:
+#endif
+        return true;
+    default:
+        return false;
+    }
+}
+
+//! Renames \p from to \p to only when nothing is at \p to. Returns 0, EEXIST when the name is taken,
+//! or another errno. Linux renames with RENAME_NOREPLACE and macOS with RENAME_EXCL. Where the
+//! filesystem does not take that flag, and on other systems, the file is linked in at \p to and its
+//! old name removed: a link refuses a taken name too. On a filesystem that keeps no hard links the
+//! name is checked just before a plain rename, so a name made between the two is replaced; that
+//! is the one gap left.
+int RenameNoReplace(const fs::path& from, const fs::path& to)
+{
+#if defined(__linux__) && defined(SYS_renameat2)
+    // RENAME_NOREPLACE in <linux/fs.h>, which clashes with the C library's headers.
+    constexpr unsigned int RENAME_NOREPLACE_FLAG{1};
+    if (::syscall(SYS_renameat2, AT_FDCWD, from.c_str(), AT_FDCWD, to.c_str(), RENAME_NOREPLACE_FLAG) == 0) return 0;
+    if (errno != EINVAL && errno != ENOSYS) return errno;
+#elif defined(__APPLE__)
+    if (::renamex_np(from.c_str(), to.c_str(), RENAME_EXCL) == 0) return 0;
+    if (errno != ENOTSUP && errno != EINVAL) return errno;
+#endif
+    if (::link(from.c_str(), to.c_str()) == 0) {
+        // The file is in place under both names; the old one goes.
+        (void)::unlink(from.c_str());
+        return 0;
+    }
+    if (!NoHardLinks(errno)) return errno;
+
+    struct stat st;
+    if (::lstat(to.c_str(), &st) == 0) return EEXIST;
+    if (errno != ENOENT) return errno;
+    return ::rename(from.c_str(), to.c_str()) == 0 ? 0 : errno;
+}
+#endif
+
+} // namespace
+
+std::optional<TransferTempFile> TransferTempFile::Create(const fs::path& dest, std::string& error, Replace replace)
+{
+    unsigned char rnd[8];
+    GetRandBytes(Span<unsigned char>(rnd, sizeof(rnd)));
+
+    fs::path temp = dest;
+    temp += "." + HexStr(Span<const unsigned char>(rnd, sizeof(rnd))) + ".part";
+
+    return CreateAt(dest, temp, error, replace);
+}
+
+std::optional<TransferTempFile> TransferTempFile::CreateAt(const fs::path& dest, const fs::path& temp, std::string& error,
+                                                           Replace replace)
+{
+    TransferTempFile f;
+    f.m_dest = dest;
+    f.m_temp = temp;
+
+    // A destination that is there now may be replaced at the commit: the user chose it. One that is
+    // not is never replaced, also by a file that appears at its name while the data arrives. A name
+    // that cannot be examined is taken to be there, and is refused below. (symlink_status sets
+    // ENOENT for a name that is not there, so the type tells it, not the error.)
+    boost::system::error_code status_error;
+    f.m_replace = fs::symlink_status(dest, status_error).type() != fs::file_not_found;
+    if (f.m_replace && replace == Replace::Never) {
+        error = strprintf("%s is already there, and is not replaced", dest.string());
+        return std::nullopt;
+    }
+    // Which file it is, so that the commit carries permissions from this one, and replaces this
+    // one, and no other. One that cannot be told from another later is not replaced.
+    if (f.m_replace) {
+        f.m_dest_identity = fsmodes::IdentityOf(dest);
+        if (!f.m_dest_identity) {
+            error = strprintf("%s cannot be examined, so it is not replaced", dest.string());
+            return std::nullopt;
+        }
+    }
+
+#ifdef WIN32
+    // Owner-only from creation: the list is given to CreateFileW, so the file never exists
+    // with the list it would inherit, and it is read back through the handle, because a
+    // volume may accept the list and keep nothing (FAT, exFAT).
+    const winacl::AclSpec spec = OwnerOnlyAclSpec(/*inheritable=*/false);
+    winacl::UniqueSecurityDescriptor sd;
+    try {
+        sd.reset(winacl::MakeSecurityDescriptor(spec));
+    } catch (const std::exception& e) {
+        error = strprintf("cannot make the access list for temporary file %s: %s", temp.string(), AsciiWhat(e));
+        return std::nullopt;
+    }
+    SECURITY_ATTRIBUTES sa{};
+    sa.nLength = sizeof(sa);
+    sa.lpSecurityDescriptor = sd.get();
+    sa.bInheritHandle = FALSE;
+
+    // WRITE_DAC lets Commit() give the file the access list of the destination it will replace.
+    HANDLE h = ::CreateFileW(temp.c_str(), GENERIC_WRITE | READ_CONTROL | WRITE_DAC, 0, &sa, CREATE_NEW,
+                             FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OPEN_REPARSE_POINT, nullptr);
+
+    if (h == INVALID_HANDLE_VALUE) {
+        const DWORD last_error = ::GetLastError();
+        error = strprintf("cannot create temporary file %s (error %u)", temp.string(), static_cast<unsigned>(last_error));
+        return std::nullopt;
+    }
+
+    f.m_handle = h;
+    f.m_active = true;
+
+    try {
+        if (const std::optional<std::string> reason =
+                winacl::CheckMatchesSpec(winacl::ReadAcl(h, /*kernel_object=*/false), spec)) {
+            error = strprintf("cannot restrict temporary file %s: %s", temp.string(), OwnerOnlyRefusalText(temp, *reason));
+            return std::nullopt;
+        }
+    } catch (const std::exception& e) {
+        error = strprintf("cannot restrict temporary file %s: %s", temp.string(), AsciiWhat(e));
+        return std::nullopt;
+    }
+#else
+    // O_EXCL refuses any existing name and O_NOFOLLOW refuses a symlink in the last
+    // component, so a name planted ahead of time is never written through.
+    const int fd = ::open(temp.c_str(), O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0600);
+
+    if (fd < 0) {
+        error = strprintf("cannot create temporary file %s: %s", temp.string(), SysErrorString(errno));
+        return std::nullopt;
+    }
+
+    f.m_fd = fd;
+    f.m_active = true;
+
+    // The mode given to open() is masked by the umask, so set it explicitly.
+    if (::fchmod(fd, 0600) != 0) {
+        error = strprintf("cannot restrict temporary file %s: %s", temp.string(), SysErrorString(errno));
+        return std::nullopt;
+    }
+#endif
+
+    return std::optional<TransferTempFile>(std::move(f));
+}
+
+TransferTempFile::TransferTempFile(TransferTempFile&& other) noexcept
+{
+    MoveFrom(other);
+}
+
+TransferTempFile& TransferTempFile::operator=(TransferTempFile&& other) noexcept
+{
+    if (this != &other) {
+        Abort();
+        MoveFrom(other);
+    }
+
+    return *this;
+}
+
+TransferTempFile::~TransferTempFile()
+{
+    Abort();
+}
+
+void TransferTempFile::MoveFrom(TransferTempFile& other) noexcept
+{
+    m_dest = std::move(other.m_dest);
+    m_temp = std::move(other.m_temp);
+    m_active = other.m_active;
+    m_replace = other.m_replace;
+    m_dest_identity = other.m_dest_identity;
+    m_remove_failed = other.m_remove_failed;
+    m_hasher = other.m_hasher;
+    m_size = other.m_size;
+#ifdef WIN32
+    m_handle = other.m_handle;
+    other.m_handle = nullptr;
+#else
+    m_fd = other.m_fd;
+    other.m_fd = -1;
+#endif
+    other.m_active = false;
+}
+
+void TransferTempFile::CloseHandle()
+{
+#ifdef WIN32
+    if (m_handle != nullptr) {
+        ::CloseHandle(static_cast<HANDLE>(m_handle));
+        m_handle = nullptr;
+    }
+#else
+    if (m_fd >= 0) {
+        ::close(m_fd);
+        m_fd = -1;
+    }
+#endif
+}
+
+void TransferTempFile::Abort()
+{
+    CloseHandle();
+
+    if (m_active) {
+        if (!RemoveFile(m_temp)) {
+            m_remove_failed = true;
+        }
+
+        m_active = false;
+    }
+}
+
+void TransferTempFile::AppendRemoveNote(std::string& error) const
+{
+    if (m_remove_failed) {
+        error += "; " + RemoveFailedNote();
+    }
+}
+
+std::string TransferTempFile::RemoveFailedNote() const
+{
+    if (!m_remove_failed) {
+        return "";
+    }
+
+    return strprintf("the temporary file %s could not be removed", m_temp.string());
+}
+
+uint256 TransferTempFile::Sha256() const
+{
+    CSHA256 hasher = m_hasher;
+    uint256 out;
+    hasher.Finalize(out.begin());
+    return out;
+}
+
+bool TransferTempFile::Write(const unsigned char* data, size_t len, std::string& error)
+{
+    if (!m_active) {
+        error = "temporary file is not open";
+        return false;
+    }
+
+    size_t done = 0;
+
+    while (done < len) {
+#ifdef WIN32
+        const DWORD want = static_cast<DWORD>(std::min<size_t>(len - done, 1u << 30));
+        DWORD wrote = 0;
+
+        if (!::WriteFile(static_cast<HANDLE>(m_handle), data + done, want, &wrote, nullptr)) {
+            const DWORD last_error = ::GetLastError();
+            error = strprintf("write to %s failed (error %u)", m_temp.string(), static_cast<unsigned>(last_error));
+            return false;
+        }
+
+        const size_t n = wrote;
+#else
+        const ssize_t r = ::write(m_fd, data + done, len - done);
+
+        if (r < 0) {
+            if (errno == EINTR) {
+                continue;
+            }
+
+            error = strprintf("write to %s failed: %s", m_temp.string(), SysErrorString(errno));
+            return false;
+        }
+
+        const size_t n = static_cast<size_t>(r);
+#endif
+        // A write that makes no progress is reported rather than retried forever.
+        if (n == 0) {
+            error = strprintf("write to %s made no progress", m_temp.string());
+            return false;
+        }
+
+        m_hasher.Write(data + done, n);
+        m_size += n;
+        done += n;
+    }
+
+    return true;
+}
+
+bool TransferTempFile::Commit(uint64_t expected_size, const uint256& expected_sha256, std::string& error)
+{
+    if (!m_active) {
+        error = "temporary file is not open";
+        return false;
+    }
+
+#ifdef WIN32
+    if (!::FlushFileBuffers(static_cast<HANDLE>(m_handle))) {
+        const DWORD last_error = ::GetLastError();
+        error = strprintf("cannot flush %s (error %u)", m_temp.string(), static_cast<unsigned>(last_error));
+        Abort();
+        AppendRemoveNote(error);
+        return false;
+    }
+#else
+    if (::fsync(m_fd) != 0) {
+        error = strprintf("cannot sync %s: %s", m_temp.string(), SysErrorString(errno));
+        Abort();
+        AppendRemoveNote(error);
+        return false;
+    }
+#endif
+
+    // A destination that exists keeps its permissions when the temporary file replaces it. They go
+    // on the file only now, so it is owner-only while it fills, and only from this account's own
+    // file: another account's says nothing of what this one wants.
+    // Only from the file that was there when the transfer began: another at the name by now is not
+    // the one the user chose, and is not replaced.
+    if (m_replace && !m_dest_identity) {
+        error = strprintf("%s could not be examined when the transfer began, and was not replaced", m_dest.string());
+        Abort();
+        AppendRemoveNote(error);
+        return false;
+    }
+    if (m_replace) {
+#ifdef WIN32
+        const fsmodes::KeepResult kept =
+            fsmodes::KeepPermissions(m_dest, m_handle, /*own_only=*/true, &*m_dest_identity);
+#else
+        const fsmodes::KeepResult kept = fsmodes::KeepPermissions(m_dest, m_fd, /*own_only=*/true, &*m_dest_identity);
+#endif
+        if (kept.kind == fsmodes::KeepResult::Kind::Changed) {
+            error = strprintf("%s is not the file that was there when the transfer began, and was not replaced",
+                              m_dest.string());
+            Abort();
+            AppendRemoveNote(error);
+            return false;
+        }
+        if (kept.kind == fsmodes::KeepResult::Kind::NotKept) {
+            LogPrintf("WARNING: the permissions of %s could not be kept on the file that replaces it (%s)",
+                      m_dest.string(), kept.error);
+        } else if (kept.kind == fsmodes::KeepResult::Kind::NotOurs) {
+            LogPrintf("WARNING: %s belongs to another account, so the file that replaces it is owner-only",
+                      m_dest.string());
+        }
+    }
+
+    CloseHandle();
+
+    if (m_size != expected_size) {
+        error = strprintf("size mismatch: received %u bytes, expected %u", m_size, expected_size);
+        Abort();
+        AppendRemoveNote(error);
+        return false;
+    }
+
+    if (Sha256() != expected_sha256) {
+        error = "SHA-256 mismatch";
+        Abort();
+        AppendRemoveNote(error);
+        return false;
+    }
+
+    const std::string appeared =
+        strprintf("%s appeared while the file was being received, and was not replaced", m_dest.string());
+#ifdef WIN32
+    const DWORD move_flags = MOVEFILE_WRITE_THROUGH | (m_replace ? MOVEFILE_REPLACE_EXISTING : 0);
+    if (!::MoveFileExW(m_temp.c_str(), m_dest.c_str(), move_flags)) {
+        const DWORD last_error = ::GetLastError();
+        if (!m_replace && (last_error == ERROR_ALREADY_EXISTS || last_error == ERROR_FILE_EXISTS)) {
+            error = appeared;
+        } else {
+            error = strprintf("cannot rename %s over %s (error %u)", m_temp.string(), m_dest.string(),
+                              static_cast<unsigned>(last_error));
+        }
+        Abort();
+        AppendRemoveNote(error);
+        return false;
+    }
+#else
+    const int rename_error = m_replace ? (::rename(m_temp.c_str(), m_dest.c_str()) == 0 ? 0 : errno)
+                                       : RenameNoReplace(m_temp, m_dest);
+    if (rename_error != 0) {
+        error = rename_error == EEXIST && !m_replace
+                    ? appeared
+                    : strprintf("cannot rename %s over %s: %s", m_temp.string(), m_dest.string(),
+                                SysErrorString(rename_error));
+        Abort();
+        AppendRemoveNote(error);
+        return false;
+    }
+
+    SyncDirectory(m_dest.parent_path());
+#endif
+
+    // Committed. The temporary name no longer exists, so there is nothing to remove.
+    m_active = false;
+    return true;
+}
+
+SpaceCheck CheckFreeSpace(const fs::path& dir, uint64_t need, std::string& error)
+{
+    boost::system::error_code ec;
+    const fs::space_info info = fs::space(dir, ec);
+
+    if (ec) {
+        error = strprintf("cannot determine the free space in %s: %s", dir.string(), ec.message());
+        return SpaceCheck::QueryFailed;
+    }
+
+    const uint64_t margin = interfaces::FILE_TRANSFER_FREE_SPACE_MARGIN;
+    const uint64_t available = info.available;
+
+    // need + margin without overflow
+    const bool overflow = need > std::numeric_limits<uint64_t>::max() - margin;
+
+    if (!overflow && available >= need + margin) {
+        return SpaceCheck::Enough;
+    }
+
+    const uint64_t required = overflow ? std::numeric_limits<uint64_t>::max() : need + margin;
+    const uint64_t shortfall = required > available ? required - available : 0;
+
+    error = strprintf("not enough free space in %s: %u bytes available, %u bytes required (%u short)",
+                      dir.string(), available, required, shortfall);
+    return SpaceCheck::Short;
+}
+
+bool HasFreeSpace(const fs::path& dir, uint64_t need, std::string& error)
+{
+    return CheckFreeSpace(dir, need, error) == SpaceCheck::Enough;
+}
+
+} // namespace util

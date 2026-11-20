@@ -33,6 +33,9 @@ uint256 CPartialMerkleTree::CalcHash(int height, unsigned int pos, const std::ve
 {
     //we can never have zero txs in a merkle block, we always need the coinbase tx
     //if we do not have this assert, we can hit a memory access violation when indexing into vTxid
+    // Invariant: only CMerkleBlock builds the tree, from a stored block
+    // (gettxoutproof), and CheckBlock refuses a block with no transactions.
+    // Guards against a new producer that builds a tree from an empty list.
     assert(vTxid.size() != 0);
     if (height == 0) {
         // hash at height 0 is the txids themselves
@@ -112,6 +115,8 @@ CPartialMerkleTree::CPartialMerkleTree(const std::vector<uint256> &vTxid, const 
 {
     // TraverseAndBuild indexes vMatch by leaf position in [0, nTransactions),
     // so it must have one entry per txid; a shorter vMatch would read OOB.
+    // Invariant: the only caller, CMerkleBlock's constructor, fills both in one
+    // loop. Guards against a new caller that builds them separately.
     assert(vMatch.size() == vTxid.size());
 
     // reset state

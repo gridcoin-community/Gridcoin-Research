@@ -30,7 +30,7 @@ static const RPCHelpMan createhtlc_help{
     "Returns a JSON object with the P2SH address and redeem script. "
     "If amount is provided, funds the HTLC with a transaction.\n"
     "\n"
-    "Requires wallet passphrase to be set with walletpassphrase first if wallet is encrypted.",
+    "If the wallet is encrypted, it must be unlocked with walletpassphrase first (not for staking only), or the request must carry the passphrase (the client's -stdinelevate option).",
     {
         {"receiver_addr", RPCArg::Type::STR, RPCArg::Optional::NO, "Address of the receiver (claim path)."},
         {"sender_addr", RPCArg::Type::STR, RPCArg::Optional::NO, "Address of the sender (refund path)."},
@@ -140,7 +140,7 @@ static const RPCHelpMan claimhtlc_help{
     "claimhtlc",
     "Claim an HTLC output using the preimage.\n"
     "\n"
-    "Requires wallet passphrase to be set with walletpassphrase first if wallet is encrypted.",
+    "If the wallet is encrypted, it must be unlocked with walletpassphrase first (not for staking only), or the request must carry the passphrase (the client's -stdinelevate option).",
     {
         {"htlc_txid", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "Transaction ID of the HTLC funding tx."},
         {"vout", RPCArg::Type::NUM, RPCArg::Optional::NO, "Output index of the HTLC."},
@@ -297,7 +297,7 @@ static const RPCHelpMan refundhtlc_help{
     "refundhtlc",
     "Refund an HTLC output after the timeout has passed.\n"
     "\n"
-    "Requires wallet passphrase to be set with walletpassphrase first if wallet is encrypted.",
+    "If the wallet is encrypted, it must be unlocked with walletpassphrase first (not for staking only), or the request must carry the passphrase (the client's -stdinelevate option).",
     {
         {"htlc_txid", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "Transaction ID of the HTLC funding tx."},
         {"vout", RPCArg::Type::NUM, RPCArg::Optional::NO, "Output index of the HTLC."},

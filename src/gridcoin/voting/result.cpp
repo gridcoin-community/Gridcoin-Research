@@ -1898,8 +1898,8 @@ PollResultOption PollResult::BuildFor(const PollReference& poll_ref, const CBloc
         // recording is best-effort in that degenerate case.
         //
         // GetStartingHeight() walks the chain index, so it requires cs_main —
-        // matching the pattern in PollReference::GetActiveVoteWeight at
-        // voting/registry.cpp:510. The degenerate fallback uses the pinned tip's
+        // matching the pattern in PollReference::GetActiveVoteWeight in
+        // voting/registry.cpp. The degenerate fallback uses the pinned tip's
         // height (nHeight is immutable per block index and the object is never
         // freed, so it needs no lock) instead of the live nBestHeight.
         int poll_start_height;

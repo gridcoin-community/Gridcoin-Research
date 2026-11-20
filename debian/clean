@@ -1,0 +1,3 @@
+debian/gridcoinresearchd.gridcoinresearchd.service
+debian/gridcoinresearchd.gridcoin-autounlock.socket
+debian/gridcoinresearchd.gridcoin-autounlock.service

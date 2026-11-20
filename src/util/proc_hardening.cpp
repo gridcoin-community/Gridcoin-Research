@@ -7,6 +7,11 @@
 #include <util/proc_hardening.h>
 
 #include <logging.h>
+#include <util/strencodings.h>
+
+#include <fstream>
+#include <istream>
+#include <string>
 
 #if defined(__linux__)
 #include <cerrno>
@@ -63,4 +68,101 @@ void HardenProcess()
               "(0 is expected for an unprivileged launch).",
               no_new_privs ? "set" : "NOT set (see warning above)", dropped);
 #endif // __linux__
+}
+
+namespace {
+//! errno of the last SetProcessNonDumpable() call; 0 on success or when not attempted.
+int g_non_dumpable_errno = 0;
+bool g_non_dumpable_attempted = false;
+} // namespace
+
+bool SetProcessNonDumpable()
+{
+#if defined(__linux__)
+    g_non_dumpable_attempted = true;
+    if (prctl(PR_SET_DUMPABLE, 0, 0, 0, 0) != 0) {
+        g_non_dumpable_errno = errno;
+        return false;
+    }
+    g_non_dumpable_errno = 0;
+#endif
+    return true;
+}
+
+void LogNonDumpableStatus()
+{
+    if (!g_non_dumpable_attempted) return;
+
+    if (g_non_dumpable_errno == 0) {
+        LogPrintf("Process hardening: non-dumpable (core dumps and same-user memory access blocked)");
+    } else {
+        LogPrintf("Process hardening: WARNING: could not mark the process non-dumpable: %s",
+                  std::strerror(g_non_dumpable_errno));
+    }
+}
+
+bool SetProcessDumpableForDebugging()
+{
+#if defined(__linux__)
+    return prctl(PR_SET_DUMPABLE, 1, 0, 0, 0) == 0;
+#else
+    return true;
+#endif
+}
+
+std::optional<int> ParseTracerPid(std::istream& status)
+{
+    static const std::string key = "TracerPid:";
+
+    std::string line;
+    while (std::getline(status, line)) {
+        if (line.compare(0, key.size(), key) != 0) continue;
+
+        // ParseInt32 rejects leading and trailing whitespace, so trim the field first.
+        std::string value = line.substr(key.size());
+        const size_t first = value.find_first_not_of(" \t");
+        if (first == std::string::npos) return std::nullopt;
+        value = value.substr(first, value.find_last_not_of(" \t\r") - first + 1);
+
+        int32_t pid = 0;
+        if (!ParseInt32(value, &pid) || pid < 0) return std::nullopt;
+        return pid;
+    }
+
+    return std::nullopt;
+}
+
+std::optional<int> ReadOwnTracerPid()
+{
+#if defined(__linux__)
+    std::ifstream status("/proc/self/status");
+    if (!status) return std::nullopt;
+    return ParseTracerPid(status);
+#else
+    return std::nullopt;
+#endif
+}
+
+bool TracerCheckSupported()
+{
+#if defined(__linux__)
+    return true;
+#else
+    return false;
+#endif
+}
+
+std::optional<std::string> TracerStateWarning(std::optional<int> tracer_pid, bool supported)
+{
+    // Where there is no check, nothing was read and nothing failed.
+    if (!supported || tracer_pid) return std::nullopt;
+
+    return std::string("WARNING: could not read the tracer state of this process; the tracer check did not run");
+}
+
+TracerVerdict DecideTracer(std::optional<int> tracer_pid, bool override_set)
+{
+    if (override_set) return TracerVerdict::StartDumpableForDebugging;
+    if (tracer_pid && *tracer_pid > 0) return TracerVerdict::Refuse;
+    return TracerVerdict::Start;
 }

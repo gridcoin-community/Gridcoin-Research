@@ -287,7 +287,7 @@ public:
 //! The transaction is authenticated by Contract::RequiresMasterKey()
 //! returning true for POOL_APPROVE; the framework's existing
 //! HasMasterKeyInput check enforces master-key authority at the validation
-//! boundary (see src/validation.cpp:175) for all three actions.
+//! boundary (see CheckContracts in src/validation.cpp) for all three actions.
 //!
 //! For ADD/REMOVE the payload is minimal — version + cpid — because the
 //! authority is in the tx inputs and the target is identified by CPID.
@@ -400,7 +400,7 @@ public:
     //! \brief The 5 pre-V15 hardcoded pools, grandfathered into the
     //! registry at construction so pre-activation queries match the legacy
     //! g_mining_pools list bit-for-bit. Must stay in sync with the
-    //! MiningPools constructor in researcher.h:88-95.
+    //! MiningPools constructor in researcher.h.
     //!
     static const std::vector<BuiltinSeed>& BuiltinPoolSeeds();
 

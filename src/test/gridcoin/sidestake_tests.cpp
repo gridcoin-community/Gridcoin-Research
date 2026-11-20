@@ -617,6 +617,50 @@ BOOST_AUTO_TEST_CASE(sidestake_throwing_save_rolls_back_and_clears_the_flag)
     BOOST_CHECK(getRwSetting("sidestake_reload_probe").isNull());
 }
 
+// The start-up log names whether side staking is enabled and each active local
+// side stake with its address, allocation and description.
+BOOST_AUTO_TEST_CASE(local_side_stakes_are_logged_at_start)
+{
+    GRC::SideStakeRegistry& registry = GRC::GetSideStakeRegistry();
+
+    uint160 hash;
+    *(hash.begin()) = 0x60;
+    const CTxDestination dest = CKeyID(hash);
+    const std::string address = EncodeDestination(dest);
+
+    registry.NonContractDelete(dest, /*save_to_file=*/false); // start clean
+
+    grc_test::ForcedArgGuard sidestaking("enablesidestaking", "1");
+
+    // The count below is of this case's entry alone.
+    BOOST_REQUIRE(registry.ActiveSideStakeEntries(GRC::SideStake::FilterFlag::LOCAL, true).empty());
+
+    registry.NonContractAdd(GRC::LocalSideStake(dest,
+                                                GRC::Allocation(0.10),
+                                                "logged description",
+                                                GRC::LocalSideStake::LocalSideStakeStatus::ACTIVE),
+                            /*save_to_file=*/false);
+
+    std::vector<std::string> lines;
+    {
+        const auto callback = LogInstance().PushBackCallback([&lines](const std::string& s) { lines.push_back(s); });
+        registry.LogLocalSideStakes();
+        LogInstance().DeleteCallback(callback);
+    }
+
+    registry.NonContractDelete(dest, /*save_to_file=*/false);
+
+    const auto logged = [&lines](const std::string& needle) {
+        for (const std::string& line : lines) {
+            if (line.find(needle) != std::string::npos) return true;
+        }
+        return false;
+    };
+
+    BOOST_CHECK(logged("Local side stakes at start (side staking enabled): 1"));
+    BOOST_CHECK(logged("Local side stake: " + address + " 10.0000% \"logged description\""));
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 
 namespace {

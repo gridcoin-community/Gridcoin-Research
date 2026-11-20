@@ -7,14 +7,22 @@
 #ifndef BITCOIN_RPC_SERVER_H
 #define BITCOIN_RPC_SERVER_H
 
+#include <fs.h>
+#include <rpc/bind_policy.h>
+#include <support/allocators/secure.h>
+
 #include <boost/asio/ip/address.hpp>
+#include <boost/asio/ip/tcp.hpp>
 #include <cstdint>
+#include <functional>
 #include <string>
 #include <vector>
 #include <list>
 #include <map>
+#include <optional>
 
 class CBlockIndex;
+class CWallet;
 class uint256;
 // Forward-declare RPCHelpMan rather than #include <rpc/util.h>: the util
 // header transitively defines `enum class Optional { NO, ... }`, and on
@@ -26,12 +34,16 @@ class uint256;
 // where util.h is already included directly.
 class RPCHelpMan;
 
+#include <chrono>
 #include <univalue.h>
 
 //! Idle deadline for a serviced RPC connection, in seconds. One connection pins
 //! one worker thread, so this is what bounds how long a silent client can hold
 //! one of only -rpcthreads of them.
 static constexpr int DEFAULT_RPC_SERVER_TIMEOUT = 30;
+
+//! Longest a closing RPC connection waits for the client to close its side before it is reset.
+static constexpr std::chrono::milliseconds RPC_GRACEFUL_CLOSE_TIMEOUT{2000};
 
 //! Parse -rpcallowip into the RPC allow list. Called by StartRPCThreads().
 //! The overload taking entries does the parsing and is what tests drive; the
@@ -44,6 +56,32 @@ void InitRPCAllowList();
 bool ClientAllowed(const boost::asio::ip::address& address);
 
 void StartRPCThreads();
+
+//! What StartRPCThreads() shows, and logs, when rpcpassword is empty or equal to rpcuser:
+//! that \p conf needs rpcuser and rpcpassword. It suggests no password.
+std::string MissingRpcPasswordMessage(const fs::path& conf);
+
+//! StartRPCThreads() binds the listener early, while initialisation is still running, so that
+//! the port is held from the datadir lock onward. Until this is called the server answers
+//! RPC_IN_WARMUP to every method except "stop".
+void SetRPCWarmupFinished();
+bool RPCIsInWarmup();
+//! Test hook; tests restore false.
+void SetRPCWarmupForTest(bool in_warmup);
+//! True when `method` must be answered RPC_IN_WARMUP now: in warmup, every method except "stop".
+bool RPCRefusedInWarmup(const std::string& method);
+//! Throws the RPC_IN_WARMUP error when RPCRefusedInWarmup(method). Every path that dispatches into
+//! tableRPC outside the socket server (the GUI console) applies it too.
+void ThrowIfRefusedInWarmup(const std::string& method);
+
+//! Test hook for the file-static acceptor setup: opens an acceptor exactly as the RPC server does,
+//! binds it to \p address (a numeric address) and \p port and listens, and returns how the bind
+//! failed, or RpcBindError::None when it listens, after \p while_listening (when given) has run with
+//! the port it listens on. Every Boost.Asio object stays in this file: the test binary is built as
+//! C++20 and this library as C++17, and an asio object made under one and used under the other is not
+//! the same class (with Homebrew's Boost 1.92 an acceptor made in the test crashed in assign()).
+RpcBindError BindRpcAcceptorForTest(const std::string& address, unsigned short port,
+                                    const std::function<void(unsigned short)>& while_listening = {});
 void StopRPCThreads();
 int CommandLineRPC(int argc, char *argv[]);
 
@@ -96,15 +134,40 @@ enum rpcheritage
     heritage_pure_gridcoin,
 };
 
+// RPC access class, enforced for access_elevate by CRPCTable::admit(), which
+// CRPCTable::execute() and the console's passphrase call run before the method.
+//   read_only      -- changes nothing.
+//   free           -- changes state that neither moves nor redirects value, widens
+//                     exposure, nor handles keys.
+//   elevate        -- signs or reveals keys, writes key material, moves or redirects
+//                     value, widens exposure, or exports or deletes wallet files; needs
+//                     a full unlock or the passphrase sent with the request.
+//   elevate_inband -- the method verifies a passphrase given as its own argument.
+//   elevate_unencrypted -- the method acts only on an unencrypted wallet, which
+//                     always has its keys, and refuses an encrypted one itself.
+//   settings       -- changesettings; each setting applies its own class.
+enum rpcaccess
+{
+    access_read_only,
+    access_free,
+    access_elevate,
+    access_elevate_inband,
+    access_elevate_unencrypted,
+    access_settings,
+};
+
+//! "read_only", "free", "elevate", "elevate_inband", "elevate_unencrypted", "settings"
+const char* RpcAccessName(rpcaccess access);
+
 class CRPCCommand
 {
 public:
     // All fields are required at construction, so a command cannot be added to
-    // vRPCCommands[] without a heritage classification (classify-at-birth).
+    // vRPCCommands[] without a heritage classification or an access class (classify-at-birth).
     CRPCCommand(std::string _name, rpcfn_type _actor, rpccategory _category,
-                rpchelpman_fn _helpman, rpcheritage _heritage, std::string _heritage_fp)
+                rpchelpman_fn _helpman, rpcheritage _heritage, std::string _heritage_fp, rpcaccess _access)
         : name(std::move(_name)), actor(_actor), category(_category), helpman(_helpman),
-          heritage(_heritage), heritage_fp(std::move(_heritage_fp)) {}
+          heritage(_heritage), heritage_fp(std::move(_heritage_fp)), access(_access) {}
 
     std::string name;
     rpcfn_type actor;
@@ -114,6 +177,7 @@ public:
     // Surface-fingerprint baseline (args + result-keys), 12 hex chars; "manual" when the
     // output isn't literal-key-trackable; empty for pure_gridcoin (not fingerprinted).
     std::string heritage_fp;
+    rpcaccess access;
 };
 
 /**
@@ -138,6 +202,16 @@ public:
     UniValue execute(const std::string &method, const UniValue& params) const;
 
     /**
+     * The checks execute() makes before a method runs: the method exists, the
+     * argument count fits its help (the help is thrown otherwise, with the line
+     * an access_elevate row adds), and an access_elevate row is refused with
+     * RPC_WALLET_UNLOCK_NEEDED while the wallet cannot use its keys. For a
+     * caller that runs the method itself, as the console's passphrase call does.
+     * @returns The method's command.
+     */
+    const CRPCCommand& admit(const std::string& method, const UniValue& params) const;
+
+    /**
     * Returns a list of registered commands
     * @param include_deprecated   Also list commands in DEPRECATED_RPCS
     *                             (hidden from autocomplete but still callable).
@@ -153,6 +227,84 @@ extern UniValue ValueFromAmount(int64_t amount);
 
 extern std::string HelpRequiringPassphrase();
 extern void EnsureWalletIsUnlocked();
+
+//! EnsureWalletIsUnlocked() for \p wallet rather than pwalletMain: the same
+//! refusals, for a caller that is given the wallet it works on.
+void EnsureWalletIsUnlocked(const CWallet& wallet);
+
+//! \brief Everything dumpwallet does after its unlock check: write every key
+//! \p wallet holds to \p filename, a bare name resolving to the data directory.
+//!
+//! The text is what WalletDumpGenerator (wallet/walletdump.h) generates, under
+//! LOCK2(cs_main, wallet.cs_wallet) held for the whole dump. Without the keys
+//! on this thread (the wallet unlocked for staking only, with no capability
+//! scope open) it throws RPC_WALLET_UNLOCK_NEEDED "keys are not available"
+//! before a key is read. A key the wallet holds that cannot be read fails the
+//! dump rather than being left out of it: RPC_WALLET_ERROR when the thread may
+//! still use the keys (the key does not decrypt), RPC_WALLET_UNLOCK_NEEDED when
+//! it no longer may (a timed relock during the dump). Metadata for a key the
+//! wallet does not hold is no key, and is left out. A dump that cannot
+//! be written throws RPC_WALLET_ERROR. On any failure part way through, a
+//! regular file at the path is removed before the error leaves; a symbolic
+//! link or a special file there is left as it is. Anything already at the
+//! path (a file, a symbolic link, also one that leads nowhere, or a path that
+//! cannot be examined) is refused with RPC_INVALID_PARAMETER before the file
+//! is opened, so nothing there is truncated or removed.
+void WriteWalletDump(CWallet& wallet, const std::string& filename);
+
+//! \brief Take a request's elevation header out of its headers.
+//!
+//! The X-Gridcoin-Elevate header (stored as "x-gridcoin-elevate", the parser
+//! lower-cases names) carries the wallet passphrase for one request,
+//! base64-encoded in the standard alphabet with padding, so that the parser's
+//! trimming of whitespace cannot change it. Returns the value, still encoded,
+//! in secure memory, or nullopt when the request carries none. The header is
+//! erased from \p headers, and the memory that held its value is overwritten
+//! first, so nothing that reads the headers afterwards, a request handler or a
+//! log, can see it.
+std::optional<SecureString> TakeElevationHeader(std::map<std::string, std::string>& headers);
+
+//! \brief Run one request, or one batch, under the capability its elevation
+//! header proves.
+//!
+//! With no header, or with no wallet to authorise anything, \p execute runs as
+//! it would without one. Otherwise the header is decoded and the wallet checks
+//! the passphrase (CWallet::BeginElevation(), for CapabilityKind::RpcRequest).
+//! \p execute then runs on the calling thread under a CapabilityScope for that
+//! capability, and the capability ends when \p execute returns or throws. A
+//! value that is not base64, or a passphrase the wallet does not accept,
+//! throws RPC_WALLET_PASSPHRASE_INCORRECT without running \p execute.
+//!
+//! An unencrypted wallet issues a capability for any passphrase, so a request
+//! with a well-formed header runs there as it would without one.
+//!
+//! The passphrase check derives a key and may wait out the failed-passphrase
+//! delay, so the caller must hold no lock.
+UniValue ExecuteWithElevation(const std::optional<SecureString>& header, const std::function<UniValue()>& execute);
+
+//! \brief Execute a JSON-RPC batch under the capability its elevation header
+//! proves.
+//!
+//! The header is checked once for the whole batch, as ExecuteWithElevation()
+//! checks it, and every call in \p requests then runs in order under that one
+//! capability. Each call is answered by its own entry in the returned array:
+//! a call that fails gets an error entry, as without a header, and the calls
+//! after it still run under the capability. A header that is refused throws
+//! before any call runs.
+UniValue ExecuteBatchWithElevation(const UniValue& requests, const std::optional<SecureString>& header);
+
+//! The passphrase parameters of `method` (walletpassphrase, walletpassphrasechange, encryptwallet,
+//! setautounlock or clearautounlock) moved out of `params` into SecureStrings, in parameter order,
+//! each in a secure buffer of its own (capacity at least 100), whatever its length. Throws what
+//! get_str() throws for a non-string.
+std::vector<SecureString> ReadPassphraseParams(const std::string& method, const UniValue& params);
+
+//! walletpassphrase, walletpassphrasechange, encryptwallet, setautounlock or clearautounlock with the
+//! passphrases already in SecureStrings (parameter order). `params` holds the other parameters at
+//! their real indexes; the passphrase positions are ignored. Throws exactly what the RPCs throw; a
+//! wrong passphrase count throws JSONRPCError(RPC_INVALID_PARAMETER, "<method> takes <n>
+//! passphrase(s)").
+UniValue ExecutePassphraseCommand(const std::string& method, const std::vector<SecureString>& passphrases, const UniValue& params);
 
 //
 // Utilities: convert hex-encoded Values
@@ -180,6 +332,7 @@ extern UniValue dumpprivkey(const UniValue& params);
 extern UniValue dumpseedphrase(const UniValue& params);
 extern UniValue fundrawtransaction(const UniValue& params);
 extern UniValue dumpwallet(const UniValue& params);
+extern UniValue clearautounlock(const UniValue& params);
 extern UniValue encryptwallet(const UniValue& params);
 extern UniValue getaccount(const UniValue& params);
 extern UniValue getaccountaddress(const UniValue& params);
@@ -235,6 +388,7 @@ extern UniValue sendmany(const UniValue& params);
 extern UniValue sendrawtransaction(const UniValue& params);
 extern UniValue sendtoaddress(const UniValue& params);
 extern UniValue setaccount(const UniValue& params);
+extern UniValue setautounlock(const UniValue& params);
 extern UniValue sethdseed(const UniValue& params);
 extern UniValue setlabel(const UniValue& params);
 extern UniValue settxfee(const UniValue& params);
@@ -466,6 +620,7 @@ extern const RPCHelpMan& dumpcontracts_helpman();
 extern const RPCHelpMan& dumpprivkey_helpman();
 extern const RPCHelpMan& dumpseedphrase_helpman();
 extern const RPCHelpMan& dumpwallet_helpman();
+extern const RPCHelpMan& clearautounlock_helpman();
 extern const RPCHelpMan& encryptwallet_helpman();
 extern const RPCHelpMan& explainmagnitude_helpman();
 extern const RPCHelpMan& fundrawtransaction_helpman();
@@ -604,6 +759,7 @@ extern const RPCHelpMan& signrawtransactionwithkey_helpman();
 extern const RPCHelpMan& signrawtransactionwithwallet_helpman();
 extern const RPCHelpMan& splitunspent_helpman();
 extern const RPCHelpMan& stakelimit_helpman();
+extern const RPCHelpMan& setautounlock_helpman();
 extern const RPCHelpMan& stop_helpman();
 extern const RPCHelpMan& sweepuncoveredcoins_helpman();
 extern const RPCHelpMan& superblockage_helpman();

@@ -1,11 +1,14 @@
 add_executable(test_gridcoin-qt
     test_main.cpp
     aboutdialogtests.cpp
+    askpassphrasedialogtests.cpp
     bitcoinunitstests.cpp
     uritests.cpp
     sidestakemodeltests.cpp
+    splashscreentests.cpp
     coinselectionmodeltests.cpp
     coinselectionviewtests.cpp
+    escapetests.cpp
     psgttoastdamptests.cpp
     researcherwizardpagetests.cpp
     researchermodeltests.cpp
@@ -14,6 +17,17 @@ add_executable(test_gridcoin-qt
     guiutiltests.cpp
     rpcconsoletests.cpp
     bitcoinguitests.cpp
+    clientmodeltests.cpp
+    mrcmodeltests.cpp
+    pushedstatetests.cpp
+    overviewtxmodeltests.cpp
+    sendcoinsdialogtests.cpp
+    coreconnectwaittests.cpp
+    filetransferdialogtests.cpp
+    guiipcworkertests.cpp
+    walletmodeltests.cpp
+    tablemodelindextests.cpp
+    ../../test/wine.cpp
 )
 
 set_target_properties(test_gridcoin-qt PROPERTIES
@@ -58,3 +72,6 @@ if(TARGET ${QT}::QOffscreenIntegrationPlugin)
 endif()
 
 add_test(NAME gridcoin_qt_tests COMMAND test_gridcoin-qt)
+# A class that fails without throwing still marks the run failed. Should that
+# regress, the binary exits 0, but QTest's FAIL! line still shows the check.
+set_tests_properties(gridcoin_qt_tests PROPERTIES FAIL_REGULAR_EXPRESSION "FAIL!  : ")

@@ -860,6 +860,11 @@ UniValue consolidateunspent(const UniValue& params)
         throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, string("Invalid Gridcoin address: ") + sAddress);
     }
 
+    // Refused as the other spends are, locked or unlocked for staking only,
+    // unless this thread may use the keys, and before the wallet is searched
+    // for inputs.
+    EnsureWalletIsUnlocked();
+
     // Set the consolidation transaction address to the specified output address.
     CScript scriptDestPubKey;
     scriptDestPubKey.SetDestination(OptimizeAddress);
@@ -1064,21 +1069,6 @@ UniValue consolidateunspent(const UniValue& params)
     int64_t nFee = nTransactionFee * (1 + (int64_t) nBytes / 1000);
 
     int64_t nFeeRequired = std::max(nMinFee, nFee);
-
-
-    if (pwalletMain->IsLocked())
-    {
-        string strError = _("Error: Wallet locked, unable to create transaction.");
-        LogPrintf("consolidateunspent: %s", strError);
-        return strError;
-    }
-
-    if (pwalletMain->IsUnlockedForStakingOnly())
-    {
-        string strError = _("Error: Wallet unlocked for staking only, unable to create transaction.");
-        LogPrintf("consolidateunspent: %s", strError);
-        return strError;
-    }
 
     vector<pair<CScript, int64_t> > vecSend;
 
@@ -1334,7 +1324,8 @@ UniValue splitunspent(const UniValue& params)
         throw JSONRPCError(RPC_WALLET_UNLOCK_NEEDED, "Error: Wallet locked, unable to create transaction.");
     }
 
-    if (pwalletMain->IsUnlockedForStakingOnly())
+    // A capability scope open on this thread lets a staking-only wallet through.
+    if (!pwalletMain->CanUseKeys())
     {
         throw JSONRPCError(RPC_WALLET_UNLOCK_NEEDED,
                            "Error: Wallet unlocked for staking only, unable to create transaction.");
@@ -2272,7 +2263,7 @@ static const RPCHelpMan fundrawtransaction_help{
     "Note: The transaction must have no existing inputs. Unlike Bitcoin Core's fundrawtransaction,\n"
     "this command does not yet support adding funds to a transaction that already has inputs.\n"
     "\n"
-    "Requires wallet passphrase to be set with walletpassphrase first if wallet is encrypted.",
+    "If the wallet is encrypted, it must be unlocked with walletpassphrase first (not for staking only), or the request must carry the passphrase (the client's -stdinelevate option).",
     {
         {"hexstring", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "Hex string of the raw transaction."},
         {"options", RPCArg::Type::OBJ, RPCArg::Optional::OMITTED, "",
@@ -2705,7 +2696,7 @@ static const RPCHelpMan signrawtransactionwithwallet_help{
     "signrawtransactionwithwallet",
     "Sign inputs for a raw (serialized, hex-encoded) transaction using wallet keys.\n"
     "\n"
-    "Requires wallet passphrase to be set with walletpassphrase first if wallet is encrypted.",
+    "If the wallet is encrypted, it must be unlocked with walletpassphrase first (not for staking only), or the request must carry the passphrase (the client's -stdinelevate option).",
     {
         {"hexstring", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "The transaction hex string."},
         {"prevtxs", RPCArg::Type::ARR, RPCArg::Optional::OMITTED,
@@ -2754,7 +2745,7 @@ static const RPCHelpMan signrawtransaction_help{
     "If the optional private-keys array is provided, those are the only keys used to sign;\n"
     "otherwise the wallet's keys are used.\n"
     "\n"
-    "Requires wallet passphrase to be set with walletpassphrase first if wallet is encrypted.",
+    "If the wallet is encrypted, it must be unlocked with walletpassphrase first (not for staking only), or the request must carry the passphrase (the client's -stdinelevate option).",
     {
         {"hexstring", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "The transaction hex string."},
         {"prevtxs", RPCArg::Type::ARR, RPCArg::Optional::OMITTED,

@@ -212,6 +212,10 @@ public:
      */
     uint64_t randrange(uint64_t range) noexcept
     {
+        // Invariant: every caller passes a positive range: each draws from a set
+        // it checks for empty first, or uses a fixed positive bound. Guards
+        // against a new caller with an empty range, which --range below would
+        // wrap to UINT64_MAX.
         assert(range);
         --range;
         int bits = CountBits(range);

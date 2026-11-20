@@ -465,6 +465,7 @@ QVariant TransactionTableModel::formatRole(const TransactionRecord *rec, int col
         case Amount: return {};
         } // no default case, so the compiler can warn about missing cases
         assert(false);
+        return {};
     case Qt::DisplayRole:
         switch (column) {
         case Status: return {};
@@ -478,6 +479,7 @@ QVariant TransactionTableModel::formatRole(const TransactionRecord *rec, int col
             return formatTxAmount(rec);
         } // no default case, so the compiler can warn about missing cases
         assert(false);
+        return {};
     case Qt::EditRole:
         // Edit role is used for sorting, so return the unformatted values
         switch (column) {
@@ -494,6 +496,7 @@ QVariant TransactionTableModel::formatRole(const TransactionRecord *rec, int col
             return qint64{rec->credit + rec->debit};
         } // no default case, so the compiler can warn about missing cases
         assert(false);
+        return {};
     case Qt::ToolTipRole:
         return formatTooltip(rec);
     case Qt::AccessibleTextRole:
@@ -521,6 +524,7 @@ QVariant TransactionTableModel::formatRole(const TransactionRecord *rec, int col
             return tr("Amount: %1").arg(formatTxAmount(rec));
         } // no default case, so the compiler can warn about missing cases
         assert(false);
+        return {};
     case Qt::TextAlignmentRole:
         return column_alignments[columnInt];
     case Qt::ForegroundRole:

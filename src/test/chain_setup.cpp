@@ -625,6 +625,16 @@ bool CreateAndProcessBlock(CBlock& block_out, std::string& err)
         return false;
     }
 
+    return CreateAndProcessBlock(*pwalletMain, block_out, err);
+}
+
+bool CreateAndProcessBlock(CWallet& staking_wallet, CBlock& block_out, std::string& err)
+{
+    if (!pwalletMain) {
+        err = "no wallet";
+        return false;
+    }
+
     if (!g_state) {
         err = "no RegtestChainSetup is alive";
         return false;
@@ -657,7 +667,7 @@ bool CreateAndProcessBlock(CBlock& block_out, std::string& err)
         const int64_t slot = GRC::MaskStakeTime(GetMockTime().count()) + GRC::STAKE_TIMESTAMP_MASK + 1;
         g_last_stake_slot = std::max(g_last_stake_slot, slot);
         SetMockTime(slot);
-        ok = TryMineRegtestBlock(pwalletMain, block_out, err, /*stake_time_slot_offset=*/0);
+        ok = TryMineRegtestBlock(&staking_wallet, block_out, err, /*stake_time_slot_offset=*/0);
     }
 
     if (!ok) return false;
@@ -689,6 +699,12 @@ bool CreateAndProcessBlock(CBlock& block_out, std::string& err)
         }
 
         pwalletMain->BlockConnected(block_out, pindexBest->nHeight);
+
+        // A staking wallet of the case's own is told as well, so that it does
+        // not offer the output it just staked again.
+        if (&staking_wallet != pwalletMain) {
+            staking_wallet.BlockConnected(block_out, pindexBest->nHeight);
+        }
     }
 
     return true;

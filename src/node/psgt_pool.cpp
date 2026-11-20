@@ -62,9 +62,6 @@ std::string PSGTPoolRejectToString(PSGTPoolReject reject)
 // Validation
 // ---------------------------------------------------------------------------
 
-//! Reject fees above this multiple of the relay minimum as user error.
-static constexpr int MAX_POOL_FEE_MULTIPLIER = 100;
-
 //! Is the funding output available from this node's point of view? The
 //! embedded funding transaction is already hash-authenticated against
 //! prevout.hash, so existence and unspentness are the only chain facts left
@@ -277,10 +274,10 @@ PSGTPoolReject ValidatePSGTForPool(const PSGTPool& pool,
         return PSGTPoolReject::FEE_TOO_LOW;
     }
 
-    if (*analysis.fee > MAX_POOL_FEE_MULTIPLIER * min_fee) {
+    if (*analysis.fee > ABSURD_FEE_MULTIPLIER * min_fee) {
         error = strprintf("fee %s is more than %d times the relay minimum %s; "
                           "rejecting as probable user error",
-                          FormatMoney(*analysis.fee), MAX_POOL_FEE_MULTIPLIER,
+                          FormatMoney(*analysis.fee), ABSURD_FEE_MULTIPLIER,
                           FormatMoney(min_fee));
         return PSGTPoolReject::FEE_ABSURD;
     }

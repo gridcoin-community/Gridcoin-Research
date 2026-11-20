@@ -4,19 +4,61 @@
 
 #include <boost/test/unit_test.hpp>
 
+#include <amount.h>
+#include <chain.h>
+#include <chainparams.h>
 #include <gridcoin/account.h>
 #include <gridcoin/beacon.h>
+#include <gridcoin/claim.h>
 #include <gridcoin/cpid.h>
 #include <gridcoin/mrc.h>
 #include <gridcoin/tally.h>
+#include <interfaces/gui_state.h>
+#include <interfaces/mrc.h>
 #include <key.h>
+#include <logging.h>
 #include <miner.h>
+#include <node/gui_cache.h>
+#include <primitives/block.h>
 #include <primitives/transaction.h>
+#include <random.h>
 #include <rpc/blockchain.h>
+#include <support/allocators/secure.h>
 #include <test/state_guard.h>
+#include <txmempool.h>
 #include <test/test_gridcoin.h>
+#include <util.h>
+#include <wallet/wallet.h>
+
+#include <memory>
+
+#include <functional>
+#include <list>
+#include <string>
+#include <vector>
 
 namespace {
+//! Collects the log lines containing "ERROR" while alive.
+class CapturedErrors
+{
+public:
+    std::vector<std::string> m_lines;
+
+    CapturedErrors()
+        : m_callback(LogInstance().PushBackCallback([this](const std::string& line) {
+              if (line.find("ERROR") != std::string::npos) m_lines.push_back(line);
+          }))
+    {
+    }
+
+    ~CapturedErrors() { LogInstance().DeleteCallback(m_callback); }
+    CapturedErrors(const CapturedErrors&) = delete;
+    CapturedErrors& operator=(const CapturedErrors&) = delete;
+
+private:
+    std::list<std::function<void(const std::string&)>>::iterator m_callback;
+};
+
 struct Setup {
     // First member: restores the tip globals, mock time and the arguments
     // this fixture forces, after the members below are gone. The destructor
@@ -98,6 +140,23 @@ struct Setup {
 
         gArgs.ForceSetArg("forcecpid", cpid.ToString());
         GRC::Researcher::Reload({}, {});
+    }
+
+    //! Encrypt the wallet and unlock it for staking only, as a researcher who
+    //! stakes runs it.
+    void EncryptAndUnlockForStakingOnly()
+    {
+        const SecureString passphrase("mrc-tests");
+
+        BOOST_REQUIRE(wallet->EncryptWallet(passphrase));
+        wallet->Lock();
+        BOOST_REQUIRE(wallet->Unlock(passphrase, UnlockScope::StakingOnly));
+        BOOST_REQUIRE(wallet->IsUnlockedForStakingOnly());
+
+        // The general route to the beacon key is refused from here on, so a
+        // signature a case gets can only have come through a staking path.
+        CKey general;
+        BOOST_REQUIRE(!wallet->GetKey(key.GetPubKey().GetID(), general));
     }
 
     ~Setup() {
@@ -301,6 +360,286 @@ BOOST_AUTO_TEST_CASE(it_creates_valid_mrc_claims)
     // Currently the miner code is too coupled together which makes this
     // infeasible without having a mess of spaghetti code for working
     // around this.
+}
+
+// The node's GUI state cache quotes the MRC request page's figures on every tip
+// once synced, with a trial claim. For a researcher just paid, with nothing
+// accrued, the trial's "no positive research reward pending" is routine, and must
+// not write a default-level ERROR line per tip. The RPC and submit paths still do.
+BOOST_AUTO_TEST_CASE(the_gui_cache_trial_with_nothing_accrued_logs_no_error)
+{
+    // Regtest opens the MRC version gate from genesis, so the quote reaches its
+    // trial claim on this mock chain. The fixture's StateGuard puts the network,
+    // the tip and the clock back.
+    SelectParams(CBaseChainParams::REGTEST);
+    account.m_accrual = 0;
+    g_previous_block_time = GetAdjustedTime();
+
+    LOCK(cs_main);
+    pindexBest = pindex;
+    nBestHeight = pindex->nHeight;
+
+    // A synced, eligible researcher: what the cache's researcher part reports
+    // for this fixture's active beacon.
+    interfaces::GuiStateSnapshot snap;
+    snap.out_of_sync = false;
+    snap.has_researcher = true;
+    snap.researcher.has_active_beacon = true;
+
+    CapturedErrors errors;
+
+    node::MakeProductionCompute().mrc(snap);
+
+    BOOST_REQUIRE(snap.has_mrc);
+    BOOST_CHECK(!snap.mrc.out_of_sync);
+    BOOST_CHECK(snap.mrc.block_version_valid);
+    BOOST_CHECK(snap.mrc.create_error);
+    BOOST_CHECK(snap.mrc.create_error_msg.find("No positive research reward pending") != std::string::npos);
+    BOOST_CHECK(errors.m_lines.empty());
+
+    // The same claim through the RPC's and the submit's call still logs it.
+    GRC::MRC mrc;
+    CAmount reward{0}, fee{0};
+    BOOST_CHECK_THROW(GRC::CreateMRC(pindex, mrc, reward, fee, wallet), GRC::MRC_error);
+    BOOST_REQUIRE_EQUAL(errors.m_lines.size(), 1U);
+    BOOST_CHECK(errors.m_lines[0].find("No positive research reward pending") != std::string::npos);
+}
+
+// A GUI's fee-boost quote (GuiState::requestMRCQuote) is the cache's trial claim
+// at the boost asked: the same shared MRC snapshot code with that boost, with the
+// researcher's eligibility read from the cache's snapshot, and as quiet.
+BOOST_AUTO_TEST_CASE(the_gui_cache_quote_is_the_trial_at_the_boost_asked)
+{
+    // Regtest opens the MRC version gate on this mock chain (see above). The
+    // fixture's StateGuard puts the network, the tip and the clock back.
+    SelectParams(CBaseChainParams::REGTEST);
+    account.m_accrual = 72;
+    g_previous_block_time = GetAdjustedTime();
+
+    LOCK(cs_main);
+    // The block createmrc_creates_valid_mrcs claims at.
+    pindexBest = pindex->pprev;
+    nBestHeight = pindexBest->nHeight;
+
+    // A synced, eligible researcher in the cache's snapshot.
+    interfaces::GuiStateSnapshot current;
+    current.out_of_sync = false;
+    current.has_researcher = true;
+    current.researcher.has_active_beacon = true;
+
+    const node::GuiCache::Compute compute = node::MakeProductionCompute();
+    CapturedErrors errors;
+
+    // Unboosted, the trial gives the reward and the minimum fee.
+    const interfaces::MRCSnapshot unboosted = compute.mrc_quote(0, current);
+    BOOST_CHECK(!unboosted.out_of_sync);
+    BOOST_CHECK(unboosted.block_version_valid);
+    BOOST_REQUIRE_MESSAGE(!unboosted.create_error, unboosted.create_error_msg);
+    BOOST_REQUIRE_GT(unboosted.reward, unboosted.min_fee);
+
+    // Boosted, the quote asks for the minimum fee plus the boost, and reruns the
+    // trial at that fee.
+    const CAmount boost = unboosted.reward - unboosted.min_fee;
+    interfaces::MRCSnapshot quote = compute.mrc_quote(boost, current);
+    BOOST_CHECK(!quote.create_error);
+    BOOST_CHECK(!quote.boosted_fee_error);
+    BOOST_CHECK_EQUAL(quote.reward, unboosted.reward);
+    BOOST_CHECK_EQUAL(quote.min_fee, unboosted.min_fee);
+    BOOST_CHECK_EQUAL(quote.fee, unboosted.reward);
+
+    // One unit more and the boosted rerun refuses the fee, in the quote alone.
+    quote = compute.mrc_quote(boost + 1, current);
+    BOOST_CHECK(quote.boosted_fee_error);
+    BOOST_CHECK(quote.boosted_fee_error_msg.find("greater than the computed research reward") != std::string::npos);
+    BOOST_CHECK_EQUAL(quote.fee, unboosted.reward + 1);
+    BOOST_CHECK(errors.m_lines.empty());
+
+    // Not an eligible researcher in the cache's snapshot: no trial at all.
+    current.researcher.has_active_beacon = false;
+    quote = compute.mrc_quote(boost, current);
+    BOOST_CHECK(!quote.create_error);
+    BOOST_CHECK_EQUAL(quote.reward, 0);
+    BOOST_CHECK_EQUAL(quote.fee, 0);
+}
+
+// DESIGN rule: a submit whose rebuilt fee is higher, or whose net payout is lower,
+// than the terms the user confirmed is refused with the fresh figures and
+// broadcasts nothing. This runs the real MRCImpl::Submit on the mock chain of the
+// quote case above, with the fixture wallet signing the rebuilt claim.
+BOOST_AUTO_TEST_CASE(submit_refuses_a_higher_fee_than_confirmed_and_broadcasts_nothing)
+{
+    SelectParams(CBaseChainParams::REGTEST);
+    account.m_accrual = 72;
+    g_previous_block_time = GetAdjustedTime();
+
+    LOCK(cs_main);
+    pindexBest = pindex->pprev;
+    nBestHeight = pindexBest->nHeight;
+
+    interfaces::GuiStateSnapshot current;
+    current.out_of_sync = false;
+    current.has_researcher = true;
+    current.researcher.has_active_beacon = true;
+
+    const node::GuiCache::Compute compute = node::MakeProductionCompute();
+    // The fee the user confirms is the quoted one: the minimum plus a boost of one
+    // unit (the mock chain's minimum fee is zero).
+    constexpr CAmount boost = 1;
+    const interfaces::MRCSnapshot quote = compute.mrc_quote(boost, current);
+    BOOST_REQUIRE_MESSAGE(!quote.create_error, quote.create_error_msg);
+    BOOST_REQUIRE(!quote.boosted_fee_error);
+    BOOST_REQUIRE_GT(quote.reward, quote.fee);
+    BOOST_REQUIRE_EQUAL(quote.fee, quote.min_fee + boost);
+
+    const size_t wallet_txs = WITH_LOCK(wallet->cs_wallet, return wallet->mapWallet.size());
+    const unsigned long pool_txs = mempool.size();
+
+    const std::unique_ptr<interfaces::MRC> mrc = interfaces::MakeMRC(wallet);
+
+    // Fee: the user confirmed one unit below what the rebuilt claim pays.
+    interfaces::MRCSubmitResult res = mrc->submitConfirmed(boost, /*wallet_locked=*/false,
+                                                           quote.fee - 1, quote.reward - quote.fee);
+    BOOST_CHECK(res.terms_changed);
+    BOOST_CHECK(!res.success);
+    BOOST_CHECK(!res.error.empty());
+    BOOST_CHECK_EQUAL(res.fresh_fee, quote.fee);
+    BOOST_CHECK_EQUAL(res.fresh_reward, quote.reward);
+    BOOST_CHECK_EQUAL(WITH_LOCK(wallet->cs_wallet, return wallet->mapWallet.size()), wallet_txs);
+    BOOST_CHECK_EQUAL(mempool.size(), pool_txs);
+
+    // Net payout: the fee holds, the user confirmed one unit more than it nets.
+    res = mrc->submitConfirmed(boost, /*wallet_locked=*/false, quote.fee, quote.reward - quote.fee + 1);
+    BOOST_CHECK(res.terms_changed);
+    BOOST_CHECK(!res.success);
+    BOOST_CHECK_EQUAL(res.fresh_fee, quote.fee);
+    BOOST_CHECK_EQUAL(res.fresh_reward, quote.reward);
+    BOOST_CHECK_EQUAL(WITH_LOCK(wallet->cs_wallet, return wallet->mapWallet.size()), wallet_txs);
+    BOOST_CHECK_EQUAL(mempool.size(), pool_txs);
+}
+
+// DESIGN rule: a user action re-checks the state in the core. The GUI's eligibility
+// comes from a pushed snapshot that can be seconds old, so the core refuses a
+// submit while the tip has fallen behind, with nothing built or sent. The fixture's
+// StateGuard puts the clock back.
+BOOST_AUTO_TEST_CASE(submit_refuses_while_out_of_sync_and_broadcasts_nothing)
+{
+    SelectParams(CBaseChainParams::REGTEST);
+    account.m_accrual = 72;
+    g_previous_block_time = GetAdjustedTime();
+
+    LOCK(cs_main);
+    pindexBest = pindex->pprev;
+    nBestHeight = pindexBest->nHeight;
+
+    interfaces::GuiStateSnapshot current;
+    current.out_of_sync = false;
+    current.has_researcher = true;
+    current.researcher.has_active_beacon = true;
+
+    const node::GuiCache::Compute compute = node::MakeProductionCompute();
+    constexpr CAmount boost = 1;
+    const interfaces::MRCSnapshot quote = compute.mrc_quote(boost, current);
+    BOOST_REQUIRE_MESSAGE(!quote.create_error, quote.create_error_msg);
+    BOOST_REQUIRE(!quote.boosted_fee_error);
+    BOOST_REQUIRE_GT(quote.reward, quote.fee);
+
+    const size_t wallet_txs = WITH_LOCK(wallet->cs_wallet, return wallet->mapWallet.size());
+    const unsigned long pool_txs = mempool.size();
+
+    const std::unique_ptr<interfaces::MRC> mrc = interfaces::MakeMRC(wallet);
+
+    // The tip is now 900 s old (the limit), so the node is out of sync.
+    SetMockTime(GetTime() + 900);
+    BOOST_REQUIRE(OutOfSyncByAge());
+
+    const interfaces::MRCSubmitResult res = mrc->submitConfirmed(boost, /*wallet_locked=*/false,
+                                                                 quote.fee, quote.reward - quote.fee);
+    BOOST_CHECK(!res.success);
+    BOOST_CHECK(!res.terms_changed);
+    BOOST_CHECK_EQUAL(res.error, "The wallet is out of sync; the claim was not sent.");
+    BOOST_CHECK_EQUAL(WITH_LOCK(wallet->cs_wallet, return wallet->mapWallet.size()), wallet_txs);
+    BOOST_CHECK_EQUAL(mempool.size(), pool_txs);
+}
+
+BOOST_AUTO_TEST_CASE(terms_hold_only_when_paying_no_more_and_receiving_no_less)
+{
+    // The user confirmed paying at most 10 and receiving at least 90.
+    BOOST_CHECK(GRC::MRCTermsHold(10, 100, 10, 90));
+    BOOST_CHECK(!GRC::MRCTermsHold(11, 100, 10, 90)); // fee higher
+    BOOST_CHECK(!GRC::MRCTermsHold(10, 99, 10, 90));  // net 89 < 90
+    BOOST_CHECK(GRC::MRCTermsHold(9, 100, 10, 90));   // pays less, nets more
+    BOOST_CHECK(!GRC::MRCTermsHold(10, 100, 10, 91)); // net 90 < 91
+}
+
+//! A researcher staking from a wallet unlocked for staking only signs the claim
+//! in each block it stakes with its beacon key.
+BOOST_AUTO_TEST_CASE(claim_signed_under_staking_only)
+{
+    EncryptAndUnlockForStakingOnly();
+
+    CMutableTransaction coinstake;
+    coinstake.nTime = pindex->nTime;
+    coinstake.vin.resize(1);
+    coinstake.vin[0].prevout = COutPoint(GetRandHash(), 0);
+    coinstake.vout.resize(2);
+    coinstake.vout[0].SetEmpty();
+
+    CBlock block;
+    block.nTime = pindex->nTime;
+    block.hashPrevBlock = pindex->pprev->GetBlockHash();
+    block.vtx.resize(2);
+    block.vtx[1] = CTransaction(coinstake);
+
+    GRC::Claim claim;
+    claim.m_mining_id = cpid;
+
+    LOCK(cs_main);
+
+    // The dry run that CreateMRCRewards makes before it commits to a research
+    // claim checks only that the key can be had.
+    BOOST_CHECK(TrySignClaim(wallet, claim, block, /*dry_run=*/true));
+    BOOST_CHECK(claim.m_signature.empty());
+
+    BOOST_REQUIRE(TrySignClaim(wallet, claim, block, /*dry_run=*/false));
+    BOOST_CHECK(claim.VerifySignature(key.GetPubKey(), block.hashPrevBlock, block.vtx[1]));
+}
+
+//! The MRC request page's preview, on a researcher wallet unlocked for staking
+//! only, shows the fee and no error. Its trial claim is built unsigned: the
+//! preview needs the fee, not a signature, and the general route to the beacon
+//! key is refused under staking only.
+BOOST_AUTO_TEST_CASE(mrc_snapshot_no_error_under_staking_only)
+{
+    // Large enough that the fee, a small fraction of it under regtest's short
+    // zero-payout interval, is not rounded away.
+    const CAmount accrual = 1000 * COIN;
+    account.m_accrual = accrual;
+    EncryptAndUnlockForStakingOnly();
+
+    // The snapshot reaches CreateMRC only from the V12 height, which regtest
+    // puts at genesis and mainnet far above this mock chain. The fixture's
+    // guard puts the network back.
+    SelectParams(CBaseChainParams::REGTEST);
+
+    {
+        LOCK(cs_main);
+        pindexBest = pindex;
+    }
+
+    // In sync.
+    g_previous_block_time.store(GetAdjustedTime());
+
+    const std::unique_ptr<interfaces::MRC> mrc_interface = interfaces::MakeMRC(wallet);
+    const interfaces::MRCSnapshot snap = mrc_interface->snapshot(/*fee_boost=*/0,
+                                                                 /*wallet_locked=*/false,
+                                                                 /*researcher_eligible=*/true);
+
+    BOOST_REQUIRE(!snap.out_of_sync);
+    BOOST_REQUIRE(snap.block_version_valid);
+    BOOST_CHECK_MESSAGE(!snap.create_error, snap.create_error_msg);
+    BOOST_CHECK_EQUAL(snap.reward, accrual);
+    BOOST_CHECK(snap.min_fee > 0);
+    BOOST_CHECK(snap.min_fee < snap.reward);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

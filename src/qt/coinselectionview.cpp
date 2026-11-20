@@ -7,6 +7,7 @@
 #include "qt/coinselectionmodel.h"
 
 #include <QKeyEvent>
+#include <QMessageBox>
 #include <QPointer>
 #include <QScrollBar>
 #include <QTimer>
@@ -185,4 +186,18 @@ void CoinSelectionView::reportViewport()
         }
         if (!visible.isEmpty()) emit visibleIndexesChanged(visible);
     });
+}
+
+void CoinSelectionView::showLoadFailed(const QString& message)
+{
+    // Not modal: a GUI that is quitting because the core dropped the
+    // connection must not wait on a box.
+    auto* const box = new QMessageBox(QMessageBox::Warning, window()->windowTitle(),
+                                      tr("The coin list could not be loaded: %1. Close this window and open it "
+                                         "again to retry.")
+                                          .arg(message),
+                                      QMessageBox::Ok, window());
+    box->setAttribute(Qt::WA_DeleteOnClose);
+    box->setWindowModality(Qt::NonModal);
+    box->show();
 }

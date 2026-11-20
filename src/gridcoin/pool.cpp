@@ -74,11 +74,11 @@ PoolRegistry& GRC::GetPoolRegistry()
 // Grandfathered builtin pools (issue #1783 / V15)
 // -----------------------------------------------------------------------------
 //
-// The five entries below were the hardcoded MiningPools list (researcher.h:88-95)
-// that drove pool-mode detection and the voting AVW calculation before the
-// on-chain registry existed. PoolRegistry's constructor seeds them at boot so
-// pre-V15 queries match g_mining_pools bit-for-bit. Keep this list in lockstep
-// with researcher.h.
+// The five entries below were the hardcoded MiningPools list (the MiningPools
+// constructor in researcher.h) that drove pool-mode detection and the voting
+// AVW calculation before the on-chain registry existed. PoolRegistry's
+// constructor seeds them at boot so pre-V15 queries match g_mining_pools
+// bit-for-bit. Keep this list in lockstep with researcher.h.
 //
 const std::vector<PoolRegistry::BuiltinSeed>& PoolRegistry::BuiltinPoolSeeds()
 {

@@ -17,6 +17,7 @@ private slots:
     void stakingToolTipMaskedHidesWeightAndFrequency();
     void notStakingToolTipMaskedHidesFrequency();
     void unableToStakeToolTipIgnoresMask();
+    void autoUnlockActionShownOnlyInMultiprocessWithAStore();
 };
 
 #endif // BITCOIN_QT_TEST_BITCOINGUITESTS_H

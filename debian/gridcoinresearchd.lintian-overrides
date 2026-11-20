@@ -1,0 +1,3 @@
+# The daemon is installed execute-only (0711), so that a process allowed to run it
+# cannot read it.
+gridcoinresearchd: non-standard-executable-perm 0711 != 0755 [usr/bin/gridcoinresearchd]

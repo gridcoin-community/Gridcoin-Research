@@ -4,9 +4,11 @@
 
 #include <scheduler.h>
 
+#include <logging.h>
 #include <util/time.h>
 
 #include <assert.h>
+#include <exception>
 #include <functional>
 #include <utility>
 
@@ -16,6 +18,10 @@ CScheduler::CScheduler()
 
 CScheduler::~CScheduler()
 {
+    // Invariant: on the normal shutdown path, Shutdown() stops the scheduler and
+    // joins its thread before the scheduler is destroyed. Guards against a change
+    // to that order, which would destroy the queue under a thread still waiting
+    // on it.
     assert(nThreadsServicingQueue == 0);
     if (stopWhenEmpty) assert(taskQueue.empty());
 }
@@ -176,6 +182,9 @@ void SingleThreadedSchedulerClient::ProcessQueue()
 
 void SingleThreadedSchedulerClient::AddToProcessQueue(std::function<void()> func)
 {
+    // Invariant: the only instance is built from the node's scheduler
+    // (validationinterface.cpp), and m_pscheduler is set only by the
+    // constructor. Guards against a new instance built without a scheduler.
     assert(m_pscheduler);
 
     {
@@ -187,6 +196,9 @@ void SingleThreadedSchedulerClient::AddToProcessQueue(std::function<void()> func
 
 void SingleThreadedSchedulerClient::EmptyQueue()
 {
+    // Invariant: the only caller, FlushBackgroundCallbacks() in Shutdown(), runs
+    // after the scheduler thread has been joined. Guards against a change that
+    // drains the queue on this thread while the scheduler still runs it.
     assert(!m_pscheduler->AreThreadsServicingQueue());
     bool should_continue = true;
     while (should_continue) {
@@ -200,4 +212,17 @@ size_t SingleThreadedSchedulerClient::CallbacksPending()
 {
     LOCK(m_cs_callbacks_pending);
     return m_callbacks_pending.size();
+}
+
+CScheduler::Function CatchAndLogJob(const char* job_name, CScheduler::Function job)
+{
+    return [job_name, job = std::move(job)] {
+        try {
+            job();
+        } catch (const std::exception& e) {
+            // The name is written out because __func__ inside this lambda
+            // would name the lambda's call operator, not this function.
+            LogPrintf("ERROR: CatchAndLogJob: %s: %s", job_name, e.what());
+        }
+    };
 }

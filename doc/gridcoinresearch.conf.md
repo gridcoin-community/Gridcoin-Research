@@ -56,12 +56,22 @@ behavior.
     ############ Warning: Set a Good Password and Secure Your System ############
     #############################################################################
 
+    ## RPC is plain HTTP: the password and every request cross the network
+    ## unencrypted. The RPC port listens on loopback (127.0.0.1) by default, and
+    ## loopback may always connect.
+    ## Without rpcbind=, ANY rpcallowip= line opens the RPC port on every
+    ## interface of this machine, and only the allow list limits who connects.
+    ## To reach RPC from another machine, prefer an SSH tunnel and leave the
+    ## port on loopback:
+    ##   ssh -N -L 15715:127.0.0.1:15715 <user>@<this machine>
+    ## Otherwise bind it to one numeric address of this machine with rpcbind=,
+    ## and allow only the remote system (an address, or a subnet in CIDR form).
     #server=1
-    #rpcallowip=127.0.0.1
-    #rpcallowip=<IP Address of Remote System>
     #rpcport=<Port for RPC Communication>
     #rpcuser=<A Username for RPC>
     #rpcpassword=<A STRONG Password for RPC>
+    #rpcbind=<An address of this machine, e.g. 192.168.1.10>
+    #rpcallowip=<The remote system, e.g. 192.168.1.20 or 192.168.1.0/24>
 
     #############################################################################
     ######################## Optional BOINC settings ############################
@@ -147,7 +157,7 @@ Some Gridcoin specific other entries:
 **stakingefficiency=<percentage between 75 and 98, defaults to 90>**
 **minstakesplitvalue=<value in GRC, minimum and defaults to 800>**
 
-enablestakesplit=1 will enable the automatic splitting of UTXO's in the
+enablestakesplit=1 will enable the automatic splitting of UTXOs in the
 coinstake transaction (stake outputs). Zero is the default (disabled).
 
 stakingefficiency=xx is an integer that specifies the desired staking
@@ -157,7 +167,7 @@ in case an unreasonable value is provided.
 minstakesplitvalue=xxx is an integer that specifies the minimum UTXO size
 desired post split to provide a secondary control on UTXO size. If
 difficulty drops and a high efficiency is specified, the efficiency alone
-would split UTXO's into amounts smaller than the user desires. This will
+would split UTXOs into amounts smaller than the user desires. This will
 prevent that from occurring. If a user specifies less than 800 GRC, then
 the code uses 800 GRC. Note that the stake splitter uses a 160 block
 averaging interval for calculating the difficulty to smooth out the

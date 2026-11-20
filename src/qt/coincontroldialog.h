@@ -114,6 +114,7 @@ private slots:
     void selectedConsolidationAddressSlot(std::pair<QString, QString> address);
     void modelSelectionChanged();
     void modelLoadingFinished();
+    void modelLoadingFailed(const QString& message);
 };
 
 #endif // BITCOIN_QT_COINCONTROLDIALOG_H

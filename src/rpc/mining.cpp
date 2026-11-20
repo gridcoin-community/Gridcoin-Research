@@ -22,6 +22,7 @@
 #include "server.h"
 #include <rpc/util.h>
 
+#include <cstdlib>
 #include <map>
 #include <stdexcept>
 
@@ -606,8 +607,11 @@ UniValue auditsnapshotaccrual(const UniValue& params)
 
         try {
             beacon_ptr = beacons.GetBeaconChainletRoot(beacon_ptr, beacon_chain_out_ptr);
-        } catch (std::runtime_error& e) {
-            throw JSONRPCError(RPC_INTERNAL_ERROR, e.what());
+        } catch (const std::runtime_error&) {
+            // A corrupt chainlet throws after the beacon registry has been reset,
+            // so the node stops here instead of continuing with the reset
+            // registry. The registry is rebuilt at the next start.
+            std::abort();
         }
 
         for (const auto& iter : *beacon_chain_out_ptr) {

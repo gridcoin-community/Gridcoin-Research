@@ -8,6 +8,7 @@ add_executable(test_gridcoin
     alt_signal_stack_tests.cpp
     bip68_tests.cpp
     block_version_tests.cpp
+    capability_tests.cpp
     checkpoints_tests.cpp
     coinstake_construction_tests.cpp
     csv_tests.cpp
@@ -15,6 +16,12 @@ add_executable(test_gridcoin
     accounting_tests.cpp
     chain_setup.cpp
     state_guard.cpp
+    # RunningUnderWine, for the cases that need Windows' own access control.
+    wine.cpp
+    # PeerGroupsReadable, for the cases that need the IPC peer check to identify a peer.
+    peer_groups.cpp
+    # SameAcl and, on Windows, MakeJunction, for the cases that read access lists.
+    win_fs_util.cpp
     gridcoin/message_contract_tests.cpp
     state_leak_detector.cpp
     state_guard_tests.cpp
@@ -25,7 +32,17 @@ add_executable(test_gridcoin
     kernel_branch_lookup_tests.cpp
     # The fixture chain's own clock.
     chain_setup_tests.cpp
+    # Whole-balance subtract-fee sends on the fixture chain.
+    wallet_send_subtract_fee_tests.cpp
+    # The GUI state cache on fakes, and on the fixture chain with the production compute.
+    gui_cache_tests.cpp
+    gui_cache_regtest_tests.cpp
     addressbook_tests.cpp
+    autounlock_tests.cpp
+    autounlock_blob_tests.cpp
+    autounlock_dpapi_tests.cpp
+    autounlock_setup_tests.cpp
+    autounlock_socket_tests.cpp
     addrman_tests.cpp
     allocator_tests.cpp
     base32_tests.cpp
@@ -33,14 +50,19 @@ add_executable(test_gridcoin
     base64_tests.cpp
     bip32_tests.cpp
     #compilerbug_tests.cpp
+    connection_scope_tests.cpp
     crypto_tests.cpp
     diagnose_tests.cpp
     fees_tests.cpp
+    file_transfer_tests.cpp
     fs_tests.cpp
+    fsmodes_tests.cpp
     getarg_tests.cpp
     gridcoin_tests.cpp
     htlc_tests.cpp
+    key_entry_points_tests.cpp
     key_io_tests.cpp
+    gridcoin/accrual_snapshot_tests.cpp
     gridcoin/backup_tests.cpp
     gridcoin/block_finder_tests.cpp
     gridcoin/block_rewards_tests.cpp
@@ -56,6 +78,7 @@ add_executable(test_gridcoin
     gridcoin/magnitude_tests.cpp
     gridcoin/mnemonics_tests.cpp
     gridcoin/mrc_tests.cpp
+    gridcoin/newbie_window_tests.cpp
     gridcoin/poll_result_cache_tests.cpp
     gridcoin/poll_registry_tests.cpp
     gridcoin/poll_result_tests.cpp
@@ -71,16 +94,20 @@ add_executable(test_gridcoin
     gridcoin/seen_stakes_tests.cpp
     gridcoin/sidestake_tests.cpp
     gridcoin/superblock_tests.cpp
+    gridcoin/tally_tests.cpp
     gridcoin/voting_notify_tests.cpp
+    init_tests.cpp
     interfaces_tests.cpp
     key_tests.cpp
     limitedmap_tests.cpp
+    logging_tests.cpp
     merkle_tests.cpp
     merkleblock_tests.cpp
     mruset_tests.cpp
     multisig_tests.cpp
     netbase_tests.cpp
     net_tests.cpp
+    notification_dispatcher_tests.cpp
     orphan_block_tests.cpp
     psgt_pool_tests.cpp
     psgt_tests.cpp
@@ -135,13 +162,12 @@ add_executable(test_gridcoin
     # selection mirror, and the value-filter parity semantics. Core lives in
     # gridcoin_util, so only the suite is listed here (GUI-OFF).
     qt_walletcoinstore_tests.cpp
-    # Transport helpers (src/ipc/process.cpp). Also Cap'n Proto-free. Needed here
-    # because on WIN32 handshake.cpp's WriteFileAtomic calls MakeOwnerOnlyDacl /
-    # ApplyOwnerOnlyDacl (defined at process.cpp:587,607) to create the cookie with
-    # an owner-only DACL. gridcoin_ipc would supply them, but it is deliberately
-    # NOT linked here on Windows (see the ENABLE_MULTIPROCESS AND NOT WIN32 guard
-    # below), so without this the win64 test link fails on those two symbols while
-    # every other target succeeds.
+    # Transport helpers (src/ipc/process.cpp), for ipc_process_tests. Also Cap'n
+    # Proto-free. gridcoin_ipc would supply them, but it is deliberately NOT linked
+    # here on Windows (see the ENABLE_MULTIPROCESS AND NOT WIN32 guard below), so
+    # the test target compiles the file itself. The owner-only DACL helpers that
+    # process.cpp and handshake.cpp call are in gridcoin_util
+    # (util/dir_permissions.cpp).
     ${CMAKE_SOURCE_DIR}/src/ipc/process.cpp
     # Multiprocess connect-handshake logic (src/ipc/handshake.cpp): identity-token
     # hashing, the ClientHandshake matching policy, and CheckIdentityBinding. The
@@ -155,30 +181,57 @@ add_executable(test_gridcoin
     # compiles into the ordinary test binary alongside handshake.cpp.
     ${CMAKE_SOURCE_DIR}/src/ipc/serve_init.cpp
     ipc_serve_init_tests.cpp
-    # Peer-credential check (src/ipc/peercred.cpp): SO_PEERCRED / getpeereid
-    # same-user enforcement. No Cap'n Proto, so it compiles into the ordinary
-    # test binary alongside the sources above.
+    # Peer check (src/ipc/peercred.cpp): the policy and its pure decisions, and
+    # the platform hooks (peercred_posix.cpp: SO_PEERCRED / getpeereid and the
+    # attach group; peercred_win.cpp: the Windows attach group), each of which
+    # compiles to nothing off its platform. No Cap'n Proto, so they compile into
+    # the ordinary test binary alongside the sources above.
     ${CMAKE_SOURCE_DIR}/src/ipc/peercred.cpp
+    ${CMAKE_SOURCE_DIR}/src/ipc/peercred_posix.cpp
+    ${CMAKE_SOURCE_DIR}/src/ipc/peercred_win.cpp
     ipc_peercred_tests.cpp
+    # The Windows endpoint's access lists and the GUI's check before it connects
+    # (src/ipc/win_endpoint.cpp). Its rules are pure and tested on every platform;
+    # process.cpp and handshake.cpp call its Windows half.
+    ${CMAKE_SOURCE_DIR}/src/ipc/win_endpoint.cpp
+    ipc_win_endpoint_tests.cpp
+    # The named pipe that identifies a Windows peer (src/ipc/win_attest.cpp). Its
+    # token classifier and name checks are pure and tested on every platform; the
+    # pipe itself is tested on Windows.
+    ${CMAKE_SOURCE_DIR}/src/ipc/win_attest.cpp
+    ipc_win_attest_tests.cpp
+    # Non-inheritable socket creation/accept and bounded drain (src/util/sock.cpp).
+    sock_tests.cpp
+    ipc_process_tests.cpp
     # CTxDB batch-consistent reads: Exists() against a pending Delete.
     dbwrapper_tests.cpp
+    proc_hardening_tests.cpp
     random_tests.cpp
+    rpc_elevation_tests.cpp
     rpc_tests.cpp
     rpchelpman_tests.cpp
     sanity_tests.cpp
+    childreaper_tests.cpp
+    sdnotify_tests.cpp
     scheduler_tests.cpp
     script_p2sh_tests.cpp
     gridcoin/connectinputs_tests.cpp
     rpc_allowlist_tests.cpp
+    rpc_bind_policy_tests.cpp
+    rpc_listener_check_tests.cpp
+    rpc_passphrase_tests.cpp
     script_tests.cpp
     scrypt_tests.cpp
     serialize_tests.cpp
     sigopcount_tests.cpp
+    staking_key_access_tests.cpp
     sync_tests.cpp
     test_gridcoin.cpp
     timedata_tests.cpp
     transaction_identity_tests.cpp
     transaction_tests.cpp
+    transfer_file_tests.cpp
+    transfer_sources_tests.cpp
     txmempool_tests.cpp
     uint256_tests.cpp
     util_fraction_tests.cpp
@@ -186,6 +239,12 @@ add_executable(test_gridcoin
     util_threadnames_tests.cpp
     wallet_db_tests.cpp
     wallet_tests.cpp
+    walletdump_tests.cpp
+    win_acl_tests.cpp
+    win_admin_drop_tests.cpp
+    winservice_tests.cpp
+    winsvc_layout_tests.cpp
+    winsvc_transfer_tests.cpp
 )
 
 # As in src/ipc/CMakeLists.txt: GCC before 13 ignores handshake.cpp's #pragma for
@@ -300,9 +359,9 @@ target_link_libraries(test_gridcoin PRIVATE
     ZLIB::ZLIB
 )
 
-# The IPC sources compiled in above use the Win32 DACL API (SetEntriesInAclW,
-# Get/SetNamedSecurityInfoW, InitializeSecurityDescriptor,
-# SetSecurityDescriptorDacl). gridcoin_ipc carries advapi32 for the other
+# The IPC sources compiled in above use the Win32 security API: handshake.cpp
+# calls InitializeSecurityDescriptor, SetSecurityDescriptorDacl and
+# SetSecurityDescriptorControl. gridcoin_ipc carries advapi32 for the other
 # targets, but it is not linked here on Windows, so name it directly.
 if(WIN32)
     target_link_libraries(test_gridcoin PRIVATE advapi32)
@@ -316,10 +375,13 @@ endif()
 # ENABLE_MULTIPROCESS also covers the win64 MP port, which lacks those APIs; the
 # handshake logic itself is covered cross-platform by the capnp-free ipc suites
 # and validated live on Windows. Linking gridcoin_ipc propagates C++20 and the
-# capnp/kj headers to test_gridcoin in multiprocess builds.
+# capnp/kj headers to test_gridcoin in multiprocess builds. The suite also includes
+# the ipc/capnp/*-types.h headers, which include libmultiprocess's mp/ headers and
+# its generated mp/proxy.capnp.h; target_capnp_sources links libmultiprocess into
+# gridcoin_ipc privately, so test_gridcoin links it as well for that include dir.
 if(ENABLE_MULTIPROCESS AND NOT WIN32)
     target_sources(test_gridcoin PRIVATE ipc_wire_handshake_tests.cpp)
-    target_link_libraries(test_gridcoin PRIVATE gridcoin_ipc)
+    target_link_libraries(test_gridcoin PRIVATE gridcoin_ipc Libmultiprocess::multiprocess)
 endif()
 
 # BOTH halves are required on musl; neither is sufficient alone.
@@ -337,3 +399,34 @@ endif()
 # Verified by strace: the pre-install alone leaves Boost installing per test case;
 # the switch alone leaves framework::init() installing. Together, neither happens.
 add_test(NAME gridcoin_tests COMMAND test_gridcoin --use_alt_stack=no)
+
+# util::TlsLibrariesScope has to make the process's first OpenSSL
+# initialisation call, so it cannot be checked inside test_gridcoin, where
+# OpenSSL is long since initialised. The probe is its own small program: it is
+# run once with the scope (no configuration file may be read) and once
+# without it (the same file is read, which shows the check can fail). It
+# returns 77 for an OpenSSL without providers. It uses setenv(), so it is not
+# built for Windows, where the same code path is compiled into the programs.
+if(NOT WIN32)
+    add_executable(openssl_noconfig_probe
+        openssl_noconfig_probe.cpp
+        ${CMAKE_SOURCE_DIR}/src/util/tls_libraries.cpp
+    )
+    target_include_directories(openssl_noconfig_probe PRIVATE ${CMAKE_SOURCE_DIR}/src)
+    # Linked as gridcoin_util links libcurl: a static libcurl names neither its
+    # TLS backend nor zlib.
+    target_compile_definitions(openssl_noconfig_probe PRIVATE CURL_STATICLIB)
+    target_link_libraries(openssl_noconfig_probe PRIVATE
+        CURL::libcurl
+        OpenSSL::SSL OpenSSL::Crypto
+        Threads::Threads
+        ZLIB::ZLIB
+        ${CMAKE_DL_LIBS}
+    )
+
+    add_test(NAME openssl_noconfig
+        COMMAND openssl_noconfig_probe ${CMAKE_CURRENT_SOURCE_DIR}/data/openssl_null_provider.cnf)
+    add_test(NAME openssl_noconfig_control
+        COMMAND openssl_noconfig_probe ${CMAKE_CURRENT_SOURCE_DIR}/data/openssl_null_provider.cnf --control)
+    set_tests_properties(openssl_noconfig openssl_noconfig_control PROPERTIES SKIP_RETURN_CODE 77)
+endif()

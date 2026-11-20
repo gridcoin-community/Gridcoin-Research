@@ -17,18 +17,34 @@
 //! is the one way to reach the leg deterministically.
 //!
 
+#include "amount.h"
 #include "chain.h"
+#include "consensus/merkle.h"
 #include "dbwrapper.h"
+#include "gridcoin/claim.h"
+#include "gridcoin/contract/contract.h"
 #include "gridcoin/staking/chain_trust.h"
 #include "node/chainman.h"
 #include "primitives/block.h"
+#include "primitives/transaction.h"
+#include "rpc/protocol.h"
+#include "rpc/server.h"
+#include "script/script.h"
+#include "streams.h"
 #include "sync.h"
 #include "test/chain_setup.h"
 #include "uint256.h"
+#include "validation.h"
+#include "version.h"
 
 #include <boost/test/unit_test.hpp>
 
+#include <functional>
+#include <limits>
 #include <string>
+#include <vector>
+
+#include <univalue.h>
 
 namespace {
 
@@ -40,6 +56,75 @@ CBlock MineOne()
     std::string err;
     BOOST_REQUIRE_MESSAGE(grc_test::CreateAndProcessBlock(block, err), err);
     return block;
+}
+
+//! A second block on the same parent with the same stake as \p block: the same
+//! coinstake, so the same stake proof, and a claim that differs, so another
+//! hash. Signed with the premine key, which the fixture stakes with.
+CBlock SiblingWithSameStake(const CBlock& block)
+{
+    CBlock changed = block;
+
+    GRC::Claim claim = changed.PullClaim();
+    claim.m_organization = "sibling";
+
+    CMutableTransaction coinbase(changed.vtx[0]);
+    coinbase.vContracts[0] = GRC::MakeContract<GRC::Claim>(
+        coinbase.vContracts[0].m_version,
+        GRC::ContractAction::ADD,
+        std::move(claim));
+    changed.vtx[0] = CTransaction(std::move(coinbase));
+    changed.hashMerkleRoot = BlockMerkleRoot(changed);
+
+    CKey key = grc_test::PremineKey();
+    BOOST_REQUIRE(key.Sign(changed.GetHash(), changed.vchBlockSig));
+
+    // Through serialization, so that the sibling carries none of the memory-only
+    // caches of the block it was copied from.
+    CDataStream stream(SER_NETWORK, PROTOCOL_VERSION);
+    stream << changed;
+
+    CBlock sibling;
+    stream >> sibling;
+
+    return sibling;
+}
+
+//! A transaction whose one input carries a relative lock of \p blocks blocks
+//! on a premine output. It is not signed; the case runs no scripts.
+CTransaction SpendWithRelativeLock(const uint32_t blocks, const uint32_t time)
+{
+    const std::vector<COutPoint> outputs = grc_test::SpendablePremineOutputs();
+    BOOST_REQUIRE(!outputs.empty());
+
+    CMutableTransaction mtx;
+    mtx.nVersion = 2;
+    mtx.nTime = time;
+    mtx.vin.emplace_back(outputs.front(), CScript(), blocks);
+    mtx.vout.emplace_back(1 * COIN, grc_test::PremineScript());
+
+    return CTransaction(mtx);
+}
+
+//! A copy of \p block after \p change, with its merkle root and signature made
+//! again. It shares the block's parent and, unless \p change touches the
+//! coinstake, its stake.
+CBlock ChangedCopy(const CBlock& block, const std::function<void(CBlock&)>& change)
+{
+    CBlock changed = block;
+    change(changed);
+    changed.hashMerkleRoot = BlockMerkleRoot(changed);
+
+    CKey key = grc_test::PremineKey();
+    BOOST_REQUIRE(key.Sign(changed.GetHash(), changed.vchBlockSig));
+
+    CDataStream stream(SER_NETWORK, PROTOCOL_VERSION);
+    stream << changed;
+
+    CBlock copy;
+    stream >> copy;
+
+    return copy;
 }
 
 } // anonymous namespace
@@ -116,6 +201,160 @@ BOOST_AUTO_TEST_CASE(setbestchain_reverts_a_reorg_that_lowers_chain_trust)
     uint256 best_on_disk;
     BOOST_CHECK(txdb.ReadHashBestChain(best_on_disk));
     BOOST_CHECK(best_on_disk == hashBestChain);
+}
+
+// A node's block data files can hold two blocks with the same stake proof on
+// one parent: the one that arrived first, and the one the chain went on with.
+// From a peer the second is refused while no block that builds on it is
+// waiting. An import has no peer and keeps no waiting blocks, so it must take
+// the second, or it leaves every block after it in the file without a parent.
+BOOST_AUTO_TEST_CASE(an_imported_block_is_taken_with_a_stake_proof_another_block_used)
+{
+    const CBlock first = MineOne();
+    CBlock second = SiblingWithSameStake(first);
+
+    const uint256 first_hash = first.GetHash(true);
+    const uint256 second_hash = second.GetHash(true);
+    BOOST_REQUIRE(second_hash != first_hash);
+    BOOST_REQUIRE(second.vtx[1].GetHash() == first.vtx[1].GetHash());
+
+    LOCK(cs_main);
+
+    BOOST_REQUIRE(hashBestChain == first_hash);
+
+    // As from a peer: refused, and not indexed.
+    CValidationState peer_state;
+    BOOST_CHECK(!AcceptBlock(second, peer_state, /*generated_by_me=*/false, /*imported=*/false));
+    BOOST_CHECK(!mapBlockIndex.count(second_hash));
+
+    // As from a block data file: indexed beside the first. Its trust is the
+    // same, so the first stays the tip, and a block that builds on either one
+    // decides between them.
+    CValidationState import_state;
+    BOOST_CHECK(ProcessBlock(nullptr, &second, /*generated_by_me=*/false, import_state));
+    BOOST_REQUIRE(mapBlockIndex.count(second_hash));
+    BOOST_CHECK(mapBlockIndex.at(second_hash)->pprev == mapBlockIndex.at(first_hash)->pprev);
+    BOOST_CHECK(hashBestChain == first_hash);
+
+    // The suite's cases share one chain and may run in any order. Park the
+    // chain at genesis again, where a case that runs after this one expects it.
+    BOOST_REQUIRE(pindexGenesisBlock);
+    BOOST_CHECK(ForceReorganizeToHash(pindexGenesisBlock->GetBlockHash()));
+    BOOST_CHECK_EQUAL(nBestHeight, 0);
+}
+
+// AcceptBlock() checks a block's stake before the sequence locks of its
+// transactions. A block that breaks both rules is refused for its stake, and a
+// block with a sound stake is still refused for an unsatisfied sequence lock.
+BOOST_AUTO_TEST_CASE(acceptblock_checks_the_stake_before_the_sequence_locks)
+{
+    const CBlock mined = MineOne();
+
+    // A relative lock far longer than the chain is unsatisfied in any block here.
+    const CTransaction locked = SpendWithRelativeLock(1000, mined.nTime);
+
+    const CBlock with_locked_spend = ChangedCopy(mined, [&](CBlock& block) {
+        block.vtx.push_back(locked);
+    });
+
+    const CBlock with_locked_spend_and_unsigned_stake = ChangedCopy(mined, [&](CBlock& block) {
+        block.vtx.push_back(locked);
+
+        CMutableTransaction coinstake(block.vtx[1]);
+        coinstake.vin[0].scriptSig = CScript();
+        block.vtx[1] = CTransaction(std::move(coinstake));
+    });
+
+    {
+        LOCK(cs_main);
+
+        // The stake is checked first.
+        CBlock block = with_locked_spend_and_unsigned_stake;
+        CValidationState state;
+        int score = 0;
+        BOOST_CHECK(!AcceptBlock(block, state, /*generated_by_me=*/false, /*imported=*/false));
+        BOOST_CHECK(state.IsInvalid(score));
+        BOOST_CHECK_EQUAL(score, 100);
+        BOOST_CHECK(!mapBlockIndex.count(block.GetHash(true)));
+    }
+
+    {
+        LOCK(cs_main);
+
+        // The stake is the mined block's own, which is why this copy is given
+        // as an imported block: the stake proof is one the node has seen.
+        CBlock block = with_locked_spend;
+        CValidationState state;
+        int score = 0;
+        BOOST_CHECK(!AcceptBlock(block, state, /*generated_by_me=*/false, /*imported=*/true));
+        BOOST_CHECK(state.IsInvalid(score));
+        BOOST_CHECK_EQUAL(score, 10);
+        BOOST_CHECK(!mapBlockIndex.count(block.GetHash(true)));
+    }
+
+    // Leave the chain at genesis, where a case that runs after this one
+    // expects it.
+    BOOST_REQUIRE(ForceReorganizeToHash(WITH_LOCK(cs_main, return pindexGenesisBlock->GetBlockHash())));
+    BOOST_REQUIRE_EQUAL(WITH_LOCK(cs_main, return nBestHeight), 0);
+}
+
+// getblocksbatch walks the main chain from its starting block. A block that is
+// in the index but no longer in the main chain has no next block, so it is
+// refused as a starting block.
+BOOST_AUTO_TEST_CASE(getblocksbatch_refuses_a_starting_block_off_the_main_chain)
+{
+    const CBlock block = MineOne();
+    const uint256 block_hash = block.GetHash(true);
+
+    UniValue params(UniValue::VARR);
+    params.push_back(block_hash.GetHex());
+    params.push_back(10);
+
+    // On the main chain the block starts a batch.
+    UniValue batch;
+    BOOST_REQUIRE_NO_THROW(batch = getblocksbatch(params));
+    BOOST_CHECK_EQUAL(find_value(batch, "block_count").get_int(), 1);
+
+    // Park the chain at genesis, which leaves the block in the index and off
+    // the main chain, and where a case that runs after this one expects it.
+    BOOST_REQUIRE(WITH_LOCK(cs_main, return pindexGenesisBlock != nullptr));
+    BOOST_REQUIRE(ForceReorganizeToHash(WITH_LOCK(cs_main, return pindexGenesisBlock->GetBlockHash())));
+    BOOST_REQUIRE_EQUAL(WITH_LOCK(cs_main, return nBestHeight), 0);
+
+    BOOST_CHECK_EXCEPTION(getblocksbatch(params), UniValue, [](const UniValue& error) {
+        return find_value(error, "message").get_str() == "Starting block for batch is not in the main chain.";
+    });
+}
+
+// listtransactions adds its count and its starting offset. With a wallet that
+// has transactions, a count at the top of the int range and an offset must
+// give the entries from the offset on, as any count past the end does.
+BOOST_AUTO_TEST_CASE(listtransactions_takes_a_count_at_the_top_of_the_int_range)
+{
+    MineOne();
+    MineOne();
+
+    UniValue all(UniValue::VARR);
+    all.push_back("*");
+    all.push_back(1000);
+    all.push_back(0);
+
+    const UniValue listed = listtransactions(all);
+    BOOST_REQUIRE(listed.size() >= 2);
+
+    UniValue params(UniValue::VARR);
+    params.push_back("*");
+    params.push_back(std::numeric_limits<int>::max());
+    params.push_back(1);
+
+    UniValue tail;
+    BOOST_REQUIRE_NO_THROW(tail = listtransactions(params));
+    BOOST_CHECK_EQUAL(tail.size(), listed.size() - 1);
+
+    // Leave the chain at genesis, where a case that runs after this one
+    // expects it.
+    BOOST_REQUIRE(ForceReorganizeToHash(WITH_LOCK(cs_main, return pindexGenesisBlock->GetBlockHash())));
+    BOOST_REQUIRE_EQUAL(WITH_LOCK(cs_main, return nBestHeight), 0);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

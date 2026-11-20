@@ -126,13 +126,7 @@ void ResearcherWizardPoolPage::openLink(int row, int column) const
 
 void ResearcherWizardPoolPage::getNewAddress()
 {
-    const WalletModel::UnlockContext unlock_context(m_wallet_model->requestUnlock());
-
-    if (!unlock_context.isValid()) {
-        // Unlock wallet was cancelled
-        return;
-    }
-
+    // The label first: no capability is held while the user types.
     bool ok;
     const QString label = QInputDialog::getText(
         this,
@@ -147,7 +141,27 @@ void ResearcherWizardPoolPage::getNewAddress()
         return;
     }
 
-    const QString address = m_wallet_model->getNewReceiveAddress(label);
+    // The address comes from the key pool, which needs no passphrase while it
+    // has keys, so draw first. Only an empty pool on a wallet locked or
+    // unlocked for staking only needs one: under a capability the pool may be
+    // refilled, so ask, and draw once more.
+    QString address = m_wallet_model->getNewReceiveAddress(label);
+
+    if (address.isEmpty()) {
+        const WalletModel::EncryptionStatus status = m_wallet_model->getEncryptionStatus();
+
+        if (status == WalletModel::Locked || status == WalletModel::UnlockedForStakingOnly) {
+            const WalletModel::UnlockContext unlock_context(
+                m_wallet_model->requestUnlock(CapabilityKind::Contract));
+
+            if (!unlock_context.isValid()) {
+                // Unlock wallet was cancelled
+                return;
+            }
+
+            address = m_wallet_model->getNewReceiveAddress(label);
+        }
+    }
 
     if (address.isEmpty()) {
         ui->addressLabel->setText(tr("Error: failed to generate a new address."));

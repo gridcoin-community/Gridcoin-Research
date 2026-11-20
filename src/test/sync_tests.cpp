@@ -2,11 +2,13 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
+#include <chain.h>
 #include <logging.h>
 #include <sync.h>
 #include <util/threadnames.h>
 
 #include <algorithm>
+#include <atomic>
 #include <functional>
 #include <list>
 #include <mutex>
@@ -261,6 +263,65 @@ BOOST_AUTO_TEST_CASE(held_locks_name_their_thread_after_the_lock_call_returns)
                             held.find("(in thread '" + HOLDER_THREAD + "')") != std::string::npos,
                         "LocksHeld() returned: " + held);
 }
+BOOST_AUTO_TEST_CASE(cs_main_on_the_marked_thread_is_reported)
+{
+    // A thread that carries the GUI mark and takes cs_main is reported once per
+    // acquisition; an unmarked thread, and a marked thread taking another lock,
+    // are not.
+    BOOST_CHECK(!IsGuiThread());
+
+    const uint64_t before = GuiThreadCsMainReports();
+
+    std::thread unmarked([] {
+        LOCK(cs_main);
+    });
+    unmarked.join();
+    BOOST_CHECK_EQUAL(GuiThreadCsMainReports(), before);
+
+    // A Boost check cannot run on another thread, so the thread records what
+    // it saw and the case checks it after the join.
+    std::atomic<bool> marked_sees_its_mark{false};
+    std::thread marked([&marked_sees_its_mark] {
+        MarkGuiThread();
+        marked_sees_its_mark = IsGuiThread();
+
+        CCriticalSection other;
+        {
+            LOCK(other);
+        }
+        // A blocking take of cs_main is reported.
+        {
+            LOCK(cs_main);
+        }
+    });
+    marked.join();
+    BOOST_CHECK(marked_sees_its_mark);
+    BOOST_CHECK_EQUAL(GuiThreadCsMainReports(), before + 1);
+
+    // The mark belongs to the thread that set it.
+    BOOST_CHECK(!IsGuiThread());
+}
+
+BOOST_AUTO_TEST_CASE(the_gui_thread_report_is_one_line)
+{
+    // The logger ends every log call's line itself, so the report is one line
+    // and leaves no blank line after it.
+    CaptureLog log;
+
+    std::thread marked([] {
+        MarkGuiThread();
+        LOCK(cs_main);
+    });
+    marked.join();
+
+    const auto report = std::find_if(log.m_lines.begin(), log.m_lines.end(), [](const std::string& line) {
+        return line.find("GUI-THREAD-CS_MAIN") != std::string::npos;
+    });
+    BOOST_REQUIRE(report != log.m_lines.end());
+    BOOST_CHECK_EQUAL(std::count(report->begin(), report->end(), '\n'), 1);
+    BOOST_CHECK_EQUAL(report->back(), '\n');
+}
+
 #endif // DEBUG_LOCKORDER
 
 BOOST_AUTO_TEST_SUITE_END()

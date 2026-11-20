@@ -100,6 +100,8 @@ void ConsolidateUnspentWizardSelectInputsPage::setModel(WalletModel *model)
                 this, &ConsolidateUnspentWizardSelectInputsPage::modelSelectionChanged);
         connect(m_selection_model, &CoinSelectionModel::loadingFinished,
                 this, &ConsolidateUnspentWizardSelectInputsPage::modelLoadingFinished);
+        connect(m_selection_model, &CoinSelectionModel::loadingFailed,
+                this, &ConsolidateUnspentWizardSelectInputsPage::modelLoadingFailed);
 
         // default view is sorted by amount desc
         ui->treeView->header()->setSortIndicator(CoinSelectionModel::COLUMN_AMOUNT, Qt::DescendingOrder);
@@ -120,6 +122,12 @@ void ConsolidateUnspentWizardSelectInputsPage::setCoinControl(interfaces::Wallet
 void ConsolidateUnspentWizardSelectInputsPage::setPayAmounts(QList<qint64> *payAmounts)
 {
     this->payAmounts = payAmounts;
+}
+
+void ConsolidateUnspentWizardSelectInputsPage::modelLoadingFailed(const QString& message)
+{
+    // The tree stays disabled: nothing was loaded.
+    ui->treeView->showLoadFailed(message);
 }
 
 void ConsolidateUnspentWizardSelectInputsPage::modelLoadingFinished()

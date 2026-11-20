@@ -220,16 +220,20 @@ public:
 
     //! \brief Forget that an inventory item was requested.
     //!
-    //! Call when the item arrives or the request is abandoned, so it stops being
-    //! re-asked. Absence is meaningful: SendMessages treats a missing entry as a
-    //! satisfied request and will not re-arm it.
+    //! Call when the item arrives or the request is abandoned. It removes the
+    //! item's request time, so the next AskFor for it is not put two minutes
+    //! after the last. SendMessages does not read this record to decide whether
+    //! a queued request is sent: it asks AlreadyHave whether the item is still
+    //! needed. When it sends a request for an item with no record, it leaves
+    //! the item without one.
     virtual void ForgetInventoryRequest(const CInv& inv) = 0;
 
     //! \brief Clear an inventory item's backoff without forgetting it.
     //!
     //! Leaves the entry present with a zero request time, so the next AskFor
-    //! sends immediately instead of two minutes out. Distinct from
-    //! ForgetInventoryRequest because presence is load-bearing (see above).
+    //! sends immediately instead of two minutes out. Unlike
+    //! ForgetInventoryRequest it keeps the record, so SendMessages gives it the
+    //! time of the next request it sends for the item.
     virtual void ResetInventoryRequestBackoff(const CInv& inv) = 0;
 };
 

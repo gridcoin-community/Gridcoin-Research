@@ -14,6 +14,18 @@ deadlock:src/qt/test/*
 # https://github.com/bitcoin/bitcoin/pull/27658#issuecomment-1547639621
 deadlock:libdb
 
+# Stack mutexes reused across test cases
+# --------------------------------------
+# The unbroadcast tests keep an UnbroadcastPersister and a CTxMemPool on the stack and
+# lock the persister's m_mutex, then pool.cs. libstdc++'s std::mutex and
+# std::recursive_mutex have trivial destructors, so TSan never sees those mutexes
+# destroyed. A case whose objects land at the same stack addresses (an IPC
+# encryptWallet case locking cs_wallet, then m_capability_mutex) then looks to it like
+# the same two mutexes taken in the other order. The objects are different, and there is
+# no cycle; the DEBUG_LOCKORDER build, which forgets a lock when it is destroyed, runs
+# the whole suite clean.
+deadlock:txmempool_tests::unbroadcast_*
+
 # Intermittent issues
 # -------------------
 #

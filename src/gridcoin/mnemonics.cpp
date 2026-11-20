@@ -404,6 +404,10 @@ bool DeriveWalletKey(Span<const std::byte> entropy, CKey& key_out)
 
 bool GRC::Mnemonics::DecodeSeedPhrase(const SecureString& seed_phrase, Span<std::byte> data_out)
 {
+    // Invariant: every caller passes a buffer of ENCIPHERED_LENGTH
+    // (makeseedphrase and restoreseedphrase resize theirs first;
+    // ParseSeedPhrase() uses a fixed array). Guards against a new caller with a
+    // shorter buffer, which the decode would write past.
     assert(data_out.size() == ENCIPHERED_LENGTH);
     std::fill(data_out.begin(), data_out.end(), std::byte{0});
 
@@ -450,6 +454,10 @@ bool GRC::Mnemonics::DecodeSeedPhrase(const SecureString& seed_phrase, Span<std:
 
 SecureString GRC::Mnemonics::EncodeSeedPhrase(Span<const std::byte> data_in)
 {
+    // Invariant: callers pass one whole enciphered seed. BuildSeedPhrase() makes
+    // one, and dumpseedphrase passes the blob CWallet::GetSeedPhraseBlob()
+    // checked. Guards against a new caller that passes an unchecked blob from
+    // wallet.dat, which GetWordBits() below would read past.
     assert(data_in.size() == ENCIPHERED_LENGTH);
 
     SecureString seed_phrase;
@@ -486,6 +494,9 @@ SecureString GRC::Mnemonics::EncodeSeedPhrase(Span<const std::byte> data_in)
 SecureString GRC::Mnemonics::BuildSeedPhrase(Span<const std::byte> entropy, uint16_t birthday_days,
                                              Span<const std::byte> salt, const SecureString& password)
 {
+    // Invariant: GenerateSeedPhrase() and the tests pass fixed arrays of these
+    // lengths. Guards against a new caller with other lengths, which the copies
+    // into blob below would overrun.
     assert(entropy.size() == ENTROPY_LENGTH);
     assert(salt.size() == SALT_LENGTH);
 

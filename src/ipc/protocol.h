@@ -30,7 +30,10 @@ public:
     //! Return an Init interface that forwards calls over \p fd. I/O runs on a
     //! background thread. If \p on_disconnect is set it is invoked (on the
     //! event-loop thread) when the peer's connection drops unexpectedly — the
-    //! GUI uses it to quit gracefully when the node process exits.
+    //! GUI uses it to quit gracefully when the node process exits. Takes
+    //! ownership of \p fd: it is closed with the connection, and also when this
+    //! throws. That includes the bootstrap round trip made here (Init.construct),
+    //! which fails as a disconnect when the socket is shut down while it waits.
     virtual std::unique_ptr<interfaces::Init> connect(int fd, const char* exe_name,
                                                       std::function<void()> on_disconnect = {}) = 0;
 

@@ -4,21 +4,48 @@
     Remove the Gridcoin core Scheduled Tasks registered by Install-GridcoinCoreTask.ps1.
 
 .DESCRIPTION
-    Unregisters \Gridcoin\Core-Start and \Gridcoin\Core-Stop, removes the Core-Start retry
-    launcher (core-autostart.cmd) and the inbound firewall rule Install-GridcoinCoreTask.ps1
-    created for the daemon, and removes the (now empty) \Gridcoin task folder. Tolerant of
-    already-absent items (idempotent).
+    Unregisters \Gridcoin\Core-Start and \Gridcoin\Core-Stop, removes the Core-Start launcher
+    (core-autostart.cmd) and the inbound firewall rule Install-GridcoinCoreTask.ps1 created for the
+    daemon, and removes the (now empty) \Gridcoin task folder. Tolerant of already-absent items
+    (idempotent).
 
-    Does NOT remove the opt-in autounlock task (\Gridcoin\Autounlock) -- that is owned by
-    Set-GridcoinAutounlock.ps1 (`-Remove`) -- nor the opt-in shutdown-flush Group Policy
-    script -- owned by Set-GridcoinShutdownFlush.ps1 (`-Remove`). It also does not stop a
-    running core; run the Core-Stop task first if you want a graceful stop.
+    With -All it also removes the Group Policy shutdown script (Set-GridcoinShutdownFlush.ps1
+    -Remove) and the resident autounlock helper and task that earlier versions left, of every
+    account, as the shutdown script is the machine's (this account's old passphrase file is
+    reported, not deleted). Needs an elevated console. The uninstaller runs it this way.
+
+    It never deletes a wallet file or the autounlock file the core reads, and it does not stop a
+    running core: run the Core-Stop task first for a graceful stop.
 #>
 [CmdletBinding()]
-param([string]$TaskFolder = 'Gridcoin')
+param(
+    [string]$TaskFolder = 'Gridcoin',
 
-$ErrorActionPreference = 'Stop'
+    # The datadir whose old autounlock files are looked for (-All only). Made without Join-Path, as
+    # a default is evaluated before the module path is pinned below.
+    [string]$DataDir = [System.IO.Path]::Combine($env:APPDATA, 'GridcoinResearch'),
+
+    [switch]$All
+)
+
 Set-StrictMode -Version Latest
+$ErrorActionPreference = 'Stop'
+
+# An elevated run loads modules only from the system's own module directories.
+$env:PSModulePath = "$PSHOME\Modules;$env:ProgramFiles\WindowsPowerShell\Modules"
+
+. (Join-Path $PSScriptRoot 'GridcoinCommon.ps1')
+
+if ($All) {
+    if (-not (Test-GridcoinElevated)) {
+        throw '-All needs an elevated console (it changes Group Policy and ends the old helper).'
+    }
+    & (Join-Path $PSScriptRoot 'Set-GridcoinShutdownFlush.ps1') -Remove -TaskFolder $TaskFolder
+    $oldBlob = Remove-GridcoinLegacyAutounlock -DataDir $DataDir -TaskFolder $TaskFolder -AllAccounts
+    if ($oldBlob) {
+        Write-Host "An old autounlock file remains at '$oldBlob'; the core does not read it. Delete it when you no longer need it." -ForegroundColor Yellow
+    }
+}
 
 foreach ($name in 'Core-Start', 'Core-Stop') {
     $existing = Get-ScheduledTask -TaskPath "\$TaskFolder\" -TaskName $name -ErrorAction SilentlyContinue
@@ -30,9 +57,13 @@ foreach ($name in 'Core-Start', 'Core-Stop') {
     }
 }
 
-# Remove the Core-Start retry launcher Install-GridcoinCoreTask.ps1 generated (idempotent).
-$launcher = Join-Path $PSScriptRoot 'core-autostart.cmd'
-if (Test-Path -LiteralPath $launcher) {
+# Remove the Core-Start launcher Install-GridcoinCoreTask.ps1 generated (idempotent), unless a
+# Core-Start in another folder still runs it.
+$launcher = Get-GridcoinLauncherPath
+$launcherUsers = @(Get-GridcoinLauncherFolders -LauncherPath $launcher -ExceptFolder $TaskFolder)
+if ($launcherUsers.Count -gt 0) {
+    Write-Host "Kept the Core-Start launcher ($launcher): \$($launcherUsers[0])\Core-Start runs it."
+} elseif (Test-Path -LiteralPath $launcher) {
     Remove-Item -LiteralPath $launcher -Force
     Write-Host "Removed the Core-Start launcher ($launcher)."
 }
@@ -50,17 +81,14 @@ try {
     Write-Host "Could not remove the daemon firewall rule ($($_.Exception.Message)); left in place."
 }
 
-# Remove the folder only if it is now empty (leaves \Gridcoin alone if the Plan-5
-# Autounlock task or anything else still lives there). Enumerate via the COM folder
-# object -- Get-ScheduledTask's -TaskPath does not reliably support wildcards, and a
-# false "empty" result would wrongly delete the folder and its remaining tasks.
+# Remove the folder only if it is now empty. Enumerate through the COM folder object, hidden
+# tasks included: a false "empty" would delete the folder and the tasks still in it.
 try {
-    $service = New-Object -ComObject 'Schedule.Service'
-    $service.Connect()
-    $folder = $service.GetFolder("\$TaskFolder")
-    $remaining = @($folder.GetTasks(1))   # 1 = TASK_ENUM_HIDDEN (count hidden too)
+    $taskService = Get-GridcoinTaskService
+    $folder = $taskService.GetFolder("\$TaskFolder")
+    $remaining = @($folder.GetTasks(1))
     if ($remaining.Count -eq 0) {
-        $service.GetFolder('\').DeleteFolder($TaskFolder, 0)
+        $taskService.GetFolder('\').DeleteFolder($TaskFolder, 0)
         Write-Host "Removed empty task folder \$TaskFolder"
     } else {
         Write-Host "Task folder \$TaskFolder still has $($remaining.Count) task(s); left in place."

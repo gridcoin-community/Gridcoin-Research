@@ -18,7 +18,9 @@
 //! these tests pin what a submit writes through changeSettings, the only path by
 //! which OptionsModel::setData writes a core setting to gridcoinsettings.json:
 //! an untouched field must write nothing (a write would pin the displayed value
-//! over the config file), and an edited one must still be stored.
+//! over the config file), and an edited one must still be stored. They also pin
+//! when the dialog asks for the wallet passphrase, and the one-time migration
+//! of the settings an earlier version kept in Gridcoin-Qt.conf.
 class OptionsModelTests : public QObject
 {
     Q_OBJECT
@@ -51,6 +53,48 @@ private slots:
     void proxyFailedHostRetries();
     void proxyFailedPortRetries();
     void proxyFailedEnableThenValidHost();
+
+    void elevationRefusalAsksAndRetriesOnce();
+    void declinedElevationIsAskedOncePerPass();
+    void oneSubmitAsksOnceForSeveralElevatedFields();
+    void elevationRefusalWithoutAWalletModelFails();
+    void sideStakeEditRefusalAsksAndRetriesOnce();
+    void sideStakeInvalidInputDoesNotAsk();
+
+    void migrationMovesOnlyFreeSettingsWithoutElevation();
+    void elevatedMigrationAppliesProxyAndUpnpWhenElevated();
+    void declinedElevatedMigrationDiscardsLegacyValuesOnce();
+    void elevatedMigrationSkippedAfterAnEarlierMigration();
+    void failedElevatedMigrationStoreRetries();
+    void elevatedMigrationRetriedAtTheNextStart();
+    void elevatedMigrationWithoutLegacyValuesDoesNotAsk();
+    void elevatedMigrationDropsAUpnpValueTheNodeUses();
+    void elevatedMigrationAsksForAUpnpValueThatDiffers();
+    void elevatedMigrationMovesOnlyTheValuesThatDiffer();
+    void legacyNetworkSettingsAreAppliedForTheFirstRun();
+    void legacyNetworkSettingsAppliedForTheRunAreMovedWhenElevated();
+    void declinedLegacyNetworkSettingsAppliedForTheRunAreKeptAndAskedAgain();
+    void needsSettingsElevationOnlyForChangedNetworkAndSideStakeFields_data();
+    void needsSettingsElevationOnlyForChangedNetworkAndSideStakeFields();
+
+    // The Options dialog over a WalletModel built on fakes, which asks for the
+    // passphrase (WalletModel::requireUnlock) as the application does.
+    void dialogSubmitOfElevatedChangesAsksOnce();
+    void dialogSubmitOfFreeChangesDoesNotAsk();
+    void dialogDoesNotAskAWalletThatNeedsNoPassphrase_data();
+    void dialogDoesNotAskAWalletThatNeedsNoPassphrase();
+    void dialogHeldElevationIsNotAskedAgain();
+    void dialogUnexpectedRefusalAsksOnce();
+    void dialogDeclinedPassphraseSavesNothing();
+    void dialogWithoutAWalletModelSavesNothing();
+    void dialogSideStakingToggleAsksOnce();
+    void dialogDeclinedSideStakingToggleReverts();
+    void dialogProxyHostEditWithTheProxyOffDoesNotAsk();
+    void editSideStakeDeclinedShowsMessageAndStaysOpen_data();
+    void editSideStakeDeclinedShowsMessageAndStaysOpen();
+    void deleteSideStakeDeclinedRemovesNothing();
+    void tableSideStakeEditDeclinedShowsTheMessage();
+    void tableSideStakeEditRefusedTwiceShowsTheMessageOnce();
 
 private:
     // Suite-wide QSettings redirect (see initTestCase) and what it replaced.

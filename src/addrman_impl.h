@@ -221,6 +221,10 @@ public:
             mapUnkIds[it->first] = nIds;
             const AddrInfo& info = it->second;
             if (info.nRefCount) {
+                // Invariant: nNew counts the entries with nRefCount > 0 (see the
+                // table invariants below), and the loader reads exactly nNew new
+                // records. Guards against a change to a site that updates nNew
+                // without the matching table change.
                 assert(nIds != nNew); // this means nNew was wrong, oh ow
                 s << info;
                 nIds++;
@@ -230,6 +234,7 @@ public:
         for (std::map<int, AddrInfo>::const_iterator it = mapInfo.begin(); it != mapInfo.end(); it++) {
             const AddrInfo& info = it->second;
             if (info.fInTried) {
+                // Invariant: nTried counts the tried entries, as nNew above.
                 assert(nIds != nTried); // this means nTried was wrong, oh ow
                 s << info;
                 nIds++;
@@ -266,6 +271,15 @@ public:
         s >> nKey;
         s >> nNew;
         s >> nTried;
+
+        // A damaged peers.dat can hold any counts. Refuse counts that the
+        // tables cannot hold before reading any entry:
+        if (nNew < 0 || nNew > ADDRMAN_NEW_BUCKET_COUNT * ADDRMAN_BUCKET_SIZE) {
+            throw std::ios_base::failure(strprintf("Corrupt addrman serialization: nNew = %d", nNew));
+        }
+        if (nTried < 0 || nTried > ADDRMAN_TRIED_BUCKET_COUNT * ADDRMAN_BUCKET_SIZE) {
+            throw std::ios_base::failure(strprintf("Corrupt addrman serialization: nTried = %d", nTried));
+        }
 
         int nUBuckets = 0;
         s >> nUBuckets;
@@ -379,6 +393,22 @@ private:
 
     //! Deterministic-mode RandomInt state (seeded to 1, as the old test did).
     uint64_t m_det_rand_state;
+
+    // The tables below keep these invariants. Create(), Add_(), ClearNew(),
+    // MakeTried(), Delete() and Unserialize() maintain them together, and the
+    // asserts in addrman.cpp check them where an id is used:
+    // - A1: every id in vRandom is a key of mapInfo, and mapInfo[id].nRandomPos
+    //   is its index in vRandom.
+    // - A2: a new entry's nRefCount is the number of vvNew slots holding its
+    //   id. A tried entry has nRefCount 0 and sits in one vvTried slot.
+    // - A3: an id sits in vvNew[b][p] only where p is its own entry's
+    //   GetBucketPosition(nKey, true, b).
+    // - nNew counts the new entries and nTried the tried ones.
+    // The tables change only through those functions, Unserialize() computes
+    // the slots and reference counts itself rather than taking them from the
+    // file, and a peers.dat that fails to load leaves the tables empty
+    // (CAddrDB::Read). The asserts guard against a future change to one of
+    // those functions that breaks them.
 
     //! last used nId
     int nIdCount;

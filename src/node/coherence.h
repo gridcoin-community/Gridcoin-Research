@@ -149,9 +149,8 @@ bool AbandonChainTo(class CBlockIndex* pindex_target, class CTxDB& txdb) EXCLUSI
 //!
 //! Erases the mapBlockIndex slot and the LevelDB CDiskBlockIndex record. Does NOT delete
 //! the CBlockIndex object: the index objects are allocated out of GRC::BlockIndexPool,
-//! which never reclaims slots (see src/gridcoin/block_index.h:54-55 and
-//! .claude/memory/reference_block_index_pool.md). Calling `delete` on a pool slot is
-//! undefined behaviour and corrupts the heap free list -- the symptom (originally hit
+//! which never reclaims slots (see its class comment in src/gridcoin/block_index.h). Calling `delete`
+//! on a pool slot is undefined behaviour and corrupts the heap free list -- the symptom (originally hit
 //! 2026-05-16 on isolated testnet) is `assert(!pindexBest->pnext)` firing in
 //! DisconnectBlocksBatch on the first P2P block delivered after Phase 2 reported clean
 //! completion, because heap corruption rewrites neighbouring pool memory at allocation

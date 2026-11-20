@@ -160,9 +160,15 @@ BASE_SCRIPTS = [
     # feature_shutdown.py: `stop` must not hang on an in-service RPC connection
     # (issue #3123 -- StopRPCThreads must interrupt a worker parked in recv).
     'feature_shutdown.py',
-    # feature_rpc_bind_v4_conflict.py: an IPv4 RPC listener that cannot bind
-    # (the port already held on 127.0.0.1) is logged, not swallowed.
-    'feature_rpc_bind_v4_conflict.py',
+    # feature_rpc_bind_conflict.py: an RPC loopback address held by another
+    # program disables RPC with a logged error; the node keeps running.
+    'feature_rpc_bind_conflict.py',
+    # feature_notify_fd_inheritance.py: a notify child inherits neither the RPC listener nor an
+    # accepted RPC connection.
+    'feature_notify_fd_inheritance.py',
+    # feature_rpc_bounded_close.py: a client that never reads or closes cannot hold a closed RPC
+    # connection past the graceful close bound.
+    'feature_rpc_bounded_close.py',
     'p2p_version_handshake.py',
     # p2p_version_timedrift.py: the VERSION handshake's 480 s clock-drift gate,
     # including a crafted nTime that overflowed the old abs() check.
@@ -182,6 +188,7 @@ BASE_SCRIPTS = [
     'p2p_message_exceptions.py',
     'p2p_mempool_request.py',
     'p2p_block_tx_relay.py',
+    'p2p_part_announcement.py',
     # The PSGT multi-node tests run under deterministic mock-time lockstep
     # (sync_clocks/advance_to_next_stake_slot, #3165): no wall-clock sleeps on
     # their critical paths.
@@ -189,6 +196,9 @@ BASE_SCRIPTS = [
     'p2p_psgt_orphan.py',
     'p2p_psgt_read_cap.py',
     'p2p_ping.py',
+    # p2p_getdata_send_queue.py: a getdata is served as the peer's send queue
+    # has room, in the order asked, and the node goes on serving other peers.
+    'p2p_getdata_send_queue.py',
     'rpc_help.py',
     'rpc_signmessage.py',
     'rpc_rawtransaction.py',
@@ -200,6 +210,8 @@ BASE_SCRIPTS = [
     'rpc_audit_snapshot_accrual.py',
     'rpc_netinfo.py',
     'rpc_getaddednodeinfo.py',
+    # rpc_dumpcontracts.py: dumpcontracts refuses heights that are not on the chain.
+    'rpc_dumpcontracts.py',
     'rpc_multisig.py',
     # rpc_votebyid.py: votebyid refuses a choice id outside 0..255.
     'rpc_votebyid.py',
@@ -214,8 +226,17 @@ BASE_SCRIPTS = [
     'wallet_splitunspent.py',
     'interface_cli.py',
     # interface_cli_settings.py: the RPC client reads the node's read-write settings
-    # (a changesettings rpcconnect is honoured) but never rewrites the file.
+    # file, ignores its refused keys (connection options included) and never rewrites it.
     'interface_cli_settings.py',
+    # feature_settings_file_refused.py: refused keys in the settings file are ignored at
+    # startup, logged, listed by listsettings, and still erasable with changesettings.
+    'feature_settings_file_refused.py',
+    # interface_cli_listener_check.py: the RPC client identifies the owner of the RPC
+    # listener before it sends credentials; -rpcserviceuser and -rpcskiplistenercheck.
+    'interface_cli_listener_check.py',
+    # interface_cli_stdin.py: the RPC client reads wallet passphrases from standard input
+    # (-stdinwalletpassphrase) and sends one for a single request (-stdinelevate).
+    'interface_cli_stdin.py',
     'mempool_accept.py',
     # mempool_unbroadcast_persist.py: unbroadcast.dat follows the unbroadcast
     # set while the node runs, so a node killed without a shutdown reloads a
@@ -263,6 +284,13 @@ BASE_SCRIPTS = [
     # disturbing its header, the one corruption class that arms its
     # CheckBlock branch and that Phase 2 coherence recovery does not cover.
     'feature_blockindex_verification.py',
+    # feature_reindex_interrupted.py: a -reindex stopped after its rename or
+    # during its import keeps the blk*.dat.orig files, and a later -reindex
+    # imports them and restores the whole chain.
+    'feature_reindex_interrupted.py',
+    # feature_reindex_loadblock.py: -reindex together with -loadblock is
+    # refused at startup, before any block data file is renamed.
+    'feature_reindex_loadblock.py',
     # feature_no_mainnet_seeds_on_regtest.py: neither compiled-in mainnet seed
     # list -- the DNS seed hostnames resolved at startup, nor the pnSeed
     # addresses injected after 60 seconds with an empty addrman -- may reach a

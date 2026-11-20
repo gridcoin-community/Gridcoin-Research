@@ -109,9 +109,44 @@ The `deploy` job in `cmake_production.yml` automates the release process.
     3.  **Flattens** them (moves files from subfolders to root).
     4.  Creates a **Draft Release** on GitHub with all binaries attached.
 
-Checksums are not generated. The GitHub release page publishes a SHA-256 digest for every
-attached asset, so a separate `SHA256SUMS.txt` duplicated information the platform already
-provides.
+The job also attaches `SHA256SUMS` to the draft: `sha256sum` over the flattened assets,
+sorted by file name, one `<64 hex>  <name>` line each (LF, base names only). It is not signed; on
+Windows the installer itself carries the signature (next section).
+
+### Windows release signing
+
+On release tags the Windows leg of the `depends-builds` job signs what it has just built. That leg, and only on
+a release tag, runs under the GitHub environment `windows-release` (limit it to tags in the environment's
+deployment branch and tag rules); the job has `id-token: write` for the Azure login, and without the environment
+the federated credential refuses the token. The leg strips the executables, signs them and the elevated scripts,
+packs with CPack as every build does, signs the installer, and uploads the same artifact as an unsigned build.
+Other legs and other runs are unchanged.
+
+The signing is part of the build leg, not a job of its own, because CPack builds the tree before it packs it: a
+job that received only the install tree could not pack. A separate job would also not narrow who can obtain a
+signature. That is decided by the tag ruleset and the environment's tag rule (`doc/release-process.md`), and a
+separate job would sign whatever the build leg produced. What it would withhold from the build steps is the
+ability to request the signing token during a release run.
+
+It signs
+with Microsoft Artifact Signing: `azure/login` with a federated credential, an access token for
+`https://codesigning.azure.net`, then `jsign` (pinned version, SHA-256 checked, the token passed by file and deleted after each call) with the timestamp service
+`http://timestamp.acs.microsoft.com` (RFC 3161). The executables and the elevated scripts are signed before
+packing, the uninstaller through an NSIS `!uninstfinalize` hook (defined only when
+`GRIDCOIN_UNINSTALLER_SIGN_COMMAND` is set, so other builds are unchanged), and the installer last.
+
+The job holds the account's identifiers as plain values in the workflow; they are not secrets, because the login
+is a federated credential that trusts only this repository's `windows-release` environment:
+
+| Value | Meaning |
+|---|---|
+| `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID` | The Entra ID app with the federated credential |
+| `ARTIFACT_SIGNING_REGION` | The region of the account; the endpoint is `<region>.codesigning.azure.net` |
+| `ARTIFACT_SIGNING_ACCOUNT`, `ARTIFACT_SIGNING_PROFILE` | The account and certificate profile; the jsign alias is `<account>/<profile>` |
+
+In another repository the signing steps print a warning and are skipped, and the release keeps the unsigned
+Windows files. See `doc/release-process.md`
+for the one-time setup and for pinning the signer.
 
 -----
 

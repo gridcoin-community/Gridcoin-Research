@@ -58,6 +58,7 @@ public:
                 return row->m_required;
             } // no default case, so the compiler can warn about missing cases
             assert(false);
+            return {};
 
         case AdditionalFieldsTableModel::SortRole:
             switch (index.column()) {
@@ -69,6 +70,7 @@ public:
                 return row->m_required;
             } // no default case, so the compiler can warn about missing cases
             assert(false);
+            return {};
 
         case Qt::AccessibleTextRole:
             // For screen readers (issue #2604). Name column returns a one-shot
@@ -104,9 +106,7 @@ public:
 
     QModelIndex index(int row, int column, const QModelIndex &parent) const override
     {
-        Q_UNUSED(parent);
-
-        if (row > static_cast<int>(m_rows.size())) {
+        if (!hasIndex(row, column, parent)) {
             return QModelIndex();
         }
 

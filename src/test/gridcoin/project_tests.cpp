@@ -3067,12 +3067,12 @@ BOOST_AUTO_TEST_CASE(facade_record_is_advisory_below_the_gate)
 //!
 //! \brief Snapshot's auto-greylist overlay must NOT mutate the underlying registry entries.
 //!
-//! Reproduces the consensus bug in Whitelist::Snapshot(): the override working copy at
-//! project.cpp:665 is a SHALLOW copy of ProjectEntryMap (std::map<std::string,
-//! std::shared_ptr<ProjectEntry>>), so setting m_status = AUTO_GREYLISTED on the copy
-//! (project.cpp:680) mutates the SHARED registry ProjectEntry in place. There is no revert
-//! path, so a recovered project stays stuck AUTO_GREYLISTED in memory while a restarted node
-//! reloads ACTIVE from LevelDB -- the in-memory-vs-persisted divergence that splits the network.
+//! Reproduces the consensus bug in Whitelist::Snapshot(): the override working copy is a
+//! SHALLOW copy of ProjectEntryMap (std::map<std::string, std::shared_ptr<ProjectEntry>>),
+//! so setting m_status = AUTO_GREYLISTED on the copy mutates the SHARED registry ProjectEntry
+//! in place. There is no revert path, so a recovered project stays stuck AUTO_GREYLISTED in
+//! memory while a restarted node reloads ACTIVE from LevelDB -- the in-memory-vs-persisted
+//! divergence that splits the network.
 //!
 //! Drives a project into the auto-greylist (reusing the it_auto_greylists_correctly "horrible
 //! project" series through the point it meets criteria), takes a Snapshot with the overlay,

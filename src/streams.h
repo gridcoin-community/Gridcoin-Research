@@ -96,6 +96,11 @@ class CVectorWriter
     }
     void write(Span<const std::byte> src)
     {
+        // Invariant: the constructor grows the vector to nPos and each write keeps
+        // it at least nPos long. The vector is the caller's, and the callers write
+        // into a fresh one without touching it in between. Guards against a caller
+        // that shrinks the vector while the writer is in use, which would
+        // underflow the size below.
         assert(nPos <= vchData.size());
         size_t nOverwrite = std::min(src.size(), vchData.size() - nPos);
         if (nOverwrite) {

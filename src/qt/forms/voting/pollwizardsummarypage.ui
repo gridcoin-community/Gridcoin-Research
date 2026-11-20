@@ -83,6 +83,9 @@
    </item>
    <item>
     <widget class="QLabel" name="pollTitleLabel">
+     <property name="textFormat">
+      <enum>Qt::PlainText</enum>
+     </property>
      <property name="alignment">
       <set>Qt::AlignCenter</set>
      </property>

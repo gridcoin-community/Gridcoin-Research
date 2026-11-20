@@ -3,56 +3,64 @@
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #include "ipc/process.h"
+#include "ipc/peercred.h"
 #include "util/dir_permissions.h"
+#include "util/sock.h"
 
 #include "fs.h"
 #include "tinyformat.h"
+#include "util/system.h"
 #include "util.h"
 #include "util/syserror.h"
 
+#include <algorithm>
 #include <cerrno>
 #include <cstring>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <system_error>
+#include <vector>
 #ifndef WIN32
 #include <fcntl.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
+#include <sys/syscall.h>
 #include <sys/un.h>
 #include <unistd.h>
 #else
+#include "interfaces/ipc.h" // PeerRefusedError
+#include "ipc/win_endpoint.h"
+
 // winsock2.h must precede afunix.h/ws2tcpip.h. AF_UNIX for Windows lives in
 // <afunix.h> (Windows 10 1803+); sockaddr_un has the same sun_family/sun_path
 // layout ParseAddress relies on.
 #include <climits>
 #include <mutex>
-#include <vector>
 #include <winsock2.h>
 #include <ws2tcpip.h>
 #include <afunix.h>
-#include <aclapi.h> // SetEntriesInAclW / Set|GetNamedSecurityInfoW (advapi32)
 #endif
 
 namespace ipc {
 namespace {
 
-//! Default socket filename inside the (network-specific) data directory:
-//! <datadir>/<network>/node.sock (doc/multiprocess_design.md section 4.3).
+//! Default socket filename inside the IPC directory (-ipcdir, default the
+//! network-specific data directory): <ipcdir>/node.sock (doc/multiprocess_design.md section 4.3).
 const char* const DEFAULT_SOCKET_FILE = "node.sock";
 
-//! Resolve \p address ("unix" -> <data_dir>/node.sock, "unix:<path>" -> a custom
+//! Resolve \p address ("unix" -> <ipc_dir>/node.sock, "unix:<path>" -> a custom
 //! path) into a sockaddr_un. Rewrites \p address to its canonical "unix:<path>"
 //! form. Throws std::invalid_argument on an unrecognized address or an
 //! over-length path.
-fs::path ParseAddress(std::string& address, const fs::path& data_dir, struct sockaddr_un& addr)
+fs::path ParseAddress(std::string& address, const fs::path& ipc_dir, struct sockaddr_un& addr)
 {
     fs::path path;
     if (address == "unix" || address == "auto") {
-        path = data_dir / DEFAULT_SOCKET_FILE;
+        path = ipc_dir / DEFAULT_SOCKET_FILE;
     } else if (address.rfind("unix:", 0) == 0 && address.size() > 5) {
         path = fs::path(address.substr(5));
-        if (!path.is_absolute()) path = data_dir / path;
+        if (!path.is_absolute()) path = ipc_dir / path;
     } else {
         throw std::invalid_argument(strprintf("Unrecognized IPC address '%s'", address));
     }
@@ -184,21 +192,15 @@ bool IsPossiblyStaleSocketBindError(const std::error_code& ec)
 }
 
 //! Create an AF_UNIX SOCK_STREAM socket that is not inherited by child processes,
-//! so the IPC fd cannot leak into an exec'd child. POSIX uses SOCK_CLOEXEC
-//! atomically where available (Linux, the BSDs) and falls back to
-//! fcntl(FD_CLOEXEC) (notably macOS); Windows uses WSA_FLAG_NO_HANDLE_INHERIT.
+//! so the IPC fd cannot leak into an exec'd child (see CreateCloexecSocket).
 //! Returns -1 with the platform socket error set on failure.
 int MakeCloexecStreamSocket()
 {
-#ifdef WIN32
-    // WSA_FLAG_OVERLAPPED is required: libmultiprocess drives these sockets with
-    // kj's IOCP async backend (overlapped AcceptEx / WSARecv). Without it kj cannot
-    // post an async accept, so the daemon never accepts and clients get
-    // WSAECONNREFUSED even though node.sock exists and listen() succeeded.
-    // WSA_FLAG_NO_HANDLE_INHERIT is the close-on-exec equivalent.
-    SOCKET s = ::WSASocketW(AF_UNIX, SOCK_STREAM, 0, nullptr, 0,
-                            WSA_FLAG_OVERLAPPED | WSA_FLAG_NO_HANDLE_INHERIT);
+    // Windows: WSA_FLAG_OVERLAPPED is required because libmultiprocess drives these
+    // sockets with kj's IOCP async backend (overlapped AcceptEx / WSARecv).
+    SOCKET s = CreateCloexecSocket(AF_UNIX, SOCK_STREAM, 0);
     if (s == INVALID_SOCKET) return -1;
+#ifdef WIN32
     // The descriptor is carried as int (libmultiprocess SocketId) across the
     // transport. Windows AF_UNIX handles fit in the low 32 bits in practice, but
     // guard the assumption: a value that would not round-trip through int is
@@ -209,21 +211,8 @@ int MakeCloexecStreamSocket()
         ::WSASetLastError(WSAEMFILE);
         return -1;
     }
-    return static_cast<int>(s);
-#elif defined(SOCK_CLOEXEC)
-    return ::socket(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0);
-#else
-    int fd = ::socket(AF_UNIX, SOCK_STREAM, 0);
-    if (fd == -1) return -1;
-    const int flags = ::fcntl(fd, F_GETFD);
-    if (flags == -1 || ::fcntl(fd, F_SETFD, flags | FD_CLOEXEC) == -1) {
-        const int saved = errno;
-        ::close(fd);
-        errno = saved;
-        return -1;
-    }
-    return fd;
 #endif
+    return static_cast<int>(s);
 }
 
 //! Connect a fresh AF_UNIX SOCK_STREAM socket to \p addr. Returns the connected
@@ -244,14 +233,449 @@ int TryConnect(const struct sockaddr_un& addr, int& out_errno)
     return -1;
 }
 
+#ifdef WIN32
+//! The GUI's check of the endpoint at \p socket_path before it connects
+//! (ipc::win::CheckServerEndpointBeforeConnect against ExpectedServerSid()),
+//! returning what must stay open until the connect is made. A missing endpoint is
+//! no server listening, and is passed on as such, so the GUI keeps waiting.
+//! Anything else that stops the check is a refusal, thrown as
+//! interfaces::PeerRefusedError: nothing has been connected or sent.
+win::EndpointHold CheckEndpointBeforeConnect(const fs::path& socket_path)
+{
+    try {
+        return win::CheckServerEndpointBeforeConnect(socket_path, win::ExpectedServerSid());
+    } catch (const std::system_error& e) {
+        if (e.code() == std::errc::no_such_file_or_directory) throw;
+        throw interfaces::PeerRefusedError(
+            strprintf("Refusing to connect: the IPC endpoint could not be checked (%s)", AsciiWhat(e)));
+    } catch (const std::exception& e) {
+        throw interfaces::PeerRefusedError(strprintf("Refusing to connect to the IPC endpoint: %s", AsciiWhat(e)));
+    }
+}
+#endif
+
+} // namespace
+
+fs::path GetIpcDir()
+{
+    if (gArgs.IsArgSet("-ipcdir") && !gArgs.IsArgNegated("-ipcdir")) {
+        return AbsPathForConfigVal(fs::path(gArgs.GetArg("-ipcdir", "")), /*net_specific=*/true);
+    }
+    return GetDataDir();
+}
+
+std::optional<std::string> AttachGroupIpcDirRefusal()
+{
+    if (ConfiguredOption("-ipcattachgroup").empty()) return std::nullopt;
+
+    if (ConfiguredOption("-ipcdir").empty()) {
+        return std::string{"-ipcattachgroup is set without -ipcdir. The attach group is given access to the IPC "
+                           "directory, which without -ipcdir is the data directory. Set -ipcdir to a directory of "
+                           "its own for the IPC socket and cookie."};
+    }
+
+    // Compared with the links resolved. A directory that does not exist yet, or
+    // cannot be resolved, is not the data directory, which does exist. A spelling
+    // this misses (on Windows, one that differs only in case) is refused where the
+    // directory is opened, by its identity (DataDirectoryRefusal).
+    const auto resolved = [](const fs::path& path) {
+        boost::system::error_code ec;
+        const fs::path canonical = fs::canonical(path, ec);
+        return ec ? fs::path() : canonical;
+    };
+
+    const fs::path ipcdir = resolved(GetIpcDir());
+    if (ipcdir.empty()) return std::nullopt;
+
+    // The network's data directory, and on a test network also the base one
+    // above it, which holds the configuration file.
+    for (const bool net_specific : {true, false}) {
+        if (ipcdir == resolved(GetDataDir(net_specific))) {
+            return strprintf("-ipcattachgroup is set and -ipcdir names the data directory (%s). The attach group is "
+                             "given access to the IPC directory. Set -ipcdir to a directory of its own for the IPC "
+                             "socket and cookie.",
+                             GetIpcDir().string());
+        }
+    }
+
+    return std::nullopt;
+}
+
+std::optional<std::string> DataDirectoryRefusal(const fs::path& ipcdir, const FileId& ipcdir_id,
+                                                const std::vector<std::pair<fs::path, FileId>>& datadirs)
+{
+    for (const auto& [datadir, id] : datadirs) {
+        if (id == ipcdir_id) {
+            return strprintf("-ipcattachgroup is set and -ipcdir (%s) is the data directory (%s). The attach group is "
+                             "given access to the IPC directory. Set -ipcdir to a directory of its own for the IPC "
+                             "socket and cookie.",
+                             ipcdir.string(), datadir.string());
+        }
+    }
+
+    return std::nullopt;
+}
+
+#ifndef WIN32
+void ApplyPathAccessNoFollow(const fs::path& path, PathKind kind, mode_t mode, std::optional<gid_t> group,
+                             const std::function<void(const struct stat&)>& check)
+{
+    const std::string p = path.string();
+    const auto fail = [&](int err, const char* what) {
+        throw std::system_error(err, std::system_category(), strprintf("%s %s", what, p));
+    };
+    const auto type_ok = [kind](mode_t m) {
+        switch (kind) {
+        case PathKind::Socket: return S_ISSOCK(m);
+        case PathKind::Directory: return S_ISDIR(m);
+        case PathKind::RegularFile: return S_ISREG(m);
+        }
+        return false;
+    };
+
+#ifdef __linux__
+    const int fd = ::open(p.c_str(), O_PATH | O_NOFOLLOW | O_CLOEXEC);
+    if (fd == -1) fail(errno, "cannot open");
+
+    struct FdCloser {
+        int fd{-1};
+        ~FdCloser() { ::close(fd); }
+    } closer{fd};
+
+    struct stat st;
+    if (::fstat(fd, &st) != 0) fail(errno, "cannot stat");
+    // A symlink opens as the link itself under O_PATH|O_NOFOLLOW, so it fails
+    // the type check here.
+    if (!type_ok(st.st_mode)) fail(EINVAL, "unexpected file type at");
+    if (st.st_uid != ::geteuid()) fail(EPERM, "not owned by this user:");
+    if (check) check(st);
+
+    const auto set_mode = [&](mode_t m) {
+        bool mode_set = false;
+#ifdef SYS_fchmodat2
+        mode_set = ::syscall(SYS_fchmodat2, fd, "", m, AT_EMPTY_PATH) == 0;
+#endif
+        if (!mode_set) {
+            const std::string proc_path = strprintf("/proc/self/fd/%d", fd);
+            if (::chmod(proc_path.c_str(), m) != 0) fail(errno, "cannot set the mode of");
+        }
+    };
+
+    if (group) {
+        // Narrow first, so the new group never holds a bit the old mode had and
+        // the final mode does not.
+        set_mode(static_cast<mode_t>(st.st_mode & mode & 07777));
+        if (::fchownat(fd, "", static_cast<uid_t>(-1), *group, AT_EMPTY_PATH) != 0) {
+            fail(errno, "cannot set the group of");
+        }
+    }
+    set_mode(mode);
+
+    // Verify through the same fd.
+    struct stat after;
+    if (::fstat(fd, &after) != 0) fail(errno, "cannot stat");
+    if (!type_ok(after.st_mode) || after.st_uid != ::geteuid() || (after.st_mode & 07777) != mode ||
+        (group && after.st_gid != *group)) {
+        fail(EPERM, "access was not applied to");
+    }
+#else
+    struct stat st;
+    if (::lstat(p.c_str(), &st) != 0) fail(errno, "cannot stat");
+    if (!type_ok(st.st_mode)) fail(EINVAL, "unexpected file type at");
+    if (st.st_uid != ::geteuid()) fail(EPERM, "not owned by this user:");
+    if (check) check(st);
+    if (group) {
+        // Narrow first, so the new group never holds a bit the old mode had and
+        // the final mode does not.
+        if (::fchmodat(AT_FDCWD, p.c_str(), static_cast<mode_t>(st.st_mode & mode & 07777), AT_SYMLINK_NOFOLLOW) != 0) {
+            fail(errno, "cannot set the mode of");
+        }
+        if (::fchownat(AT_FDCWD, p.c_str(), static_cast<uid_t>(-1), *group, AT_SYMLINK_NOFOLLOW) != 0) {
+            fail(errno, "cannot set the group of");
+        }
+    }
+    if (::fchmodat(AT_FDCWD, p.c_str(), mode, AT_SYMLINK_NOFOLLOW) != 0) fail(errno, "cannot set the mode of");
+    struct stat after;
+    if (::lstat(p.c_str(), &after) != 0) fail(errno, "cannot stat");
+    if (!type_ok(after.st_mode) || after.st_uid != ::geteuid() || (after.st_mode & 07777) != mode ||
+        (group && after.st_gid != *group)) {
+        fail(EPERM, "access was not applied to");
+    }
+#endif
+}
+
+std::optional<std::string> IpcDirWarning(const std::string& dir, mode_t mode, uid_t owner, gid_t group,
+                                         uid_t self_uid, std::optional<gid_t> attach_gid)
+{
+    if ((mode & (S_IRWXG | S_IRWXO)) == 0) return std::nullopt;
+    if (attach_gid && owner == self_uid && group == *attach_gid && (mode & 07777) == static_cast<mode_t>(0750)) {
+        return std::nullopt;
+    }
+    return strprintf("the IPC directory %s is accessible to other users (mode %03o). Leaving it as configured; "
+                     "the IPC socket and cookie inside it are %s.",
+                     dir, static_cast<unsigned>(mode & 07777),
+                     attach_gid ? "accessible to the attach group" : "owner-only");
+}
+
+namespace {
+//! Refuses, by throwing std::runtime_error, \p dir opened as \p st when it is
+//! the network data directory or the base one above it: the same device and
+//! inode, which a bind mount or a spelling with ".." keeps.
+void RefuseDataDirectory(const fs::path& dir, const struct stat& st)
+{
+    std::vector<std::pair<fs::path, FileId>> datadirs;
+    for (const bool net_specific : {true, false}) {
+        const fs::path datadir = GetDataDir(net_specific);
+        struct stat data_st{};
+
+        if (::stat(datadir.string().c_str(), &data_st) != 0) continue;
+
+        datadirs.emplace_back(datadir,
+                              FileId{static_cast<uint64_t>(data_st.st_dev), static_cast<uint64_t>(data_st.st_ino)});
+    }
+
+    const FileId id{static_cast<uint64_t>(st.st_dev), static_cast<uint64_t>(st.st_ino)};
+    if (std::optional<std::string> refusal = DataDirectoryRefusal(dir, id, datadirs)) {
+        throw std::runtime_error(*refusal);
+    }
+}
+} // namespace
+
+void ApplyAttachGroupAccess(const fs::path& ipcdir)
+{
+    const std::optional<gid_t> gid = AttachGroupGid();
+    if (!gid) throw std::logic_error("no -ipcattachgroup is configured");
+    try {
+        ApplyPathAccessNoFollow(ipcdir, PathKind::Directory, 0750, gid,
+                                [&ipcdir](const struct stat& st) { RefuseDataDirectory(ipcdir, st); });
+    } catch (const std::system_error& e) {
+        if (e.code() != std::error_code(EPERM, std::system_category())) throw;
+        // EPERM can also come from the ownership check, so say what to change
+        // only when the account is really outside the group. A core with
+        // CAP_CHOWN that is not a member never gets here, because the change
+        // succeeds.
+        bool member = ::getegid() == *gid;
+        const int n = ::getgroups(0, nullptr);
+        if (!member && n > 0) {
+            std::vector<gid_t> groups(static_cast<size_t>(n));
+            const int got = ::getgroups(n, groups.data());
+            if (got >= 0) member = std::find(groups.begin(), groups.begin() + got, *gid) != groups.begin() + got;
+        }
+        if (member) throw;
+        throw std::system_error(e.code(), strprintf("cannot set the group of %s (the core must run with the "
+                                                    "attach group as a supplementary group)", ipcdir.string()));
+    }
+}
+#endif // !WIN32
+
+std::optional<fs::path> PlainIpcDirectory(const fs::path& dir)
+{
+    // A trailing separator reads as a final "." component; it is not one.
+    fs::path plain = dir;
+    const auto ends_with_separator = [](const fs::path& path) {
+        const fs::path::string_type& native = path.native();
+        return !native.empty() && (native.back() == '/' || native.back() == fs::path::preferred_separator);
+    };
+    while (plain.has_relative_path() && plain.filename() == "." && ends_with_separator(plain)) {
+        plain = plain.parent_path();
+    }
+
+    for (const fs::path& part : plain) {
+        if (part == "." || part == "..") return std::nullopt;
+    }
+
+    return plain.lexically_normal();
+}
+
+namespace {
+#ifndef WIN32
+//! Make sure \p dir exists. Returns whether this call created it, which the
+//! caller then restricts. Throws std::system_error, naming the directory, when it
+//! cannot be created.
+bool MakeIpcDirectory(const fs::path& dir)
+{
+    boost::system::error_code ec;
+    const bool created = fs::create_directories(dir, ec);
+    if (ec) {
+        throw std::system_error(ec.value(), std::system_category(),
+                                "could not create the IPC directory " + dir.string());
+    }
+
+    return created;
+}
+#else
+//! Make sure \p dir exists. When this call creates it, it is created with \p spec
+//! from the start (util::winacl::CreateDirectoryWithAcl, which reads it back), so it
+//! is never there with its parent's inherited list; the directories above it are
+//! made as usual. Returns whether this call created it. A spelling with a "." or
+//! ".." component is refused with std::runtime_error, so the directory created and
+//! checked is the one the path names. Throws std::system_error, naming the
+//! directory, when it cannot be created, and util::winacl::AclNotKeptError when it
+//! does not keep \p spec.
+bool MakeIpcDirectory(const fs::path& dir, const util::winacl::AclSpec& spec)
+{
+    const std::optional<fs::path> plain = PlainIpcDirectory(dir);
+    if (!plain) {
+        throw std::runtime_error(strprintf("The IPC directory '%s' has a '.' or '..' component. Give -ipcdir as a "
+                                           "path without them.",
+                                           dir.string()));
+    }
+
+    if (plain->has_relative_path() && plain->has_parent_path()) {
+        boost::system::error_code ec;
+        fs::create_directories(plain->parent_path(), ec);
+        if (ec) {
+            throw std::system_error(ec.value(), std::system_category(),
+                                    "could not create the directory above the IPC directory " + dir.string());
+        }
+    }
+
+    return util::winacl::CreateDirectoryWithAcl(*plain, spec);
+}
+#endif
+} // namespace
+
+#ifndef WIN32
+void PrepareAttachGroupDirectory(const fs::path& dir)
+{
+    // "Created" also when only a part of a spelling such as "<datadir>/x/.." was
+    // made, so the restriction refuses the data directory as the group's access
+    // does.
+    const bool created = MakeIpcDirectory(dir);
+    if (created) {
+        ApplyPathAccessNoFollow(dir, PathKind::Directory, 0700, std::nullopt,
+                                [&dir](const struct stat& st) { RefuseDataDirectory(dir, st); });
+    }
+
+    // A directory made just now was this account's alone; only a change to one
+    // that was there already is logged.
+    struct stat before{};
+    const bool existed = !created && ::stat(dir.string().c_str(), &before) == 0;
+
+    ApplyAttachGroupAccess(dir);
+
+    const std::optional<gid_t> gid = AttachGroupGid();
+    if (existed && gid && ((before.st_mode & 07777) != static_cast<mode_t>(0750) || before.st_gid != *gid)) {
+        LogPrintf("IPC: set the IPC directory %s to mode 750 in the attach group (gid %u); it was mode %03o, gid %u",
+                  dir.string(), static_cast<unsigned>(*gid), static_cast<unsigned>(before.st_mode & 07777),
+                  static_cast<unsigned>(before.st_gid));
+    }
+}
+#else
+void PrepareAttachGroupDirectory(const fs::path& dir)
+{
+    const std::optional<std::string> group_sid = win::AttachGroupSid();
+    if (!group_sid) throw std::logic_error("no -ipcattachgroup is configured");
+    const std::optional<util::winacl::Sid> group = util::winacl::ParseSidString(*group_sid);
+    if (!group) throw std::logic_error(strprintf("the attach group's SID '%s' does not parse", *group_sid));
+
+    // A directory made here has the attach group's list from the start. One that
+    // exists is refused by its identity, when it is the data directory, before
+    // anything is changed.
+    bool created = false;
+    try {
+        created = MakeIpcDirectory(dir, win::IpcDirAclSpec(util::winacl::CurrentTokenUser(), *group));
+    } catch (const util::winacl::AclNotKeptError& e) {
+        throw std::runtime_error(win::EndpointAclNotKeptText(dir, e.reason()));
+    }
+    win::ApplyAttachGroupDirectoryAccess(dir, *group, created);
+}
+#endif // !WIN32
+
+void PrepareIpcDirectory(const fs::path& dir)
+{
+    // Socket directory access control (design section 4.3).
+    //
+    // The directory is hardened ONLY when this call creates it. If it already
+    // exists its permissions are the operator's decision: an admin may have
+    // deliberately widened them (a shared group, a second account, a backup
+    // agent), and silently re-tightening on every start would undo that with
+    // no warning and no way to make it stick. So a permissive existing
+    // directory is warned about but never changed.
+    //
+    // The socket and the auth cookie are ours and are recreated on every start
+    // with a fixed access that fails closed (see bind and handshake.cpp):
+    // owner-only by default, and with -ipcattachgroup the socket is 0660 and the
+    // cookie 0640 in the attach group (on Windows, the group's entries in
+    // ipc/win_endpoint.h). A widened directory therefore does not change who can
+    // read the cookie. In attach-group mode the daemon sets the directory itself
+    // to 0750 in that group (ApplyAttachGroupAccess), which is the state this call
+    // does not warn about.
+    //
+    // Windows is the exception for an -ipcdir the operator named: there an
+    // existing directory where another account could add, remove or replace the
+    // socket or cookie is refused rather than warned about, because on Windows the
+    // directory's list, not its traverse right, is what keeps them in place. The
+    // default, the data directory, keeps the warning: data directories made by
+    // earlier releases inherit %APPDATA%'s list. The startup check of the wallet
+    // files (fsmodes::CheckOwnerOnlyModes, from AppInit2, on every platform) also
+    // reports a data directory that lets another account read or change it, with
+    // the command that fixes it, and changes nothing.
+    //
+    // When the directory is created here, restricting it fails closed: if we
+    // cannot restrict a directory we just made, throw rather than expose the
+    // socket in a world-accessible one. On POSIX that is an fd-based mode 0700;
+    // Windows has no chmod/umask for AF_UNIX, so the equivalent is an explicit
+    // owner-only protected DACL given when the directory is created
+    // (util::winacl::CreateDirectoryWithAcl).
+    //
+    // The default -ipcdir is the data directory, which GetDataDir() has
+    // normally created already (owner-only, through
+    // util::CreateOwnerOnlyDirectory), so for it the create branch does not run.
+    // It runs for an explicit -ipcdir, or a custom socket path, whose directory
+    // does not exist yet.
+#ifndef WIN32
+    if (MakeIpcDirectory(dir)) {
+        ApplyPathAccessNoFollow(dir, PathKind::Directory, 0700, std::nullopt);
+        return;
+    }
+
+    struct stat st;
+    if (::stat(dir.string().c_str(), &st) == 0) {
+        const auto warning = IpcDirWarning(dir.string(), st.st_mode, st.st_uid, st.st_gid, ::geteuid(),
+                                           AttachGroupGid());
+        if (warning) LogPrintf("WARN: %s: %s", __func__, *warning);
+    }
+#else
+    // Created with the owner-only list from the start, and read back. A volume that
+    // does not keep the list gets the same advice as before.
+    try {
+        if (MakeIpcDirectory(dir, util::OwnerOnlyAclSpec(/*inheritable=*/true))) return;
+    } catch (const util::winacl::AclNotKeptError& e) {
+        throw std::runtime_error(util::OwnerOnlyRefusalText(dir, e.reason()));
+    }
+
+    if (!ConfiguredOption("-ipcdir").empty()) {
+        if (const std::optional<std::string> reason = win::ServerIpcDirRefusal(dir)) {
+            throw std::runtime_error(strprintf("Refusing to serve IPC: %s", *reason));
+        }
+        return;
+    }
+
+    try {
+        util::VerifyOwnerOnlyDacl(dir);
+    } catch (const std::exception&) {
+        LogPrintf("WARN: %s: the IPC directory %s is not restricted to this account. "
+                  "Leaving it as configured; the IPC socket and cookie inside it remain owner-only.",
+                  __func__, dir.string());
+    }
+#endif
+}
+
+namespace {
+
 class ProcessImpl : public Process
 {
 public:
-    int connect(const fs::path& data_dir, std::string& address) override
+    int connect(const fs::path& ipc_dir, std::string& address) override
     {
         EnsureWinsock();
         struct sockaddr_un addr;
-        ParseAddress(address, data_dir, addr);
+        [[maybe_unused]] const fs::path path = ParseAddress(address, ipc_dir, addr);
+#ifdef WIN32
+        // Held until this returns, after the connect below.
+        const win::EndpointHold hold = CheckEndpointBeforeConnect(path);
+#endif
         int connect_errno = 0;
         int fd = TryConnect(addr, connect_errno);
         if (fd == -1) {
@@ -260,98 +684,15 @@ public:
         return fd;
     }
 
-    int bind(const fs::path& data_dir, std::string& address) override
+    int bind(const fs::path& ipc_dir, std::string& address) override
     {
         EnsureWinsock();
         struct sockaddr_un addr;
-        const fs::path path = ParseAddress(address, data_dir, addr);
+        const fs::path path = ParseAddress(address, ipc_dir, addr);
 
-        // Socket directory access control (design section 4.3).
-        //
-        // READ THIS BEFORE RELYING ON THE create BRANCH BELOW: for the DEFAULT
-        // address ("unix" -> <datadir>/node.sock) it does not run. GetDataDir()
-        // itself calls fs::create_directories (ArgsManager::GetDataDirPath in
-        // util/system.cpp), and AppInit2, WriteCookie(GetDataDir()) and this
-        // function's own GetDataDir() argument have all called it long before we
-        // get here -- so the directory always already exists and `created` is
-        // false. The branch is live only for a custom `unix:<path>` whose parent
-        // does not exist yet.
-        //
-        // The practical effect is that this branch does not decide the datadir's
-        // permissions. A datadir that GetDataDirPath (or the Qt first-run chooser)
-        // creates is already owner-only, because both create it through
-        // util::CreateOwnerOnlyDirectory; GetDataDirPath itself never creates a
-        // mainnet -datadir, which must already exist. One that already existed
-        // keeps the permissions it has: whatever the operator gave it, or the OS
-        // default (%APPDATA%'s inherited ACL on Windows, 0755 on macOS) if a
-        // release that predates owner-only creation made it. That is
-        // deliberate: we do not re-tighten a directory the operator may have
-        // widened on purpose. What actually protects the secret is that node.sock
-        // and ipc.cookie are created BY US, owner-only, and fail closed if that
-        // cannot be applied -- see below and in handshake.cpp.
-        //
-        // When the create branch does run, it fails closed: if we cannot restrict a
-        // directory we just made, refuse to listen rather than expose the socket in
-        // a world-accessible one.
-        // Windows has no chmod/umask for AF_UNIX, so the equivalent is an explicit
-        // owner-only *protected* DACL (ApplyOwnerOnlyDacl). The port used to
-        // rely instead on the per-user-profile datadir ACL being owner-only by
-        // default: true for a default %APPDATA% install (icacls on-device showed
-        // owner + SYSTEM + Administrators only), but nothing set or checked it, so
-        // a -datadir on a shared volume, an inherited-permissive parent or a
-        // non-ACL filesystem silently exposed the wallet IPC socket and the auth
-        // cookie.
-        //
-        // Applied ON CREATION ONLY, on both platforms. See the comment below: an
-        // existing datadir's permissions belong to the operator, not to us.
-        if (path.has_parent_path()) {
-            const fs::path parent = path.parent_path();
-
-            // Harden the datadir ONLY when we are the ones creating it. If it already
-            // exists its permissions are the operator's decision: an admin may have
-            // deliberately widened them (a shared group, a second account, a backup
-            // agent), and silently re-tightening on every start would undo that with
-            // no warning and no way to make it stick. So we warn about a permissive
-            // datadir but never change one we did not create.
-            //
-            // This is not a hole: the two things that actually matter -- the socket
-            // and the auth cookie -- are ours, recreated on every start, and are
-            // still created owner-only and fail closed below. A widened datadir makes
-            // the directory listable, not the cookie readable.
-            boost::system::error_code ec;
-            const bool created = fs::create_directories(parent, ec);
-            if (ec) {
-                throw std::system_error(ec.value(), std::system_category(),
-                                        "could not create the IPC socket directory " + parent.string());
-            }
-
-            if (created) {
-#ifndef WIN32
-                if (::chmod(parent.string().c_str(), 0700) != 0) {
-                    throw std::system_error(errno, std::system_category());
-                }
-#else
-                util::ApplyOwnerOnlyDacl(parent, /*inheritable=*/true);
-#endif
-            } else {
-#ifndef WIN32
-                struct stat st;
-                if (::stat(parent.string().c_str(), &st) == 0 && (st.st_mode & (S_IRWXG | S_IRWXO)) != 0) {
-                    LogPrintf("WARN: %s: the data directory %s is accessible to other users (mode %03o). "
-                              "Leaving it as configured; the IPC socket and cookie inside it remain owner-only.",
-                              __func__, parent.string(), static_cast<unsigned>(st.st_mode & 07777));
-                }
-#else
-                try {
-                    util::VerifyOwnerOnlyDacl(parent);
-                } catch (const std::exception&) {
-                    LogPrintf("WARN: %s: the data directory %s is not restricted to this account. "
-                              "Leaving it as configured; the IPC socket and cookie inside it remain owner-only.",
-                              __func__, parent.string());
-                }
-#endif
-            }
-        }
+        // The socket's directory is prepared (created owner-only, or checked and
+        // left as configured) before the bind. See PrepareIpcDirectory.
+        if (path.has_parent_path()) PrepareIpcDirectory(path.parent_path());
 
         // Try to bind; only if the path already exists (EADDRINUSE) do we probe it.
         // A live listener means the node is already running (refuse to start rather
@@ -366,35 +707,38 @@ public:
                 throw std::system_error(SocketErrorCode(LastSocketError()));
             }
 #ifndef WIN32
-            // Create the socket node with 0600 from the start: bind() honors the
-            // umask, so a permissive umask would otherwise leave a world-accessible
-            // window before an after-the-fact chmod. (No umask on Windows; there
-            // the fail-closed ApplyOwnerOnlyDacl after the bind below restricts
-            // the socket.)
-            const mode_t old_umask = ::umask(0177);
+            // The daemon sets an owner-only process umask at startup, so bind()
+            // creates the socket node owner-only. This function does not touch
+            // the process umask: it is process-wide state that other threads
+            // share. The mode is set explicitly below, through an fd of the path,
+            // before listen() so no peer can connect before it is final.
+            // (No umask on Windows; there the fail-closed ApplyEndpointAcl
+            // after the bind below gives the socket its access list.)
 #endif
             const int rc = ::bind(fd, (const struct sockaddr*)&addr, sizeof(addr));
             const int bind_errno = LastSocketError();
-#ifndef WIN32
-            ::umask(old_umask);
-#endif
             if (rc == 0) {
 #ifndef WIN32
-                // Belt-and-suspenders after the umask above. Fail closed: if the
-                // socket cannot be confirmed 0600, refuse to serve rather than
-                // leave the wallet IPC socket potentially accessible.
-                if (::chmod(path.string().c_str(), 0600) != 0) {
-                    const int chmod_errno = errno;
+                // Fail closed: if the socket cannot be confirmed at its final
+                // access without following a symlink, refuse to serve rather than
+                // leave the wallet IPC socket potentially accessible. That is
+                // 0600, or 0660 in the attach group when one is configured.
+                try {
+                    const std::optional<gid_t> attach_gid = AttachGroupGid();
+                    ApplyPathAccessNoFollow(path, PathKind::Socket, attach_gid ? 0660 : 0600, attach_gid);
+                } catch (...) {
                     CloseSocket(fd);
-                    throw std::system_error(chmod_errno, std::system_category());
+                    throw;
                 }
 #else
-                // Same fail-closed contract as the chmod above: restrict the
-                // socket to this account and SYSTEM (non-inheritable, protected,
-                // verified by read-back), and refuse to serve rather than listen
-                // unprotected if that fails.
+                // Same fail-closed contract as the mode set above: give the
+                // socket its access list (this account and SYSTEM, and with an
+                // attach group that group's right to connect; non-inheritable,
+                // protected, verified by read-back), only once what is at the
+                // path is checked to be the socket just bound, and refuse to
+                // serve rather than listen unprotected if either fails.
                 try {
-                    util::ApplyOwnerOnlyDacl(path, /*inheritable=*/false);
+                    win::ApplyBoundSocketAcl(path);
                 } catch (...) {
                     CloseSocket(fd);
                     throw;

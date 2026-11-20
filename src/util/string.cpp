@@ -5,6 +5,7 @@
 
 #include <util/string.h>
 
+#include <ios>
 #include <istream>
 #include <streambuf>
 
@@ -57,23 +58,34 @@ bool ReadLineBounded(std::istream& in, std::string& out, const size_t max_len, b
 
     std::streambuf* sb = in.rdbuf();
 
-    for (;;) {
-        const int c = sb->sbumpc();
+    // Reading through the streambuf also bypasses what the istream functions do
+    // when the buffer throws, which is to set badbit and report a failed read.
+    // A filtering buffer throws on input it cannot decode (a gzip decompressor
+    // on a damaged or truncated stream), so the same is done here. A caller's
+    // read loop then ends as it did with std::getline().
+    try {
+        for (;;) {
+            const int c = sb->sbumpc();
 
-        if (c == std::char_traits<char>::eof()) {
-            in.setstate(std::ios_base::eofbit);
+            if (c == std::char_traits<char>::eof()) {
+                in.setstate(std::ios_base::eofbit);
 
-            // A final line without a trailing newline is still a line.
-            return !out.empty();
+                // A final line without a trailing newline is still a line.
+                return !out.empty();
+            }
+
+            if (c == '\n') return true;
+
+            if (out.size() >= max_len) {
+                overlong = true;
+                return false;
+            }
+
+            out.push_back(static_cast<char>(c));
         }
+    } catch (const std::ios_base::failure&) {
+        in.setstate(std::ios_base::badbit);
 
-        if (c == '\n') return true;
-
-        if (out.size() >= max_len) {
-            overlong = true;
-            return false;
-        }
-
-        out.push_back(static_cast<char>(c));
+        return false;
     }
 }

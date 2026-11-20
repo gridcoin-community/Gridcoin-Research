@@ -17,6 +17,8 @@ class CWallet;
 
 namespace interfaces {
 
+class ConnectionScope;
+
 class Handler;
 
 //! One atomic, node-side read of everything the MRC request page needs
@@ -83,6 +85,12 @@ struct MRCSnapshot
     CAmount queue_head_fee = 0;
     CAmount queue_tail_fee = 0;
     CAmount queue_pay_limit_fee = 0;
+
+    //! The wallet's mature balance (CWallet::GetBalance()), for the page's check
+    //! that a claim has at least 1 GRC mature, so the GUI needs no getBalance()
+    //! of its own. Read only when synced and researcher_eligible, before the
+    //! version gate, as that check is; 0 otherwise.
+    CAmount mature_balance = 0;
 };
 
 //! Result of an MRC submission (Phase 1d-i).
@@ -99,6 +107,14 @@ struct MRCSubmitResult
     //! the block advanced) without any further core read.
     int submitted_height = 0;
     CAmount research_subsidy = 0;
+
+    //! Only for submitConfirmed(): the claim rebuilt now no longer meets the terms
+    //! the user confirmed, so nothing was broadcast (\p success is false and \p
+    //! error says why). \p fresh_fee and \p fresh_reward are the total fee and
+    //! research reward of the rebuilt claim, for the user to confirm again.
+    bool terms_changed = false;
+    CAmount fresh_fee = 0;
+    CAmount fresh_reward = 0;
 };
 
 //! Called when the node's pending-MRC set changes (uiInterface.MRCChanged).
@@ -113,8 +129,10 @@ public:
     virtual ~MRC() = default;
 
     //! Atomic node-side snapshot at the given fee boost. \p wallet_locked (the
-    //! GUI's WalletModel encryption state) becomes CreateMRC's no_sign flag — a
-    //! locked wallet cannot sign, so the trial claim is built unsigned. \p
+    //! GUI's WalletModel encryption state) is one source of CreateMRC's no_sign
+    //! flag: the trial claim is built unsigned when it is set, and when the
+    //! wallet itself is locked or unlocked for staking only, since a wallet that
+    //! cannot use its keys cannot sign. \p
     //! researcher_eligible is the GUI's active-beacon / not-noncruncher /
     //! not-pool determination (owned by ResearcherModel, migrated in 1d-iv); when
     //! false the snapshot skips the trial CreateMRC (which would otherwise throw
@@ -130,6 +148,15 @@ public:
     //! first (\p wallet_locked false); a locked wallet yields an error result.
     virtual MRCSubmitResult submit(CAmount fee_boost, bool wallet_locked) = 0;
 
+    //! As submit(), but carrying the terms the user confirmed: the total fee they
+    //! agreed to pay and the net payout (reward less fee) they agreed to receive.
+    //! The claim is rebuilt under cs_main + cs_wallet and broadcast only if the
+    //! user pays no more and receives no less (GRC::MRCTermsHold); otherwise
+    //! nothing is broadcast and the result has \p terms_changed with the fresh
+    //! fee and reward to confirm again.
+    virtual MRCSubmitResult submitConfirmed(CAmount fee_boost, bool wallet_locked,
+                                            CAmount confirmed_fee, CAmount confirmed_net) = 0;
+
     //! Live out-of-sync (OutOfSyncByAge) reading. Separate from the snapshot's
     //! cached out_of_sync because this check is purely time-based
     //! (GetAdjustedTime() - g_previous_block_time) and can flip true with no new
@@ -140,6 +167,14 @@ public:
     //! Subscribe to the node's MRCChanged notification (the mempool MRC set
     //! changed) — the GUI re-snapshots on it.
     virtual std::unique_ptr<Handler> handleMRCChanged(MRCChangedFn fn) = 0;
+
+    //! LOCAL ONLY: not served over capnp (no ordinal), so no peer can call it,
+    //! and the GUI's proxy keeps this default, which does nothing. Binds this to
+    //! the IPC connection it is served on, so what it runs under the client's
+    //! capability reads the IPC capability for that connection: none once the
+    //! connection has closed (see Wallet::bindConnectionScope). The serving Init
+    //! calls it once, before handing it out.
+    virtual void bindConnectionScope(std::shared_ptr<ConnectionScope> /*scope*/) {}
 };
 
 //! Return an in-process MRC interface over the node's single wallet, which must

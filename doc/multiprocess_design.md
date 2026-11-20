@@ -84,10 +84,14 @@ These were converged in RFC #2937 and are not open for relitigation in Phase 1/2
    from the wallet during claim signing) makes a wallet process split a real staking
    risk with no compelling driver. Revisit only if a concrete driver appears.
 3. **Front-end/back-end matching policy** (§4.2).
-4. **Authentication: cookie-PSK handshake layered over filesystem permissions** (§4.3).
-   The cookie handshake is the load-bearing, platform-portable authenticator; the
-   peer-UID check is defense-in-depth that fails closed on POSIX (Windows exposes no
-   peer credentials).
+4. **Authentication: the OS peer check, then a cookie handshake** (§4.3).
+   On POSIX the boundary is the OS peer check on the socket, and it fails closed: the
+   core admits its own uid, or a non-root peer in the configured attach group
+   (`-ipcattachgroup`); the GUI admits a core running as its own uid, or as the
+   configured service account (`-ipcserviceuser`). The cookie is an instance nonce:
+   it ties a connection to this run of the core, not to an OS account. Windows
+   exposes no peer credentials, so there the owner-only DACL on the socket and the
+   cookie is the guard.
 5. **Registry-mutation ordering: monotonic versions with a consumer high-water mark**
    (§4.4).
 6. **Sequencing**: Phase 1 began after the v13/v14 mandatory (5.5.0.0 "Natasha"), the
@@ -168,36 +172,76 @@ schema-diff lint against the previous release tag.
 
 ### 4.3 Authentication and transport (Stage 2)
 
-- Socket directory `0700`, socket `0600`. The socket and cookie are created
-  owner-only and refuse to start if that cannot be applied. The DIRECTORY is
-  hardened only when the node creates it: an existing data directory is left as
-  the operator configured it and merely warned about, so a deliberately widened
-  datadir is never silently re-tightened.
-- Cookie-PSK: node writes a fresh 256-bit cookie (`ipc.cookie`, `0600`, atomic rename)
-  each startup; first IPC call is `Init::authenticate(cookie)`, constant-time compare.
-  The cookie is pure portable code and is the load-bearing authenticator on every
-  platform. A wrong cookie **latches the connection**: it can never authenticate
-  afterwards, even with the right cookie, so it is neither a guessing oracle nor a way
-  to hold the connection slot while retrying. Recovery is by reconnecting, which builds
-  a fresh `ServeInit`.
+- Default access: socket `0600`, cookie `0600`, both in the data directory (or the
+  `-ipcdir` directory), so only the account that runs the core can reach them. They
+  are created owner-only, and the core refuses to start if that cannot be applied.
+  With `-ipcattachgroup=<group>` (POSIX) the core gives the IPC directory `0750`, the
+  socket `0660` and the cookie `0640`, all owned by the core's uid with that group,
+  so a GUI running as another account in the group can reach the socket and read the
+  cookie. The core sets them through file descriptors rather than by following a
+  path, and refuses to start if it cannot, for example when its account is not a
+  member of the group (it must run with the attach group as a supplementary group).
+  On POSIX the core refuses to start when `-ipcattachgroup` is set without `-ipcdir`,
+  or with an `-ipcdir` that resolves to the data directory (links resolved; on a test
+  network the base data directory counts too): the `0750` directory would otherwise
+  be the data directory itself, so group members could traverse it and read any file
+  inside it that is world-readable. A spelling the comparison cannot resolve
+  (`<datadir>/x/..` with no `x`, a bind mount) is refused where the directory is
+  opened, by its device and inode, before its mode or group is changed. An attach
+  group therefore always has an IPC directory of its own. The core logs the mode and
+  group that directory had when it changes them.
+  The checks on the arguments, and that the attach group exists, run before the node
+  initialises: no wallet is loaded and no RPC port is bound, and under `-daemon` the
+  starting process reports the failure.
+  The DIRECTORY is changed only when the node creates it (owner-only) or when
+  `-ipcattachgroup` is set: an existing directory is otherwise left as the
+  operator configured it and merely warned about, so a deliberately widened datadir
+  is never silently re-tightened.
+- Cookie: node writes a fresh 256-bit cookie (`ipc.cookie`, atomic rename) each
+  startup, `0600` by default and `0640` in the attach group when one is configured;
+  first IPC call is `Init::authenticate(cookie)`, constant-time compare.
+  On POSIX the cookie is an instance nonce: every process the peer check admits may
+  read it, so it ties a connection to this run of the core, and the OS peer check
+  below decides which accounts may connect. On Windows the owner-only DACL keeps the
+  cookie to this account (and SYSTEM). A wrong cookie **latches the connection**: it
+  can never authenticate afterwards, even with the right cookie, so it is neither a
+  guessing oracle nor a way to hold the connection slot while retrying. Recovery is by
+  reconnecting, which builds a fresh `ServeInit`.
 - **Unauthenticated-connection deadline** (`ipc::IPC_AUTH_DEADLINE`, 30 s): the listener
-  serves one connection at a time and does not re-arm `accept()` while the slot is
-  taken, so a peer that connects and never authenticates would otherwise deny the real
-  GUI service for as long as it lived. Such a connection is dropped and its slot
-  reclaimed. This is also how "disconnect on mismatch" is realised — as a bounded delay
-  rather than an instantaneous close, because `authenticate()` runs on a server worker
-  thread while closing a connection is an event-loop-thread operation.
-- Peer-identity checks (`SO_PEERCRED` / `getpeereid`) are defense-in-depth on top of the
-  cookie, and **fail closed on POSIX**: a peer whose uid cannot be read is refused, not
-  admitted, so a platform that stops exposing peer credentials turns the check off
-  loudly rather than silently. Same-uid only; root is not special-cased. Windows AF_UNIX
-  exposes no peer-credential API at all, so there the explicit owner+SYSTEM PROTECTED
-  DACL on the socket and cookie (applied and verified by read-back) is the guard. The
-  daemon logs which mode is in force at startup. Platform asymmetry must not become a
-  security regression.
-- The **GUI performs the same check on its own end** before presenting the cookie. The
-  cookie is a bearer token and step 5 hands it to whatever answered, so a foreign-uid
-  process that won the race to bind `node.sock` would otherwise harvest it.
+  serves at most two connections (the GUI holding the attach slot and one that is told
+  another GUI is attached) and does not re-arm `accept()` while both are taken, so peers
+  that connect and never authenticate, or authenticate without the slot, would otherwise
+  deny the real GUI service for as long as they lived. Such a connection is dropped and
+  its place reclaimed. This is also how "disconnect on mismatch" is realised — as a
+  bounded delay rather than an instantaneous close, because `authenticate()` runs on a
+  server worker thread while closing a connection is an event-loop-thread operation.
+- The **OS peer check** (`SO_PEERCRED` on Linux, `getpeereid` on the other POSIX
+  targets) is the boundary on POSIX, and it **fails closed**: a peer whose identity
+  cannot be read is refused, not admitted, so a platform that stops exposing peer
+  credentials turns the check off loudly rather than silently. The core
+  (`ipc::ServerPeerPolicy`) admits a peer at its own uid; with `-ipcattachgroup` it
+  also admits a non-root peer in that group. Root is never admitted through the group.
+  Each refusal is logged with the uid(s) and the rule that failed. Windows AF_UNIX
+  exposes no peer-credential API at all, so there the explicit-owner PROTECTED DACL on
+  the socket and cookie (applied and verified by read-back) decides who may connect
+  (the cookie and the autounlock file also carry a Medium no-read-up label, so a
+  Low-integrity process of the account cannot read them; node.sock needs write
+  access, which the default label already denies it),
+  and the peer is identified, in every mode, by a named-pipe identity check that runs
+  before `authenticate()` (`Init::beginAttest` / `Init::finishAttest`,
+  `src/ipc/win_attest.h`). The core reads the GUI's token user, attach-group
+  membership and integrity level through the pipe, admits its own account or a member
+  of the `-ipcattachgroup` group at Medium integrity only, and refuses
+  `authenticate()` on a connection the check has not admitted. The GUI checks that
+  the pipe, like `node.sock`, is owned by the account it expects (its own, or the
+  `-ipcserviceuser` account) before it writes anything into it. The daemon logs which
+  mode is in force at startup. Platform asymmetry must not become a security
+  regression.
+- The **GUI checks the core on its own end** (`ipc::ClientPeerPolicy`) before
+  presenting the cookie, because step 5 hands the cookie to whatever answered. It
+  admits a core at its own uid. With `-ipcserviceuser` it also admits a core running
+  as that account, provided the directory holding the socket is a directory (not a
+  symlink), owned by that account or root, and not writable by group or others.
 - **One transport everywhere: AF_UNIX**, including Windows (supported since Win10 1803;
   filesystem-path based, same endpoint code). The remaining platform delta hides behind
   a two-method port (listen/connect + peer identity) with one contract-test suite. The
@@ -209,8 +253,11 @@ schema-diff lint against the previous release tag.
   refused connection means a stale path left by a crash, which is unlinked and
   rebound; a successful connection means a live listener, and the node refuses to
   start rather than displace it. A live socket is never unlinked.
-- Wallet passphrase crosses as bytes zeroed on both sides after the call; unlock is
-  always time-bounded.
+- A wallet passphrase crosses the socket as bytes in a `Data` field. The node scrubs the
+  bytes it receives and holds the passphrase only in a `SecureString` for the call; the
+  GUI's outgoing message buffer is freed without scrubbing, because libmultiprocess has no
+  post-send hook. Leftover copies are kept from other programs by non-dumpability and
+  disabled core dumps, not by scrubbing. Unlock is always time-bounded.
 
 The connect-time sequence, in order (steps 1–7 add ~5–10 ms to startup):
 
@@ -219,9 +266,10 @@ The connect-time sequence, in order (steps 1–7 add ~5–10 ms to startup):
    datadir: none is running with `-multiprocess`, one is still starting, or the last
    one shut down cleanly; do not dial)
 3. `connect(node.sock)`
-4. Peer-identity check (`SO_PEERCRED` on Linux, `getpeereid` on the other POSIX
-   targets, none on Windows; defense-in-depth per the authentication layers
-   listed earlier in this section) → hard fail on mismatch, or on a uid that
+4. Peer check (`ipc::ClientPeerPolicy`: `SO_PEERCRED` on Linux, `getpeereid` on the
+   other POSIX targets, none on Windows; see the authentication layers listed
+   earlier in this section) → hard fail when the core is neither this account nor
+   the configured service account with an acceptable directory, or when its uid
    cannot be read
 5. `Init::authenticate(cookie)` → hard fail on mismatch
 6. `Init::getBuildInfo()` → schema/protocol comparison per §4.2
@@ -229,7 +277,21 @@ The connect-time sequence, in order (steps 1–7 add ~5–10 ms to startup):
    stored expectation per §4.2 (prompt / `-autotrustidentity` re-bind). Fetched
    together with step 6 in one guarded round-trip; an IPC throw here is a clean
    failure, distinct from an empty token
-8. `Init::makeNode()` / `makeWallet()` / … → proceed
+8. `Init::holdsAttachSlot()` → hard fail "another Gridcoin GUI is already attached"
+   when another GUI holds the core's one attach slot
+9. `Init::makeNode()` / `makeWallet()` / … → proceed
+
+The round trips from libmultiprocess's bootstrap call after step 4 through step 8
+are bounded: if the core has not answered them within
+`ipc::IPC_CLIENT_HANDSHAKE_TIMEOUT` (30 s), the GUI shuts the connection down and
+reports that the core did not answer. A missing cookie (step 2) or nothing
+listening (step 3) is how a core that is still starting looks, so the GUI then
+shows a cancellable "Waiting for the Gridcoin core to start..." dialog and tries
+again every `IPC_CONNECT_RETRY_INTERVAL` (2 s), for up to `IPC_CONNECT_WAIT_MAX`
+(300 s); every other failure is reported at once (`ipc::NextConnectStep`). Each
+attempt runs off the GUI thread, and the dialog also comes up once an attempt has
+been waiting for 2 s, so a busy core is waited for visibly. Cancel waits for the
+attempt in flight with the dialog saying "Canceling...".
 
 Authentication (step 5) precedes every exchange on the `interfaces::Init` surface —
 build info, identity, and every `make*()` factory are refused until it succeeds, and

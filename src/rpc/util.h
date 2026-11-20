@@ -336,7 +336,10 @@ class RPCHelpMan
 public:
     RPCHelpMan(std::string name, std::string description, std::vector<RPCArg> args, RPCResults results, RPCExamples examples);
 
-    std::string ToString() const;
+    //! The help text. A non-empty \p requirement is printed as its own line
+    //! after the description: what the dispatcher requires of every request of
+    //! the command, such as the wallet passphrase.
+    std::string ToString(const std::string& requirement = {}) const;
     /** If the supplied number of args is neither too small nor too high */
     bool IsValidNumArgs(size_t num_args) const;
     //! Return list of arguments and whether they are named-only.

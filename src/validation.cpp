@@ -36,6 +36,7 @@
 #include "wallet/wallet.h"
 #include "txmempool.h"
 
+#include <cstdlib>
 #include <limits>
 #include <set>
 #include <stdexcept>
@@ -992,7 +993,7 @@ bool TryLoadSuperblock(
     // accrual taken at each superblock:
     //
     if (block.nVersion >= 11) {
-        if (!GRC::Tally::ApplySuperblock(superblock)) {
+        if (!GRC::Tally::ApplySuperblock(superblock, pindex)) {
             return false;
         }
 
@@ -1414,12 +1415,23 @@ bool AddToBlockIndex(CBlock& block, unsigned int nFile, unsigned int nBlockPos, 
     pindexNew->phashBlock = &(mi->first);
 
     // Write to disk block index
+    //
+    // The block is in mapBlockIndex already, so a failed write stops the node at once, as a failed commit of a
+    // block's connect does in ReorganizeChain(). Returning false would leave a block in the in-memory index that the
+    // database does not record, and a block import would go on past it and delete its source files. The reindex
+    // that the message asks for rebuilds the index from the block files.
     CTxDB txdb;
-    if (!txdb.TxnBegin())
-        return error("%s: txdb.TxnBegin failed", __func__);
+    if (!txdb.TxnBegin()) {
+        error("%s: txdb.TxnBegin failed. This is a fatal error. The block index may be inconsistent. Aborting. "
+              "Please reindex the chain and restart.", __func__);
+        std::_Exit(EXIT_FAILURE);
+    }
     txdb.WriteBlockIndex(CDiskBlockIndex(pindexNew));
-    if (!txdb.TxnCommit())
-        return error("%s: txdb.TxnCommit failed", __func__);
+    if (!txdb.TxnCommit()) {
+        error("%s: txdb.TxnCommit failed. This is a fatal error. The block index may be inconsistent. Aborting. "
+              "Please reindex the chain and restart.", __func__);
+        std::_Exit(EXIT_FAILURE);
+    }
 
     // cs_main is required on entry (declared EXCLUSIVE_LOCKS_REQUIRED in
     // validation.h). The previous explicit LOCK(cs_main) here was redundant on
@@ -1697,7 +1709,7 @@ BlockTimeCheck CheckBlockTime(int64_t block_time, int64_t parent_time, int64_t a
     return BlockTimeCheck::OK;
 }
 
-bool AcceptBlock(CBlock& block, CValidationState& state, bool generated_by_me) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+bool AcceptBlock(CBlock& block, CValidationState& state, bool generated_by_me, bool imported) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     AssertLockHeld(cs_main);
 
@@ -1805,13 +1817,6 @@ bool AcceptBlock(CBlock& block, CValidationState& state, bool generated_by_me) E
         // Check that all transactions are finalized
         if (!IsFinalTx(tx, nHeight, block.GetBlockTime()))
             return state.DoS(10, error("%s: contains a non-final transaction", __func__));
-
-        // BIP68: Check sequence locks for v14+ blocks (skip coinbase and coinstake)
-        if (IsV14Enabled(nHeight) && !tx.IsCoinBase() && !tx.IsCoinStake()) {
-            if (!CheckSequenceLocks(tx, 0, pindexPrev)) {
-                return state.DoS(10, error("%s: contains a transaction with unsatisfied sequence locks", __func__));
-            }
-        }
     }
 
     // Check that the block chain matches the known block chain up to a checkpoint
@@ -1834,7 +1839,14 @@ bool AcceptBlock(CBlock& block, CValidationState& state, bool generated_by_me) E
                          pindexPrev->GetBlockHash().ToString());
         }
 
-        if (g_seen_stakes.ContainsProof(hashProof)
+        // A block from a peer is refused for a stake proof that another block used, unless blocks that build on it
+        // are already waiting as orphans, in which case the node asked for it. An imported block has no peer to ask
+        // and the import keeps no orphans, so the check would refuse the block for good, and every block after it in
+        // the file would be left without a parent. A node's own block data files hold such pairs: a block that lost
+        // to a block with the same proof stays in the file ahead of it. The import takes both, and chain trust
+        // decides between them as it did when they arrived.
+        if (!imported
+            && g_seen_stakes.ContainsProof(hashProof)
             && !g_orphan_blocks.HasChildrenOf(hash))
         {
             return error(
@@ -1842,6 +1854,19 @@ bool AcceptBlock(CBlock& block, CValidationState& state, bool generated_by_me) E
                 __func__,
                 hashProof.ToString(),
                 hash.ToString());
+        }
+
+        // BIP68: Check sequence locks for v14+ blocks (skip coinbase and coinstake). This follows the checks of
+        // the block's own stake and comes before the stake proof is remembered. Block version 14 is at least
+        // version 8, so every block the rule applies to passes through this branch.
+        if (IsV14Enabled(nHeight)) {
+            for (auto const& tx : block.vtx) {
+                if (tx.IsCoinBase() || tx.IsCoinStake()) continue;
+
+                if (!CheckSequenceLocks(tx, 0, pindexPrev)) {
+                    return state.DoS(10, error("%s: contains a transaction with unsatisfied sequence locks", __func__));
+                }
+            }
         }
 
         g_seen_stakes.Remember(hashProof);
@@ -1881,8 +1906,12 @@ bool AcceptBlock(CBlock& block, CValidationState& state, bool generated_by_me) E
         return error("%s: out of disk space", __func__);
     unsigned int nFile = std::numeric_limits<unsigned int>::max();
     unsigned int nBlockPos = 0;
-    if (!WriteBlockToDisk(block, nFile, nBlockPos, Params().MessageStart()))
+    // A block that cannot be written is a local fault, not a fault of the block, so it is marked as an error rather
+    // than as invalid. A block import stops on it, rather than going on without the block.
+    if (!WriteBlockToDisk(block, nFile, nBlockPos, Params().MessageStart())) {
+        state.Error("block-write-failed");
         return error("%s: WriteToDisk failed", __func__);
+    }
     if (!AddToBlockIndex(block, nFile, nBlockPos, hashProof))
         return error("%s: AddToBlockIndex failed", __func__);
 

@@ -1,0 +1,70 @@
+#!/bin/sh
+set -e
+
+OLD_AUTOUNLOCK=gridcointestnetd-autounlock
+STATE_DIR=/var/lib/gridcoin-service
+STATE=$STATE_DIR/switchover-test.state
+RECORDED=$STATE_DIR/switchover-test.recorded
+BEFORE=$STATE_DIR/switchover-test.before
+
+# An install or upgrade stopped before the new package was configured: turn the old
+# autounlock units the preinst turned off back on, where their unit files still are, and
+# put the switch-over state back as it was.
+undo_preinst() {
+    if [ ! -e "$RECORDED" ]; then
+        return 0
+    fi
+    before=
+    while read -r kind user; do
+        case $kind in
+            before)
+                before=$user
+                continue
+                ;;
+            autounlock) unit=$OLD_AUTOUNLOCK@$user.service ;;
+            system-autounlock) unit=$OLD_AUTOUNLOCK.service ;;
+            *) continue ;;
+        esac
+        if ! systemctl enable "$unit" >/dev/null 2>&1; then
+            echo "gridcointestnetd: $unit could not be turned back on, and was left off." >&2
+        fi
+    done < "$RECORDED"
+    if [ "$before" = no ]; then
+        rm -f "$STATE"
+    elif [ "$before" = yes ] && [ -e "$BEFORE" ]; then
+        mv "$BEFORE" "$STATE"
+    else
+        echo "gridcointestnetd: $STATE was kept as it is, as its state from before this upgrade is not known." >&2
+    fi
+    rm -f "$RECORDED" "$BEFORE"
+}
+
+case "$1" in
+    abort-install|abort-upgrade)
+        undo_preinst
+        ;;
+    purge)
+        # The drop-ins gridcointestnet-service wrote, and the switch-over state of this
+        # network. Datadirs, configuration files, credentials and the record of a wallet
+        # moved into the service stay.
+        for dropin in /etc/systemd/system/gridcointestnetd@*.service.d/50-gridcoin-service.conf \
+                      /etc/systemd/system/gridcointestnetd@*.service.d/60-gridcoin-autounlock.conf \
+                      /etc/systemd/system/gridcointestnetd.service.d/60-gridcoin-autounlock.conf \
+                      /etc/systemd/system/gridcointestnetd.service.d/50-gridcoin-service.conf \
+                      /etc/systemd/system/gridcointestnet-autounlock.service.d/50-existing-credential.conf; do
+            if [ -f "$dropin" ] || [ -L "$dropin" ]; then
+                rm -f "$dropin"
+                rmdir "${dropin%/*}" 2>/dev/null || true
+            fi
+        done
+        for state in /var/lib/gridcoin-service/*-test*; do
+            if [ -f "$state" ]; then
+                rm -f "$state"
+            fi
+        done
+        ;;
+esac
+
+#DEBHELPER#
+
+exit 0

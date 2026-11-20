@@ -10,12 +10,17 @@
 #include "random.h"
 #include "tinyformat.h"
 #include "util/strencodings.h"
+#include "util/syserror.h"
 #ifdef WIN32
-#include "util/dir_permissions.h" // ApplyOwnerOnlyDacl / MakeOwnerOnlyDacl
+#include "ipc/win_endpoint.h"
+#include "util/win_acl.h"
+
+#include <memory>
 #endif
 
 #include <algorithm>
 #include <array>
+#include <cerrno>
 #include <cstddef>
 #include <cstdint>
 #include <exception>
@@ -39,9 +44,12 @@ namespace ipc {
 namespace {
 const char* const COOKIE_FILE = "ipc.cookie";
 
-//! Read an entire file into a string; nullopt if it cannot be opened.
-std::optional<std::string> ReadFile(const fs::path& path)
+//! Read an entire file into a string, or say why not: the file does not exist, or it is there and
+//! cannot be opened.
+CookieRead ReadFile(const fs::path& path)
 {
+    CookieRead result;
+
     // fsbridge::ifstream, not std::ifstream(path.string()): on Windows the GNU
     // runtime has no wide-char stream constructor, so a narrow open goes through
     // the system code page (fs.h, "GNU libstdc++ specific workaround") and cannot
@@ -51,10 +59,29 @@ std::optional<std::string> ReadFile(const fs::path& path)
     // and then read back as "no cookie", leaving the GUI stuck reporting that the
     // daemon is not running while it is running perfectly well. fsbridge::ifstream
     // opens via _wfopen and reads exactly the file the writer wrote.
+    errno = 0;
     fsbridge::ifstream in(path, std::ios::binary);
-    if (!in.good()) return std::nullopt;
-    std::string contents((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
-    return contents;
+    if (!in.good()) {
+        // The open's own errno is the reason. Where it was not set, the file's presence decides.
+        const int open_error = errno;
+        bool missing = open_error == ENOENT || open_error == ENOTDIR;
+        if (open_error == 0) {
+            boost::system::error_code ec;
+            missing = !fs::exists(path, ec) && !ec;
+        }
+
+        if (missing) {
+            result.status = CookieStatus::Missing;
+        } else {
+            result.status = CookieStatus::Unreadable;
+            result.error = open_error != 0 ? SysErrorString(open_error) : "the file cannot be opened";
+        }
+        return result;
+    }
+
+    result.status = CookieStatus::Read;
+    result.cookie = std::string((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+    return result;
 }
 
 //! Deletes the atomic-write temp file unless explicitly released. The temp file
@@ -85,18 +112,22 @@ private:
 
 //! Write \p contents to \p path atomically (temp file + rename). The temp file is
 //! created with mode 0600 from the start (no umask window that could expose the
-//! secret cookie), the write is verified, and any failure throws so the caller
+//! secret cookie; with a \p group on POSIX it is then made 0640 in that group
+//! through its fd), the write is verified, and any failure throws so the caller
 //! knows the file does not hold what it expects.
 #ifdef WIN32
 //! Windows port of the atomic cookie writer. Same guarantees as the POSIX path,
-//! mapped to the Win32 API: an owner-only protected DACL supplied to CreateFileW
-//! (the analogue of POSIX's mode 0600 at open(): the secret is never on disk under
-//! a permissive ACL, not even briefly), no sharing for an exclusive open,
-//! bInheritHandle=FALSE for close-on-exec, FlushFileBuffers() for fsync, and
-//! MoveFileExW(REPLACE_EXISTING) for the atomic replace (boost::filesystem::
-//! rename's overwrite behaviour on Windows is version-dependent, so do not rely
-//! on it). O_NOFOLLOW has no direct analogue; CREATE_NEW over a pre-planted name
-//! fails rather than following it, which covers the same threat.
+//! mapped to the Win32 API: the cookie's access list \p spec (owner-only, or with
+//! the attach group's read) as a protected security descriptor supplied to
+//! CreateFileW, with its owner stated (the analogue of POSIX's mode at open(): the
+//! secret is never on disk under a permissive ACL, not even briefly), no sharing
+//! for an exclusive open, bInheritHandle=FALSE for close-on-exec,
+//! FlushFileBuffers() for fsync, and MoveFileExW(REPLACE_EXISTING) for the atomic
+//! replace (boost::filesystem::rename's overwrite behaviour on Windows is
+//! version-dependent, so do not rely on it). FILE_FLAG_OPEN_REPARSE_POINT stands in
+//! for O_NOFOLLOW: with it CREATE_NEW over a pre-planted name, a link included, fails
+//! rather than following it. Without it CREATE_NEW would follow a link that leads
+//! nowhere and create the file where it leads.
 //!
 //! This used to open with _wsopen_s(..., _S_IREAD | _S_IWRITE) and rely on the
 //! file inheriting an owner-only datadir ACL. Neither protected anything: the CRT
@@ -105,7 +136,7 @@ private:
 //! datadir ACL it was relying on. On-device (W4) the inherited ACL did happen to
 //! be owner + SYSTEM + Administrators for a default %APPDATA% install, but that
 //! was an observation about one machine, not a property this code enforced.
-void WriteFileAtomic(const fs::path& path, const std::string& contents)
+void WriteFileAtomic(const fs::path& path, const std::string& contents, const util::winacl::AclSpec& spec)
 {
     fs::path tmp = path;
     tmp += ".tmp";
@@ -122,27 +153,23 @@ void WriteFileAtomic(const fs::path& path, const std::string& contents)
                                  ": " + remove_ec.message());
     }
 
-    PACL dacl = static_cast<PACL>(util::MakeOwnerOnlyDacl(/*inheritable=*/false));
-    SECURITY_DESCRIPTOR sd;
-    HANDLE handle = INVALID_HANDLE_VALUE;
-    DWORD create_err = 0;
-    // SE_DACL_PROTECTED: without it the parent directory's inheritable ACEs are
-    // merged into the new file's DACL, which would defeat the point of naming an
-    // explicit trustee set here.
-    if (!::InitializeSecurityDescriptor(&sd, SECURITY_DESCRIPTOR_REVISION) ||
-        !::SetSecurityDescriptorDacl(&sd, TRUE, dacl, FALSE) ||
-        !::SetSecurityDescriptorControl(&sd, SE_DACL_PROTECTED, SE_DACL_PROTECTED)) {
-        create_err = ::GetLastError();
-    } else {
-        SECURITY_ATTRIBUTES sa{};
-        sa.nLength = sizeof(sa);
-        sa.lpSecurityDescriptor = &sd;
-        sa.bInheritHandle = FALSE; // don't leak the handle into a child process
-        handle = ::CreateFileW(tmp.wstring().c_str(), GENERIC_WRITE, /*dwShareMode=*/0, &sa,
-                               CREATE_NEW, FILE_ATTRIBUTE_NORMAL, nullptr);
-        if (handle == INVALID_HANDLE_VALUE) create_err = ::GetLastError();
-    }
-    ::LocalFree(dacl); // the created file holds its own copy of the ACL
+    // The descriptor states the owner and a protected DACL: without the
+    // protection the parent directory's inheritable ACEs would be merged into the
+    // new file's DACL, which would defeat the point of naming the trustees here.
+    // It also carries a Medium label with no read-up.
+    const std::unique_ptr<void, void (*)(void*)> sd(
+        util::winacl::MakeSecurityDescriptor(spec, util::winacl::MandatoryLabel::MediumNoReadUp),
+        util::winacl::FreeSecurityDescriptor);
+    SECURITY_ATTRIBUTES sa{};
+    sa.nLength = sizeof(sa);
+    sa.lpSecurityDescriptor = sd.get();
+    sa.bInheritHandle = FALSE; // don't leak the handle into a child process
+    // READ_CONTROL, so the list can be read back through this handle below.
+    // FILE_FLAG_OPEN_REPARSE_POINT: a link planted at the name after the removal above
+    // counts as taken, so nothing is created where it leads (POSIX: O_NOFOLLOW).
+    const HANDLE handle = ::CreateFileW(tmp.wstring().c_str(), GENERIC_WRITE | READ_CONTROL, /*dwShareMode=*/0, &sa,
+                                        CREATE_NEW, FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OPEN_REPARSE_POINT, nullptr);
+    const DWORD create_err = handle == INVALID_HANDLE_VALUE ? ::GetLastError() : 0;
     if (handle == INVALID_HANDLE_VALUE) {
         throw std::system_error(static_cast<int>(create_err), std::system_category(),
                                 "create " + tmp_str);
@@ -150,6 +177,21 @@ void WriteFileAtomic(const fs::path& path, const std::string& contents)
     // From here on the temp file exists and holds (or will hold) the secret: every
     // exit that is not the successful rename must delete it.
     TempFileGuard guard(tmp);
+
+    // The list is confirmed through the handle before anything is written: a volume
+    // that accepts the descriptor and keeps no list (FAT, exFAT, some redirectors)
+    // never receives the secret, not even in a temp file that is then deleted.
+    std::optional<std::string> not_kept;
+    try {
+        not_kept = util::winacl::CheckMatchesSpec(util::winacl::ReadAcl(handle, /*kernel_object=*/false), spec);
+    } catch (...) {
+        ::CloseHandle(handle);
+        throw;
+    }
+    if (not_kept) {
+        ::CloseHandle(handle);
+        throw std::runtime_error(win::EndpointAclNotKeptText(tmp, *not_kept));
+    }
 
     size_t written = 0;
     while (written < contents.size()) {
@@ -173,13 +215,11 @@ void WriteFileAtomic(const fs::path& path, const std::string& contents)
                                 "close " + tmp_str);
     }
 
-    // Re-state and verify the DACL on the finished file before it becomes the
-    // cookie: a volume without ACL support accepts the SECURITY_ATTRIBUTES above
-    // and stores nothing, and we would rather refuse to serve IPC than hand out a
-    // world-readable authentication secret. Doing this before the rename means a
-    // volume that cannot protect the cookie never gets one -- the guard deletes
-    // the temp copy on the way out.
-    util::ApplyOwnerOnlyDacl(tmp, /*inheritable=*/false);
+    // Re-state and verify the DACL on the finished file, by its path, before it
+    // becomes the cookie: what the rename moves into place is the file whose list
+    // was confirmed. A failure here refuses to serve IPC, and the guard deletes the
+    // temp copy on the way out.
+    win::ApplyEndpointAcl(tmp, spec);
 
     if (!::MoveFileExW(tmp.wstring().c_str(), path.wstring().c_str(),
                        MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)) {
@@ -189,7 +229,7 @@ void WriteFileAtomic(const fs::path& path, const std::string& contents)
     guard.release(); // renamed into place: nothing left to clean up
 }
 #else
-void WriteFileAtomic(const fs::path& path, const std::string& contents)
+void WriteFileAtomic(const fs::path& path, const std::string& contents, std::optional<gid_t> group)
 {
     fs::path tmp = path;
     tmp += ".tmp";
@@ -228,6 +268,34 @@ void WriteFileAtomic(const fs::path& path, const std::string& contents)
     // The temp file now holds (or will hold) the cookie: every exit that is not
     // the successful rename must delete it rather than leave the secret on disk.
     TempFileGuard guard(tmp);
+    if (group) {
+        // The group and the group-readable mode are set on the open temp file,
+        // before the secret is written and before the rename makes it visible,
+        // so no path is followed and the cookie never appears under the final
+        // name with other access.
+        if (::fchown(fd, static_cast<uid_t>(-1), *group) != 0) {
+            int e = errno;
+            ::close(fd);
+            throw std::system_error(e, std::system_category(), "fchown " + tmp_str);
+        }
+        if (::fchmod(fd, 0640) != 0) {
+            int e = errno;
+            ::close(fd);
+            throw std::system_error(e, std::system_category(), "fchmod " + tmp_str);
+        }
+        // Fail closed unless the fd shows the mode and group that were asked for.
+        struct stat st;
+        if (::fstat(fd, &st) != 0) {
+            int e = errno;
+            ::close(fd);
+            throw std::system_error(e, std::system_category(), "fstat " + tmp_str);
+        }
+        if ((st.st_mode & 07777) != static_cast<mode_t>(0640) || st.st_gid != *group) {
+            ::close(fd);
+            throw std::system_error(EPERM, std::system_category(),
+                                    "the group access was not applied to " + tmp_str);
+        }
+    }
     size_t written = 0;
     while (written < contents.size()) {
         ssize_t n = ::write(fd, contents.data() + written, contents.size() - written);
@@ -287,24 +355,37 @@ bool ConstantTimeEqual(const std::string& a, const std::string& b)
     return diff == 0;
 }
 
-std::string WriteCookie(const fs::path& dir)
+#ifndef WIN32
+std::string WriteCookie(const fs::path& dir, std::optional<gid_t> group)
+#else
+std::string WriteCookie(const fs::path& dir, const std::optional<std::string>& group_sid)
+#endif
 {
+#ifdef WIN32
+    // One list for both the create and the read-back, so the two cannot differ.
+    const util::winacl::AclSpec spec = win::ThisProcessEndpointAclSpec(win::IpcObject::Cookie, group_sid);
+#endif
     std::array<unsigned char, 32> buf{};
     GetStrongRandBytes(buf);
     const std::string cookie = HexStr(buf);
-    WriteFileAtomic(dir / COOKIE_FILE, cookie);
+#ifndef WIN32
+    WriteFileAtomic(dir / COOKIE_FILE, cookie, group);
+#else
+    WriteFileAtomic(dir / COOKIE_FILE, cookie, spec);
+#endif
     return cookie;
 }
 
-std::optional<std::string> ReadCookie(const fs::path& dir)
+CookieRead ReadCookie(const fs::path& dir)
 {
-    auto contents = ReadFile(dir / COOKIE_FILE);
-    if (!contents) return std::nullopt;
+    CookieRead result = ReadFile(dir / COOKIE_FILE);
+    if (!result.cookie) return result;
     // Trim trailing whitespace/newline defensively.
-    while (!contents->empty() && (contents->back() == '\n' || contents->back() == '\r' || contents->back() == ' ')) {
-        contents->pop_back();
+    while (!result.cookie->empty() && (result.cookie->back() == '\n' || result.cookie->back() == '\r' ||
+                                       result.cookie->back() == ' ')) {
+        result.cookie->pop_back();
     }
-    return contents;
+    return result;
 }
 
 void DeleteCookie(const fs::path& dir)
@@ -387,6 +468,15 @@ HandshakeResult ClientHandshake(interfaces::Init& init, const std::string& cooki
             return result;
         }
 
+        // Asked only once the core is known to speak this schema: a core of
+        // another schema may not serve it, and its mismatch is reported above.
+        if (!init.holdsAttachSlot()) {
+            result.already_attached = true;
+            result.error = "Another Gridcoin GUI is already attached to this core. Only one GUI can attach at a "
+                           "time; close the other one first.";
+            return result;
+        }
+
         // Soft findings (non-fatal). GUI schema_minor < node is forward-compatible
         // (log-only); a git_commit mismatch is the mixed-build banner.
         if (local.schema_minor < remote.schema_minor) {
@@ -405,7 +495,7 @@ HandshakeResult ClientHandshake(interfaces::Init& init, const std::string& cooki
         // identity token: this is a hard failure, not a graceful degrade.
         result.ok = false;
         result.soft.clear();
-        result.error = strprintf("Lost connection to the daemon during the handshake: %s", e.what());
+        result.error = strprintf("Lost connection to the daemon during the handshake: %s", AsciiWhat(e));
         return result;
     }
 }
@@ -420,6 +510,36 @@ BindOutcome CheckIdentityBinding(const std::string& reported_token, const std::s
     }
     if (stored_token.empty()) return BindOutcome::FirstSeen;
     return reported_token == stored_token ? BindOutcome::Match : BindOutcome::Mismatch;
+}
+
+ConnectStep NextConnectStep(const ConnectFailure& f, std::chrono::seconds elapsed)
+{
+    switch (f.kind) {
+    case ConnectFailureKind::NoCookie:
+    case ConnectFailureKind::NotListening:
+        return elapsed < IPC_CONNECT_WAIT_MAX ? ConnectStep::Retry : ConnectStep::GiveUp;
+    case ConnectFailureKind::CookieDenied:
+        return elapsed < IPC_COOKIE_DENIED_WAIT ? ConnectStep::Retry : ConnectStep::GiveUp;
+    case ConnectFailureKind::PeerRefused:
+    case ConnectFailureKind::AlreadyAttached:
+    case ConnectFailureKind::Timeout:
+    case ConnectFailureKind::Handshake:
+        return ConnectStep::GiveUp;
+    } // no default case, so the compiler can warn about a kind left out
+    return ConnectStep::GiveUp;
+}
+
+ConnectStep ConnectRetry::Next(const ConnectFailure& f, std::chrono::seconds elapsed)
+{
+    if (f.kind != ConnectFailureKind::CookieDenied) {
+        m_denied_since.reset();
+        return NextConnectStep(f, elapsed);
+    }
+
+    if (!m_denied_since) m_denied_since = elapsed;
+    if (elapsed >= IPC_CONNECT_WAIT_MAX) return ConnectStep::GiveUp;
+
+    return NextConnectStep(f, elapsed - *m_denied_since);
 }
 
 } // namespace ipc

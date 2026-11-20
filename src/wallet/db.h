@@ -331,6 +331,12 @@ public:
     }
 
     bool static Rewrite(const std::string& strFile, const char* pszSkip = nullptr);
+
+    //! Gives \p rewritten, the file Rewrite() has just written, the permissions of \p original, the
+    //! database file it is about to replace (fsmodes::KeepPermissions). True unless \p original
+    //! exists and its permissions could not be carried over, which is logged: the rewrite then
+    //! goes on with the file as Berkeley DB created it.
+    static bool KeepRewrittenFilePermissions(const fs::path& original, const fs::path& rewritten);
 };
 
 #endif // BITCOIN_WALLET_DB_H

@@ -7,6 +7,10 @@
 // tags are extracted from a transaction's contracts, and that adding an
 // entry keeps mapNextTx / lookup consistent.
 
+#ifndef WIN32
+#include <sys/stat.h>
+#endif
+
 #include <boost/test/unit_test.hpp>
 
 #include "test/state_guard.h"
@@ -700,6 +704,34 @@ BOOST_AUTO_TEST_CASE(unbroadcast_cleared_when_tx_leaves_pool)
     pool.remove(a, /*fRecursive=*/true, MemPoolRemovalReason::BLOCK);
     BOOST_CHECK(pool.GetUnbroadcast().empty());
 }
+
+#ifndef WIN32
+// The unbroadcast file that is rewritten keeps the mode it had, and is created owner-only when it
+// is not there. Production change that would fail this: WriteMempoolEntries opening its
+// temporary file with the default mode and renaming it over the old file without carrying the
+// old mode.
+BOOST_AUTO_TEST_CASE(unbroadcast_rewrite_keeps_the_mode_of_the_file)
+{
+    node::MempoolPersistEntries entries;
+    entries.emplace_back(MakePlainTx(51), 333);
+
+    const fs::path path = fs::temp_directory_path() / fs::unique_path("gridcoin_unbroadcast_mode_%%%%%%%%.dat");
+    const auto mode_of = [&path] {
+        struct stat st;
+        BOOST_REQUIRE_EQUAL(::stat(path.string().c_str(), &st), 0);
+        return static_cast<unsigned>(st.st_mode & 07777);
+    };
+
+    BOOST_REQUIRE(node::WriteMempoolEntries(path, entries));
+    BOOST_CHECK_EQUAL(mode_of(), 0600U);
+    BOOST_REQUIRE_EQUAL(::chmod(path.string().c_str(), 0640), 0);
+    BOOST_REQUIRE(node::WriteMempoolEntries(path, entries));
+    BOOST_CHECK_EQUAL(mode_of(), 0640U);
+
+    boost::system::error_code ec;
+    fs::remove(path, ec);
+}
+#endif
 
 BOOST_AUTO_TEST_CASE(unbroadcast_persist_roundtrip)
 {

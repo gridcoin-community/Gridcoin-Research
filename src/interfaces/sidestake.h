@@ -15,6 +15,7 @@
 
 namespace interfaces {
 
+class ConnectionScope;
 class Handler;
 
 //! One row of the sidestake table as pointer-free value data (Phase 1d-ii).
@@ -64,6 +65,7 @@ enum class SideStakeEditStatus
     DUPLICATE_ADDRESS,   //!< A local sidestake for this address already exists.
     INVALID_ALLOCATION,  //!< Allocation negative or would push the total past 100%.
     INVALID_DESCRIPTION, //!< Description contains characters outside SAFE_CHARS_CSV.
+    ELEVATION_REQUIRED,  //!< Nothing done: changing side stakes needs the wallet passphrase.
 };
 
 //! Result of a mutating command. \p local_revision is the post-mutation local
@@ -140,6 +142,15 @@ public:
     //! refetch trigger. Together with handleRwSettingsUpdated this keeps the
     //! single unified table fresh for both kinds of entry, without polling.
     virtual std::unique_ptr<Handler> handleMandatorySideStakeChanged(MandatorySideStakeChangedFn fn) = 0;
+
+    //! LOCAL ONLY: not served over capnp (no ordinal), so no peer can call it,
+    //! and the GUI's proxy keeps this default, which does nothing. Binds this to
+    //! the IPC connection it is served on, so the edits it runs under the
+    //! client's Settings capability read the IPC capability for that
+    //! connection: none once the connection has closed (see
+    //! Wallet::bindConnectionScope). The serving Init calls it once, before
+    //! handing it out.
+    virtual void bindConnectionScope(std::shared_ptr<ConnectionScope> /*scope*/) {}
 };
 
 //! Return an in-process SideStakeManager over the global sidestake registry.

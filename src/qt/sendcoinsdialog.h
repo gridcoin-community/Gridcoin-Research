@@ -32,6 +32,11 @@ public:
      */
     QWidget *setupTabChain(QWidget *prev);
 
+    //! The confirmation text: each recipient's amount, label (escaped) and full address, the fee rate per kB,
+    //! and the custom change address when coin control sets one.
+    static QString FormatSendConfirmation(const QList<SendCoinsRecipient>& recipients,
+                                          CAmount fee_rate_per_kb, const QString& change_address);
+
     void pasteEntry(const SendCoinsRecipient &rv);
     bool handleURI(const QString &uri);
 

@@ -9,7 +9,9 @@
 
 #include <boost/test/unit_test.hpp>
 
+#include <atomic>
 #include <functional>
+#include <stdexcept>
 #include <mutex>
 #include <thread>
 #include <vector>
@@ -209,6 +211,47 @@ BOOST_AUTO_TEST_CASE(mockforward)
     int delta = std::chrono::duration_cast<std::chrono::seconds>(first - now).count();
     // should be between 2 & 3 minutes from now
     BOOST_CHECK(delta > 2*60 && delta < 3*60);
+}
+
+//! A job that throws, scheduled through the logging wrapper, neither ends the
+//! scheduler thread nor drops its own repeat, and later jobs still run.
+BOOST_AUTO_TEST_CASE(a_throwing_job_does_not_end_the_scheduler)
+{
+    CScheduler scheduler;
+    std::atomic<int> throwing_runs{0};
+    std::atomic<int> later_runs{0};
+    std::atomic<bool> escaped{false};
+
+    scheduler.scheduleEvery(CatchAndLogJob("test throwing job", [&throwing_runs] {
+        ++throwing_runs;
+        throw std::runtime_error("job failed");
+    }), std::chrono::milliseconds{1});
+
+    scheduler.scheduleFromNow(CatchAndLogJob("test first job", [] {
+        throw std::runtime_error("job failed");
+    }), std::chrono::milliseconds{1});
+
+    scheduler.scheduleFromNow([&later_runs] { ++later_runs; }, std::chrono::milliseconds{20});
+
+    std::thread service([&scheduler, &escaped] {
+        try {
+            scheduler.serviceQueue();
+        } catch (...) {
+            escaped = true;
+        }
+    });
+
+    // Wait for the later job and the repeats, bounded.
+    for (int i = 0; i < 500 && (later_runs.load() == 0 || throwing_runs.load() < 3); ++i) {
+        UninterruptibleSleep(std::chrono::milliseconds{10});
+    }
+
+    scheduler.stop();
+    service.join();
+
+    BOOST_CHECK(!escaped.load());
+    BOOST_CHECK_EQUAL(later_runs.load(), 1);
+    BOOST_CHECK_GE(throwing_runs.load(), 3);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

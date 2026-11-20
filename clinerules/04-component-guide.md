@@ -435,11 +435,11 @@ Apply Sidestakes → Build Block → Sign → Broadcast
 ```cpp
 static const CRPCCommand vRPCCommands[] =
 {
-    { "name", &impl, cat_x, &impl_helpman, heritage_<bucket>, "<fp>" },
+    { "name", &impl, cat_x, &impl_helpman, heritage_<bucket>, "<fp>", access_<class> },
     // ...
 };
 ```
-The heritage bucket and fingerprint are mandatory; see the RPC Heritage Ledger section of `CLAUDE.md`.
+The heritage bucket, fingerprint and access class are mandatory; see the RPC Heritage Ledger section of `CLAUDE.md`.
 
 ---
 

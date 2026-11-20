@@ -47,6 +47,13 @@ void ResearcherWizardProjectsPage::setModel(ResearcherModel *model)
     ui->projectTableView->hideColumn(ProjectTableModel::Magnitude);
 
     connect(ui->refreshButton, &QPushButton::clicked, this, &ResearcherWizardProjectsPage::refresh);
+
+    // The reload runs off the GUI thread and its result reaches the model with
+    // the next push. A push repaints only what the model's snapshot holds; the
+    // project table reads the core's projects, which takes cs_main, so it
+    // refreshes only when the user's reload finishes (and on entry).
+    connect(model, &ResearcherModel::researcherChanged, this, &ResearcherWizardProjectsPage::showStatus);
+    connect(model, &ResearcherModel::reloaded, this, &ResearcherWizardProjectsPage::showProjects);
 }
 
 void ResearcherWizardProjectsPage::initializePage()
@@ -78,6 +85,18 @@ void ResearcherWizardProjectsPage::refresh()
 {
     m_researcher_model->reload();
 
+    showProjects();
+}
+
+void ResearcherWizardProjectsPage::showProjects()
+{
+    showStatus();
+
+    m_table_model->refresh();
+}
+
+void ResearcherWizardProjectsPage::showStatus()
+{
     ui->emailLabel->setText(m_researcher_model->email());
     ui->boincPathLabel->setText(m_researcher_model->formatBoincPath());
     ui->selectedCpidLabel->setText(m_researcher_model->formatCpid());
@@ -91,8 +110,6 @@ void ResearcherWizardProjectsPage::refresh()
         ui->selectedCpidIconLabel->setPixmap(
             QIcon(":/icons/white_and_red_x").pixmap(icon_size, icon_size));
     }
-
-    m_table_model->refresh();
 
     emit completeChanged();
 }

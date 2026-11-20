@@ -312,6 +312,11 @@ private:
             const size_t offset = GetOffset(pindex);
 
             if (offset >= m_cache.size()) {
+                // Invariant: SetBest() stores as blocks connect or disconnect, one at
+                // a time, and Initialize() fills one entry per interval, so a store
+                // past the end is at most the next entry. Guards against a change
+                // that skips an interval, which would push the trust at the wrong
+                // offset for fork choice to read.
                 assert(offset == m_cache.size());
                 Reserve(pindex); // Just grow by 1. This doesn't happen often.
                 Push(trust);

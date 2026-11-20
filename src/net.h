@@ -157,7 +157,7 @@ public:
     CDataStream vRecv;              // received message data
     unsigned int nDataPos;
 
-    int64_t nTime;                  // time (in microseconds) of message receipt.
+    int64_t nTime;                  // time (in microseconds, mockable) of message receipt.
 
     CNetMessage(int nTypeIn, int nVersionIn) : hdrbuf(nTypeIn, nVersionIn), vRecv(nTypeIn, nVersionIn) {
         hdrbuf.resize(24);
@@ -218,9 +218,10 @@ public:
     // These three were plain int64_t historically (Bitcoin-Core-inherited).
     // ThreadSocketHandler2's inactivity-check loop reads them racily against
     // the message-handler / connection-accept paths that write them; TSan
-    // surfaced races at net.cpp:751,1144,1158,1170,1179,1188 and elsewhere
-    // tracking the same addresses. Atomicising matches the pattern already
-    // used for nSendBytes / nRecvBytes / nTimeOffset directly above.
+    // surfaced races in SocketSendData and in ThreadSocketHandler2's
+    // inactivity check (net.cpp) and elsewhere tracking the same addresses.
+    // Atomicising matches the pattern already used for nSendBytes /
+    // nRecvBytes / nTimeOffset directly above.
     std::atomic<int64_t> nLastSend{0};
     std::atomic<int64_t> nLastRecv{0};
     std::atomic<int64_t> nTimeConnected{0};
@@ -293,6 +294,14 @@ protected:
     // thin Misbehaving()/GetMisbehavior() wrappers below forward to them.
 
 public:
+    //! The entries of a getdata that have not been served yet, in the order
+    //! they were asked for. The message handler serves them as the send queue
+    //! has room and handles no further message from the peer until they are
+    //! gone, so they are the entries of one getdata: at most MAX_INV_SZ.
+    std::deque<CInv> vRecvGetData GUARDED_BY(cs_vRecvMsg);
+    //! How many PSGT entries of that getdata have been served.
+    size_t nGetDataPsgtServed GUARDED_BY(cs_vRecvMsg){0};
+
     uint256 hashContinue;
     CBlockIndex* pindexLastGetBlocksBegin;
     uint256 hashLastGetBlocksEnd;
@@ -316,8 +325,9 @@ public:
     // ping-send path in SendMessages and cleared on the PONG receive path in
     // ProcessMessage; read raw from ThreadSocketHandler2's timeout check. The
     // companion nPingUsecTime / nMinPingUsecTime below were already atomic;
-    // atomicising these two closes the matching races (TSan main.cpp:2992 and
-    // net.cpp:1186).
+    // atomicising these two closes the matching races (TSan: the PONG branch
+    // of ProcessMessage in net_processing.cpp and the ping-timeout check in
+    // ThreadSocketHandler2 in net.cpp).
     std::atomic<uint64_t> nPingNonceSent{0};
     // Time (in usec) the last ping was sent, or 0 if no ping was ever sent.
     std::atomic<int64_t> nPingUsecStart{0};
@@ -451,6 +461,10 @@ public:
 
     void BeginMessage(const char* pszCommand) EXCLUSIVE_LOCKS_REQUIRED(cs_vSend)
     {
+        // Invariant: ssSend is empty between messages. EndMessage() clears it
+        // after queueing, and PushMessage() calls AbortMessage() on any
+        // exception; every caller holds cs_vSend. Guards against a new caller
+        // that begins a message without ending or aborting the previous one.
         assert(ssSend.size() == 0);
         ssSend << CMessageHeader(pszCommand, 0);
     }
@@ -475,13 +489,19 @@ public:
         uint256 hash = Hash(Span{ssSend}.subspan(CMessageHeader::HEADER_SIZE));
         unsigned int nChecksum = 0;
         memcpy(&nChecksum, &hash, sizeof(nChecksum));
+        // Invariant: a non-empty ssSend starts with the header BeginMessage()
+        // wrote. Guards against a change that ends a message BeginMessage() did
+        // not begin.
         assert(ssSend.size () >= CMessageHeader::CHECKSUM_OFFSET + sizeof(nChecksum));
         memcpy((char*)&ssSend[CMessageHeader::CHECKSUM_OFFSET], &nChecksum, sizeof(nChecksum));
 
         LogPrint(BCLog::LogFlags::NOISY, "(%d bytes)", nSize);
 
-        std::deque<SerializeData>::iterator it = vSendMsg.insert(vSendMsg.end(), SerializeData());
-        it->insert(it->end(), ssSend.begin(), ssSend.end());
+        // Copy the message before queueing it, so that a failed allocation
+        // leaves the queue as it was rather than holding an empty message
+        // (PushMessage() aborts the message and rethrows).
+        SerializeData data(ssSend.begin(), ssSend.end());
+        std::deque<SerializeData>::iterator it = vSendMsg.insert(vSendMsg.end(), std::move(data));
         ssSend.clear();
         nSendSize += it->size();
 

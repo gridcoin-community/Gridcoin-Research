@@ -43,6 +43,10 @@ public:
     //! constructor rather than per dialog.
     void setModel(QAbstractItemModel* model) override;
 
+    //! Say that the coin list could not be loaded (\p message), and how to try
+    //! again, in a box that is not modal.
+    void showLoadFailed(const QString& message);
+
 signals:
     //! The visible index set changed (scroll / resize / expand / collapse).
     void visibleIndexesChanged(const QList<QModelIndex>& visible);

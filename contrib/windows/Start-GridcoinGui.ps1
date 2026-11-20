@@ -4,30 +4,49 @@
     Launch the Gridcoin -multiprocess GUI, attaching to the running core.
 
 .DESCRIPTION
-    Starts gridcoinresearch.exe -multiprocess -datadir=<dd>, which connects to the
-    core that Core-Start is running on the same datadir. With -CreateShortcut it
-    instead writes a per-user Start-Menu shortcut with the same arguments.
+    Task mode (the default): starts gridcoinresearch.exe -multiprocess -datadir=<dd>, which
+    connects to the core that the Core-Start task runs for the same account on the same datadir.
 
-    Single-user by design (not a bug to fix): on Windows the core's node.sock /
-    ipc.cookie are created owner-only (NTFS ACL, #3234), so only the wallet user can
-    open them and attach a GUI. (The SO_PEERCRED/peer-UID check, #3242, is a Linux
-    mechanism -- AF_UNIX on Windows exposes no peer-credential API, so the NTFS ACL
-    is the enforcement here.) A DIFFERENT Windows user gets "could not connect to
-    the daemon" -- that is the access control working, not a bug.
+    Service mode (-Service [-Network main|test]): starts the GUI against the Windows service that
+    gridcoin-service.exe set up, which runs the core under its own account. The GUI finds the
+    core's socket in %ProgramData%\Gridcoin\ipc\<network> and checks that the core runs as
+    NT SERVICE\gridcoinresearchd (or gridcointestnetd). Your account must be a member of the
+    "Gridcoin GUI Users" ("Gridcoin Testnet GUI Users") group, which the service setup prints.
 
-    If no core is running, the GUI shows the same connect-failure dialog (the
-    datadir chooser is suppressed in -multiprocess, Plan 1); it will not start a
-    core for you.
+    With -CreateShortcut it writes a per-user Start Menu shortcut with the same arguments instead.
+
+    The GUI refuses to run as an administrator in multiprocess mode, and so does this script: start
+    it from a normal, not elevated, session. A different Windows user cannot attach in task mode:
+    the core's socket and cookie are owner-only. If no core is running, the GUI shows the
+    connect-failure dialog; it does not start a core.
 #>
 [CmdletBinding()]
 param(
-    [string]$GuiPath = (Join-Path $PSScriptRoot '..\gridcoinresearch.exe'),
+    [string]$GuiPath,
     [string]$DataDir = (Join-Path $env:APPDATA 'GridcoinResearch'),
+    [switch]$Service,
+    [ValidateSet('main', 'test')]
+    [string]$Network = 'main',
     [switch]$CreateShortcut
 )
 
-$ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
+$ErrorActionPreference = 'Stop'
+
+. (Join-Path $PSScriptRoot 'GridcoinCommon.ps1')
+
+if (Test-GridcoinElevated) {
+    throw ("The Gridcoin wallet must not run as administrator in multiprocess mode. Run this script from a " +
+           "normal (not elevated) PowerShell window.")
+}
+
+if ($PSBoundParameters.ContainsKey('Network') -and -not $Service) {
+    throw '-Network is for the service mode: use it with -Service.'
+}
+
+# Windows PowerShell 5.1 leaves $PSScriptRoot empty in a parameter default of a script with
+# [CmdletBinding()], so the default is set here.
+if (-not $GuiPath) { $GuiPath = Join-Path $PSScriptRoot '..\gridcoinresearch.exe' }
 
 if (-not (Test-Path -LiteralPath $GuiPath)) {
     throw "gridcoinresearch.exe not found at '$GuiPath'. Pass -GuiPath explicitly."
@@ -35,28 +54,48 @@ if (-not (Test-Path -LiteralPath $GuiPath)) {
 $GuiPath = (Resolve-Path -LiteralPath $GuiPath).Path
 
 if ($DataDir -match '"') {
-    throw "-DataDir must not contain a double-quote character."
+    throw '-DataDir must not contain a double-quote character.'
+}
+# A trailing backslash escapes the closing quote when the command line is split, which corrupts
+# every argument after it.
+if ($DataDir -match '\\$') {
+    throw "-DataDir must not end with a backslash ('$DataDir'): it would escape the closing quote of the argument."
 }
 
-# One arg string reused for both the direct launch and the shortcut.
-$ddQuoted = '"' + $DataDir + '"'
-$arguments = "-multiprocess -datadir=$ddQuoted"
+# One argument string, used for the direct launch and for the shortcut.
+if ($Service) {
+    $serviceName = 'gridcoinresearchd'
+    $ipcLeaf = 'mainnet'
+    if ($Network -eq 'test') {
+        $serviceName = 'gridcointestnetd'
+        $ipcLeaf = 'testnet'
+    }
+    $ipcDir = Join-Path $env:ProgramData "Gridcoin\ipc\$ipcLeaf"
+    $arguments = '-multiprocess -ipcdir="' + $ipcDir + '" -ipcserviceuser="NT SERVICE\' + $serviceName + '"'
+    if ($Network -eq 'test') { $arguments = $arguments + ' -testnet' }
+    $where = "the $Network network service ($serviceName)"
+} else {
+    $arguments = '-multiprocess -datadir="' + $DataDir + '"'
+    $where = "datadir '$DataDir'"
+}
 
 if ($CreateShortcut) {
-    $programs = [Environment]::GetFolderPath('Programs')   # per-user Start Menu\Programs
-    $lnkPath = Join-Path $programs 'Gridcoin (multiprocess).lnk'
+    $programs = [Environment]::GetFolderPath('Programs')
+    $linkName = 'Gridcoin (multiprocess).lnk'
+    if ($Service) { $linkName = "Gridcoin (service, $Network).lnk" }
+    $linkPath = Join-Path $programs $linkName
     $shell = New-Object -ComObject 'WScript.Shell'
-    $shortcut = $shell.CreateShortcut($lnkPath)
+    $shortcut = $shell.CreateShortcut($linkPath)
     $shortcut.TargetPath = $GuiPath
     $shortcut.Arguments = $arguments
     $shortcut.WorkingDirectory = (Split-Path -Parent $GuiPath)
     $shortcut.Description = 'Gridcoin GUI attaching to the running multiprocess core'
     $shortcut.IconLocation = $GuiPath
     $shortcut.Save()
-    Write-Host "Created Start-Menu shortcut: $lnkPath" -ForegroundColor Green
+    Write-Host "Created Start-Menu shortcut: $linkPath" -ForegroundColor Green
     return
 }
 
 # Launch detached; do not block this shell on the GUI.
 Start-Process -FilePath $GuiPath -ArgumentList $arguments -WorkingDirectory (Split-Path -Parent $GuiPath)
-Write-Host "Launched the Gridcoin GUI (-multiprocess) on datadir '$DataDir'."
+Write-Host "Launched the Gridcoin GUI (-multiprocess) on $where."

@@ -595,15 +595,26 @@ std::optional<PendingBeacon> TryOwnPendingBeacon(const Cpid& cpid) EXCLUSIVE_LOC
 //! \brief Determine whether the wallet contains a valid private key that
 //! matches the supplied beacon public key.
 //!
+//! \param wallet     The wallet to look in.
 //! \param public_key Identifies the corresponding private key.
+//! \param access     A staking path's access, with which the key is reached
+//! while the wallet is unlocked for staking only. nullptr for any other caller,
+//! which then needs a full unlock of an encrypted wallet.
 //!
 //! \return \c true if the wallet contains a matching private key.
 //!
-bool CheckBeaconPrivateKey(const CWallet* const wallet, const CPubKey& public_key)
+bool CheckBeaconPrivateKey(
+    const CWallet* const wallet,
+    const CPubKey& public_key,
+    const StakingKeyAccess* access)
 {
     CKey out_key;
 
-    if (!wallet->GetKey(public_key.GetID(), out_key)) {
+    const CKeyID key_id = public_key.GetID();
+    const bool found = access ? wallet->GetKeyForStaking(key_id, out_key, *access)
+                              : wallet->GetKey(key_id, out_key);
+
+    if (!found) {
         return error("%s: Key not found", __func__);
     }
 
@@ -618,22 +629,16 @@ bool CheckBeaconPrivateKey(const CWallet* const wallet, const CPubKey& public_ke
     return true;
 }
 
-} // anonymous namespace
-
-AdvertiseBeaconResult GRC::GenerateBeaconKey(const Cpid& cpid) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+//!
+//! \brief Label a beacon key in the address book.
+//!
+//! We label this key in the GUI to indicate to the user that it is a beacon key.
+//! The block number is also included because there are situations where there
+//! could be multiple beacon keys in the wallet due to expiration or forced re-
+//! advertisement.
+//!
+void LabelBeaconKey(const Cpid& cpid, const CPubKey& public_key) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
-    LogPrintf("%s: Generating new keys for %s...", __func__, cpid.ToString());
-
-    CPubKey public_key;
-    if (!pwalletMain->GetKeyFromPool(public_key, false)) {
-        LogPrintf("ERROR: %s: Failed to get new key from wallet", __func__);
-        return BeaconError::MISSING_KEY;
-    }
-
-    // We label this key in the GUI to indicate to the user that it is a beacon key.
-    // The block number is also included because there are situations where there
-    // could be multiple beacon keys in the wallet due to expiration or forced re-
-    // advertisement.
     const std::string address_label = strprintf(
         "Beacon Address for CPID %s (at %" PRIu64 ")",
         cpid.ToString(),
@@ -642,11 +647,34 @@ AdvertiseBeaconResult GRC::GenerateBeaconKey(const Cpid& cpid) EXCLUSIVE_LOCKS_R
     if (!pwalletMain->SetAddressBookName(public_key.GetID(), address_label)) {
         LogPrintf("WARNING: %s: Failed to change beacon key label", __func__);
     }
+}
 
-    if (!CheckBeaconPrivateKey(pwalletMain, public_key)) {
+} // anonymous namespace
+
+AdvertiseBeaconResult GRC::GenerateBeaconKey(const Cpid& cpid) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+{
+    LogPrintf("%s: Generating new keys for %s...", __func__, cpid.ToString());
+
+    // Returns the key to the pool when it goes out of scope, unless it is kept.
+    CReserveKey reservation(pwalletMain);
+    CPubKey public_key;
+
+    // The pool is topped up first only where keys may be created, as drawing
+    // from it used to; under staking only this makes nothing.
+    pwalletMain->TopUpKeyPool();
+
+    if (!reservation.GetReservedKeyWithoutTopUp(public_key)) {
+        LogPrintf("ERROR: %s: Failed to get new key from wallet", __func__);
+        return BeaconError::MISSING_KEY;
+    }
+
+    if (!CheckBeaconPrivateKey(pwalletMain, public_key, nullptr)) {
         LogPrintf("ERROR: %s: Failed to verify new beacon key", __func__);
         return BeaconError::MISSING_KEY;
     }
+
+    reservation.KeepKey();
+    LabelBeaconKey(cpid, public_key);
 
     if (!BackupWallet(*pwalletMain, GetBackupFilename("wallet.dat"))) {
         LogPrintf("WARNING: %s: Failed to backup wallet file", __func__);
@@ -661,14 +689,21 @@ namespace {
 //! \brief Sign a new beacon payload with the beacon's private key.
 //!
 //! \param payload The beacon payload to sign.
+//! \param access  A staking path's access, with which the key is reached while
+//! the wallet is unlocked for staking only. nullptr for any other caller, which
+//! then needs a full unlock of an encrypted wallet.
 //!
 //! \return \c false if the key doesn't exist or fails to sign the payload.
 //!
-bool SignBeaconPayload(BeaconPayload& payload)
+bool SignBeaconPayload(BeaconPayload& payload, const StakingKeyAccess* access)
 {
     CKey out_key;
 
-    if (!pwalletMain->GetKey(payload.m_beacon.m_public_key.GetID(), out_key)) {
+    const CKeyID key_id = payload.m_beacon.m_public_key.GetID();
+    const bool found = access ? pwalletMain->GetKeyForStaking(key_id, out_key, *access)
+                              : pwalletMain->GetKey(key_id, out_key);
+
+    if (!found) {
         return error("%s: Key not found", __func__);
     }
 
@@ -682,12 +717,14 @@ bool SignBeaconPayload(BeaconPayload& payload)
 //!
 //! \brief Determine whether a wallet can send a beacon transaction.
 //!
-//! \param wallet The wallet that will hold the key and pay for the beacon.
+//! \param wallet         The wallet that will hold the key and pay for the beacon.
+//! \param cpid           The CPID the beacon is for.
+//! \param renewal_access The automated renewal's access, or nullptr.
 //!
 //! \return An error that describes why the wallet cannot send a beacon if
 //! a transaction will not succeed.
 //!
-BeaconError CheckBeaconTransactionViable(CWallet* wallet, const Cpid& cpid)
+BeaconError CheckBeaconTransactionViable(CWallet* wallet, const Cpid& cpid, const StakingKeyAccess* renewal_access)
     EXCLUSIVE_LOCKS_REQUIRED(cs_main, wallet->cs_wallet)
 {
     // Every beacon send passes through here. The RPCs and the renewal job also
@@ -700,6 +737,15 @@ BeaconError CheckBeaconTransactionViable(CWallet* wallet, const Cpid& cpid)
 
     if (wallet->IsLocked()) {
         LogPrintf("WARNING: %s: Wallet locked.", __func__);
+        return BeaconError::WALLET_LOCKED;
+    }
+
+    // A wallet unlocked for staking only sends a beacon only as the automated
+    // renewal, or under a capability scope open on this thread. Refused before
+    // anything else is done: a new beacon would draw a key from the pool next,
+    // and a stale advertisement would be retired.
+    if (!wallet->CanUseKeys() && !renewal_access) {
+        LogPrintf("WARNING: %s: Wallet unlocked for staking only.", __func__);
         return BeaconError::WALLET_LOCKED;
     }
 
@@ -742,25 +788,28 @@ BeaconError CheckBeaconTransactionViable(CWallet* wallet, const Cpid& cpid)
 //!
 //! \brief Send a transaction that contains a beacon contract.
 //!
-//! \param cpid   CPID to send a beacon for.
-//! \param beacon Contains the CPID's beacon public key.
-//! \param action Determines whether to add or remove a beacon.
+//! \param cpid           CPID to send a beacon for.
+//! \param beacon         Contains the CPID's beacon public key.
+//! \param action         Determines whether to add or remove a beacon.
+//! \param renewal_access The automated renewal's access, or nullptr. With it
+//! the payload is signed and the transaction built and signed through the
+//! staking accessor, in the renewal's fixed shape at the minimum fee.
 //!
 //! \return A variant that contains the new public key if successful or a
 //! description of the error that occurred.
 //!
 //! Both trailing arguments are deliberately NOT defaulted. An earlier revision
-//! defaulted automated_renewal and two callers then silently took the default,
-//! so the exemption never reached the builder and the renewal it exists for
-//! stayed broken -- and it compiled. Requiring every caller to state its intent
-//! turns that class of mistake into a build error.
+//! defaulted the renewal's flag and two callers then silently took the default,
+//! so it never reached the builder and the renewal it exists for stayed
+//! broken -- and it compiled. Requiring every caller to state its intent turns
+//! that class of mistake into a build error.
 AdvertiseBeaconResult SendBeaconContract(
     const Cpid& cpid,
     Beacon beacon,
     ContractAction action,
-    bool automated_renewal) EXCLUSIVE_LOCKS_REQUIRED(cs_main, pwalletMain->cs_wallet)
+    const StakingKeyAccess* renewal_access) EXCLUSIVE_LOCKS_REQUIRED(cs_main, pwalletMain->cs_wallet)
 {
-    const BeaconError error = CheckBeaconTransactionViable(pwalletMain, cpid);
+    const BeaconError error = CheckBeaconTransactionViable(pwalletMain, cpid, renewal_access);
 
     if (error != BeaconError::NONE) {
         return error;
@@ -768,7 +817,7 @@ AdvertiseBeaconResult SendBeaconContract(
 
     BeaconPayload payload(cpid, beacon);
 
-    if (!SignBeaconPayload(payload)) {
+    if (!SignBeaconPayload(payload, renewal_access)) {
         return BeaconError::MISSING_KEY;
     }
 
@@ -776,7 +825,7 @@ AdvertiseBeaconResult SendBeaconContract(
 
     const auto result_pair = SendContract(
         MakeContract<BeaconPayload>(contract_version, action, std::move(payload)),
-        automated_renewal);
+        renewal_access);
 
     if (!result_pair.second.empty()) {
         return BeaconError::TX_FAILED;
@@ -994,7 +1043,7 @@ AdvertiseBeaconResult GRC::SendBeaconContractV3(
         }
     }
 
-    const BeaconError error = CheckBeaconTransactionViable(pwalletMain, cpid);
+    const BeaconError error = CheckBeaconTransactionViable(pwalletMain, cpid, /*renewal_access=*/nullptr);
 
     if (error != BeaconError::NONE) {
         return error;
@@ -1002,7 +1051,7 @@ AdvertiseBeaconResult GRC::SendBeaconContractV3(
 
     BeaconPayload payload(cpid, beacon, std::move(proof));
 
-    if (!SignBeaconPayload(payload)) {
+    if (!SignBeaconPayload(payload, nullptr)) {
         return BeaconError::MISSING_KEY;
     }
 
@@ -1022,22 +1071,91 @@ AdvertiseBeaconResult GRC::SendBeaconContractV3(
 namespace {
 
 //!
-//! \brief Generate keys for and send a new beacon contract.
+//! \brief Send a new beacon contract for the automated renewal, with a key from
+//! the key pool.
 //!
-//! \param cpid The CPID to create the beacon for.
+//! The key is reserved from the pool as the pool stands, so none is created,
+//! and kept only once the advertisement is sent. A send that fails puts it
+//! back in the pool, unlabelled. An empty pool is refused before anything is
+//! changed.
+//!
+//! \param cpid           The CPID to create the beacon for.
+//! \param renewal_access The automated renewal's access.
 //!
 //! \return A variant that contains the new public key if successful or a
 //! description of the error that occurred.
 //!
-AdvertiseBeaconResult SendNewBeacon(const Cpid& cpid, bool automated_renewal)
+AdvertiseBeaconResult SendNewBeaconFromKeyPool(const Cpid& cpid, const StakingKeyAccess& renewal_access)
     EXCLUSIVE_LOCKS_REQUIRED(cs_main, pwalletMain->cs_wallet)
 {
+    // Before the check below, which retires a stale advertisement.
+    if (pwalletMain->GetKeyPoolSize() == 0) {
+        LogPrintf("WARNING: %s: No key in the key pool for a new beacon. A full unlock refills it.", __func__);
+        return BeaconError::MISSING_KEY;
+    }
+
+    const BeaconError error = CheckBeaconTransactionViable(pwalletMain, cpid, &renewal_access);
+
+    if (error != BeaconError::NONE) {
+        return error;
+    }
+
+    LogPrintf("%s: Reserving a key from the key pool for %s...", __func__, cpid.ToString());
+
+    // Returns the key to the pool when it goes out of scope, unless it is kept.
+    CReserveKey reservation(pwalletMain);
+    CPubKey public_key;
+
+    if (!reservation.GetReservedKeyWithoutTopUp(public_key)) {
+        LogPrintf("ERROR: %s: No key in the key pool for a new beacon", __func__);
+        return BeaconError::MISSING_KEY;
+    }
+
+    if (!CheckBeaconPrivateKey(pwalletMain, public_key, &renewal_access)) {
+        LogPrintf("ERROR: %s: Failed to verify new beacon key", __func__);
+        return BeaconError::MISSING_KEY;
+    }
+
+    AdvertiseBeaconResult result = SendBeaconContract(cpid, public_key, ContractAction::ADD, &renewal_access);
+
+    if (!result.TryPublicKey()) {
+        return result;
+    }
+
+    reservation.KeepKey();
+    LabelBeaconKey(cpid, public_key);
+
+    if (!BackupWallet(*pwalletMain, GetBackupFilename("wallet.dat"))) {
+        LogPrintf("WARNING: %s: Failed to backup wallet file", __func__);
+    }
+
+    return result;
+}
+
+//!
+//! \brief Generate keys for and send a new beacon contract.
+//!
+//! \param cpid           The CPID to create the beacon for.
+//! \param renewal_access The automated renewal's access, or nullptr. With it
+//! the key comes from the key pool as the pool stands, and none is created;
+//! see SendNewBeaconFromKeyPool().
+//!
+//! \return A variant that contains the new public key if successful or a
+//! description of the error that occurred.
+//!
+AdvertiseBeaconResult SendNewBeacon(const Cpid& cpid, const StakingKeyAccess* renewal_access)
+    EXCLUSIVE_LOCKS_REQUIRED(cs_main, pwalletMain->cs_wallet)
+{
+    if (renewal_access) {
+        return SendNewBeaconFromKeyPool(cpid, *renewal_access);
+    }
+
     // First, determine whether we can successfully send a beacon contract. The
     // wallet must be unlocked and hold a balance great enough to send a beacon
     // transaction. Otherwise, we may create a bogus beacon key that lingers in
     // the wallet:
     //
-    const BeaconError error = CheckBeaconTransactionViable(pwalletMain, cpid);
+    const BeaconError error = CheckBeaconTransactionViable(pwalletMain, cpid, /*renewal_access=*/nullptr);
 
     if (error != BeaconError::NONE) {
         return error;
@@ -1046,7 +1164,7 @@ AdvertiseBeaconResult SendNewBeacon(const Cpid& cpid, bool automated_renewal)
     AdvertiseBeaconResult result = GenerateBeaconKey(cpid);
 
     if (auto key_option = result.TryPublicKey()) {
-        result = SendBeaconContract(cpid, std::move(*key_option), ContractAction::ADD, automated_renewal);
+        result = SendBeaconContract(cpid, std::move(*key_option), ContractAction::ADD, /*renewal_access=*/nullptr);
     }
 
     return result;
@@ -1055,13 +1173,14 @@ AdvertiseBeaconResult SendNewBeacon(const Cpid& cpid, bool automated_renewal)
 //!
 //! \brief Send a contract that renews an existing beacon.
 //!
-//! \param cpid   The CPID to create the beacon for.
-//! \param beacon Contains the public key to renew.
+//! \param cpid           The CPID to create the beacon for.
+//! \param beacon         Contains the public key to renew.
+//! \param renewal_access The automated renewal's access, or nullptr.
 //!
 //! \return A variant that contains the public key if successful or a
 //! description of the error that occurred.
 //!
-AdvertiseBeaconResult RenewBeacon(const Cpid& cpid, const Beacon& beacon, bool automated_renewal)
+AdvertiseBeaconResult RenewBeacon(const Cpid& cpid, const Beacon& beacon, const StakingKeyAccess* renewal_access)
     EXCLUSIVE_LOCKS_REQUIRED(cs_main, pwalletMain->cs_wallet)
 {
     if (!beacon.Renewable(GetAdjustedTime())) {
@@ -1071,7 +1190,7 @@ AdvertiseBeaconResult RenewBeacon(const Cpid& cpid, const Beacon& beacon, bool a
 
     LogPrintf("%s: Renewing beacon for %s", __func__, cpid.ToString());
 
-    const BeaconError error = CheckBeaconTransactionViable(pwalletMain, cpid);
+    const BeaconError error = CheckBeaconTransactionViable(pwalletMain, cpid, renewal_access);
 
     if (error != BeaconError::NONE) {
         return error;
@@ -1082,12 +1201,12 @@ AdvertiseBeaconResult RenewBeacon(const Cpid& cpid, const Beacon& beacon, bool a
     // the same CPID, both nodes will attempt to renew the beacon. Only allow a
     // node with the private key to send the contract:
     //
-    if (!CheckBeaconPrivateKey(pwalletMain, beacon.m_public_key)) {
+    if (!CheckBeaconPrivateKey(pwalletMain, beacon.m_public_key, renewal_access)) {
         LogPrintf("WARNING: %s: Missing or invalid private key", __func__);
         return BeaconError::MISSING_KEY;
     }
 
-    return SendBeaconContract(cpid, beacon, ContractAction::ADD, automated_renewal);
+    return SendBeaconContract(cpid, beacon, ContractAction::ADD, renewal_access);
 }
 } // anonymous namespace
 
@@ -1373,6 +1492,18 @@ void Researcher::Initialize()
     Reload();
 }
 
+//! \brief The automated beacon renewal's token for the staking accessor.
+//!
+//! Defined and used only in this file, and called only by RunRenewBeaconJob();
+//! test/lint/lint-staking-key-access.py fails if it appears anywhere else. With
+//! it the hourly renewal signs the beacon payload and the transaction's inputs
+//! while the wallet is unlocked for staking only, and the transaction is built
+//! in the renewal's fixed shape at the minimum fee.
+StakingKeyAccess RenewalStakingKeyAccess()
+{
+    return StakingKeyAccess();
+}
+
 void Researcher::RunRenewBeaconJob()
 {
     if (OutOfSyncByAge()) {
@@ -1410,9 +1541,13 @@ void Researcher::RunRenewBeaconJob()
         }
 
         // The one caller permitted to build while the wallet is unlocked for
-        // staking only. It runs unattended on exactly those wallets, and a
-        // refusal would let the beacon expire silently at six months.
-        researcher->AdvertiseBeacon(/*force=*/false, /*automated_renewal=*/true);
+        // staking only. It runs hourly on those wallets, and a refusal would
+        // let the beacon expire at six months. With the access it renews a
+        // beacon, or advertises a new one with a key from the key pool when
+        // there is none to renew, in a fixed shape at the minimum fee.
+        const StakingKeyAccess renewal_access = RenewalStakingKeyAccess();
+
+        researcher->AdvertiseBeacon(/*force=*/false, &renewal_access);
     } else {
         LogPrint(BCLog::LogFlags::BEACON,
                  "INFO: %s: Skipping beacon renewal while within scraper beacon consensus window.",
@@ -1769,7 +1904,7 @@ bool Researcher::ChangeMode(const ResearcherMode mode, std::string email)
     return true;
 }
 
-AdvertiseBeaconResult Researcher::AdvertiseBeacon(const bool force, const bool automated_renewal)
+AdvertiseBeaconResult Researcher::AdvertiseBeacon(const bool force, const StakingKeyAccess* renewal_access)
 {
     const CpidOption cpid = m_mining_id.TryCpid();
 
@@ -1784,15 +1919,17 @@ AdvertiseBeaconResult Researcher::AdvertiseBeacon(const bool force, const bool a
 
     AdvertiseBeaconResult result(GRC::BeaconError::NONE);
 
+    // The renewal's access goes to a renewal, and to a new beacon when there is
+    // none to renew. A forced advertisement is a user's, and does not use it.
     if (force) {
-        result = SendNewBeacon(*cpid, automated_renewal);
+        result = SendNewBeacon(*cpid, /*renewal_access=*/nullptr);
     } else if (TryOwnPendingBeacon(*cpid)) {
         LogPrintf("%s: Beacon awaiting confirmation already", __func__);
         return GRC::BeaconError::PENDING;
     } else if (!current_beacon) {
-        result = SendNewBeacon(*cpid, automated_renewal);
+        result = SendNewBeacon(*cpid, renewal_access);
     } else {
-        result = RenewBeacon(*cpid, *current_beacon, automated_renewal);
+        result = RenewBeacon(*cpid, *current_beacon, renewal_access);
     }
 
     // Errors that describe the moment are not kept. The snapshot maps the stored
@@ -1825,5 +1962,5 @@ AdvertiseBeaconResult Researcher::RevokeBeacon(const Cpid cpid)
         return GRC::BeaconError::NO_CPID;
     }
 
-    return SendBeaconContract(cpid, *beacon, ContractAction::REMOVE, /*automated_renewal=*/false);
+    return SendBeaconContract(cpid, *beacon, ContractAction::REMOVE, /*renewal_access=*/nullptr);
 }

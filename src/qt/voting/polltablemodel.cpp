@@ -88,6 +88,7 @@ QVariant PollTableDataModel::data(const QModelIndex &index, int role) const
                     return row->m_stale;
             } // no default case, so the compiler can warn about missing cases
             assert(false);
+            return {};
 
         case Qt::TextAlignmentRole:
             switch (index.column()) {
@@ -141,6 +142,7 @@ QVariant PollTableDataModel::data(const QModelIndex &index, int role) const
                     return tr("Stale results: %1").arg(row->m_stale ? tr("yes") : tr("no"));
             } // no default case, so the compiler can warn about missing cases
             assert(false);
+            return {};
 
         case PollTableModel::SortRole:
             switch (index.column()) {
@@ -186,9 +188,7 @@ QVariant PollTableDataModel::headerData(int section, Qt::Orientation orientation
 
 QModelIndex PollTableDataModel::index(int row, int column, const QModelIndex &parent) const
 {
-    Q_UNUSED(parent);
-
-    if (row > static_cast<int>(m_rows.size())) {
+    if (!hasIndex(row, column, parent)) {
         return QModelIndex();
     }
 

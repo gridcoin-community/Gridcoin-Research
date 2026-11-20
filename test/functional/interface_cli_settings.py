@@ -2,7 +2,7 @@
 # Copyright (c) 2026 The Gridcoin developers
 # Distributed under the MIT software license, see the accompanying
 # file COPYING or https://opensource.org/licenses/mit-license.php.
-"""The RPC client reads the node's read-write settings file and never writes it.
+"""The RPC client reads the node's read-write settings file, ignores its refused keys, and never writes it.
 
 gridcoinresearchd given a non-switch argv acts as the RPC client. It used to run
 InitSettings, which reads gridcoinsettings.json and writes it back through a fixed
@@ -10,22 +10,21 @@ temporary name, before it found out it was a client. Clients calling the same no
 concurrently raced on that temporary file and could fail with "Error initializing
 settings", and a client could write back a setting the node had just changed.
 
-The client still has to read the file: a connection setting stored there with
-changesettings outranks the config file, and the client must honour it.
+The client still reads the file, but the connection options (rpcconnect, rpcport,
+rpcuser, rpcpassword, ...) are refused keys: they are honoured only in
+gridcoinresearch.conf and on the command line, so a copy in the settings file is
+ignored by the client as it is by the node.
 
   - client calls leave gridcoinsettings.json untouched (same inode, same mtime);
-  - a client-only setting stored with changesettings (rpcconnect, pointed at a name
-    that cannot resolve) is honoured by the client, and the command line still
-    outranks it;
-  - erasing the setting restores the default.
+  - rpcconnect and rpcport written into the settings file are ignored by the client,
+    and the command line still works;
+  - erasing them with changesettings removes them from the file.
 """
+import json
 import os
 
 from test_framework.test_framework import GridcoinTestFramework
-from test_framework.util import (
-    assert_equal,
-    assert_raises_process_error,
-)
+from test_framework.util import assert_equal
 
 
 class InterfaceCLISettingsTest(GridcoinTestFramework):
@@ -63,18 +62,26 @@ class InterfaceCLISettingsTest(GridcoinTestFramework):
             assert_equal(node.cli.getblockcount(), expected_height)
         assert_equal(self.file_identity(), before)
 
-        self.log.info("The client honours a connection setting stored with changesettings")
-        node.changesettings("rpcconnect=nonexistent.invalid")
+        self.log.info("The client ignores connection options found in the settings file")
+        with open(self.settings_file(), encoding="utf8") as f:
+            stored_settings = json.load(f)
+        stored_settings.update({"rpcconnect": "nonexistent.invalid", "rpcport": "1"})
+        with open(self.settings_file(), "w", encoding="utf8") as f:
+            json.dump(stored_settings, f)
         stored = self.file_identity()
-        # The client exits with 1 when it cannot reach the server; ignoring the stored value would succeed instead.
-        assert_raises_process_error(1, "couldn't connect to server", node.cli.getblockcount)
-        # The command line outranks the read-write settings.
+        # Honouring either value would fail to connect; the client exits with 1 then.
+        assert_equal(node.cli.getblockcount(), expected_height)
         assert_equal(node.cli("-rpcconnect=127.0.0.1").getblockcount(), expected_height)
         # Neither client call rewrote the file.
         assert_equal(self.file_identity(), stored)
 
-        self.log.info("Erasing the setting restores the default")
+        self.log.info("Erasing the settings removes them from the file")
         node.changesettings("rpcconnect=")
+        node.changesettings("rpcport=")
+        with open(self.settings_file(), encoding="utf8") as f:
+            remaining = json.load(f)
+        assert "rpcconnect" not in remaining
+        assert "rpcport" not in remaining
         assert_equal(node.cli.getblockcount(), expected_height)
 
 

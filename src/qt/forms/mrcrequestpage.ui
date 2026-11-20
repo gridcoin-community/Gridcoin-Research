@@ -166,6 +166,40 @@
           </property>
          </widget>
         </item>
+        <item row="7" column="0">
+         <widget class="QLabel" name="mrcTotalFeeLabel">
+          <property name="text">
+           <string>Total MRC Fee</string>
+          </property>
+         </widget>
+        </item>
+        <item row="7" column="1">
+         <widget class="QLabel" name="mrcTotalFee">
+          <property name="toolTip">
+           <string>The fee the MRC request pays: the calculated minimum fee, or the fee with the boost.</string>
+          </property>
+          <property name="text">
+           <string/>
+          </property>
+         </widget>
+        </item>
+        <item row="8" column="0">
+         <widget class="QLabel" name="mrcNetPayoutLabel">
+          <property name="text">
+           <string>Net Payout After Fee</string>
+          </property>
+         </widget>
+        </item>
+        <item row="8" column="1">
+         <widget class="QLabel" name="mrcNetPayout">
+          <property name="toolTip">
+           <string>The research reward less the total MRC fee.</string>
+          </property>
+          <property name="text">
+           <string/>
+          </property>
+         </widget>
+        </item>
         <item row="4" column="1">
          <widget class="QLabel" name="mrcQueueTailFee">
           <property name="toolTip">

@@ -57,6 +57,9 @@ protected:
 public:
     explicit limitedmap(size_type nMaxSizeIn)
     {
+        // Invariant: the only instance, mapAlreadyAskedFor, is built with
+        // MAX_INV_SZ. Guards against a new instance with size 0, whose first
+        // insert would evict the first element of an empty map.
         assert(nMaxSizeIn > 0);
         nMaxSize = nMaxSizeIn;
     }

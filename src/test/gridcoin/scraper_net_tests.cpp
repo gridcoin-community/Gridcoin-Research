@@ -6,6 +6,7 @@
 
 #include "hash.h"
 #include "key.h"
+#include "key_io.h"
 #include "serialize.h"
 #include "streams.h"
 #include "util.h"
@@ -219,8 +220,9 @@ namespace {
 //! Build a manifest stream as far as the structural checks read it. The part
 //! list, the beacon-list reference and the project dentries are all that those
 //! checks consult, and they run before signature verification, so no key and no
-//! valid signature are needed. nTime is current so IsManifestCurrent() passes,
-//! and a chainless test process is out of sync by age, which skips
+//! valid signature are needed. The manifest is named with the address of the
+//! key it carries, as a manifest is. nTime is current so IsManifestCurrent()
+//! passes, and a chainless test process is out of sync by age, which skips
 //! authorization.
 CDataStream ManifestPrefix(size_t part_count, int beacon_list,
                            const std::vector<int>& project_part1s,
@@ -244,7 +246,7 @@ CDataStream ManifestPrefix(size_t part_count, int beacon_list,
 
     ss << vph;
     ss << CPubKey();
-    ss << std::string("test-manifest");
+    ss << EncodeDestination(CTxDestination(CPubKey().GetID()));
     ss << static_cast<int64_t>(GetAdjustedTime());
     ss << uint256();
     ss << beacon_list << static_cast<unsigned int>(0);
@@ -542,6 +544,213 @@ BOOST_AUTO_TEST_CASE(purging_a_pending_entry_clears_phash)
 
     BOOST_CHECK(CScraperManifest::mapPendingDeletedManifest.count(hash) == 0);
     BOOST_CHECK(WITH_LOCK(manifest->cs_manifest, return manifest->phash) == nullptr);
+}
+
+//!
+//! A part is needed only while a split object references it and its data has
+//! not arrived. That is the one case in which a peer's announcement of the part
+//! draws a request. A part nothing references, and a part whose data is already
+//! here, are not needed.
+//!
+BOOST_AUTO_TEST_CASE(a_part_is_needed_only_while_referenced_and_missing)
+{
+    auto manifest = std::shared_ptr<CScraperManifest>(new CScraperManifest());
+
+    // A part the manifest references whose data has not arrived.
+    const uint256 missing = Hash(std::string("a part that has not arrived"));
+    manifest->addPart(missing);
+
+    // A part the manifest references whose data is here.
+    CDataStream data(SER_NETWORK, PROTOCOL_VERSION);
+    data << std::string("a part that is here");
+    BOOST_REQUIRE_EQUAL(manifest->addPartData(std::move(data)), 1);
+
+    // A part that nothing references.
+    const uint256 unreferenced = Hash(std::string("a part nothing references"));
+
+    uint256 held;
+    {
+        // The order production uses: cs_mapParts, then cs_manifest.
+        LOCK2(CSplitBlob::cs_mapParts, manifest->cs_manifest);
+
+        BOOST_REQUIRE_EQUAL(manifest->vParts.size(), 2u);
+        BOOST_REQUIRE(!manifest->vParts[0]->present());
+        BOOST_REQUIRE(manifest->vParts[1]->present());
+        BOOST_REQUIRE(CSplitBlob::mapParts.count(unreferenced) == 0);
+
+        held = manifest->vParts[1]->hash;
+    }
+
+    // PartNeeded() takes cs_mapParts itself, so it is called with no lock held.
+    BOOST_CHECK(CSplitBlob::PartNeeded(missing) == true);
+    BOOST_CHECK(CSplitBlob::PartNeeded(held) == false);
+    BOOST_CHECK(CSplitBlob::PartNeeded(unreferenced) == false);
+}
+
+//!
+//! A part added as data is counted as received whether its data arrives with
+//! the call or is here already. A scraper's manifest mostly repeats the parts of
+//! its last one, and it is complete when the last part has been added.
+//!
+BOOST_AUTO_TEST_CASE(a_part_added_as_data_is_counted_when_its_data_is_already_here)
+{
+    const auto data = [](const std::string& text) {
+        CDataStream stream(SER_NETWORK, PROTOCOL_VERSION);
+        stream << text;
+        return stream;
+    };
+
+    // An earlier manifest holds the shared part.
+    auto earlier = std::shared_ptr<CScraperManifest>(new CScraperManifest());
+    BOOST_REQUIRE_EQUAL(earlier->addPartData(data("a part two manifests share")), 0);
+
+    auto manifest = std::shared_ptr<CScraperManifest>(new CScraperManifest());
+
+    // A part another manifest holds, a part of its own, and that part a second
+    // time.
+    BOOST_REQUIRE_EQUAL(manifest->addPartData(data("a part two manifests share"), true), 0);
+    BOOST_REQUIRE_EQUAL(manifest->addPartData(data("a part of its own"), true), 1);
+    BOOST_REQUIRE_EQUAL(manifest->addPartData(data("a part of its own"), true), 2);
+
+    // The order production uses: cs_mapParts, then cs_manifest.
+    LOCK2(CSplitBlob::cs_mapParts, manifest->cs_manifest);
+
+    BOOST_CHECK_EQUAL(manifest->vParts.size(), 3u);
+    BOOST_CHECK_EQUAL(manifest->cntPartsRcvd, 3u);
+
+    // Not while the publish is in progress.
+    BOOST_CHECK(!manifest->isComplete());
+
+    manifest->Complete();
+
+    BOOST_CHECK(manifest->isComplete());
+}
+
+//! A manifest ends at its signature. A message with more after it is refused.
+//!
+BOOST_AUTO_TEST_CASE(recvmanifest_refuses_data_after_the_signature)
+{
+    CKey key;
+    key.MakeNewKey(true);
+
+    // The publisher's object is never put in the manifest map. It holds the
+    // parts, so the copy a node receives below is complete on arrival.
+    const auto publisher = std::make_shared<CScraperManifest>();
+
+    CDataStream beacon_part(SER_NETWORK, 1);
+    beacon_part << std::string("beacon list part for the signature test");
+    CDataStream project_part(SER_NETWORK, 1);
+    project_part << std::string("project part for the signature test");
+
+    BOOST_REQUIRE_EQUAL(publisher->addPartData(std::move(beacon_part)), 0);
+    BOOST_REQUIRE_EQUAL(publisher->addPartData(std::move(project_part)), 1);
+
+    CDataStream wire(SER_NETWORK, 1);
+    {
+        LOCK2(CSplitBlob::cs_mapParts, publisher->cs_manifest);
+
+        publisher->sCManifestName = EncodeDestination(CTxDestination(key.GetPubKey().GetID()));
+        publisher->pubkey = key.GetPubKey();
+        publisher->nTime = GetAdjustedTime();
+        publisher->BeaconList = 0;
+        publisher->BeaconList_c = 0;
+
+        CScraperManifest::dentry project;
+        project.project = "project";
+        project.part1 = 1;
+        publisher->projects.push_back(project);
+
+        CDataStream compare(SER_NETWORK, 1);
+        publisher->SerializeForManifestCompare(compare);
+        publisher->nContentHash = Hash(compare);
+
+        CDataStream unsigned_bytes(SER_NETWORK, 1);
+        publisher->SerializeWithoutSignature(unsigned_bytes);
+        BOOST_REQUIRE(key.Sign(Hash(unsigned_bytes), publisher->signature));
+
+        publisher->Serialize(wire);
+    }
+
+    CDataStream longer(wire);
+    longer << static_cast<unsigned char>(0);
+
+    const uint256 received_hash = Hash(wire);
+    const uint256 longer_hash = Hash(longer);
+
+    CDataStream as_signed(wire);
+    BOOST_CHECK(CScraperManifest::RecvManifest(nullptr, as_signed));
+    BOOST_CHECK(!CScraperManifest::RecvManifest(nullptr, longer));
+
+    LOCK(CScraperManifest::cs_mapManifest);
+
+    BOOST_CHECK_EQUAL(CScraperManifest::mapManifest.count(received_hash), 1u);
+    BOOST_CHECK_EQUAL(CScraperManifest::mapManifest.count(longer_hash), 0u);
+
+    CScraperManifest::DeleteManifest(received_hash, true);
+}
+
+//!
+//! A part is copied for sending only when its data is here, and the copy is the
+//! part's data. CopyPart() takes cs_mapParts itself: the caller sends the copy
+//! with no scraper lock held.
+//!
+BOOST_AUTO_TEST_CASE(a_part_is_copied_for_sending_only_when_its_data_is_here)
+{
+    auto manifest = std::shared_ptr<CScraperManifest>(new CScraperManifest());
+
+    const uint256 missing = Hash(std::string("a part that has not arrived"));
+    manifest->addPart(missing);
+
+    CDataStream data(SER_NETWORK, PROTOCOL_VERSION);
+    data << std::string("a part that is here");
+    const SerializeData expected(data.begin(), data.end());
+    BOOST_REQUIRE_EQUAL(manifest->addPartData(std::move(data)), 1);
+
+    const uint256 held = WITH_LOCK(CSplitBlob::cs_mapParts,
+                                   return WITH_LOCK(manifest->cs_manifest, return manifest->vParts[1]->hash));
+    const uint256 unreferenced = Hash(std::string("a part nothing references"));
+
+    CDataStream out(SER_NETWORK, PROTOCOL_VERSION);
+
+    BOOST_CHECK(CSplitBlob::CopyPart(held, out));
+    BOOST_CHECK(SerializeData(out.begin(), out.end()) == expected);
+
+    CDataStream untouched(SER_NETWORK, PROTOCOL_VERSION);
+
+    BOOST_CHECK(!CSplitBlob::CopyPart(missing, untouched));
+    BOOST_CHECK(!CSplitBlob::CopyPart(unreferenced, untouched));
+    BOOST_CHECK(untouched.empty());
+}
+
+//!
+//! SerializeForSend() gives the bytes the manifest serializes to, which is what
+//! a peer is sent for a manifest.
+//!
+BOOST_AUTO_TEST_CASE(a_manifest_is_serialized_for_sending_as_it_serializes)
+{
+    auto manifest = std::shared_ptr<CScraperManifest>(new CScraperManifest());
+
+    CDataStream data(SER_NETWORK, PROTOCOL_VERSION);
+    data << std::string("the part of a manifest to send");
+    BOOST_REQUIRE_EQUAL(manifest->addPartData(std::move(data)), 0);
+
+    // The order production uses: cs_mapManifest, then cs_mapParts, then cs_manifest.
+    LOCK2(CScraperManifest::cs_mapManifest, CSplitBlob::cs_mapParts);
+
+    CDataStream expected(SER_NETWORK, PROTOCOL_VERSION);
+    {
+        LOCK(manifest->cs_manifest);
+
+        manifest->sCManifestName = "a manifest to send";
+        manifest->nTime = 1700000000;
+
+        expected << *manifest;
+    }
+
+    const CDataStream sent = CScraperManifest::SerializeForSend(manifest);
+
+    BOOST_CHECK(!sent.empty());
+    BOOST_CHECK(SerializeData(sent.begin(), sent.end()) == SerializeData(expected.begin(), expected.end()));
 }
 
 BOOST_AUTO_TEST_SUITE_END()

@@ -18,9 +18,10 @@ namespace interfaces { class Node; }
 class WinShutdownMonitor : public QAbstractNativeEventFilter
 {
 public:
-    //! \p node is used to request shutdown on WM_QUERYENDSESSION; it is
-    //! process-lifetime (main()'s gui_node), so holding a reference is safe.
-    explicit WinShutdownMonitor(interfaces::Node& node) : m_node(node) {}
+    //! On WM_QUERYENDSESSION, BitcoinGUI::requestQuitForSessionEnd(\p node,
+    //! \p multiprocess). \p node is process-lifetime (main()'s gui_node), so
+    //! holding a reference is safe.
+    WinShutdownMonitor(interfaces::Node& node, bool multiprocess) : m_node(node), m_multiprocess(multiprocess) {}
 
     /** Implements QAbstractNativeEventFilter interface for processing Windows messages */
 #if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
@@ -34,6 +35,7 @@ public:
 
 private:
     interfaces::Node& m_node;
+    const bool m_multiprocess;
 };
 #endif
 

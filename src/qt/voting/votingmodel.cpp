@@ -9,6 +9,7 @@
 #include "interfaces/voting.h"
 #include "optionsmodel.h"
 #include "qt/clientmodel.h"
+#include "qt/guistatecache.h"
 #include "qt/voting/votingmodel.h"
 #include "qt/walletmodel.h"
 #include "uint256.h"
@@ -101,14 +102,16 @@ VotingModel::VotingModel(
     , m_options_model(options_model)
     , m_wallet_model(wallet_model)
     , m_last_poll_time(0)
+    , m_available(false)
+    , m_last_poll_time_read(false)
     , m_pollitems()
 {
     subscribeToCoreSignals();
 
-    // The voting model is constructed after core init finishes. Remember the
-    // time of the most recent active poll found on start-up to avoid showing
-    // notifications for these if the node reorganizes the chain:
-    m_last_poll_time = m_voting.latestActivePollTime();
+    // Polls and votes follow the state the core pushes. One already computed
+    // when the cache was built emits nothing, so it is read once here.
+    connect(m_client_model.guiState(), &GuiStateCache::changed, this, &VotingModel::applyPushedState);
+    applyPushedState();
 }
 
 VotingModel::~VotingModel()
@@ -209,6 +212,11 @@ OptionsModel& VotingModel::getOptionsModel()
 
 QString VotingModel::getCurrentPollTitle() const
 {
+    // Poll work waits for the sync.
+    if (!m_available) {
+        return QString();
+    }
+
     return QString::fromStdString(m_voting.currentPollTitle())
         .left(80)
         .replace(QChar('_'), QChar(' '), Qt::CaseSensitive);
@@ -343,9 +351,10 @@ VotingResult VotingModel::sendPoll(
             {field.m_name.toStdString(), field.m_value.toStdString(), field.m_required});
     }
 
-    // Unlock the wallet before handing the submission to the node. The modal
-    // stays in the GUI and is raised OUTSIDE any core lock.
-    const WalletModel::UnlockContext unlock_context(m_wallet_model.requestUnlock());
+    // Ask for the passphrase before handing the submission to the node; the
+    // poll is signed under the capability the context holds. The modal stays
+    // in the GUI and is raised OUTSIDE any core lock.
+    const WalletModel::UnlockContext unlock_context(m_wallet_model.requestUnlock(CapabilityKind::Contract));
 
     if (!unlock_context.isValid()) {
         return VotingResult(tr("Please unlock the wallet."));
@@ -365,10 +374,11 @@ VotingResult VotingModel::sendVote(
     const QString& poll_id,
     const std::vector<uint8_t>& choice_offsets) const
 {
-    // Unlock the wallet before the node builds and broadcasts the vote. The modal
-    // is raised here in the GUI, no longer while holding cs_main (the node takes
+    // Ask for the passphrase before the node builds and broadcasts the vote,
+    // which is signed under the capability the context holds. The modal is
+    // raised here in the GUI, no longer while holding cs_main (the node takes
     // cs_main internally for the registry lookup and broadcast).
-    const WalletModel::UnlockContext unlock_context(m_wallet_model.requestUnlock());
+    const WalletModel::UnlockContext unlock_context(m_wallet_model.requestUnlock(CapabilityKind::Contract));
 
     if (!unlock_context.isValid()) {
         return VotingResult(tr("Please unlock the wallet."));
@@ -424,9 +434,33 @@ void VotingModel::unsubscribeFromCoreSignals()
     m_handlers.clear();
 }
 
+void VotingModel::applyPushedState()
+{
+    const interfaces::GuiStateSnapshot& pushed = m_client_model.guiState()->snapshot();
+
+    // The test the voting code used before it was pushed: the GUI's handling of
+    // expired polls waited for the sync (out of sync by age), the new poll
+    // notice for the initial download. Polls and votes wait for both.
+    const bool available = !pushed.out_of_sync && !pushed.initial_download;
+
+    if (available && !m_last_poll_time_read) {
+        // The voting model is constructed after core init finishes. Remember the
+        // time of the most recent active poll found when polls become available
+        // to avoid showing notifications for these if the node reorganizes the
+        // chain:
+        m_last_poll_time = m_voting.latestActivePollTime();
+        m_last_poll_time_read = true;
+    }
+
+    if (available != m_available) {
+        m_available = available;
+        emit availableChanged(m_available);
+    }
+}
+
 void VotingModel::handleNewPoll(int64_t poll_time)
 {
-    if (poll_time <= m_last_poll_time || m_client_model.inInitialBlockDownload()) {
+    if (poll_time <= m_last_poll_time || !m_available) {
         return;
     }
 

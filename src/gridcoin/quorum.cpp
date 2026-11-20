@@ -849,9 +849,10 @@ private: // SuperblockValidator classes
             // between resolution and the combination iteration ("the most recent project part should
             // always exist" per the comment there, but defensive). Inserting a nullptr would leave a
             // (name, nullptr) entry that ComputeQuorumHash -> GetScraperStatsByConvergedManifest later
-            // dereferences without a null check (scraper.cpp:4179 etc.) -- crash. Drop the part instead;
-            // the resulting candidate will produce a different quorum hash than the validated superblock
-            // and validation will simply fail for this combination, which is the correct behavior.
+            // dereferences without a null check (in GetScraperStatsByConvergedManifest in scraper.cpp,
+            // among others) -- crash. Drop the part instead; the resulting candidate will produce a
+            // different quorum hash than the validated superblock and validation will simply fail for
+            // this combination, which is the correct behavior.
             if (project_part_ptr == nullptr) {
                 LogPrintf("ValidateSuperblock(): AddPart: null CPart for project %s; dropping.",
                           project_name);
@@ -1076,8 +1077,8 @@ private: // SuperblockValidator classes
         //!
         //! Threaded from SuperblockValidator so AddBeaconPartsData can gate
         //! the PACTC/PPK inclusion (post-BlockV13Height) in the reconstructed
-        //! convergence, matching the scraper-side behavior at
-        //! scraper.cpp:5613-5627.
+        //! convergence, matching the scraper-side behavior in
+        //! ScraperConstructConvergedManifestByProject (scraper.cpp).
         //!
         const int m_height;
 
@@ -1109,15 +1110,15 @@ private: // SuperblockValidator classes
         //! parts from the specified manifest into the provided convergence
         //! candidate.
         //!
-        //! Mirrors the scraper-side convergence construction at
-        //! scraper.cpp:5611-5627: after the per-project supermajority check
-        //! selects a winning source manifest, pull BeaconList (always at
-        //! part 0) and any of the side-channel parts (VerifiedBeacons,
-        //! ProjectsAllCpidTotalCredits, ProjectPublicKeys) that the manifest
-        //! happens to carry. Absence of any side-channel part is not a
-        //! failure — scrapers emit them conditionally (e.g. VerifiedBeacons
-        //! only when beacons are pending verification; PPK only when
-        //! v3-beacon-capable projects are whitelisted).
+        //! Mirrors the scraper-side convergence construction in
+        //! ScraperConstructConvergedManifestByProject (scraper.cpp): after the
+        //! per-project supermajority check selects a winning source manifest,
+        //! pull BeaconList (always at part 0) and any of the side-channel parts
+        //! (VerifiedBeacons, ProjectsAllCpidTotalCredits, ProjectPublicKeys)
+        //! that the manifest happens to carry. Absence of any side-channel part
+        //! is not a failure — scrapers emit them conditionally (e.g.
+        //! VerifiedBeacons only when beacons are pending verification; PPK only
+        //! when v3-beacon-capable projects are whitelisted).
         //!
         //! Side-channel-part integrity is inherited transitively: the
         //! source manifest was already in supermajority for at least one
@@ -1203,7 +1204,8 @@ private: // SuperblockValidator classes
             // Add a side-channel part to the convergence if the manifest
             // carries it. Absent parts are silently skipped — scrapers emit
             // these conditionally and the convergence is expected to omit
-            // them when the manifest did. Mirrors scraper.cpp:5622-5626.
+            // them when the manifest did. Mirrors the side-channel loop in
+            // ScraperConstructConvergedManifestByProject (scraper.cpp).
             //
             // The helper takes projects / vParts as parameters (rather than
             // capturing manifest by reference) so the analyzer can see that

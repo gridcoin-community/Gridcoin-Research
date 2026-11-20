@@ -190,6 +190,11 @@ void PollTab::changeViewMode(const ViewId view_id)
 
 void PollTab::refresh()
 {
+    // Polls wait for the sync: the table is the core's tally walk.
+    if (!m_voting_model || !m_voting_model->available()) {
+        return;
+    }
+
     if (m_polltable_model->empty()) {
         m_no_result->showDefaultLoadingTitle();
         m_no_result->contentWidgetAs<QLabel>()->setText(PollWaitMessage());
@@ -255,6 +260,11 @@ void PollTab::showVoteRowDialog(int row)
 
 void PollTab::showVoteDialog(const PollItem& poll_item)
 {
+    // Votes wait for the sync. The core keeps its own check.
+    if (!m_voting_model || !m_voting_model->available()) {
+        return;
+    }
+
     (new VoteWizard(poll_item, *m_voting_model, this))->show();
 }
 
@@ -290,9 +300,10 @@ void PollTab::showTableContextMenu(const QPoint& pos)
         });
 
         if (!poll_item->m_finished) {
-            menu.addAction(tr("Vote"), [this, poll_item]() {
+            QAction* vote_action = menu.addAction(tr("Vote"), [this, poll_item]() {
                 showVoteDialog(*poll_item);
             });
+            vote_action->setEnabled(m_voting_model && m_voting_model->available());
         }
 
         menu.exec(ui->table->viewport()->mapToGlobal(pos));

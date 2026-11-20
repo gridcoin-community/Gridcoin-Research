@@ -551,7 +551,7 @@ add_library(gridcoin_util STATIC
 ```
 
 #### 2.6 Create RPC Commands
-Add commands next to the existing contract RPCs (`advertisebeacon`, `beaconstatus`, `superblocks` in `src/rpc/blockchain.cpp`), or create a new file for managing your contract type. Every new `vRPCCommands[]` row in `src/rpc/server.cpp` needs a heritage classification; see the RPC Heritage Ledger section of `CLAUDE.md`.
+Add commands next to the existing contract RPCs (`advertisebeacon`, `beaconstatus`, `superblocks` in `src/rpc/blockchain.cpp`), or create a new file for managing your contract type. Every new `vRPCCommands[]` row in `src/rpc/server.cpp` needs a heritage classification and an access class (`{ "name", &impl, cat_x, &impl_helpman, heritage_<bucket>, "<fp>", access_<class> }`); see the RPC Heritage Ledger section of `CLAUDE.md`.
 
 #### 2.7 Add Tests
 Create `src/test/gridcoin/mynewtype_tests.cpp`:

@@ -12,6 +12,7 @@
 #include "node/ui_interface.h"
 #include <random.h>
 #include "util.h"
+#include <util/childreaper.h>
 #include <util/strencodings.h>
 #include <util/string.h>
 
@@ -575,7 +576,7 @@ std::vector<std::string> split(const std::string& s, const std::string& delim)
 void runCommand(std::string strCommand)
 {
 #ifndef WIN32
-    int nErr = ::system(strCommand.c_str());
+    int nErr = util::RunShellCommand(strCommand);
 #else
     // The callers run this on threads of their own, where an uncaught exception
     // ends the program, so a command that is not valid UTF-8, as from a
@@ -584,25 +585,15 @@ void runCommand(std::string strCommand)
     try {
         command = Utf8ToWide(strCommand);
     } catch (const std::range_error&) {
-        // Escape each byte that is not ASCII, as \xNN, so that debug.log stays UTF-8.
-        std::string escaped;
-        for (const char ch : strCommand) {
-            const unsigned int byte = static_cast<unsigned char>(ch);
-            // sign-compare checked: byte is unsigned int; 0x80U is a non-negative literal, so
-            // both sides are unsigned.
-            if (byte < 0x80U) {
-                escaped += ch;
-            } else {
-                escaped += strprintf("\\x%02x", byte);
-            }
-        }
-        LogPrintf("runCommand error: %s is not valid UTF-8 and was not run", escaped);
+        // The command is not logged: a notify command may hold a token.
+        LogPrintf("runCommand error: a command is not valid UTF-8 and was not run");
         return;
     }
     int nErr = ::_wsystem(command.c_str());
 #endif
+    // The command is not logged: a notify command may hold a token.
     if (nErr)
-        LogPrintf("runCommand error: system(%s) returned %d", strCommand, nErr);
+        LogPrintf("runCommand error: a shell command returned %d", nErr);
 }
 #endif
 

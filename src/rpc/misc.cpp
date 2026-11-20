@@ -108,7 +108,9 @@ UniValue logging(const UniValue& params)
 
 static const RPCHelpMan listsettings_help{
     "listsettings",
-    "Outputs all arguments/settings in JSON format.",
+    "Outputs all arguments/settings in JSON format.\n"
+    "Keys in the settings file that were ignored at startup (set them in gridcoinresearch.conf or on the command\n"
+    "line instead) are listed under setting_file_args_ignored; sensitive values show as ****.",
     {},
     RPCResult{RPCResult::Type::OBJ_DYN, "", "Mapping of setting name to its current value",
         {
@@ -137,7 +139,12 @@ static const RPCHelpMan changesettings_help = RPCHelpMan{
     "Additional name=value pairs may be supplied as further positional arguments.\n"
     "\n"
     "An empty value (name=) removes the stored setting, so the value from the command line\n"
-    "or config file, or else the default, applies again.",
+    "or config file, or else the default, applies again.\n"
+    "\n"
+    "Most settings can be changed freely. Network-exposure, side-stake and fee settings need the wallet\n"
+    "passphrase: a full unlock, or the passphrase sent with this request. Settings that run a command,\n"
+    "name a file or directory, or configure RPC or IPC can be set only in gridcoinresearch.conf or on the\n"
+    "command line; an empty value still erases one from the settings file.",
     {
         {"setting", RPCArg::Type::STR, RPCArg::Optional::NO,
             "Setting to store/change in the form name=value. Pass additional positional arguments "
@@ -205,12 +212,16 @@ UniValue changesettings(const UniValue& params)
     bool restart_required = false;
     std::vector<std::string> no_change, immediate, requiring_restart;
     bool invalid_input = false;
+    bool elevation_required = false;
     std::string error;
 
-    if (!ChangeSettings(settings, restart_required, no_change, immediate, requiring_restart, invalid_input, error))
+    if (!ChangeSettings(settings, restart_required, no_change, immediate, requiring_restart, invalid_input,
+                        elevation_required, error))
     {
-        // A caller/validation error is RPC_INVALID_PARAMETER; a settings-file
+        // A missing passphrase authority is RPC_WALLET_UNLOCK_NEEDED; a
+        // caller/validation error is RPC_INVALID_PARAMETER; a settings-file
         // write failure is an internal error.
+        if (elevation_required) throw JSONRPCError(RPC_WALLET_UNLOCK_NEEDED, error);
         throw JSONRPCError(invalid_input ? RPC_INVALID_PARAMETER : RPC_MISC_ERROR, error);
     }
 

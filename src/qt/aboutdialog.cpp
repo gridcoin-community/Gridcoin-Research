@@ -173,7 +173,7 @@ AboutDialog::~AboutDialog()
     // The hazard is the NODE: the worker dereferences it, and it is destroyed by
     // StartGridcoinQt's teardown. Waiting here would only freeze the GUI thread for
     // up to the libcurl connect timeout (~10 s) every time a user closes the dialog
-    // mid-check, while doing nothing about the case that actually matters. The join
+    // mid-check, while doing nothing about the case that actually matters. The wait
     // therefore lives at teardown, immediately before the node is destroyed --
     // rarer, and already a waiting context.
     m_version_check_watcher.disconnect();

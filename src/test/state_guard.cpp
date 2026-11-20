@@ -21,6 +21,7 @@
 #include "util/system.h"
 #include "util/time.h"
 #include "validation.h"
+#include "wallet/wallet.h"
 
 #include <boost/test/unit_test.hpp>
 
@@ -56,6 +57,9 @@ void SerializeSettings(const util::Settings& s, std::map<std::string, std::strin
     }
     for (const auto& [name, value] : s.rw_settings) {
         out["rw:" + name] = value.write();
+    }
+    for (const auto& [name, value] : s.refused_rw_settings) {
+        out["refused_rw:" + name] = value.write();
     }
 }
 
@@ -488,6 +492,17 @@ V15HeightGuard::~V15HeightGuard()
             settings.forced_settings.erase(V15_SETTING_KEY);
         }
     });
+}
+
+TransactionFeeGuard::TransactionFeeGuard(const int64_t fee)
+    : m_saved(nTransactionFee)
+{
+    nTransactionFee = fee;
+}
+
+TransactionFeeGuard::~TransactionFeeGuard()
+{
+    nTransactionFee = m_saved;
 }
 
 void RequireV15Unscheduled()

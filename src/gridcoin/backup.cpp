@@ -7,10 +7,12 @@
 #include "wallet/walletdb.h"
 #include "wallet/wallet.h"
 #include "util.h"
+#include "util/dir_permissions.h"
+#include "util/fsmodes.h"
 #include "util/time.h"
-#include <filesystem>
-
-#include <boost/version.hpp>
+#include <algorithm>
+#include <atomic>
+#include <optional>
 
 #include <string>
 
@@ -113,30 +115,79 @@ void GRC::RunBackupJob()
 }
 
 namespace {
+std::atomic<bool> g_unrestricted_backup_logged{false};
+} // anonymous namespace
+
+bool GRC::LogUnrestrictedBackupOnce(const fs::path& dir, const std::string& reason)
+{
+    if (g_unrestricted_backup_logged.exchange(true)) return false;
+
+    LogPrintf("WARNING: wallet backups in %s cannot be made owner-only (%s). They are written anyway, and other "
+              "users of this computer may be able to read them.",
+              dir.string(), reason);
+    return true;
+}
+
+void GRC::ResetUnrestrictedBackupLogForTesting()
+{
+    g_unrestricted_backup_logged = false;
+}
+
+namespace {
+//! Creates the directory a backup goes into, owner-only when this call creates it and the
+//! filesystem allows it. A directory that cannot be restricted (a filesystem without POSIX
+//! modes, such as FAT, or a volume that keeps no ACL) is kept and the backup goes ahead, with
+//! one log line per process: a backup that other users might read is better than no backup,
+//! and an encrypted wallet's backup cannot be spent without the passphrase. A directory that
+//! exists keeps the mode the operator gave it.
+//! A transfer snapshot's directory is created strictly owner-only, or refused.
+void CreateBackupDirectory(const fs::path& dir, GRC::BackupTarget kind = GRC::BackupTarget::BackupDirectory)
+{
+    // A target with no directory part goes into the working directory.
+    if (dir.empty()) return;
+
+    std::string error;
+    std::optional<std::string> unrestricted;
+    const bool made = kind == GRC::BackupTarget::TransferSnapshot
+                          ? util::CreateOwnerOnlyDirectory(dir, error)
+                          : util::CreateDirectoryRestrictedIfPossible(dir, error, unrestricted);
+    if (!made) {
+        throw fs::filesystem_error(error, dir, boost::system::errc::make_error_code(boost::system::errc::io_error));
+    }
+    if (unrestricted) GRC::LogUnrestrictedBackupOnce(dir, *unrestricted);
+}
+
+//! Copies a backup file over its target. A new target is created owner-only (0600 on POSIX, the
+//! owner-only access list on Windows), so it is owner-only before any data is written; a target
+//! that exists keeps its mode or list. A new target that the filesystem does not keep owner-only
+//! is logged as CreateBackupDirectory logs, or, for a transfer snapshot, removed and refused.
+void CopyBackupFile(const fs::path& source, const fs::path& target,
+                    GRC::BackupTarget kind = GRC::BackupTarget::BackupDirectory)
+{
+    if (const std::optional<std::string> unrestricted = fsmodes::CopyFileOwnerOnly(source, target)) {
+        if (kind == GRC::BackupTarget::TransferSnapshot) {
+            boost::system::error_code ec;
+            fs::remove(target, ec);
+            throw fs::filesystem_error("the copy is not owner-only: " + *unrestricted, target,
+                                       boost::system::errc::make_error_code(
+                                           boost::system::errc::operation_not_permitted));
+        }
+        GRC::LogUnrestrictedBackupOnce(target.parent_path(), *unrestricted);
+    }
+}
+} // anonymous namespace
+
+namespace {
 //! Shared implementation of the file-copy logic used by BackupConfigFile and
-//! BackupSettingsFile. Encapsulates the Boost 1.74 symlink-target workaround
-//! so callers only have to provide the source path, the destination string,
-//! and a label for logging.
+//! BackupSettingsFile, so callers only have to provide the source path, the
+//! destination string, and a label for logging.
 bool BackupPlainFile(const fs::path& source, const std::string& strDest, const char* label)
 {
     fs::path target = strDest;
     try
     {
-        fs::create_directories(target.parent_path());
-#if BOOST_VERSION > 107400
-        fs::copy_file(source, target, fs::copy_options::overwrite_existing);
-#elif BOOST_VERSION == 107400
-        // Workaround for Boost 1.74's problem with copy_file when the target is inside a symlink.
-        // The std paths are built from the native strings as they are. Going through wstring()
-        // converts with the locale, and a non-ASCII path fails: Boost throws
-        // boost::system::system_error under the C locale, and std::filesystem refuses the wide
-        // string under a UTF-8 one.
-        std::filesystem::path StdSource = source.native();
-        std::filesystem::path StdTarget = target.native();
-        std::filesystem::copy_file(StdSource, StdTarget, std::filesystem::copy_options::overwrite_existing);
-#else
-        fs::copy_file(source, target, fs::copy_option::overwrite_if_exists);
-#endif
+        CreateBackupDirectory(target.parent_path());
+        CopyBackupFile(source, target);
         LogPrintf("%s: Copied %s to %s", __func__, label, target.string());
         return true;
     }
@@ -145,16 +196,6 @@ bool BackupPlainFile(const fs::path& source, const std::string& strDest, const c
         LogPrintf("%s: Error copying %s to %s - %s", __func__, label, target.string(), e.what());
         return false;
     }
-#if BOOST_VERSION == 107400
-    // The Boost 1.74 workaround copies with std::filesystem, which throws its own type. It is
-    // named only here, with the code that throws it: libc++ makes the type unavailable before
-    // macOS 10.15.
-    catch (const std::filesystem::filesystem_error& e)
-    {
-        LogPrintf("%s: Error copying %s to %s - %s", __func__, label, target.string(), e.what());
-        return false;
-    }
-#endif
 }
 } // anonymous namespace
 
@@ -183,7 +224,7 @@ bool GRC::BackupSettingsFile(const std::string& strDest)
     return BackupPlainFile(source, strDest, "gridcoinsettings.json");
 }
 
-bool GRC::BackupWallet(const CWallet& wallet, const std::string& strDest)
+bool GRC::BackupWallet(const CWallet& wallet, const std::string& strDest, BackupTarget target)
 {
     if (!wallet.fFileBacked)
         return false;
@@ -203,34 +244,16 @@ bool GRC::BackupWallet(const CWallet& wallet, const std::string& strDest)
         fs::path WalletTarget = strDest;
         try
         {
-            fs::create_directories(WalletTarget.parent_path());
+            CreateBackupDirectory(WalletTarget.parent_path(), target);
             if (fs::is_directory(WalletTarget))
                 WalletTarget /= wallet.strWalletFile;
-#if BOOST_VERSION > 107400
-            fs::copy_file(WalletSource, WalletTarget, fs::copy_options::overwrite_existing);
-#elif BOOST_VERSION == 107400
-            // This is a workaround for Boost 1.74's problem with copy_file when the target is inside a symlink.
-            // Native strings, as in BackupPlainFile above. The target is WalletTarget, so a directory
-            // gets the wallet file name appended here as it does in the Boost branch.
-            std::filesystem::path StdWalletSource = WalletSource.native();
-            std::filesystem::path StdWalletTarget = WalletTarget.native();
-            std::filesystem::copy_file(StdWalletSource, StdWalletTarget, std::filesystem::copy_options::overwrite_existing);
-#else
-            fs::copy_file(WalletSource, WalletTarget, fs::copy_option::overwrite_if_exists);
-#endif
+            CopyBackupFile(WalletSource, WalletTarget, target);
             LogPrintf("BackupWallet: Copied wallet.dat to %s", WalletTarget.string());
         }
         catch(const fs::filesystem_error &e) {
             LogPrintf("BackupWallet: Error copying wallet.dat to %s - %s", WalletTarget.string(), e.what());
             return false;
         }
-#if BOOST_VERSION == 107400
-        // The Boost 1.74 workaround copies with std::filesystem; see BackupPlainFile above.
-        catch(const std::filesystem::filesystem_error &e) {
-            LogPrintf("BackupWallet: Error copying wallet.dat to %s - %s", WalletTarget.string(), e.what());
-            return false;
-        }
-#endif
 
         return true;
     }
@@ -389,3 +412,108 @@ bool GRC::MaintainBackups(fs::path wallet_backup_path, std::vector<std::string> 
     return true;
 }
 
+namespace {
+//! The time, in seconds since the epoch, that the name of an automatic wallet backup gives
+//! (see ListAutomaticWalletBackupsBefore), or nullopt when \p name is not such a name.
+std::optional<int64_t> AutomaticWalletBackupTime(const std::string& name)
+{
+    static const std::string prefix{"wallet.dat-"};
+    // YYYY-MM-DDTHH-MM-SS, with 'd' for a digit.
+    static const std::string shape{"dddd-dd-ddTdd-dd-dd"};
+
+    // The name goes into the encryptwallet result and the GUI's list. Whoever can write the
+    // backup directory could put a terminal escape or a line break into it, and the core never
+    // writes a control character into a backup's name.
+    for (const char c : name) {
+        const unsigned char byte = static_cast<unsigned char>(c);
+        if (byte < 0x20 || byte == 0x7f) return std::nullopt;
+    }
+
+    if (name.compare(0, prefix.size(), prefix) != 0) return std::nullopt;
+    if (name.size() < prefix.size() + shape.size()) return std::nullopt;
+
+    std::string stamp = name.substr(prefix.size(), shape.size());
+    for (size_t i = 0; i < shape.size(); ++i) {
+        const bool digit = stamp[i] >= '0' && stamp[i] <= '9';
+        if (shape[i] == 'd' ? !digit : stamp[i] != shape[i]) return std::nullopt;
+    }
+
+    size_t rest = prefix.size() + shape.size();
+    if (rest < name.size() && name[rest] == 'Z') ++rest;
+    if (rest < name.size() && name[rest] != '-') return std::nullopt;
+
+    // ParseISO8601DateTime reads the time with colons, and returns 0 for one it cannot read,
+    // such as a month 13.
+    stamp[13] = ':';
+    stamp[16] = ':';
+    const int64_t time = ParseISO8601DateTime(stamp + "Z");
+    if (time <= 0) return std::nullopt;
+
+    return time;
+}
+} // anonymous namespace
+
+std::vector<fs::path> GRC::ListAutomaticWalletBackupsBefore(const fs::path& backup_dir, int64_t encrypted_at)
+{
+    std::vector<fs::path> found;
+
+    // A backup directory that was never made holds no backups. The directory itself may be a
+    // symbolic link (moved to another disk), which is followed, as the startup checks follow it.
+    boost::system::error_code ec;
+    const fs::file_status dir_status = fs::status(backup_dir, ec);
+    if (dir_status.type() == fs::file_not_found) return found;
+
+    if (ec) {
+        LogPrintf("WARNING: %s: could not list the wallet backups in %s: %s", __func__, backup_dir.string(),
+                  ec.message());
+        return found;
+    }
+
+    try {
+        for (const fs::directory_entry& entry : fs::directory_iterator(backup_dir)) {
+            // symlink_status() does not follow a link, so a link is never a regular file here,
+            // and neither is an entry whose status cannot be read.
+            boost::system::error_code entry_ec;
+            if (!fs::is_regular_file(entry.symlink_status(entry_ec))) continue;
+
+            const std::optional<int64_t> time = AutomaticWalletBackupTime(entry.path().filename().string());
+            if (time && *time < encrypted_at) found.push_back(entry.path());
+        }
+    } catch (const fs::filesystem_error& e) {
+        // What was listed before the error is kept.
+        LogPrintf("WARNING: %s: could not list the wallet backups in %s: %s", __func__, backup_dir.string(), e.what());
+    }
+
+    std::sort(found.begin(), found.end());
+
+    return found;
+}
+
+std::string GRC::PreEncryptionBackupWarning(const fs::path& backup_dir, const std::vector<fs::path>& found)
+{
+    std::string warning;
+
+    if (found.empty()) {
+        warning = strprintf("No automatic backup from before the encryption was found in %s. Any backup made by "
+                            "hand before encryption holds the wallet's unencrypted keys: anyone who has one can "
+                            "spend the coins without the passphrase.",
+                            backup_dir.string());
+    } else {
+        std::string names;
+        for (const fs::path& backup : found) {
+            if (!names.empty()) names += ", ";
+            names += backup.filename().string();
+        }
+
+        warning = strprintf("These automatic backups in %s were made before the encryption: %s. They, and any "
+                            "backup made by hand before encryption, hold the wallet's unencrypted keys: anyone who "
+                            "has one can spend the coins without the passphrase.",
+                            backup_dir.string(), names);
+    }
+
+    warning += " Nothing deletes them for you. First check that the new passphrase works, then make a fresh "
+               "backup of the encrypted wallet, then delete the old backups by hand. See "
+               "doc/running-unattended.md#purging-pre-encryption-backups.";
+
+    return warning;
+}

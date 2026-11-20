@@ -122,7 +122,7 @@ private:
     //! decomposes and status-stamps in place, then enqueues to the store worker
     //! (O(1)). Body hoisted unchanged from the former WalletModel free function.
     //! Dispatched through a weak_ptr-locking lambda (see subscribe()), so the
-    //! Clang analyzer cannot see the emitter's held cs_main/cs_wallet across the
+    //! Clang analyzer cannot see the locks the emitter holds across the
     //! signals2 boundary; NO_THREAD_SAFETY_ANALYSIS suppresses the false
     //! positive, and the AssertLockHeld() calls inside enforce the contract at
     //! runtime (DEBUG_LOCKORDER) exactly as before.
@@ -197,12 +197,9 @@ void WalletTxSourceImpl::onTransactionChanged(CWallet* wallet, const uint256& ha
     NO_THREAD_SAFETY_ANALYSIS
 {
     // Invoked via the weak_ptr-locking lambda in subscribe(), on the emitting
-    // core thread, under the cs_main + cs_wallet the emitter already holds (all
-    // CT_NEW/CT_UPDATED callsites: AddToWallet / CommitTransaction /
-    // WalletUpdateSpent / TransactionRemovedFromMempool's SIZELIMIT arm, which
-    // takes cs_wallet itself under ATMP's cs_main). The analyzer cannot see
-    // those locks across the signals2
-    // dispatch, hence NO_THREAD_SAFETY_ANALYSIS; the AssertLockHeld() calls below
+    // core thread, with cs_main always held and, for CT_NEW/CT_UPDATED,
+    // cs_wallet as well. The analyzer cannot see those locks across the
+    // signals2 dispatch, hence NO_THREAD_SAFETY_ANALYSIS; the AssertLockHeld() calls below
     // enforce the contract at runtime under DEBUG_LOCKORDER, exactly as the prior
     // EXCLUSIVE_LOCKS_REQUIRED annotation did for the analyzer.
     LogPrint(BCLog::LogFlags::VERBOSE, "NotifyTransactionChanged %s status=%i", hash.GetHex(), status);
@@ -218,9 +215,8 @@ void WalletTxSourceImpl::onTransactionChanged(CWallet* wallet, const uint256& ha
     //
     // The CT_NEW / CT_UPDATED / CT_UPDATING branch needs BOTH cs_main (for
     // showTransaction -> IsInMainChain) and cs_wallet (for mapWallet + the
-    // recursive IsMine in decomposeTransaction). All four such callsites hold
-    // both locks (AddToWallet / CommitTransaction / WalletUpdateSpent, verified
-    // by audit), and the AssertLockHeld()s in that branch check this at runtime
+    // recursive IsMine in decomposeTransaction). Every CT_NEW/CT_UPDATED
+    // emitter holds both locks, and the AssertLockHeld()s in that branch check this at runtime
     // in DEBUG_LOCKORDER builds. Every CT_DELETED callsite holds cs_main (the
     // producer exclusion WalletTxStore::prime relies on), and the CT_DELETED
     // branch touches only the hash, so it needs no wallet lock whatever else

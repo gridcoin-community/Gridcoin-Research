@@ -12,6 +12,11 @@
 template <unsigned int BITS>
 base_blob<BITS>::base_blob(const std::vector<unsigned char>& vch)
 {
+    // Invariant: every caller passes a vector of exactly this size. The script
+    // templates fix it (a P2PKH push is 20 bytes, IsPayToScriptHash() fixes the
+    // P2SH hash), QuorumHash tests the size first, the autogreylist copies a
+    // 32-byte hash and IPC checks the length. Guards against a new caller that
+    // passes an unchecked vector, which the memcpy below would read past.
     assert(vch.size() == sizeof(m_data));
     memcpy(m_data, vch.data(), sizeof(m_data));
 }
