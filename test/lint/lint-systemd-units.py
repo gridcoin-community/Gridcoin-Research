@@ -151,7 +151,10 @@ exact("Type", "notify", CORE)
 exact("NotifyAccess", "main", CORE)
 absent("PIDFile", CORE)
 exact("LimitCORE", "0", CORE)
-exact("PrivatePIDs", "yes", CORE)
+# PrivatePIDs= stands behind its build switch, which comments the line out for a systemd
+# older than 257 (cmake/systemd_units.cmake), and nowhere without it.
+exact("@GRC_UNIT_PRIVATE_PIDS_OFF@PrivatePIDs", "yes", CORE)
+absent("PrivatePIDs", CORE)
 exact("UMask", "0077", CORE)
 exact("NoNewPrivileges", "true", CORE)
 exact("TimeoutStopSec", "600", CORE)
@@ -361,18 +364,18 @@ def lint(directory):
 # rule of its kind; a bad sample is made from it by breaking exactly one rule.
 HEADER_AT = """# Same-account mode: this unit is for staking convenience and autounlock. There is
 # no isolation from your own session. For higher security use the different-account mode.
-# The user's supplementary groups ride along. PrivatePIDs= is ignored with a log line
-# before systemd 257. See doc/running-unattended.md.
+# The user's supplementary groups ride along. PrivatePIDs= needs systemd 257.
+# See doc/running-unattended.md.
 """
 HEADER_SYS = """# Different-account mode. attach group = node operator plus wallet viewer.
-# PrivatePIDs= is ignored with a log line before systemd 257.
+# PrivatePIDs= needs systemd 257.
 # See doc/running-unattended.md.
 """
 
 COMMON_CORE = """Type=notify
 NotifyAccess=main
 LimitCORE=0
-PrivatePIDs=yes
+@GRC_UNIT_PRIVATE_PIDS_OFF@PrivatePIDs=yes
 UMask=0077
 NoNewPrivileges=true
 TimeoutStartSec=30min

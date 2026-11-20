@@ -143,8 +143,11 @@ either way.
   not hide abstract Unix sockets, an X server's for example (whose own access control still applies), and sockets
   elsewhere in the file system, under `/var` say, stay reachable as far as their own permissions let the
   `gridcoin` account in. The per-user unit has no such sandbox.
-- **Older systemd.** Before systemd 257, `PrivatePIDs=` is ignored with a log line, and the rest of each unit
-  applies. Autounlock needs systemd 251 or later; Ubuntu 22.04 builds leave it out.
+- **Older systemd.** `PrivatePIDs=` needs systemd 257. The packages built for a distribution with an older
+  systemd (Debian 12, Ubuntu 22.04 and 24.04) carry the line commented out, and the rest of each unit applies.
+  Where a unit carries the line on an older systemd, as after a source build with the default options, systemd
+  ignores the line with a log message at every load of the unit.
+  Autounlock needs systemd 251 or later; Ubuntu 22.04 builds leave it out.
 - **The core's memory.** The core marks itself non-dumpable as its first step, so other programs of its account
   cannot read its memory or attach a debugger. On hosts with Yama `ptrace_scope=0` (Debian's default) the packages
   install the daemon execute-only (mode 0711), which makes it non-dumpable from the moment it starts. A core you

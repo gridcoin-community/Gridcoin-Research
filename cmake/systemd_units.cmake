@@ -40,6 +40,15 @@ if(INSTALL_SYSTEMD_AUTOUNLOCK)
 else()
     set(GRC_AUTOUNLOCK_SYSUSERS_OFF "#")
 endif()
+option(GRC_UNIT_PRIVATE_PIDS "Set PrivatePIDs= in the core units (systemd 257 or later)" ON)
+# An older systemd does not know PrivatePIDs= and logs that at every load of the
+# unit. The core unit templates put this in front of the line, so a build for an
+# older systemd carries the line commented out.
+if(GRC_UNIT_PRIVATE_PIDS)
+    set(GRC_UNIT_PRIVATE_PIDS_OFF "")
+else()
+    set(GRC_UNIT_PRIVATE_PIDS_OFF "#")
+endif()
 set(GRC_SYSTEMD_UNITDIR "lib/systemd/system" CACHE STRING "Unit directory, relative to CMAKE_INSTALL_PREFIX")
 set(GRC_SYSUSERSDIR "lib/sysusers.d" CACHE STRING "sysusers.d directory, relative to CMAKE_INSTALL_PREFIX")
 set(GRC_TMPFILESDIR "lib/tmpfiles.d" CACHE STRING "tmpfiles.d directory, relative to CMAKE_INSTALL_PREFIX")

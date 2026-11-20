@@ -3,11 +3,12 @@ set -e
 
 case "$1" in
     remove)
-        # dh_installsystemd stops the system units. The per-user cores and the helper
-        # sockets and services are stopped here; the units this build left out are
-        # not there to stop.
+        # The system service, the per-user cores and the helper sockets and services are
+        # stopped here. dh_installsystemd writes no stop for a unit it is told not to
+        # start (--no-start in debian/rules). The units this build left out are not
+        # there to stop.
         if [ -d /run/systemd/system ]; then
-            systemctl stop 'gridcoinresearchd@*.service' 'gridcoin-autounlock@*.socket' \
+            systemctl stop gridcoinresearchd.service 'gridcoinresearchd@*.service' 'gridcoin-autounlock@*.socket' \
                 'gridcoin-autounlock@*.service' gridcoin-autounlock.socket >/dev/null 2>&1 || true
         fi
         ;;

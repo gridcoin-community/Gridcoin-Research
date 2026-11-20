@@ -712,15 +712,25 @@ class AbortTests(unittest.TestCase):
 
 
 class RemovalTests(unittest.TestCase):
-    def test_prerm_stops_the_per_user_units(self):
+    def test_prerm_stops_the_system_service_and_the_per_user_units(self):
+        # debhelper writes no stop for a unit it is told not to start (--no-start in the rules
+        # file), so the system service is stopped here with the others.
+        for name, net in NETWORKS.items():
+            with self.subTest(network=name):
+                fake = FakeRoot(self, name)
+                fake.systemd_running()
+                rc, out, err = fake.run("prerm", "remove")
+                self.assertEqual(rc, 0, err)
+                self.assertEqual(fake.calls("systemctl"), [
+                    "systemctl stop %(daemon)s.service %(daemon)s@*.service %(autounlock)s@*.socket "
+                    "%(autounlock)s@*.service %(autounlock)s.socket" % net])
+                rc, out, err = fake.run("prerm", "upgrade", NEW)
+                self.assertEqual(fake.calls("systemctl"), [])
+
+    def test_prerm_stops_nothing_without_systemd(self):
         fake = FakeRoot(self, "test")
-        fake.systemd_running()
         rc, out, err = fake.run("prerm", "remove")
         self.assertEqual(rc, 0, err)
-        self.assertEqual(fake.calls("systemctl"), [
-            "systemctl stop gridcointestnetd@*.service gridcointestnet-autounlock@*.socket "
-            "gridcointestnet-autounlock@*.service gridcointestnet-autounlock.socket"])
-        rc, out, err = fake.run("prerm", "upgrade", NEW)
         self.assertEqual(fake.calls("systemctl"), [])
 
     def test_purge_removes_only_the_tools_drop_ins_and_state(self):
@@ -792,6 +802,32 @@ class RulesTests(unittest.TestCase):
                 rules = f.read()
             self.assertIn("dh_installsystemd -p%s --name=%s --no-enable --no-start --no-stop-on-upgrade\n"
                           % (net["package"], net["daemon"]), rules)
+
+    def test_debhelper_restarts_the_helper_socket_and_never_the_helper_service(self):
+        # The helper's service refuses a manual start, so a try-restart of it in the postinst is
+        # refused with a message at every upgrade. Only the socket is named for snippets.
+        for net in NETWORKS.values():
+            with open(os.path.join(SOURCE_ROOT, net["tree"], "rules"), encoding="utf8") as f:
+                rules = f.read()
+            calls = re.findall(r"^\tdh_installsystemd [^\n]*--name=%s(?:[^\n]*\\\n)*[^\n]*\n" % net["autounlock"],
+                               rules, re.M)
+            self.assertEqual(len(calls), 1, rules)
+            self.assertEqual(calls[0].replace("\\\n", " ").split(),
+                             ["dh_installsystemd", "-p" + net["package"], "--name=" + net["autounlock"], "--no-enable",
+                              "--no-start", "--restart-after-upgrade", net["autounlock"] + ".socket"])
+
+    def test_the_build_hosts_systemd_decides_the_private_pids_line(self):
+        # An older systemd logs an unknown key at every load of a unit that carries PrivatePIDs=.
+        for net in NETWORKS.values():
+            with open(os.path.join(SOURCE_ROOT, net["tree"], "rules"), encoding="utf8") as f:
+                rules = f.read()
+            self.assertIn('PRIVATE_PIDS := $(shell [ "$(SYSTEMD_MAJOR)" -ge 257 ] 2>/dev/null && echo ON || echo OFF)\n',
+                          rules)
+            self.assertIn("\t\t-DGRC_UNIT_PRIVATE_PIDS=$(PRIVATE_PIDS) \\\n", rules)
+        with open(os.path.join(SOURCE_ROOT, "cmake", "systemd_units.cmake"), encoding="utf8") as f:
+            cmake = f.read()
+        self.assertRegex(cmake, r'if\(GRC_UNIT_PRIVATE_PIDS\)\s+set\(GRC_UNIT_PRIVATE_PIDS_OFF ""\)\s+else\(\)\s+'
+                                r'set\(GRC_UNIT_PRIVATE_PIDS_OFF "#"\)\s+endif\(\)')
 
 
 class NewsTests(unittest.TestCase):

@@ -434,6 +434,8 @@ variables, described in [`cmake-options.md`](cmake-options.md#systemd-units-linu
 - `INSTALL_SYSTEMD_AUTOUNLOCK` (`ON`): the helper and its four units. They need systemd
   251 or later; build with `OFF` where it is older (Ubuntu 22.04), and `gridcoin-service`
   then refuses `autounlock enable`.
+- `GRC_UNIT_PRIVATE_PIDS` (`ON`): `PrivatePIDs=yes` in the two core units. It needs systemd
+  257 or later; build with `OFF` where it is older, and the line is carried commented out.
 - `GRC_SYSTEMD_UNITDIR`, `GRC_SYSUSERSDIR`, `GRC_TMPFILESDIR`: where those go, relative to
   `CMAKE_INSTALL_PREFIX`.
 - `GRC_UNIT_PYTHON3` (`/usr/bin/python3`): the interpreter the helper unit runs, as
