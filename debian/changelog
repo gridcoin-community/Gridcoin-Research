@@ -1,10 +1,11 @@
-gridcoinresearch (5.5.2.0-3) UNRELEASED; urgency=medium
+gridcoinresearch (5.5.3.0-1) unstable; urgency=medium
 
   * Installed the upstream CHANGELOG.md as changelog.gz.
 
   * Removed build-essential from Build-Depends; every build host has it.
+  * New upstream release.
 
- -- Gridcoin Developers <dev@gridcoin.us>  Thu, 12 Nov 2026 18:09:45 -0500
+ -- Gridcoin Developers <dev@gridcoin.us>  Fri, 20 Nov 2026 11:08:37 -0500
 
 gridcoinresearch (5.5.2.0-2) unstable; urgency=medium
 
