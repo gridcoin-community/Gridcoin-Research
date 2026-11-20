@@ -712,15 +712,25 @@ class AbortTests(unittest.TestCase):
 
 
 class RemovalTests(unittest.TestCase):
-    def test_prerm_stops_the_per_user_units(self):
+    def test_prerm_stops_the_system_service_and_the_per_user_units(self):
+        # debhelper writes no stop for a unit it is told not to start (--no-start in the rules
+        # file), so the system service is stopped here with the others.
+        for name, net in NETWORKS.items():
+            with self.subTest(network=name):
+                fake = FakeRoot(self, name)
+                fake.systemd_running()
+                rc, out, err = fake.run("prerm", "remove")
+                self.assertEqual(rc, 0, err)
+                self.assertEqual(fake.calls("systemctl"), [
+                    "systemctl stop %(daemon)s.service %(daemon)s@*.service %(autounlock)s@*.socket "
+                    "%(autounlock)s@*.service %(autounlock)s.socket" % net])
+                rc, out, err = fake.run("prerm", "upgrade", NEW)
+                self.assertEqual(fake.calls("systemctl"), [])
+
+    def test_prerm_stops_nothing_without_systemd(self):
         fake = FakeRoot(self, "test")
-        fake.systemd_running()
         rc, out, err = fake.run("prerm", "remove")
         self.assertEqual(rc, 0, err)
-        self.assertEqual(fake.calls("systemctl"), [
-            "systemctl stop gridcointestnetd@*.service gridcointestnet-autounlock@*.socket "
-            "gridcointestnet-autounlock@*.service gridcointestnet-autounlock.socket"])
-        rc, out, err = fake.run("prerm", "upgrade", NEW)
         self.assertEqual(fake.calls("systemctl"), [])
 
     def test_purge_removes_only_the_tools_drop_ins_and_state(self):
