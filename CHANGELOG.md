@@ -4,6 +4,68 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [5.5.3.0], 2026-11-20, leisure
+
+### Added
+
+- ipc, wallet: run the multiprocess core unattended on Linux and Windows #3548 (@jamescowens)
+
+### Changed
+
+- doc: say which desktops show the launcher's actions #3579 (@jamescowens)
+- scraper: a manifest is named with the address of its key #3578 (@jamescowens)
+- test: getblocksbatch takes a block hash whose hex ends in digits #3572 (@PrestackI)
+- scraper: a published manifest is complete as published and announced with all of its parts #3570 (@jamescowens)
+- ci: a release DMG that is not notarized fails the macOS job #3573 (@jamescowens)
+- net: serve a getdata as the peer's send queue has room #3565 (@jamescowens)
+- ci: skip a post-merge run that repeats the pull request's run #3562 (@jamescowens)
+- scraper, net: send a part or a manifest after the scraper locks are released #3560 (@jamescowens)
+- validation: AcceptBlock checks a block's stake before its sequence locks #3555 (@jamescowens)
+- build, util: narrow the macOS signing entitlements, check the bundle, initialise the TLS libraries explicitly #3558 (@jamescowens)
+- doc: note Windows controlled folder access in the Windows troubleshooting #3559 (@jamescowens)
+- debian, contrib: testnet launcher, release step #3532 (@caraka)
+- doc: name the pool registry in the recovery design's clamp lists #3556 (@PrestackI)
+- rpc: help texts name both ways to authorise a wallet operation #3550 (@jamescowens)
+- doc: correct stale comments and ledger rows (symbol cites, Windows DACL, five RPC heritage rows, NotifyTransactionChanged locks) #3546 (@PrestackI)
+- rpc: say what abandontransaction does to a conflicted transaction #3520 (@PrestackI)
+- gui: push the core's state to the GUI so the GUI thread never waits on cs_main #3542 (@jamescowens)
+- blockstorage, init: keep the block files when a -reindex is interrupted, and refuse conflicting block imports #3540 (@jamescowens)
+- net: strongly discourage -synctime=0 in its help text #3537 (@jamescowens)
+- refactor: return errors instead of asserting on local failures; document the invariants behind the remaining asserts #3533 (@jamescowens)
+
+### Fixed
+
+- gui: a click on the splash releases it and minimises it #3580 (@jamescowens)
+- ci: the sanitizer job gives a node longer to answer one RPC call #3576 (@jamescowens)
+- test: end test_gridcoin-qt once when a test class throws or aborts #3571 (@PrestackI)
+- test: fix two failures of the unit suite in sanitizer builds #3575 (@jamescowens)
+- ci: the gate runs when the branch has lost a cache it seeds #3574 (@jamescowens)
+- scraper, net: a queued request for a part is sent while the part is needed #3568 (@jamescowens)
+- scraper: mark the stats cache dirty after cs_mapParts is released #3564 (@jamescowens)
+- test: check the renewal's fee against the size the wallet takes it at #3563 (@jamescowens)
+- qt: refuse an index outside the rows and columns of three table models #3557 (@PrestackI)
+- contract, scraper, wallet, rpc, qt: input and error handling fixes #3554 (@jamescowens)
+- scraper, net: answer a peer's announcement of a part from the part store #3553 (@jamescowens)
+- ci: sign the Windows release in the Windows build leg #3552 (@jamescowens)
+- test: put the chain back after each mining case in miner_block_assembly_tests #3522 (@PrestackI)
+- contrib: autounlock enable refuses a credential systemd cannot decrypt #3551 (@jamescowens)
+- test: the passphrase dialog case asks for one timer tick, not five #3549 (@jamescowens)
+- blockstorage: let -reindex take a block whose stake proof another block used #3547 (@jamescowens)
+- crypto: add missing <algorithm> include in sha256.cpp #3545 (@Vico311)
+- test: wait for the transaction store's worker to go idle, not for a quiet queue #3544 (@jamescowens)
+- qt: refresh the overview's recent list after the drain is applied #3543 (@jamescowens)
+- net: take a peer's time vote at the time its VERSION was received #3541 (@jamescowens)
+- build: detect the strerror_r variant the C++ code sees #3539 (@jamescowens)
+- rpc: refuse dumpcontracts heights that are not on the chain #3538 (@jamescowens)
+- tally: record the block before version 11 before snapshot accrual activates #3536 (@jamescowens)
+- wallet: subtract the fee from the amount in CreateTransaction #3535 (@jamescowens)
+- accrual: forget every MRC researcher on disconnect, take the newbie window from a table, recompute snapshots at startup #3534 (@jamescowens)
+- beacon: rebuild the stored beacon history once on upgrade #3531 (@jamescowens)
+
+### Removed
+
+None.
+
 ## [5.5.2.0], 2026-11-01, leisure
 
 ### Consensus (block version 15; carried, not active)
