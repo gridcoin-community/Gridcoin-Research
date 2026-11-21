@@ -27,7 +27,6 @@ registry's own log lines.
 """
 
 import base64
-import os
 
 from test_framework.test_framework import GridcoinTestFramework
 from test_framework.util import assert_equal
@@ -63,13 +62,6 @@ class BeaconPendingProofsTest(GridcoinTestFramework):
 
     def setup_network(self):
         # See feature_beacon_activation.py.
-        boinc_dir = os.path.join(self.options.tmpdir, "boinc")
-        os.makedirs(boinc_dir, exist_ok=True)
-        client_state_path = os.path.join(boinc_dir, "client_state.xml")
-        with open(client_state_path, "w", encoding="utf-8") as client_state:
-            client_state.write("<client_state>\n</client_state>\n")
-        self.extra_args[0].append(f"-boincdatadir={boinc_dir}")
-
         self.add_nodes(self.num_nodes, self.extra_args)
         self.start_nodes()
 

@@ -408,6 +408,20 @@ def initialize_datadir(dirname, n, chain):
     # can read them from a single known path.
     rpc_user = "gctest_" + secrets.token_hex(8)
     rpc_pass = secrets.token_hex(32)
+    # The node gets a BOINC data directory of its own. Given none, it looks for
+    # BOINC in the host's default locations when it starts, and the result of a
+    # test then depends on the machine. Where BOINC is installed and the user
+    # running the tests may not read its directory, the node reports "Could not
+    # access BOINC data directory" on stderr, and the framework fails a node
+    # that wrote to stderr. A client_state.xml with no <project> section gives
+    # the node no CPID. TestNode passes the directory as -boincdatadir on the
+    # command line. It is not written to the configuration files, because the
+    # node cuts a configuration line at the first '#' and a test directory may
+    # have one in its path.
+    boinc_dir = os.path.join(datadir, "boinc")
+    os.makedirs(boinc_dir, exist_ok=True)
+    with open(os.path.join(boinc_dir, "client_state.xml"), 'w', encoding='utf8') as f:
+        f.write("<client_state>\n</client_state>\n")
     if chain_subdir_name:
         os.makedirs(os.path.join(datadir, chain_subdir_name), exist_ok=True)
         with open(os.path.join(datadir, chain_subdir_name, "gridcoinresearch.conf"), 'w', encoding='utf8') as f:

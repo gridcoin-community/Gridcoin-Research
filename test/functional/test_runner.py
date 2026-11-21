@@ -279,6 +279,10 @@ BASE_SCRIPTS = [
     'feature_mrc.py',
     'feature_contract_replay.py',
     'feature_beacon_pending_proofs.py',
+    # feature_own_boinc_dir.py: a test node reads the BOINC data directory the
+    # framework gave it, not the host's, and a -boincdatadir on the command
+    # line still decides the directory.
+    'feature_own_boinc_dir.py',
     # feature_blockindex_verification.py: LoadBlockIndex's startup
     # verification pass over a block whose payload was corrupted without
     # disturbing its header, the one corruption class that arms its
