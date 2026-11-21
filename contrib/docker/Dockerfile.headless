@@ -24,6 +24,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         libssl3t64 \
         libcurl4t64 \
         libminiupnpc17 \
+        libcapnp-1.0.1 \
     && rm -rf /var/lib/apt/lists/*
 
 COPY entrypoint.sh /entrypoint.sh
@@ -31,6 +32,9 @@ COPY healthcheck.sh /healthcheck.sh
 RUN chmod +x /entrypoint.sh /healthcheck.sh
 
 COPY bin/${TARGETARCH}/gridcoinresearchd /usr/local/bin/
+
+# Fail the build if a binary needs a shared library this image does not have.
+RUN ! ldd /usr/local/bin/gridcoinresearchd | grep 'not found'
 
 VOLUME ["/home/gridcoin/.GridcoinResearch"]
 
