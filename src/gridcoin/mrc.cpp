@@ -15,6 +15,9 @@
 #include "util.h"
 #include "wallet/wallet.h"
 
+#include <algorithm>
+#include <limits>
+
 using namespace GRC;
 
 namespace {
@@ -283,6 +286,47 @@ bool GRC::MRCContractHandler::BlockValidate(const ContractContext& ctx, int& DoS
 bool GRC::MRCTermsHold(CAmount fee_now, CAmount reward_now, CAmount confirmed_fee, CAmount confirmed_net)
 {
     return fee_now <= confirmed_fee && reward_now - fee_now >= confirmed_net;
+}
+
+GRC::MRCQueuePosition GRC::MeasureMRCQueue(const std::vector<std::pair<CAmount, Cpid>>& queue, const Cpid& cpid,
+                                           CAmount request_fee, int output_limit)
+{
+    MRCQueuePosition result;
+
+    CAmount tail = std::numeric_limits<CAmount>::max();
+    CAmount head = 0;
+    bool found = false;
+
+    for (const auto& [mempool_fee, mempool_cpid] : queue) {
+        found |= mempool_cpid == cpid;
+
+        if (!found && mempool_fee >= request_fee) ++result.pos;
+        head = std::max(head, mempool_fee);
+        tail = std::min(tail, mempool_fee);
+
+        ++result.queue_length;
+    }
+
+    // Tail converges from CAmount max, but cannot exceed head (e.g. an empty
+    // queue leaves tail at max and head at 0).
+    tail = std::min(head, tail);
+
+    // The last queue slot that would still be paid: min(queue size,
+    // output_limit) - 1, capped at the head fee.
+    int pay_limit_fee_pos = std::min<int>(queue.size(), output_limit) - 1;
+
+    CAmount pay_limit = std::numeric_limits<CAmount>::max();
+    if (pay_limit_fee_pos >= 0) {
+        pay_limit = queue[pay_limit_fee_pos].first;
+    }
+    pay_limit = std::min(head, pay_limit);
+
+    result.found = found;
+    result.head_fee = head;
+    result.tail_fee = tail;
+    result.pay_limit_fee = pay_limit;
+
+    return result;
 }
 
 namespace {

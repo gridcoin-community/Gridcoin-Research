@@ -62,7 +62,6 @@
 #include <cassert>
 #include <cmath>
 #include <functional>
-#include <limits>
 #include <map>
 #include <memory>
 #include <optional>
@@ -172,43 +171,19 @@ interfaces::MRCSnapshot GRC::BuildMRCSnapshot(CWallet* wallet, CAmount fee_boost
 
     // Fee-ordered mempool MRC queue evaluated against this request's object
     // fee (mrc.m_fee == min_fee with no boost, the boosted fee otherwise).
-    CAmount tail = std::numeric_limits<CAmount>::max();
-    CAmount head = 0;
-    bool found = false;
-
     const std::vector<std::pair<CAmount, GRC::Cpid>> mrc_queue = mempool.GetMRCQueue();
 
     GRC::Cpid mrc_cpid;
     if (auto cpid = mrc.m_mining_id.TryCpid()) mrc_cpid = *cpid;
 
-    for (const auto& [mempool_fee, mempool_cpid] : mrc_queue) {
-        found |= mempool_cpid == mrc_cpid;
+    const GRC::MRCQueuePosition queue_pos = GRC::MeasureMRCQueue(mrc_queue, mrc_cpid, mrc.m_fee, snap.output_limit);
 
-        if (!found && mempool_fee >= mrc.m_fee) ++snap.pos;
-        head = std::max(head, mempool_fee);
-        tail = std::min(tail, mempool_fee);
-
-        ++snap.queue_length;
-    }
-
-    // Tail converges from CAmount max, but cannot exceed head (e.g. an empty
-    // queue leaves tail at max and head at 0).
-    tail = std::min(head, tail);
-
-    // The last queue slot that would still be paid: min(queue size,
-    // output_limit) - 1, capped at the head fee.
-    int pay_limit_fee_pos = std::min<int>(mrc_queue.size(), snap.output_limit) - 1;
-
-    CAmount pay_limit = std::numeric_limits<CAmount>::max();
-    if (pay_limit_fee_pos >= 0) {
-        pay_limit = mrc_queue[pay_limit_fee_pos].first;
-    }
-    pay_limit = std::min(head, pay_limit);
-
-    snap.found_in_queue = found;
-    snap.queue_head_fee = head;
-    snap.queue_tail_fee = tail;
-    snap.queue_pay_limit_fee = pay_limit;
+    snap.queue_length = queue_pos.queue_length;
+    snap.pos = queue_pos.pos;
+    snap.found_in_queue = queue_pos.found;
+    snap.queue_head_fee = queue_pos.head_fee;
+    snap.queue_tail_fee = queue_pos.tail_fee;
+    snap.queue_pay_limit_fee = queue_pos.pay_limit_fee;
 
     return snap;
 }
