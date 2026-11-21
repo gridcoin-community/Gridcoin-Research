@@ -32,7 +32,9 @@ bool ForceReorganizeToHash(uint256 NewHash);
 void UpdateSyncTime(const CBlockIndex* pindexBest);
 
 //! Run the Gridcoin tally-transition services for the current chain tip.
-//! Called from SetBestChain after the tip advances (issue #3125, C1).
+//! Called from FinishTipChange: from SetBestChain after each successful
+//! reorganize, a reorg-back included, and from ForceReorganizeToHash after a
+//! forced reorganize moved the tip (issue #3125, C1).
 bool GridcoinServices() EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
 //! Ask up to 10 connected peers for blocks starting at hashStart (or the

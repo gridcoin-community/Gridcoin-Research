@@ -24,24 +24,29 @@
 #include "gridcoin/claim.h"
 #include "gridcoin/contract/contract.h"
 #include "gridcoin/staking/chain_trust.h"
+#include "logging.h"
 #include "node/chainman.h"
 #include "primitives/block.h"
 #include "primitives/transaction.h"
 #include "rpc/protocol.h"
 #include "rpc/server.h"
+#include "scheduler.h"
 #include "script/script.h"
 #include "streams.h"
 #include "sync.h"
 #include "test/chain_setup.h"
 #include "uint256.h"
 #include "validation.h"
+#include "validationinterface.h"
 #include "version.h"
 
 #include <boost/test/unit_test.hpp>
 
 #include <functional>
 #include <limits>
+#include <list>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include <univalue.h>
@@ -126,6 +131,98 @@ CBlock ChangedCopy(const CBlock& block, const std::function<void(CBlock&)>& chan
 
     return copy;
 }
+
+//! Records the two tip-change signals: each UpdatedBlockTip, with its
+//! arguments, and each ChainStateFlushed, with its locator.
+struct TipProbe final : public CValidationInterface {
+    struct Tip {
+        const CBlockIndex* pindex_new;
+        const CBlockIndex* pindex_fork;
+        bool initial_download;
+    };
+
+    std::vector<Tip> tips;
+    std::vector<CBlockLocator> flushes;
+
+    void UpdatedBlockTip(const CBlockIndex* pindexNew, const CBlockIndex* pindexFork, bool fInitialDownload) override
+    {
+        tips.push_back({pindexNew, pindexFork, fInitialDownload});
+    }
+
+    void ChainStateFlushed(const CBlockLocator& locator) override
+    {
+        flushes.push_back(locator);
+    }
+};
+
+//! Registers a TipProbe with the validation signals for one inner block. The
+//! signals are inert in this binary until a scheduler is registered, and the
+//! two the probe records are invoked synchronously, so the scheduler never has
+//! to run.
+class ProbeScope
+{
+public:
+    explicit ProbeScope(TipProbe& probe) : m_probe(probe)
+    {
+        GetMainSignals().RegisterBackgroundSignalScheduler(m_scheduler);
+        RegisterValidationInterface(&m_probe);
+    }
+
+    ~ProbeScope()
+    {
+        UnregisterValidationInterface(&m_probe);
+        GetMainSignals().UnregisterBackgroundSignalScheduler();
+    }
+
+    ProbeScope(const ProbeScope&) = delete;
+    ProbeScope& operator=(const ProbeScope&) = delete;
+
+private:
+    CScheduler m_scheduler;
+    TipProbe& m_probe;
+};
+
+//! Hands each log line to a callback for one inner block. The logger runs the
+//! callback under its own lock, so a callback only records: it neither logs nor
+//! takes a lock.
+class LogWatch
+{
+public:
+    explicit LogWatch(std::function<void(const std::string&)> on_line)
+        : m_callback(LogInstance().PushBackCallback(std::move(on_line)))
+    {
+    }
+
+    ~LogWatch() { LogInstance().DeleteCallback(m_callback); }
+
+    LogWatch(const LogWatch&) = delete;
+    LogWatch& operator=(const LogWatch&) = delete;
+
+private:
+    std::list<std::function<void(const std::string&)>>::iterator m_callback;
+};
+
+//! Turns the VERBOSE log category on for one inner block, and on destruction
+//! restores it as it found it, so it does not leak into later cases.
+class VerboseScope
+{
+public:
+    VerboseScope() : m_was_enabled(LogInstance().WillLogCategory(BCLog::LogFlags::VERBOSE))
+    {
+        LogInstance().EnableCategory(BCLog::LogFlags::VERBOSE);
+    }
+
+    ~VerboseScope()
+    {
+        if (!m_was_enabled) LogInstance().DisableCategory(BCLog::LogFlags::VERBOSE);
+    }
+
+    VerboseScope(const VerboseScope&) = delete;
+    VerboseScope& operator=(const VerboseScope&) = delete;
+
+private:
+    const bool m_was_enabled;
+};
 
 } // anonymous namespace
 
@@ -353,6 +450,210 @@ BOOST_AUTO_TEST_CASE(listtransactions_takes_a_count_at_the_top_of_the_int_range)
 
     // Leave the chain at genesis, where a case that runs after this one
     // expects it.
+    BOOST_REQUIRE(ForceReorganizeToHash(WITH_LOCK(cs_main, return pindexGenesisBlock->GetBlockHash())));
+    BOOST_REQUIRE_EQUAL(WITH_LOCK(cs_main, return nBestHeight), 0);
+}
+
+// The cases below mine on the chain they find, register the probe only after
+// that mining, and then force a reorganize to a block they mined: back to the
+// first of three blocks, or, in the case on the current tip, to the one block
+// it mined. Each starts from the height it finds, which is not always genesis
+// (the SetBestChain revert case above leaves the chain at height 2), and parks
+// the chain at genesis when it ends.
+
+// A forced reorganize reports the new tip, as a block that connects does: one
+// UpdatedBlockTip, with the forced tip as both the new tip and the fork point,
+// outside initial download.
+BOOST_AUTO_TEST_CASE(force_reorganize_reports_the_new_tip)
+{
+    const int h0 = WITH_LOCK(cs_main, return nBestHeight);
+    const uint256 target = MineOne().GetHash(true);
+    MineOne();
+    MineOne();
+    BOOST_REQUIRE_EQUAL(WITH_LOCK(cs_main, return nBestHeight), h0 + 3);
+    const CBlockIndex* const pindex_target = WITH_LOCK(cs_main, return mapBlockIndex.at(target));
+
+    {
+        TipProbe probe;
+        const ProbeScope registration(probe);
+
+        BOOST_REQUIRE(ForceReorganizeToHash(target));
+        BOOST_REQUIRE_EQUAL(WITH_LOCK(cs_main, return nBestHeight), h0 + 1);
+
+        BOOST_CHECK_EQUAL(probe.tips.size(), 1U);
+        if (!probe.tips.empty()) {
+            BOOST_CHECK(probe.tips[0].pindex_new == pindex_target);
+            BOOST_CHECK(probe.tips[0].pindex_fork == pindex_target);
+            BOOST_CHECK(!probe.tips[0].initial_download);
+        }
+    }
+
+    BOOST_REQUIRE(ForceReorganizeToHash(WITH_LOCK(cs_main, return pindexGenesisBlock->GetBlockHash())));
+    BOOST_REQUIRE_EQUAL(WITH_LOCK(cs_main, return nBestHeight), 0);
+}
+
+// A forced reorganize writes the wallet's best-block locator, as a block that
+// connects outside initial download does: one ChainStateFlushed, whose locator
+// leads with the forced tip.
+BOOST_AUTO_TEST_CASE(force_reorganize_flushes_the_wallet_locator)
+{
+    const int h0 = WITH_LOCK(cs_main, return nBestHeight);
+    const uint256 target = MineOne().GetHash(true);
+    MineOne();
+    MineOne();
+    BOOST_REQUIRE_EQUAL(WITH_LOCK(cs_main, return nBestHeight), h0 + 3);
+
+    {
+        TipProbe probe;
+        const ProbeScope registration(probe);
+
+        BOOST_REQUIRE(ForceReorganizeToHash(target));
+        BOOST_REQUIRE_EQUAL(WITH_LOCK(cs_main, return nBestHeight), h0 + 1);
+
+        // The locator is written only outside initial download. A tip less
+        // than 8 h old, at or above both the peers' median height and the last
+        // checkpoint (genesis on regtest), is outside it, as this one is, so the
+        // case requires that rather than accept no flush.
+        BOOST_REQUIRE(!IsInitialBlockDownload());
+
+        BOOST_CHECK_EQUAL(probe.flushes.size(), 1U);
+        if (!probe.flushes.empty()) {
+            BOOST_CHECK(!probe.flushes[0].vHave.empty() && probe.flushes[0].vHave[0] == target);
+        }
+    }
+
+    BOOST_REQUIRE(ForceReorganizeToHash(WITH_LOCK(cs_main, return pindexGenesisBlock->GetBlockHash())));
+    BOOST_REQUIRE_EQUAL(WITH_LOCK(cs_main, return nBestHeight), 0);
+}
+
+// A forced reorganize clears g_reorg_in_progress before it asks peers for the
+// blocks it lacks, which it does just before its success line, so the flag is
+// already clear when that line is logged.
+BOOST_AUTO_TEST_CASE(force_reorganize_clears_the_reorg_flag_before_asking_for_blocks)
+{
+    const int h0 = WITH_LOCK(cs_main, return nBestHeight);
+    const uint256 target = MineOne().GetHash(true);
+    MineOne();
+    MineOne();
+    BOOST_REQUIRE_EQUAL(WITH_LOCK(cs_main, return nBestHeight), h0 + 3);
+
+    {
+        TipProbe probe;
+        const ProbeScope registration(probe);
+
+        bool seen = false;
+        bool flag_at_success_line = true;
+        const LogWatch watch([&](const std::string& line) {
+            if (line.find("ForceReorganizeToHash: success!") != std::string::npos) {
+                seen = true;
+                flag_at_success_line = g_reorg_in_progress.load();
+            }
+        });
+
+        BOOST_REQUIRE(ForceReorganizeToHash(target));
+        BOOST_REQUIRE_EQUAL(WITH_LOCK(cs_main, return nBestHeight), h0 + 1);
+
+        BOOST_REQUIRE(seen);
+        BOOST_CHECK(!flag_at_success_line);
+    }
+
+    BOOST_REQUIRE(ForceReorganizeToHash(WITH_LOCK(cs_main, return pindexGenesisBlock->GetBlockHash())));
+    BOOST_REQUIRE_EQUAL(WITH_LOCK(cs_main, return nBestHeight), 0);
+}
+
+// A forced reorganize to the block that is already the tip changes nothing, so
+// it notifies nothing. ReorganizeChain still sets g_reorg_in_progress on that
+// path, and the flag is clear by the success line there too.
+BOOST_AUTO_TEST_CASE(force_reorganize_to_the_current_tip_notifies_nothing)
+{
+    const int h0 = WITH_LOCK(cs_main, return nBestHeight);
+    const uint256 tip = MineOne().GetHash(true);
+    BOOST_REQUIRE_EQUAL(WITH_LOCK(cs_main, return nBestHeight), h0 + 1);
+
+    {
+        TipProbe probe;
+        const ProbeScope registration(probe);
+
+        bool seen = false;
+        bool flag_at_success_line = true;
+        const LogWatch watch([&](const std::string& line) {
+            if (line.find("ForceReorganizeToHash: success!") != std::string::npos) {
+                seen = true;
+                flag_at_success_line = g_reorg_in_progress.load();
+            }
+        });
+
+        BOOST_REQUIRE(ForceReorganizeToHash(tip));
+        BOOST_REQUIRE_EQUAL(WITH_LOCK(cs_main, return nBestHeight), h0 + 1);
+
+        BOOST_CHECK_EQUAL(probe.tips.size(), 0U);
+        BOOST_CHECK_EQUAL(probe.flushes.size(), 0U);
+        BOOST_REQUIRE(seen);
+        BOOST_CHECK(!flag_at_success_line);
+    }
+
+    BOOST_REQUIRE(ForceReorganizeToHash(WITH_LOCK(cs_main, return pindexGenesisBlock->GetBlockHash())));
+    BOOST_REQUIRE_EQUAL(WITH_LOCK(cs_main, return nBestHeight), 0);
+}
+
+// The "new best block" line names the function that changed the tip: a forced
+// reorganize logs it as ForceReorganizeToHash, and a block that connects
+// afterwards still logs it as SetBestChain. Both forms of the line are checked:
+// the plain one, and the longer one VERBOSE logs.
+BOOST_AUTO_TEST_CASE(the_tip_change_lines_name_their_caller)
+{
+    const int h0 = WITH_LOCK(cs_main, return nBestHeight);
+    const uint256 target = MineOne().GetHash(true);
+    MineOne();
+    MineOne();
+    BOOST_REQUIRE_EQUAL(WITH_LOCK(cs_main, return nBestHeight), h0 + 3);
+
+    {
+        TipProbe probe;
+        const ProbeScope registration(probe);
+
+        bool forced_line_seen = false;
+        bool mined_line_seen = false;
+        const LogWatch watch([&](const std::string& line) {
+            if (line.find("ForceReorganizeToHash: new best block") != std::string::npos) forced_line_seen = true;
+            if (line.find("SetBestChain: new best block") != std::string::npos) mined_line_seen = true;
+        });
+
+        BOOST_REQUIRE(ForceReorganizeToHash(target));
+        BOOST_REQUIRE_EQUAL(WITH_LOCK(cs_main, return nBestHeight), h0 + 1);
+        BOOST_CHECK(forced_line_seen);
+
+        MineOne();
+        BOOST_REQUIRE_EQUAL(WITH_LOCK(cs_main, return nBestHeight), h0 + 2);
+        BOOST_CHECK(mined_line_seen);
+
+        // The same with VERBOSE on, which logs the longer form of the line, with
+        // the chain trust and the block date: a forced reorganize back to the
+        // target, then a block mined on it. Neither line names FinishTipChange,
+        // the function that logs both.
+        {
+            const VerboseScope verbose;
+            bool forced_verbose_line_seen = false;
+            bool mined_verbose_line_seen = false;
+            bool helper_line_seen = false;
+            const LogWatch verbose_watch([&](const std::string& line) {
+                if (line.find("trust=") == std::string::npos) return;
+                if (line.find("ForceReorganizeToHash: new best block") != std::string::npos) forced_verbose_line_seen = true;
+                if (line.find("SetBestChain: new best block") != std::string::npos) mined_verbose_line_seen = true;
+                if (line.find("FinishTipChange: new best block") != std::string::npos) helper_line_seen = true;
+            });
+
+            BOOST_REQUIRE(ForceReorganizeToHash(target));
+            BOOST_REQUIRE_EQUAL(WITH_LOCK(cs_main, return nBestHeight), h0 + 1);
+            MineOne();
+            BOOST_REQUIRE_EQUAL(WITH_LOCK(cs_main, return nBestHeight), h0 + 2);
+
+            BOOST_CHECK(forced_verbose_line_seen);
+            BOOST_CHECK(mined_verbose_line_seen);
+            BOOST_CHECK(!helper_line_seen);
+        }
+    }
+
     BOOST_REQUIRE(ForceReorganizeToHash(WITH_LOCK(cs_main, return pindexGenesisBlock->GetBlockHash())));
     BOOST_REQUIRE_EQUAL(WITH_LOCK(cs_main, return nBestHeight), 0);
 }
