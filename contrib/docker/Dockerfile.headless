@@ -34,7 +34,7 @@ RUN chmod +x /entrypoint.sh /healthcheck.sh
 COPY bin/${TARGETARCH}/gridcoinresearchd /usr/local/bin/
 
 # Fail the build if a binary needs a shared library this image does not have.
-RUN ! ldd /usr/local/bin/gridcoinresearchd | grep 'not found'
+RUN out="$(ldd /usr/local/bin/gridcoinresearchd)" && ! echo "$out" | grep 'not found'
 
 VOLUME ["/home/gridcoin/.GridcoinResearch"]
 

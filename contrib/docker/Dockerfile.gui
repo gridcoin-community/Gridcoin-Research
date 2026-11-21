@@ -60,7 +60,7 @@ COPY bin/${TARGETARCH}/gridcoinresearchd /usr/local/bin/
 COPY bin/${TARGETARCH}/gridcoinresearch /usr/local/bin/
 
 # Fail the build if a binary needs a shared library this image does not have.
-RUN ! ldd /usr/local/bin/gridcoinresearchd /usr/local/bin/gridcoinresearch | grep 'not found'
+RUN out="$(ldd /usr/local/bin/gridcoinresearchd /usr/local/bin/gridcoinresearch)" && ! echo "$out" | grep 'not found'
 
 VOLUME ["/home/gridcoin/.GridcoinResearch"]
 
