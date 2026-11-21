@@ -623,11 +623,14 @@ jobs:
         if: steps.shuffled.outcome == 'failure'
         run: |
           seed="${{ steps.shuffled.outputs.seed }}"
-          echo "::warning title=Unit suite failed in shuffled order::test_gridcoin --random=$seed failed on this commit; the log is in the shuffled-order artifact. This does not fail the job."
+          # test_gridcoin prints the seed of its InsecureRand draws when the
+          # tests start; a log without that line leaves ctx empty.
+          ctx=$(grep -o -m1 'RANDOM_CTX_SEED=[0-9a-f]*' shuffled.log || true)
+          echo "::warning title=Unit suite failed in shuffled order::$ctx test_gridcoin --random=$seed failed on this commit; the log is in the shuffled-order artifact. This does not fail the job."
           {
             echo "### Unit suite failed in shuffled order"
             echo
-            echo "Reproduce with \`test_gridcoin --random=$seed\` (or \`contrib/devtools/run-unit-suites-isolated.sh --random $seed <binary>\`)."
+            echo "Reproduce with \`$ctx test_gridcoin --random=$seed\` (or \`$ctx contrib/devtools/run-unit-suites-isolated.sh --random $seed <binary>\`)."
             echo
             echo '```'
             # Best effort: a crash may leave a log that matches nothing, and

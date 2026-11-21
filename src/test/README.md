@@ -134,3 +134,19 @@ the first on every push and pull request, and fails on any suite that does not
 pass alone. It also runs one shuffled order per run, seeded from the run
 number; a failure there is reported as a warning annotation naming the seed,
 not as a job failure.
+
+The binary prints `test_gridcoin: RANDOM_CTX_SEED=<hex>` on stderr when the
+tests start. Every test case, and every suite before its fixtures run,
+restarts `g_insecure_rand_ctx` (the `InsecureRand*()` helpers) from a stream
+keyed by that seed and the case's or suite's full name, so setting the
+variable replays a case's `InsecureRand*()` draws whatever the filter or
+the order:
+
+    RANDOM_CTX_SEED=<hex> build/src/test/test_gridcoin --run_test=<suite>/<case>
+
+An unset, empty or zero value gives a fresh seed. Only the `InsecureRand*()`
+helpers follow it. Draws that the operating system seeds do not, among them
+`GetRandBytes()`, `GetRandHash()`, `GetStrongRandBytes()` (which
+`CKey::MakeNewKey()` uses) and a default-constructed `FastRandomContext`.
+The data directory's name is drawn from a separate context that the variable
+never seeds, so two runs given the same seed do not share one.
