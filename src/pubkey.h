@@ -209,6 +209,12 @@ public:
      */
     static bool CheckLowS(const std::vector<unsigned char>& vchSig);
 
+    /**
+     * Check whether a signature has the form that CKey::Sign() writes. This
+     * says nothing about whether the signature is valid for a key and a hash.
+     */
+    static bool CheckSignatureForm(const std::vector<unsigned char>& vchSig);
+
     //! Recover a public key from a compact signature.
     bool RecoverCompact(const uint256& hash, const std::vector<unsigned char>& vchSig);
 

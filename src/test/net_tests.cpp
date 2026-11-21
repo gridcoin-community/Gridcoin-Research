@@ -1289,4 +1289,73 @@ BOOST_AUTO_TEST_CASE(a_manifest_is_taken_only_in_the_layout_a_scraper_publishes)
     WITH_LOCK(cs_main, cPeerBlockCounts = peer_block_counts);
 }
 
+// A manifest that a scraper publishes is taken with the best block one below
+// the v15 height and with the best block at it, in sync and out of sync.
+BOOST_AUTO_TEST_CASE(a_published_manifest_is_taken_with_the_best_block_below_the_v15_height_and_at_it)
+{
+    grc_test::StateGuard guard;
+
+    SetMockTime(1700000000);
+
+    const int v15_height = 100;
+    grc_test::V15HeightGuard v15(v15_height);
+
+    AuthorizedScraper scraper;
+
+    // Takes a received manifest out of the map when it goes, whether or not
+    // the manifest was taken.
+    struct Removal
+    {
+        const uint256 hash;
+
+        ~Removal()
+        {
+            LOCK(CScraperManifest::cs_mapManifest);
+            CScraperManifest::DeleteManifest(hash, true);
+        }
+    };
+
+    const auto manifests_held = [] {
+        return WITH_LOCK(CScraperManifest::cs_mapManifest, return CScraperManifest::mapManifest.size());
+    };
+
+    const size_t manifests_before = manifests_held();
+
+    for (const int best_height : {v15_height - 1, v15_height}) {
+        for (const bool in_sync : {false, true}) {
+            BOOST_TEST_CONTEXT("the best block is at height " << best_height << ", in sync " << in_sync) {
+                // The sync state of a scraper is in force for the block after
+                // the best block. A node that is in sync also tests that the key
+                // is an authorized scraper's, which this one is.
+                WITH_LOCK(cs_main, nBestHeight = best_height);
+                g_scraper_sync_in_force.store(IsV15Enabled(best_height + 1));
+                g_previous_block_time.store(in_sync ? GetAdjustedTime() : 0);
+                BOOST_REQUIRE_EQUAL(ScraperOutOfSync(), !in_sync);
+
+                // The publisher's copy of the manifest is gone, and its parts
+                // with it.
+                const CDataStream as_published = [&scraper, best_height, in_sync] {
+                    const std::string text = strprintf("taken at height %i, in sync %i", best_height, in_sync);
+                    const PublishedManifest gone(
+                        scraper.Key(), {"a beacon list part " + text, "a project part " + text}, GetAdjustedTime());
+                    BOOST_REQUIRE(gone.Published());
+
+                    return gone.Message();
+                }();
+
+                const Removal removal{Hash(as_published)};
+
+                CDataStream received(as_published);
+
+                BOOST_CHECK(CScraperManifest::RecvManifest(nullptr, received));
+                BOOST_CHECK_EQUAL(manifests_held(), manifests_before + 1);
+
+                LOCK(CScraperManifest::cs_mapManifest);
+
+                BOOST_CHECK_EQUAL(CScraperManifest::mapManifest.count(removal.hash), 1U);
+            }
+        }
+    }
+}
+
 BOOST_AUTO_TEST_SUITE_END()

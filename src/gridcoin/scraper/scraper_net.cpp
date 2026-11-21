@@ -665,7 +665,7 @@ EXCLUSIVE_LOCKS_REQUIRED(CScraperManifest::cs_mapManifest)
 }
 
 [[nodiscard]] bool CScraperManifest::UnserializeCheck(CDataStream& ss, unsigned int& banscore_out,
-                                                     const bool v15_project_cap)
+                                                     const bool v15_enabled)
 EXCLUSIVE_LOCKS_REQUIRED(CScraperManifest::cs_mapManifest, CSplitBlob::cs_manifest)
 {
     const auto pbegin = ss.begin();
@@ -965,7 +965,7 @@ EXCLUSIVE_LOCKS_REQUIRED(CScraperManifest::cs_mapManifest, CSplitBlob::cs_manife
     // Holding both concatenated in the other order is what that comment exists
     // to prevent, so the height is read in RecvManifest() before any of these
     // locks are acquired.
-    const unsigned int max_projects = v15_project_cap
+    const unsigned int max_projects = v15_enabled
         ? nMaxProjects + MANIFEST_PSEUDO_PROJECTS.size()
         : nMaxProjects;
 
@@ -1022,6 +1022,18 @@ EXCLUSIVE_LOCKS_REQUIRED(CScraperManifest::cs_mapManifest, CSplitBlob::cs_manife
              Hash(signature).GetHex());
 
     if (!pubkey.Verify(hash, signature)) return error("CScraperManifest: Invalid manifest signature");
+
+    // A scraper signs a manifest with CKey::Sign(). When v15 is enabled at the
+    // height of the best block, a received manifest's signature must have the
+    // form that CKey::Sign() writes. Otherwise the form is not tested. This does
+    // not depend on the sync state. banscore_out is not written. The tests above
+    // may have set it. This test is after them, so a manifest that one of them
+    // refuses is refused as it was.
+    if (v15_enabled && !CPubKey::CheckSignatureForm(signature))
+    {
+        return error("CScraperManifest::UnserializeCheck: manifest signature does not have the form that "
+                     "CKey::Sign() writes");
+    }
 
     // The signature is the last field of a manifest.
     if (!ss.empty()) return error("CScraperManifest: manifest has data after its signature");
@@ -1213,11 +1225,11 @@ bool CScraperManifest::RecvManifest(CNode* pfrom, CDataStream& vRecv)
     uint256 hash(Hash(vRecv));
 
     // Read the chain height BEFORE taking any of the manifest locks, and let go
-    // of cs_main again immediately. UnserializeCheck() needs to know whether the
-    // v15 project-count rule applies, but it runs under cs_mapManifest and
+    // of cs_main again immediately. UnserializeCheck() needs to know whether
+    // v15 is enabled at that height, but it runs under cs_mapManifest and
     // cs_manifest, and taking cs_main from there is the lock ordering
     // net_processing.cpp explicitly avoids for this same pair.
-    const bool v15_project_cap = WITH_LOCK(cs_main, return IsV15Enabled(nBestHeight));
+    const bool v15_enabled = WITH_LOCK(cs_main, return IsV15Enabled(nBestHeight));
 
     LOCK(cs_mapManifest);
 
@@ -1246,7 +1258,7 @@ bool CScraperManifest::RecvManifest(CNode* pfrom, CDataStream& vRecv)
 
         try
         {
-            if (!manifest->UnserializeCheck(vRecv, banscore, v15_project_cap))
+            if (!manifest->UnserializeCheck(vRecv, banscore, v15_enabled))
             {
                 mapManifest.erase(hash);
                 LogPrint(BCLog::LogFlags::MANIFEST, "invalid manifest %s received", hash.GetHex());
