@@ -812,6 +812,19 @@ std::optional<CAmount> GRC::ActiveVoteWeight(const PollSnapshot& snapshot, const
 
                 scaled_network_magnitude = superblock.m_cpids.TotalScaledMagnitude();
             }
+
+            // There is no active vote weight when a superblock in the window cannot be read or has no network
+            // magnitude, as at the start of the poll above.
+            if (scaled_network_magnitude == 0) {
+                LogPrintf("WARNING: %s: No valid superblock at height %i in the window of poll txid %s, title \"%s\", "
+                          "so no active vote weight can be calculated.",
+                          __func__,
+                          pindex->nHeight,
+                          snapshot.m_txid.GetHex(),
+                          snapshot.m_title);
+
+                return std::nullopt;
+            }
         }
 
         arith_uint256 net_weight = GetAvgNetworkWeight(pindex);

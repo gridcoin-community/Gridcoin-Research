@@ -2038,6 +2038,47 @@ BOOST_AUTO_TEST_CASE(active_vote_weight_uses_the_factor_in_the_result)
 }
 
 //!
+//! There is no active vote weight when a superblock in a poll's window cannot be read or has no network magnitude,
+//! as there is none when the superblock at the poll's start has no network magnitude. The second block here is
+//! marked as a superblock block in the index while its claim carries no superblock, as a block whose claim cannot be
+//! read looks to the walk.
+//!
+BOOST_AUTO_TEST_CASE(active_vote_weight_is_unknown_when_a_superblock_in_the_window_cannot_be_read)
+{
+    grc_test::StateGuard guard;
+    RegistryReset reset;
+    LOCK2(cs_main, GRC::PollRegistry::cs_poll_registry);
+
+    const unsigned int bits = pindexGenesisBlock->nBits;
+    const int64_t t0 = GetAdjustedTime() - DAY;
+    const LinkedTip start = LinkBlock(pindexGenesisBlock, t0, SuperblockClaim(), {}, bits);
+    BOOST_REQUIRE(start.m_pindex->IsSuperblock());
+
+    GRC::PollRegistry& registry = GRC::GetPollRegistry();
+    const PollTx poll = MakePollTx("Title", start.m_pindex->nTime, GRC::ContractAction::ADD,
+                                   GRC::PollWeightType::BALANCE_AND_MAGNITUDE);
+
+    registry.Add({poll.contract, poll.tx, start.m_pindex});
+
+    const GRC::PollReference* ref = registry.TryByTxid(poll.tx.GetHash());
+    BOOST_REQUIRE(ref != nullptr);
+
+    const auto active_vote_weight = [&](const CBlockIndex* const tip) {
+        return GRC::ActiveVoteWeight(
+            registry.Snapshot(*ref, tip),
+            GRC::PollResult(poll.contract.CopyPayloadAs<GRC::PollPayload>().m_poll));
+    };
+
+    // With the poll's own superblock block alone in the window the weight is known.
+    BOOST_CHECK(active_vote_weight(start.m_pindex));
+
+    const LinkedTip unreadable = LinkBlock(start.m_pindex, t0 + 60, GRC::Claim(), {}, bits);
+    unreadable.m_pindex->MarkAsSuperblock();
+
+    BOOST_CHECK(!active_vote_weight(unreadable.m_pindex));
+}
+
+//!
 //! A v3 poll whose active vote weight is zero is recorded as not validated.
 //! MeetsMinimumVotePercentAVW fails a zero active vote weight; the tally must
 //! record that answer rather than leave the poll's validation unset.
