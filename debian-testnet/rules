@@ -10,8 +10,21 @@ export DEB_BUILD_MAINT_OPTIONS = hardening=+all optimize=-lto
 # ARM SHA-NI intrinsics compiled for armhf (AArch32) produce incorrect SHA256
 # results when the build host is aarch64 on Launchpad. The cmake detection check only tests
 # whether -march=armv8-a+crc+crypto compiles, not whether it runs correctly.
+#
+# The tests are not built on armhf. Linking test_gridcoin fails on Launchpad's
+# Ubuntu 24.04 armhf builder with "final link failed: memory exhausted"
+# (binutils 2.42), and the tests were not run there anyway: sha256::TransformD64
+# miscompiles under -O2 in an armhf chroot on Launchpad's arm64 builders, while the
+# binary is correct on native armhf hardware. With ENABLE_TESTS off there is no test
+# suite, and dh_auto_test exits successfully when there is none. A nocheck build
+# does not build them either, since it would not run them.
+ENABLE_TESTS = ON
 ifeq ($(DEB_HOST_ARCH),armhf)
 CMAKE_ARCH_FLAGS = -DENABLE_ARM_SHANI=OFF
+ENABLE_TESTS = OFF
+endif
+ifneq (,$(filter nocheck,$(DEB_BUILD_OPTIONS)))
+ENABLE_TESTS = OFF
 endif
 
 # arm64 (aarch64): disable x86-only SIMD feature probes that aarch64-linux-gnu-g++
@@ -64,7 +77,7 @@ override_dh_auto_configure:
 		-DENABLE_DAEMON=ON \
 		-DENABLE_GUI=ON \
 		-DUSE_QT6=ON \
-		-DENABLE_TESTS=ON \
+		-DENABLE_TESTS=$(ENABLE_TESTS) \
 		-DENABLE_QRENCODE=ON \
 		-DENABLE_UPNP=ON \
 		-DENABLE_MULTIPROCESS=ON \
@@ -76,18 +89,8 @@ override_dh_auto_configure:
 		-DGRC_UNIT_PRIVATE_PIDS=$(PRIVATE_PIDS) \
 		$(CMAKE_ARCH_FLAGS)
 
-ifeq ($(DEB_HOST_ARCH),armhf)
-override_dh_auto_test:
-	: # Tests skipped on armhf: sha256::TransformD64 (scalar, fully unrolled) produces
-	: # wrong results when cross-compiled for armhf on an aarch64 Launchpad builder.
-	: # Root cause: GCC 11 register-allocation bug in very large unrolled functions
-	: # under -O2 on the aarch64-to-armhf cross toolchain. The binary is correct on
-	: # native armhf hardware; this is a builder-environment false-positive.
-else
-
 override_dh_auto_test:
 	dh_auto_test -- ARGS="--output-on-failure"
-endif
 
 # The daemon's manual page under the testnet name, installed by dh_installman from
 # gridcointestnetd.manpages. A dh-exec rename in gridcointestnetd.install would move
