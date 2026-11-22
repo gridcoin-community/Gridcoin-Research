@@ -3,6 +3,7 @@
 
 #include "init.h"
 #include "primitives/transaction.h"
+#include "test/chain_setup.h"
 #include "wallet/wallet.h"
 #include "wallet/walletdb.h"
 
@@ -23,8 +24,20 @@ GetResults(CWalletDB& walletdb, std::map<int64_t, CAccountingEntry>& results)
     }
 }
 
-BOOST_AUTO_TEST_CASE(acc_orderupgrade)
+//! The wallet's transaction count when acc_orderupgrade's body starts, and whether the body ran to its end, for
+//! the case that depends on it.
+static size_t g_entries_before{0};
+static bool g_scenario_finished{false};
+
+// pwalletMain is shared by every suite, so an entry left here stays in it for later cases until something erases it.
+// The fixture erases the entries the body adds, once the body and the lock it takes are done.
+BOOST_FIXTURE_TEST_CASE(acc_orderupgrade, grc_test::WalletTxScope)
 {
+    {
+        LOCK(pwalletMain->cs_wallet);
+        g_entries_before = pwalletMain->mapWallet.size();
+    }
+
     CWalletDB walletdb(pwalletMain->strWalletFile);
     std::vector<CWalletTx*> vpwtx;
     CWalletTx wtx;
@@ -126,6 +139,16 @@ BOOST_AUTO_TEST_CASE(acc_orderupgrade)
     BOOST_CHECK(results[4].strComment.empty());
     BOOST_CHECK(results[5].nTime == 1333333334);
     BOOST_CHECK(6 == vpwtx[1]->nOrderPos);
+
+    g_scenario_finished = true;
+}
+
+BOOST_AUTO_TEST_CASE(acc_orderupgrade_leaves_no_wallet_entries,
+                     *boost::unit_test::depends_on("accounting_tests/acc_orderupgrade"))
+{
+    BOOST_REQUIRE(g_scenario_finished);
+    LOCK(pwalletMain->cs_wallet);
+    BOOST_CHECK_EQUAL(pwalletMain->mapWallet.size(), g_entries_before);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
