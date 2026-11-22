@@ -2279,6 +2279,41 @@ BOOST_FIXTURE_TEST_CASE(an_advertisement_with_a_proof_refuses_a_key_the_registry
     BOOST_CHECK(PooledBeacons(cpid).empty());
 }
 
+//! The GUI is told so with a status of its own.
+BOOST_FIXTURE_TEST_CASE(the_gui_is_told_that_the_registry_knows_the_key_under_another_cpid, grc_test::WalletTxScope)
+{
+    const SyncTimeReset reset_sync;
+    const PoolCleared pool;
+    MineUntilReadyToAdvertise();
+
+    const std::string cpid_hex = "d1ce0004d1ce0004d1ce0004d1ce0004";
+    const GRC::Cpid cpid = GRC::Cpid::Parse(cpid_hex);
+    const GRC::Cpid other_cpid = GRC::Cpid::Parse("0ddba110ddba110ddba110ddba110dd2");
+    ForcedResearcher forced(cpid_hex);
+
+    CPubKey known_key;
+    {
+        LOCK2(cs_main, pwalletMain->cs_wallet);
+
+        const GRC::AdvertiseBeaconResult generated = GRC::GenerateBeaconKey(cpid);
+        BOOST_REQUIRE(generated.TryPublicKey());
+        known_key = *generated.TryPublicKey();
+    }
+
+    LeavePending(other_cpid, known_key);
+
+    // The proof as a project hands it out: the account, the beacon key, and the project's signature over both.
+    const std::string proof_xml = "<master_url>https://project.example/</master_url>"
+        "<msg>1 " + HexStr(known_key) + "</msg>"
+        "<signature>" + EncodeBase64(std::string(64, '\x01')) + "</signature>";
+
+    const interfaces::BeaconAdvertiseResult result =
+        interfaces::MakeResearcherContext(pwalletMain)->advertiseBeaconV3(proof_xml);
+
+    BOOST_CHECK(result.status == interfaces::BeaconStatus::ERROR_KEY_HELD_BY_ANOTHER_CPID);
+    BOOST_CHECK(PooledBeacons(cpid).empty());
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 
 BOOST_AUTO_TEST_SUITE_END() // beacon_advertisement_tests

@@ -46,6 +46,9 @@ enum class BeaconStatus
     RENEWAL_POSSIBLE,
     ALREADY_IN_MEMPOOL,
     UNKNOWN,
+    //! Appended, so the values above keep their numbers: the status crosses the
+    //! process boundary as its integer value.
+    ERROR_KEY_HELD_BY_ANOTHER_CPID,
 };
 
 //! The researcher's configured participation mode.

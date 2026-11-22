@@ -186,6 +186,8 @@ QString ResearcherModel::mapBeaconStatus(const BeaconStatus status)
                       "and is still unconfirmed an hour after sending, sending again replaces it.");
         case BeaconStatus::UNKNOWN:
             return tr("Waiting for sync...");
+        case BeaconStatus::ERROR_KEY_HELD_BY_ANOTHER_CPID:
+            return tr("The network knows this beacon key under another CPID. Start again with a new beacon key.");
     }
 
     assert(false); // Suppress warning
@@ -218,6 +220,7 @@ QIcon ResearcherModel::mapBeaconStatusIcon(const BeaconStatus status) const
         case BeaconStatus::RENEWAL_POSSIBLE:         return make_icon(warning);
         case BeaconStatus::ALREADY_IN_MEMPOOL:       return make_icon(warning);
         case BeaconStatus::UNKNOWN:                  return make_icon(inactive);
+        case BeaconStatus::ERROR_KEY_HELD_BY_ANOTHER_CPID: return make_icon(danger);
     }
 
     assert(false); // Suppress warning
