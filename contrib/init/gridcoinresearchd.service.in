@@ -20,8 +20,10 @@
 # holds this machine's disk can still decrypt it unless the disk is encrypted or a
 # TPM binds the credential.
 #
-# PrivatePIDs= is ignored with a log line before systemd 257; the rest of the unit
-# applies. The full model is in doc/running-unattended.md.
+# PrivatePIDs= needs systemd 257. A build for an older systemd carries the line
+# commented out, because systemd there ignores it with a log line at every load of
+# the unit; the rest of the unit applies. The full model is in
+# doc/running-unattended.md.
 #
 # With PrivatePIDs= the core is process 1 of its own PID namespace. It reaps the
 # processes the notify options leave behind, and it installs its stop handlers
@@ -88,7 +90,7 @@ StateDirectoryMode=0700
 ##################
 LimitCORE=0
 UMask=0077
-PrivatePIDs=yes
+@GRC_UNIT_PRIVATE_PIDS_OFF@PrivatePIDs=yes
 
 # Hardening
 ###########

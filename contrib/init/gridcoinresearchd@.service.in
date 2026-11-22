@@ -15,8 +15,9 @@
 # writes the drop-in that sets the real command line for the user, and then start the
 # instance. Until then the instance stops with an explanation and is not restarted.
 #
-# PrivatePIDs= is ignored with a log line before systemd 257. The full model is in
-# doc/running-unattended.md.
+# PrivatePIDs= needs systemd 257. A build for an older systemd carries the line
+# commented out, because systemd there ignores it with a log line at every load of
+# the unit. The full model is in doc/running-unattended.md.
 #
 # With PrivatePIDs= the core is process 1 of its own PID namespace. It reaps the
 # processes the notify options leave behind, and it installs its stop handlers
@@ -60,7 +61,7 @@ RestartPreventExitStatus=78
 NoNewPrivileges=true
 LimitCORE=0
 UMask=0077
-PrivatePIDs=yes
+@GRC_UNIT_PRIVATE_PIDS_OFF@PrivatePIDs=yes
 
 [Install]
 WantedBy=multi-user.target

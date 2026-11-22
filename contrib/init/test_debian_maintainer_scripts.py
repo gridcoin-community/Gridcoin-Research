@@ -6,9 +6,9 @@
 
 Each script runs under /bin/sh against a fake root in a temporary directory: every /etc, /var,
 /run and /usr path in it is rewritten into that root, and the run is refused if any other absolute
-path is left. systemctl, dpkg, chown, chgrp, systemd-sysusers, systemd-tmpfiles and the service
-tool are stub executables that log their arguments; PATH holds only those and a few coreutils, so
-nothing reaches the host's systemd, dpkg or system directories.
+path is left. systemctl, deb-systemd-invoke, dpkg, chown, chgrp, systemd-sysusers, systemd-tmpfiles
+and the service tool are stub executables that log their arguments; PATH holds only those and a few
+coreutils, so nothing reaches the host's systemd, dpkg or system directories.
 """
 
 import os
@@ -188,7 +188,7 @@ class FakeRoot:
         stubs = {
             "systemctl": 'if [ "$1" = list-units ]; then cat "$ROOT/active-units" 2>/dev/null; fi',
             "dpkg": dpkg_extra,
-            "chown": "", "chgrp": "", "systemd-sysusers": "", "systemd-tmpfiles": "",
+            "chown": "", "chgrp": "", "systemd-sysusers": "", "systemd-tmpfiles": "", "deb-systemd-invoke": "",
         }
         for name, extra in stubs.items():
             self.write_executable(os.path.join(self.bin, name), STUB % {"name": name, "extra": extra})
@@ -289,7 +289,8 @@ class HarnessTests(unittest.TestCase):
         self.assertIn("systemctl", names)
         for name in names:
             target = os.path.join(fake.bin, name)
-            if name in ("systemctl", "dpkg", "chown", "chgrp", "systemd-sysusers", "systemd-tmpfiles", "stat"):
+            if name in ("systemctl", "deb-systemd-invoke", "dpkg", "chown", "chgrp", "systemd-sysusers",
+                        "systemd-tmpfiles", "stat"):
                 self.assertFalse(os.path.islink(target), name)
         for net in NETWORKS:
             for script in ("preinst", "postinst", "prerm", "postrm"):
@@ -712,16 +713,36 @@ class AbortTests(unittest.TestCase):
 
 
 class RemovalTests(unittest.TestCase):
-    def test_prerm_stops_the_per_user_units(self):
+    def test_prerm_stops_the_system_service_and_the_per_user_units(self):
+        # debhelper writes no stop for a unit it is told not to start (--no-start in the rules
+        # file), so the prerm stops them. The plainly named units go through deb-systemd-invoke,
+        # which asks policy-rc.d, and the patterns through systemctl. deb-systemd-invoke is a stub
+        # here, so what it does with a refusal is not this suite's to test.
+        for name, net in NETWORKS.items():
+            with self.subTest(network=name):
+                fake = FakeRoot(self, name)
+                fake.systemd_running()
+                invoke = ["deb-systemd-invoke stop %(daemon)s.service %(autounlock)s.socket "
+                          "%(autounlock)s.service" % net]
+                patterns = ["systemctl stop %(daemon)s@*.service %(autounlock)s@*.socket "
+                            "%(autounlock)s@*.service" % net]
+                rc, out, err = fake.run("prerm", "remove")
+                self.assertEqual(rc, 0, err)
+                self.assertEqual(fake.calls("deb-systemd-invoke"), invoke)
+                self.assertEqual(fake.calls("systemctl"), patterns)
+                # A stop that fails, as one of a unit this build left out does, fails nothing.
+                rc, out, err = fake.run("prerm", "remove", fail=("deb-systemd-invoke", "systemctl"))
+                self.assertEqual(rc, 0, err)
+                self.assertEqual(fake.calls("deb-systemd-invoke"), invoke)
+                self.assertEqual(fake.calls("systemctl"), patterns)
+                rc, out, err = fake.run("prerm", "upgrade", NEW)
+                self.assertEqual(fake.calls("deb-systemd-invoke") + fake.calls("systemctl"), [])
+
+    def test_prerm_stops_nothing_without_systemd(self):
         fake = FakeRoot(self, "test")
-        fake.systemd_running()
         rc, out, err = fake.run("prerm", "remove")
         self.assertEqual(rc, 0, err)
-        self.assertEqual(fake.calls("systemctl"), [
-            "systemctl stop gridcointestnetd@*.service gridcointestnet-autounlock@*.socket "
-            "gridcointestnet-autounlock@*.service gridcointestnet-autounlock.socket"])
-        rc, out, err = fake.run("prerm", "upgrade", NEW)
-        self.assertEqual(fake.calls("systemctl"), [])
+        self.assertEqual(fake.calls("deb-systemd-invoke") + fake.calls("systemctl"), [])
 
     def test_purge_removes_only_the_tools_drop_ins_and_state(self):
         for network in NETWORKS:
@@ -792,6 +813,32 @@ class RulesTests(unittest.TestCase):
                 rules = f.read()
             self.assertIn("dh_installsystemd -p%s --name=%s --no-enable --no-start --no-stop-on-upgrade\n"
                           % (net["package"], net["daemon"]), rules)
+
+    def test_debhelper_restarts_the_helper_socket_and_never_the_helper_service(self):
+        # The helper's service refuses a manual start, so a try-restart of it in the postinst is
+        # refused with a message at every upgrade. Only the socket is named for snippets.
+        for net in NETWORKS.values():
+            with open(os.path.join(SOURCE_ROOT, net["tree"], "rules"), encoding="utf8") as f:
+                rules = f.read()
+            calls = re.findall(r"^\tdh_installsystemd [^\n]*--name=%s(?:[^\n]*\\\n)*[^\n]*\n" % net["autounlock"],
+                               rules, re.M)
+            self.assertEqual(len(calls), 1, rules)
+            self.assertEqual(calls[0].replace("\\\n", " ").split(),
+                             ["dh_installsystemd", "-p" + net["package"], "--name=" + net["autounlock"], "--no-enable",
+                              "--no-start", "--restart-after-upgrade", net["autounlock"] + ".socket"])
+
+    def test_the_build_hosts_systemd_decides_the_private_pids_line(self):
+        # An older systemd logs an unknown key at every load of a unit that carries PrivatePIDs=.
+        for net in NETWORKS.values():
+            with open(os.path.join(SOURCE_ROOT, net["tree"], "rules"), encoding="utf8") as f:
+                rules = f.read()
+            self.assertIn('PRIVATE_PIDS := $(shell [ "$(SYSTEMD_MAJOR)" -ge 257 ] 2>/dev/null && echo ON || echo OFF)\n',
+                          rules)
+            self.assertIn("\t\t-DGRC_UNIT_PRIVATE_PIDS=$(PRIVATE_PIDS) \\\n", rules)
+        with open(os.path.join(SOURCE_ROOT, "cmake", "systemd_units.cmake"), encoding="utf8") as f:
+            cmake = f.read()
+        self.assertRegex(cmake, r'if\(GRC_UNIT_PRIVATE_PIDS\)\s+set\(GRC_UNIT_PRIVATE_PIDS_OFF ""\)\s+else\(\)\s+'
+                                r'set\(GRC_UNIT_PRIVATE_PIDS_OFF "#"\)\s+endif\(\)')
 
 
 class NewsTests(unittest.TestCase):
