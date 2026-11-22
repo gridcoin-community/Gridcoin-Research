@@ -10,11 +10,13 @@
 #include "gridcoin/contract/handler.h"
 #include "gridcoin/cpid.h"
 #include "gridcoin/superblock.h"
+#include "script/standard.h"
 #include "serialize.h"
 #include "sync.h"
 #include "uint256.h"
 
 #include <optional>
+#include <set>
 #include <stdexcept>
 
 class CPubKey;
@@ -387,6 +389,20 @@ bool MRCLeavesFoundationShare(const MRC& mrc);
 //! share.
 //!
 bool MRCEligibleForClaim(const CpidOption& claim_cpid, const MRC& mrc);
+
+//!
+//! \brief Record the address an MRC of a block is paid at, unless another MRC of the block is paid at it.
+//!
+//! A block's MRCs are paid at different addresses. An MRC is paid at the address of its CPID's beacon. The rule lives
+//! here alone: the miner selects the MRCs it binds by it, and from block version 15 block validation
+//! (BlockRewardRules::CheckMRCRewards) refuses a block whose MRCs break it.
+//!
+//! \param paid_addresses The addresses the block's MRCs so far are paid at. The address is added if it is new.
+//! \param address        The address the MRC to check is paid at.
+//!
+//! \return \c true if no other MRC of the block is paid at the address.
+//!
+bool MRCPaidAtNewAddress(std::set<CTxDestination>& paid_addresses, const CTxDestination& address);
 
 //!
 //! \brief

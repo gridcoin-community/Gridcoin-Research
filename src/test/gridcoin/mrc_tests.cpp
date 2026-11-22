@@ -283,6 +283,42 @@ struct Setup {
         return error;
     }
 
+    //!
+    //! \brief Give another CPID an active beacon that carries the fixture's key, and the fixture's accrual of 72.
+    //! The case removes the CPID's account when it is done (GRC::Tally::RemoveAccount).
+    //!
+    GRC::Cpid AddCpidWithFixtureKey() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+    {
+        const GRC::Cpid other_cpid(InsecureRandBytes(16));
+        BOOST_REQUIRE(other_cpid != cpid);
+
+        GRC::ResearchAccount& other_account = GRC::Tally::CreateAccount(other_cpid);
+        other_account.m_first_block_ptr = pindexGenesisBlock;
+        other_account.m_last_block_ptr = pindexGenesisBlock;
+        other_account.m_accrual = 72;
+
+        const GRC::Contract contract = GRC::MakeContract<GRC::BeaconPayload>(
+            GRC::ContractAction::ADD,
+            other_cpid,
+            key.GetPubKey());
+
+        // The registry keeps a beacon under its transaction's hash, so this transaction carries its contract: the
+        // fixture's own advertisement is an empty transaction of the same time.
+        CMutableTransaction beacon_tx;
+        beacon_tx.nTime = pindexGenesisBlock->nTime;
+        beacon_tx.vContracts.push_back(contract);
+
+        GRC::GetBeaconRegistry().Add({contract, CTransaction(beacon_tx), pindexGenesisBlock});
+        GRC::GetBeaconRegistry().ActivatePending({key.GetPubKey().GetID()}, beacon_tx.nTime, uint256(), 0);
+
+        const GRC::BeaconOption other_beacon = GRC::GetBeaconRegistry().TryActive(other_cpid, pindex->nTime);
+        BOOST_REQUIRE(other_beacon);
+        BOOST_REQUIRE(other_beacon->GetAddress() == beacon.GetAddress());
+        BOOST_REQUIRE(GRC::GetBeaconRegistry().TryActive(cpid, pindex->nTime));
+
+        return other_cpid;
+    }
+
     ~Setup() {
         GRC::GetBeaconRegistry().Reset();
         gArgs.ForceSetArg("forcecpid", "");
@@ -885,5 +921,31 @@ BOOST_AUTO_TEST_CASE(a_block_that_pays_an_mrc_with_no_foundation_share_is_refuse
     BOOST_CHECK_EQUAL(JudgeBlockPayingMRC(all_fee, 15, {FoundationOutput(0)}), refusal);
 }
 
+
+// From block version 15 a block's MRCs are paid at different addresses, the rule the miner selects by.
+BOOST_AUTO_TEST_CASE(a_block_that_pays_two_mrcs_at_one_address_is_refused_from_v15)
+{
+    LOCK(cs_main);
+
+    account.m_accrual = 72;
+
+    const GRC::Cpid other_cpid = AddCpidWithFixtureKey();
+
+    // Two MRCs, one for each CPID. Each is due 44, and the foundation 22 of each fee of 28.
+    const GRC::MRC mrc = SignedMRC(72, 28);
+    const GRC::MRC other_mrc = SignedMRC(other_cpid, 72, 28);
+    BOOST_REQUIRE(ValidateMRC(pindex, mrc));
+    BOOST_REQUIRE(ValidateMRC(pindex, other_mrc));
+
+    // The coinstake carries the foundation's output and an output for each MRC.
+    const std::string error = JudgeBlockPayingMRCs(
+        {mrc, other_mrc}, 15, {FoundationOutput(44), BeaconOutput(22), BeaconOutput(22)});
+
+    GRC::Tally::RemoveAccount(other_cpid);
+
+    // The MRCs are judged in the order of the block's transactions, so the second is the one refused.
+    BOOST_CHECK_EQUAL(error, strprintf("MRC for CPID %s is paid at an address another MRC of the block is paid at",
+                                       other_cpid.ToString()));
+}
 
 BOOST_AUTO_TEST_SUITE_END()

@@ -266,4 +266,29 @@ BOOST_AUTO_TEST_CASE(an_mrc_whose_fee_leaves_the_foundation_no_share_is_not_boun
     BOOST_CHECK(!assembled.Holds(no_share_tx));
 }
 
+
+// A block's MRCs are paid at different addresses, so of two MRCs paid at one address the miner binds the first it
+// comes to and leaves the other in the pool.
+BOOST_AUTO_TEST_CASE(a_second_mrc_paid_at_an_address_already_bound_is_not_bound)
+{
+    Researchers researchers;
+
+    CKey key;
+    key.MakeNewKey(false);
+
+    const GRC::Cpid cpid = researchers.Add(key);
+    const GRC::Cpid other_cpid = researchers.Add(key);
+
+    // The first pays the higher transaction fee, so the miner comes to it first.
+    const CTransaction tx = researchers.SendMRC(cpid, key, 0, 2 * COIN);
+    const CTransaction other_tx = researchers.SendMRC(other_cpid, key, 1, COIN);
+
+    const Assembled assembled = Assemble();
+
+    BOOST_CHECK_EQUAL(assembled.m_mrc_map.size(), 1U);
+    BOOST_CHECK(assembled.Binds(cpid, tx));
+    BOOST_CHECK(assembled.Holds(tx));
+    BOOST_CHECK(!assembled.Holds(other_tx));
+}
+
 BOOST_AUTO_TEST_SUITE_END()

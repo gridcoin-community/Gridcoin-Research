@@ -394,6 +394,9 @@ bool CreateRestOfTheBlock(CBlock &block, CMutableTransaction& mtxCoinbase,
     // in combination with the transaction level validation for the maximum mandatory allocation perfects that rule.
     bool mandatory_sidestake_bound = false;
 
+    // The addresses the MRCs bound so far are paid at (GRC::MRCPaidAtNewAddress).
+    std::set<CTxDestination> mrc_addresses;
+
     // Largest block you're willing to create:
     unsigned int nBlockMaxSize = gArgs.GetArg("-blockmaxsize", MAX_BLOCK_SIZE_GEN/2);
     // Limit to between 1K and MAX_BLOCK_SIZE-1K for sanity:
@@ -810,11 +813,21 @@ bool CreateRestOfTheBlock(CBlock &block, CMutableTransaction& mtxCoinbase,
                             // for unique cpids, although the one MRC per cpid is also enforced in the AcceptToMemoryPool.
                             // Overflow mrc transactions beyond the output limit will also be ignored.
                             if (GRC::MRCEligibleForClaim(cpid, mrc) && ValidateMRC(pindexPrev, mrc)) {
+                                // A block's MRCs are paid at different addresses, a rule block validation also
+                                // applies from block version 15. ValidateMRC() found the beacon active at this time.
+                                // The address is recorded only for an MRC that is bound, so the first mrc
+                                // transaction for the cpid is looked for before the address is.
+                                const GRC::BeaconOption mrc_beacon = GRC::GetBeaconRegistry().TryActive(
+                                    *mrc_cpid, pindexPrev->nTime);
+
                                 // Here the insert form instead of [] is used, because we want to use the first
                                 // mrc transaction in the mempool for a given cpid in mrc fee order, not the last
                                 // for the available slots for mrc. Note that AcceptToMemoryBlock now also enforces
                                 // uniqueness of transactions in the mempool for each CPID.
-                                if (mrc_map.insert(make_pair(*mrc_cpid, make_pair(tx.GetHash(), mrc))).second) {
+                                if (mrc_beacon
+                                    && mrc_map.find(*mrc_cpid) == mrc_map.end()
+                                    && GRC::MRCPaidAtNewAddress(mrc_addresses, mrc_beacon->GetAddress())
+                                    && mrc_map.insert(make_pair(*mrc_cpid, make_pair(tx.GetHash(), mrc))).second) {
                                     // If an entry was successfully inserted into the mrc_map, adjust the block size upward
                                     // by the size of one coinstake output, because there will be one output added per
                                     // mrc entry in this map later in CreateMRCRewards.

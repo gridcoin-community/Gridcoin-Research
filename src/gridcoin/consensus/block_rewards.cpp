@@ -20,6 +20,7 @@
 
 #include <algorithm>
 #include <cassert>
+#include <set>
 
 using namespace GRC;
 
@@ -574,6 +575,9 @@ bool BlockRewardRules::CheckMRCRewards(
     if (mrc_output_limit > 0) {
         Fraction foundation_fee_fraction = FoundationSideStakeAllocation();
 
+        // The addresses the block's MRCs are paid at (MRCPaidAtNewAddress).
+        std::set<CTxDestination> mrc_addresses;
+
         for (const auto& tx : m_block->vtx) {
             for (const auto& mrc_entry : claim.m_mrc_tx_map) {
                 if (mrc_entry.second == tx.GetHash()) {
@@ -618,6 +622,16 @@ bool BlockRewardRules::CheckMRCRewards(
                             if (beacon) {
                                 if (!ValidateMRC(m_pindex->pprev, mrc)) {
                                     error_out = "An MRC in the claim failed to validate";
+                                    return false;
+                                }
+
+                                // From block version 15 a block's MRCs are paid at different addresses, the rule
+                                // the miner selects by (MRCPaidAtNewAddress).
+                                if (m_block_version >= 15
+                                    && !MRCPaidAtNewAddress(mrc_addresses, beacon->GetAddress())) {
+                                    error_out = strprintf(
+                                        "MRC for CPID %s is paid at an address another MRC of the block is paid at",
+                                        cpid->ToString());
                                     return false;
                                 }
 

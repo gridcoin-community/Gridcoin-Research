@@ -303,6 +303,11 @@ bool GRC::MRCEligibleForClaim(const CpidOption& claim_cpid, const MRC& mrc)
     return mrc_cpid && (!claim_cpid || *mrc_cpid != *claim_cpid) && MRCLeavesFoundationShare(mrc);
 }
 
+bool GRC::MRCPaidAtNewAddress(std::set<CTxDestination>& paid_addresses, const CTxDestination& address)
+{
+    return paid_addresses.insert(address).second;
+}
+
 namespace {
 //!
 //! \brief Sign the mrc.
