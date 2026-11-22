@@ -161,7 +161,7 @@ public:
     {
         LOCK(cs_main);
 
-        GRC::MRC mrc;
+        GRC::MRC mrc(GRC::MRC::VersionForBlock(pindexBest->nHeight + 1));
         mrc.m_mining_id = cpid;
         mrc.m_client_version = "6.0.0.0";
         mrc.m_last_block_hash = pindexBest->GetBlockHash();

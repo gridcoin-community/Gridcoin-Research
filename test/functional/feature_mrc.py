@@ -23,6 +23,14 @@ With --v15 both nodes run the block version 15 rules from block 1. From block
 version 15 block validation also requires that a block's MRCs not include its
 claim's CPID; node0's investor claim names no CPID, so both nodes accept the
 block that pays node1's request.
+
+With --v15-at-payment the block that pays the request is the first of block
+version 15: the request is made on the last block below it.
+
+A block pays MRCs of one version, 2 from block version 15 and 1 below it, and a
+wallet makes a request of the version of the block that would pay it. So the
+request is of version 2 in both of those runs, and of version 1 in the plain
+run.
 """
 
 from decimal import Decimal
@@ -42,11 +50,18 @@ SUPERBLOCK_SPACING = 43200
 # off testnet).
 ACCRUAL_SPAN = 86400
 
+# The height of the block that pays the request: five blocks to node0, the
+# block with the advertisement, two superblock blocks and the control block
+# come before it.
+PAYMENT_HEIGHT = 10
+
 
 class MrcTest(GridcoinTestFramework):
     def add_options(self, parser):
         parser.add_argument("--v15", dest="v15", default=False, action="store_true",
                             help="run the block version 15 rules from block 1")
+        parser.add_argument("--v15-at-payment", dest="v15_at_payment", default=False, action="store_true",
+                            help="run the block version 15 rules from the block that pays the request")
 
     def set_test_params(self):
         self.num_nodes = 2
@@ -55,6 +70,8 @@ class MrcTest(GridcoinTestFramework):
         common = ["-staking=0"]
         if self.options.v15:
             common.append("-blockv15height=1")
+        elif self.options.v15_at_payment:
+            common.append(f"-blockv15height={PAYMENT_HEIGHT}")
         self.extra_args = [common[:], common + [f"-forcecpid={CPID}"]]
 
     def setup_network(self):
@@ -128,11 +145,18 @@ class MrcTest(GridcoinTestFramework):
         block_subsidy = Decimal(control["claim"]["block_subsidy"])
         assert_equal(Decimal(str(control["mint"])), block_subsidy)
 
+        # The control block is the last below the block that pays the request.
+        assert_equal(node0.getblockcount(), PAYMENT_HEIGHT - 1)
+        v15_payment = self.options.v15 or self.options.v15_at_payment
+        assert_equal(control["version"], 15 if self.options.v15 else 14)
+
         self.log.info("node1 requests an MRC for its accrued reward")
         self.advance_to_slot()
         request = node1.createmrcrequest()
         mrc = request["mrc"]
         assert_equal(mrc["cpid"], CPID)
+        # The request is of the version of the block that pays it.
+        assert_equal(mrc["version"], 2 if v15_payment else 1)
         research_subsidy = Decimal(mrc["research_subsidy"])
         fee = Decimal(mrc["fee"])
         assert_greater_than(research_subsidy, 0)
@@ -147,7 +171,8 @@ class MrcTest(GridcoinTestFramework):
         paid = self.stake_and_sync()
         # stake_and_sync returns once node1 holds the block too, so both nodes
         # accepted it, under the version 15 rules with --v15.
-        assert_equal(paid["version"], 15 if self.options.v15 else 14)
+        assert_equal(paid["version"], 15 if v15_payment else 14)
+        assert_equal(node0.getblockcount(), PAYMENT_HEIGHT)
         claim = paid["claim"]
         assert_equal(claim["m_mrc_tx_map_size"], 1)
         # The bound MRC must be node1's, not merely counted: the claim decodes

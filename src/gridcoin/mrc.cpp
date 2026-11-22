@@ -25,7 +25,8 @@ namespace {
 //! \param last_block_hash: Hash of the block at the head of the chain.
 //! \param mrc: mrc transaction of the block that contains the claim.
 //!
-//! \return Hash of the CPID, mrc fee, and last block hash contained in the claim.
+//! \return The hash that the MRC's signature covers. For a version 2 MRC it is the hash of every field but the
+//! signature, with the last block hash given.
 //!
 uint256 GetMRCHash(
     const MRC& mrc,
@@ -37,11 +38,21 @@ uint256 GetMRCHash(
         return uint256();
     }
 
-        CHashWriter hasher(SER_NETWORK, PROTOCOL_VERSION);
+    CHashWriter hasher(SER_NETWORK, PROTOCOL_VERSION);
 
+    if (mrc.m_version >= 2) {
+        hasher << mrc.m_version
+               << mrc.m_mining_id
+               << mrc.m_client_version
+               << mrc.m_organization
+               << mrc.m_research_subsidy
+               << mrc.m_fee
+               << last_block_hash;
+    } else {
         hasher << *cpid << mrc.m_fee << last_block_hash;
+    }
 
-        return hasher.GetHash();
+    return hasher.GetHash();
 }
 } // anonymous namespace
 
@@ -51,6 +62,11 @@ uint256 GetMRCHash(
 
 MRC::MRC() : MRC(CURRENT_VERSION)
 {
+}
+
+uint32_t MRC::VersionForBlock(const int height)
+{
+    return IsV15Enabled(height) ? 2 : 1;
 }
 
 MRC::MRC(uint32_t version)
@@ -410,6 +426,9 @@ void GRC::CreateMRC(CBlockIndex* pindex,
     if (err) assert(false);
 
     mrc.m_mining_id = researcher->Id();
+
+    // The MRC is of the version that the block after pindex pays.
+    mrc.m_version = MRC::VersionForBlock(pindex->nHeight + 1);
 
     if (const GRC::CpidOption cpid = mrc.m_mining_id.TryCpid()) {
         // As in the miner: when the check of the CPID's reward blocks does not pass, ask for the accrual snapshot

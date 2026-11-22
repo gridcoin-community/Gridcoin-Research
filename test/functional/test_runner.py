@@ -307,6 +307,9 @@ BASE_SCRIPTS = [
     'feature_mrc.py',
     # feature_mrc.py --v15: the MRC test under the block version 15 rules.
     'feature_mrc.py --v15',
+    # feature_mrc.py --v15-at-payment: the request is made on the last block
+    # below block version 15 and paid by the first block of it.
+    'feature_mrc.py --v15-at-payment',
     'feature_contract_replay.py',
     'feature_beacon_pending_proofs.py',
     # feature_own_boinc_dir.py: a test node reads the BOINC data directory the

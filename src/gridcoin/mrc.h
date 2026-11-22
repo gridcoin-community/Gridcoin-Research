@@ -57,7 +57,19 @@ public:
     //! ensure that the serialization/deserialization routines also handle all
     //! of the previous versions.
     //!
-    static constexpr uint32_t CURRENT_VERSION = 1;
+    //! Version 2 is signed over every field but the signature. A block pays MRCs of one version: version 2 from
+    //! block version 15, version 1 below it (VersionForBlock).
+    //!
+    static constexpr uint32_t CURRENT_VERSION = 2;
+
+    //!
+    //! \brief Get the version of the MRCs that a block at a height pays.
+    //!
+    //! \param height The height of the block that pays the MRC, which is the block after the MRC's last block.
+    //!
+    //! \return 2 from the height of block version 15, 1 below it.
+    //!
+    static uint32_t VersionForBlock(int height);
 
     //!
     //! \brief The maximum length of a serialized client version in a claim.

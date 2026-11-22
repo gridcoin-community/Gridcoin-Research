@@ -2149,6 +2149,16 @@ bool ValidateMRC(const CBlockIndex* mrc_last_pindex, const GRC::MRC &mrc) EXCLUS
     // No Cpid, the MRC must be invalid.
     if (!cpid) return error("%s: Validation failed: MRC has no CPID.");
 
+    // A block pays MRCs of one version, which fixes what the MRC's signature covers: version 2 from block version 15
+    // and version 1 below it. Every caller checks the MRC for the block after mrc_last_pindex.
+    if (mrc.m_version != GRC::MRC::VersionForBlock(mrc_last_pindex->nHeight + 1)) {
+        return error("%s: Validation failed: MRC version %u for CPID %s is not the version for a block at height %i.",
+                     __func__,
+                     mrc.m_version,
+                     cpid->ToString(),
+                     mrc_last_pindex->nHeight + 1);
+    }
+
     // Check to ensure the beacon was active at the mrc_last_pindex time of the MRC and the MRC signature. This also
     // via the signature checks whether the supplied last block pindex hash matches that recorded in the MRC contract.
     // Note that the TryActive for the beacon at the mrc_time specified using the mrc_last_index is actually slightly

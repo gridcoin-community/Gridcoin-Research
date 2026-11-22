@@ -172,7 +172,7 @@ struct Setup {
     //! An MRC for \p mrc_cpid on the tip, signed with the fixture's beacon key.
     GRC::MRC SignedMRC(const GRC::Cpid& mrc_cpid, const CAmount research_subsidy, const CAmount fee)
     {
-        GRC::MRC mrc;
+        GRC::MRC mrc(GRC::MRC::VersionForBlock(pindex->nHeight + 1));
         mrc.m_mining_id = mrc_cpid;
         mrc.m_client_version = "6.0.0.0";
         mrc.m_last_block_hash = pindex->GetBlockHash();
@@ -432,7 +432,7 @@ BOOST_AUTO_TEST_CASE(forgetting_a_reward_looks_for_a_block_s_mrcs_before_its_sta
 
 BOOST_AUTO_TEST_CASE(it_has_proper_fees_for_newbies)
 {
-    GRC::MRC mrc;
+    GRC::MRC mrc(1);
     mrc.m_mining_id = cpid;
     mrc.m_research_subsidy = 72;
 
@@ -453,7 +453,7 @@ BOOST_AUTO_TEST_CASE(it_has_proper_fees_for_newbies)
 
 BOOST_AUTO_TEST_CASE(it_rejects_invalid_claims)
 {
-    GRC::MRC mrc;
+    GRC::MRC mrc(1);
 
     LOCK(cs_main);
 
@@ -927,6 +927,108 @@ BOOST_AUTO_TEST_CASE(an_mrc_whose_fee_leaves_the_foundation_a_share_is_eligible)
 
         BOOST_CHECK(GRC::MRCEligibleForClaim(other_cpid, mrc));
         BOOST_CHECK(GRC::MRCEligibleForClaim(GRC::MiningId::ForNoncruncher().TryCpid(), mrc));
+    }
+}
+
+// A block pays MRCs of one version: version 2 from block version 15 and version 1 below it. The version is that of
+// the block after the MRC's last block.
+BOOST_AUTO_TEST_CASE(an_mrc_is_of_the_version_of_the_block_that_pays_it)
+{
+    LOCK(cs_main);
+
+    account.m_accrual = 72;
+
+    const auto signed_mrc = [&](const uint32_t version) {
+        GRC::MRC mrc(version);
+        mrc.m_mining_id = cpid;
+        mrc.m_client_version = "6.0.0.0";
+        mrc.m_last_block_hash = pindex->GetBlockHash();
+        mrc.m_research_subsidy = 72;
+        mrc.m_fee = 28;
+
+        BOOST_REQUIRE(mrc.Sign(key));
+        BOOST_REQUIRE(mrc.WellFormed());
+
+        return mrc;
+    };
+
+    BOOST_CHECK_EQUAL(GRC::MRC::VersionForBlock(pindex->nHeight + 1), 1U);
+    BOOST_CHECK(ValidateMRC(pindex, signed_mrc(1)));
+    BOOST_CHECK(!ValidateMRC(pindex, signed_mrc(2)));
+
+    {
+        // Block version 15 from the block that pays the MRC.
+        grc_test::V15HeightGuard v15(pindex->nHeight + 1);
+
+        BOOST_CHECK_EQUAL(GRC::MRC::VersionForBlock(pindex->nHeight + 1), 2U);
+        BOOST_CHECK(ValidateMRC(pindex, signed_mrc(2)));
+        BOOST_CHECK(!ValidateMRC(pindex, signed_mrc(1)));
+    }
+
+    {
+        // Block version 15 from the block after that: the block that pays the MRC is still below it.
+        grc_test::V15HeightGuard v15(pindex->nHeight + 2);
+
+        BOOST_CHECK(ValidateMRC(pindex, signed_mrc(1)));
+        BOOST_CHECK(!ValidateMRC(pindex, signed_mrc(2)));
+    }
+}
+
+// The signature of a version 2 MRC covers every field of the payload.
+BOOST_AUTO_TEST_CASE(a_version_2_mrc_s_signature_covers_every_field)
+{
+    LOCK(cs_main);
+
+    account.m_accrual = 72;
+
+    grc_test::V15HeightGuard v15(pindex->nHeight + 1);
+
+    const GRC::MRC mrc = SignedMRC(72, 28);
+    BOOST_REQUIRE_EQUAL(mrc.m_version, 2U);
+    BOOST_REQUIRE(ValidateMRC(pindex, mrc));
+
+    GRC::MRC less_subsidy = mrc;
+    less_subsidy.m_research_subsidy = mrc.m_fee;
+    BOOST_CHECK(!ValidateMRC(pindex, less_subsidy));
+
+    GRC::MRC other_client = mrc;
+    other_client.m_client_version = "6.0.0.1";
+    BOOST_CHECK(!ValidateMRC(pindex, other_client));
+
+    GRC::MRC other_organization = mrc;
+    other_organization.m_organization = "organization";
+    BOOST_CHECK(!ValidateMRC(pindex, other_organization));
+
+    GRC::MRC more_fee = mrc;
+    more_fee.m_fee = mrc.m_fee + 1;
+    BOOST_CHECK(!ValidateMRC(pindex, more_fee));
+}
+
+// The wallet makes an MRC of the version of the block that would pay it.
+BOOST_AUTO_TEST_CASE(createmrc_makes_the_version_of_the_block_that_pays)
+{
+    account.m_accrual = 72;
+
+    LOCK2(cs_main, wallet->cs_wallet);
+
+    {
+        GRC::MRC mrc;
+        CAmount reward{0}, fee{0};
+        GRC::CreateMRC(pindex->pprev, mrc, reward, fee, wallet);
+
+        BOOST_CHECK_EQUAL(mrc.m_version, 1U);
+        BOOST_CHECK(ValidateMRC(pindex->pprev, mrc));
+    }
+
+    {
+        grc_test::V15HeightGuard v15(pindex->pprev->nHeight + 1);
+
+        GRC::MRC mrc;
+        CAmount reward{0}, fee{0};
+        GRC::CreateMRC(pindex->pprev, mrc, reward, fee, wallet);
+
+        BOOST_CHECK_EQUAL(mrc.m_version, 2U);
+        BOOST_CHECK(ValidateMRC(pindex->pprev, mrc));
     }
 }
 
