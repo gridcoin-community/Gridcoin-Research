@@ -2742,6 +2742,103 @@ BOOST_AUTO_TEST_CASE(beacon_registry_refuses_an_advertisement_of_a_key_active_fo
     registry.Reset();
 }
 
+// From block version 15 a beacon is stamped with the time of its block.
+BOOST_AUTO_TEST_CASE(beacon_registry_stamps_a_beacon_with_its_block_s_time_from_v15)
+{
+    LOCK(cs_main);
+
+    GRC::BeaconRegistry& registry = GRC::GetBeaconRegistry();
+
+    CKey key;
+    key.MakeNewKey(true);
+    const GRC::Cpid cpid = GRC::Cpid::Parse("00010203040506070809101112131415");
+
+    const int64_t tx_time = START_TIME;
+    const int64_t block_time = START_TIME + 600;
+
+    const auto stamp_of_an_advertisement_at = [&](const int height) {
+        registry.Reset();
+
+        CMutableTransaction mtx;
+        mtx.nTime = tx_time;
+        const CTransaction tx(mtx);
+
+        CBlockIndex index;
+        index.nVersion = 13;
+        index.nHeight = height;
+        index.nTime = block_time;
+
+        GRC::BeaconPayload payload {2, cpid, GRC::Beacon(key.GetPubKey())};
+        const GRC::Contract contract = GRC::MakeContract<GRC::BeaconPayload>(3, GRC::ContractAction::ADD, payload);
+
+        registry.Add({contract, tx, &index});
+
+        const auto pending = registry.PendingBeacons().find(key.GetPubKey().GetID());
+        BOOST_REQUIRE(pending != registry.PendingBeacons().end());
+
+        return pending->second->m_timestamp;
+    };
+
+    grc_test::V15HeightGuard v15(2);
+
+    BOOST_CHECK_EQUAL(stamp_of_an_advertisement_at(2), block_time);
+
+    registry.Reset();
+}
+
+// From block version 15 a beacon contract is judged at the time of its block.
+BOOST_AUTO_TEST_CASE(beacon_registry_judges_a_renewal_at_its_block_s_time_from_v15)
+{
+    LOCK(cs_main);
+
+    GRC::BeaconRegistry& registry = GRC::GetBeaconRegistry();
+
+    const GRC::Cpid cpid = GRC::Cpid::Parse("00010203040506070809101112131415");
+
+    // After the block version 11 time, before which a beacon is not renewable.
+    const int64_t advertised = 1700000000;
+    const int64_t in_the_renewal_window = advertised + GRC::Beacon::MAX_AGE - DAY;
+    const int64_t after_the_expiry = advertised + GRC::Beacon::MAX_AGE + 10 * DAY;
+
+    const auto status_after_an_advertisement_at = [&](const int v15_height) {
+        registry.Reset();
+
+        grc_test::V15HeightGuard v15(v15_height);
+
+        CKey key;
+        key.MakeNewKey(true);
+
+        AddPendingBeacon(registry, cpid, key.GetPubKey(), advertised, 1);
+        registry.ActivatePending({key.GetPubKey().GetID()}, advertised + DAY,
+                                 uint256S("0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c"), 2);
+        BOOST_REQUIRE(registry.Try(cpid));
+        BOOST_REQUIRE(!registry.Try(cpid)->Expired(in_the_renewal_window));
+        BOOST_REQUIRE(registry.Try(cpid)->Renewable(in_the_renewal_window));
+        BOOST_REQUIRE(registry.Try(cpid)->Expired(after_the_expiry));
+
+        const CTransaction tx = SignedAdvertisementTx(cpid, key, in_the_renewal_window);
+
+        CBlockIndex index_3;
+        index_3.nVersion = 13;
+        index_3.nHeight = 3;
+        index_3.nTime = after_the_expiry;
+
+        int DoS = 0;
+        BOOST_REQUIRE(registry.BlockValidate({tx.GetContracts().front(), tx, &index_3}, DoS));
+
+        registry.Add({tx.GetContracts().front(), tx, &index_3});
+
+        return std::make_pair(registry.Try(cpid)->m_status.Value(), registry.PendingBeacons().size());
+    };
+
+    // Block version 15 from height 3: the block's time is used, and the advertisement is a pending beacon.
+    const auto from = status_after_an_advertisement_at(3);
+    BOOST_CHECK(from.first == GRC::BeaconStatusForStorage::ACTIVE);
+    BOOST_CHECK_EQUAL(from.second, 1U);
+
+    registry.Reset();
+}
+
 BOOST_AUTO_TEST_CASE(beacon_registry_a_block_s_renewal_and_removal_revert_in_inverse_order_from_v15)
 {
     LOCK(cs_main);

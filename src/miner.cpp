@@ -353,9 +353,12 @@ bool CreateRestOfTheBlock(CBlock &block, CMutableTransaction& mtxCoinbase,
 
     int nHeight = pindexPrev->nHeight + 1;
 
-    // This is specifically for BlockValidateContracts, and only the nHeight is filled in.
+    // This is specifically for BlockValidateContracts. Only the height and the time of the block are filled in:
+    // the block rules for contracts depend on the height, and from block version 15 a beacon contract is judged at
+    // the time of its block.
     CBlockIndex pindex_contract_validate;
     pindex_contract_validate.nHeight = nHeight;
+    pindex_contract_validate.nTime = block.nTime;
 
     // Create coinbase tx
     mtxCoinbase.nTime = block.nTime;
@@ -445,9 +448,9 @@ bool CreateRestOfTheBlock(CBlock &block, CMutableTransaction& mtxCoinbase,
             // that we don't include a transaction that disrupts validation of
             // the block. Note that this is especially important now that there
             // are block level rules that cannot be checked for transactions
-            // that are just in the mempool. Note that the only block level rules
-            // currently implemented depend on block height only, so the
-            // pindex_contract_validate only has the block height filled out.
+            // that are just in the mempool. Note that the block level rules
+            // currently implemented depend on the block's height and time only,
+            // so the pindex_contract_validate has only those filled out.
             //
             int DoS = 0; // Unused here.
             if (!tx.GetContracts().empty() && !GRC::BlockValidateContracts(&pindex_contract_validate, tx, DoS)) {

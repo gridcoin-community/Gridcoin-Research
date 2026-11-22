@@ -21,12 +21,14 @@
 #include "gridcoin/contract/contract.h"
 #include "gridcoin/contract/message.h"
 #include "gridcoin/cpid.h"
+#include "gridcoin/mrc.h"
 #include "gridcoin/researcher.h"
 #include "gridcoin/sidestake.h"
 #include "gridcoin/tx_message.h"
 #include "init.h"
 #include "interfaces/researcher.h"
 #include "key.h"
+#include "miner.h"
 #include "policy/fees.h"
 #include "primitives/block.h"
 #include "random.h"
@@ -47,6 +49,7 @@
 
 #include <boost/test/unit_test.hpp>
 
+#include <map>
 #include <optional>
 #include <set>
 #include <string>
@@ -2002,6 +2005,58 @@ BOOST_FIXTURE_TEST_CASE(renewal_change_goes_back_to_a_pay_to_pubkey_coin, grc_te
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
     BOOST_CHECK(GRC::IsRenewalShape(CMutableTransaction(renewal), cpid, COIN / 2, fee, *pwalletMain));
+}
+
+//! From block version 15 a beacon contract is judged at the time of its block. The miner judges the contracts it
+//! chooses at the time of the block it builds, so a renewal that is due at that time goes into the block.
+BOOST_FIXTURE_TEST_CASE(the_miner_judges_a_renewal_at_the_time_of_its_block_from_v15, grc_test::WalletTxScope)
+{
+    const SyncTimeReset reset_sync;
+    const PoolCleared pool;
+    MineUntilReadyToAdvertise();
+
+    const grc_test::V15HeightGuard v15(0);
+
+    const std::string cpid_hex = "fee4fee4fee4fee4fee4fee4fee4fee4";
+    const GRC::Cpid cpid = GRC::Cpid::Parse(cpid_hex);
+
+    CKey beacon_key;
+    beacon_key.MakeNewKey(true);
+    {
+        LOCK(pwalletMain->cs_wallet);
+        BOOST_REQUIRE(pwalletMain->AddKey(beacon_key));
+    }
+
+    const RenewableBeacon beacon(cpid, beacon_key.GetPubKey());
+    ForcedResearcher forced(cpid_hex);
+
+    const GRC::AdvertiseBeaconResult result = GRC::Researcher::Get()->AdvertiseBeacon();
+    BOOST_REQUIRE_MESSAGE(result.TryPublicKey(), "renewal failed: " << static_cast<int>(result.Error()));
+    BOOST_REQUIRE(*result.TryPublicKey() == beacon_key.GetPubKey());
+
+    const std::vector<uint256> pooled = PooledBeacons(cpid);
+    BOOST_REQUIRE_EQUAL(pooled.size(), 1U);
+
+    CBlock block;
+    CMutableTransaction coinbase;
+    CMutableTransaction coinstake;
+    grc_test::MakeBlockAndCoinstake(block, coinbase, coinstake);
+
+    // The block is stamped now, when the beacon is in its renewal window.
+    block.nTime = GetAdjustedTime();
+
+    std::map<GRC::Cpid, std::pair<uint256, GRC::MRC>> mrc_map;
+    {
+        LOCK(cs_main);
+        BOOST_REQUIRE(CreateRestOfTheBlock(block, coinbase, coinstake, pindexBest, mrc_map, false));
+    }
+
+    bool taken = false;
+    for (const CTransaction& tx : block.vtx) {
+        taken |= tx.GetHash() == pooled.front();
+    }
+
+    BOOST_CHECK(taken);
 }
 
 namespace {

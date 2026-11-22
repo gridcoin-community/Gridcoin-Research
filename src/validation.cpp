@@ -2370,7 +2370,8 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, CValidationState& st
     // this node's registry holds.
     if (IsV15Enabled(nBestHeight + 1)) {
         for (const auto& contract : tx.GetContracts()) {
-            if (!GRC::GetBeaconRegistry().AdvertisedKeyIsFree(contract, tx.nTime)) {
+            // Judged at the time of the tip, as BeaconRegistry::Validate judges a beacon contract from this height.
+            if (!GRC::GetBeaconRegistry().AdvertisedKeyIsFree(contract, pindexBest->nTime)) {
                 return state.Invalid(error("%s: beacon advertisement of a key that another CPID holds", __func__),
                                      "bad-beacon-key");
             }

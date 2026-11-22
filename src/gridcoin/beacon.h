@@ -833,6 +833,21 @@ public:
     bool BlockValidate(const ContractContext& ctx, int& DoS) const override EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
+    //! \brief Determine whether a beacon contract is valid at a time. From block version 15 that is the time of the
+    //! block that carries the contract (BlockValidate), or for the memory pool the time of the tip (Validate). Below
+    //! block version 15 it is the time of the contract's transaction.
+    //!
+    //! \param contract Contains the beacon data to validate.
+    //! \param tx       Transaction that contains the contract.
+    //! \param time     The time at which the CPID's beacon is judged to be expired or renewable.
+    //! \param DoS      Misbehavior score out.
+    //!
+    //! \return \c true if the contract contains a valid beacon.
+    //!
+    bool ValidateAt(const Contract& contract, const CTransaction& tx, const int64_t time, int& DoS) const
+        EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+
+    //!
     //! \brief Determine whether a beacon removal carries the key of the CPID's
     //! current beacon. From v15, block validation and the mempool require this
     //! of a beacon removal.

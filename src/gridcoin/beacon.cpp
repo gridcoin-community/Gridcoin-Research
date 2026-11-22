@@ -611,9 +611,12 @@ void BeaconRegistry::Add(const ContractContext& ctx)
 
     Beacon_ptr current_beacon_ptr = nullptr;
 
-    // Make sure the payload m_beacon has the correct time and transaction hash.
+    // Make sure the payload m_beacon has the correct time and transaction hash. From block version 15 a beacon is
+    // stamped with the time of its block. Below it the transaction's time is used.
     // TODO: See if these are initialized correctly in the CopyPayloadAs.
-    payload.m_beacon.m_timestamp = ctx.m_tx.nTime;
+    payload.m_beacon.m_timestamp = ctx.m_pindex && IsV15Enabled(ctx.m_pindex->nHeight)
+        ? ctx.m_pindex->nTime
+        : ctx.m_tx.nTime;
     payload.m_beacon.m_hash = ctx.m_tx.GetHash();
 
     // Is there an existing beacon in the map (renewal, expired new advertisement, or force advertisement)?
@@ -1202,6 +1205,15 @@ bool BeaconRegistry::SetNeedsIsContractCorrection(bool flag)
 
 bool BeaconRegistry::Validate(const Contract& contract, const CTransaction& tx, int& DoS) const
 {
+    // From block version 15 a beacon contract is judged at the time of its block. The memory pool does not know
+    // that block yet, so it judges at the time of the tip, which the block's time is not before by much.
+    const int64_t time = pindexBest && IsV15Enabled(nBestHeight + 1) ? pindexBest->nTime : tx.nTime;
+
+    return ValidateAt(contract, tx, time, DoS);
+}
+
+bool BeaconRegistry::ValidateAt(const Contract& contract, const CTransaction& tx, const int64_t time, int& DoS) const
+{
     if (contract.m_version <= 1) {
         return true;
     }
@@ -1228,7 +1240,7 @@ bool BeaconRegistry::Validate(const Contract& contract, const CTransaction& tx, 
 
     const BeaconOption current_beacon = Try(payload->m_cpid);
 
-    if (!current_beacon || current_beacon->Expired(tx.nTime)) {
+    if (!current_beacon || current_beacon->Expired(time)) {
         return true;
     }
 
@@ -1257,13 +1269,13 @@ bool BeaconRegistry::Validate(const Contract& contract, const CTransaction& tx, 
         return false;
     }
 
-    if (!current_beacon->Renewable(tx.nTime)) {
+    if (!current_beacon->Renewable(time)) {
         DoS = 25;
         LogPrint(LogFlags::CONTRACT,
             "%s: Beacon for CPID %s is not renewable. Age: %" PRId64,
             __func__,
             payload->m_cpid.ToString(),
-            current_beacon->Age(tx.nTime));
+            current_beacon->Age(time));
 
         return false;
     }
@@ -1294,13 +1306,17 @@ bool BeaconRegistry::BlockValidate(const ContractContext& ctx, int& DoS) const
         return false;
     }
 
-    if (!Validate(ctx.m_contract, ctx.m_tx, DoS)) {
+    // From v15 a beacon contract is judged at the time of its block, and below it at the time of its transaction.
+    const bool v15 = IsV15Enabled(ctx.m_pindex->nHeight);
+    const int64_t time = v15 ? ctx.m_pindex->nTime : ctx.m_tx.nTime;
+
+    if (!ValidateAt(ctx.m_contract, ctx.m_tx, time, DoS)) {
         return false;
     }
 
     // From v15, an advertisement may not take a key that another CPID holds. The pass over the beacons comes after
     // the advertisement's signature is verified.
-    if (IsV15Enabled(ctx.m_pindex->nHeight) && !AdvertisedKeyIsFree(ctx.m_contract, ctx.m_tx.nTime)) {
+    if (v15 && !AdvertisedKeyIsFree(ctx.m_contract, time)) {
         DoS = 25;
         LogPrint(LogFlags::CONTRACT,
             "%s: rejected beacon advertisement of a key that another CPID holds at height %d",

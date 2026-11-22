@@ -303,6 +303,9 @@ BASE_SCRIPTS = [
     'feature_beacon_superblock_disconnects.py',
     'feature_beacon_reorg_restart.py',
     'feature_beacon_v15_rebuild.py',
+    # feature_beacon_v15_stamp.py: the time a beacon is stamped with from the
+    # block version 15 height.
+    'feature_beacon_v15_stamp.py',
     'feature_research_reward.py',
     'feature_mrc.py',
     # feature_mrc.py --v15: the MRC test under the block version 15 rules.
