@@ -1294,7 +1294,54 @@ bool BeaconRegistry::BlockValidate(const ContractContext& ctx, int& DoS) const
         return false;
     }
 
-    return Validate(ctx.m_contract, ctx.m_tx, DoS);
+    if (!Validate(ctx.m_contract, ctx.m_tx, DoS)) {
+        return false;
+    }
+
+    // From v15, an advertisement may not take a key that another CPID holds. The pass over the beacons comes after
+    // the advertisement's signature is verified.
+    if (IsV15Enabled(ctx.m_pindex->nHeight) && !AdvertisedKeyIsFree(ctx.m_contract, ctx.m_tx.nTime)) {
+        DoS = 25;
+        LogPrint(LogFlags::CONTRACT,
+            "%s: rejected beacon advertisement of a key that another CPID holds at height %d",
+            __func__,
+            ctx.m_pindex->nHeight);
+        return false;
+    }
+
+    return true;
+}
+
+bool BeaconRegistry::KeyHeldByAnotherCpid(
+    const Cpid& cpid,
+    const CPubKey& key,
+    const std::optional<int64_t>& unexpired_at) const
+{
+    if (const auto pending = m_pending.find(key.GetID());
+            pending != m_pending.end() && pending->second->m_cpid != cpid) {
+        return true;
+    }
+
+    for (const auto& [beacon_cpid, beacon] : m_beacons) {
+        if (beacon_cpid != cpid
+            && beacon->m_public_key == key
+            && (!unexpired_at || !beacon->Expired(*unexpired_at))) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+bool BeaconRegistry::AdvertisedKeyIsFree(const Contract& contract, const int64_t time) const
+{
+    if (contract.m_type != ContractType::BEACON || contract.m_action != ContractAction::ADD || contract.m_version < 2) {
+        return true;
+    }
+
+    const auto payload = contract.SharePayloadAs<BeaconPayload>();
+
+    return !KeyHeldByAnotherCpid(payload->m_cpid, payload->m_beacon.m_public_key, time);
 }
 
 bool BeaconRegistry::RemoveCarriesCurrentKey(const Contract& contract) const

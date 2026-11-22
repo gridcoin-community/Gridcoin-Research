@@ -2639,6 +2639,109 @@ BOOST_AUTO_TEST_CASE(beacon_registry_remove_carries_current_key)
     registry.Reset();
 }
 
+//! A transaction that carries an advertisement of \p key for \p cpid, signed with the key.
+static CTransaction SignedAdvertisementTx(const GRC::Cpid& cpid, CKey& key, const int64_t time)
+{
+    CMutableTransaction mtx;
+    mtx.nTime = time;
+
+    GRC::BeaconPayload payload {2, cpid, GRC::Beacon(key.GetPubKey())};
+    BOOST_REQUIRE(payload.Sign(key));
+    mtx.vContracts.push_back(GRC::MakeContract<GRC::BeaconPayload>(3, GRC::ContractAction::ADD, payload));
+
+    return CTransaction(mtx);
+}
+
+// From block version 15 an advertisement may not take a key that is pending for another CPID.
+BOOST_AUTO_TEST_CASE(beacon_registry_refuses_an_advertisement_of_a_key_pending_for_another_cpid_from_v15)
+{
+    LOCK(cs_main);
+
+    GRC::BeaconRegistry& registry = GRC::GetBeaconRegistry();
+    registry.Reset();
+
+    CKey key;
+    key.MakeNewKey(true);
+    const GRC::Cpid holder = GRC::Cpid::Parse("00010203040506070809101112131415");
+    const GRC::Cpid other = GRC::Cpid::Parse("15141312111009080706050403020100");
+
+    AddPendingBeacon(registry, holder, key.GetPubKey(), START_TIME, 1);
+
+    BOOST_CHECK(registry.KeyHeldByAnotherCpid(other, key.GetPubKey(), START_TIME + 60));
+    BOOST_CHECK(!registry.KeyHeldByAnotherCpid(holder, key.GetPubKey(), START_TIME + 60));
+
+    const CTransaction by_other = SignedAdvertisementTx(other, key, START_TIME + 60);
+    const CTransaction by_holder = SignedAdvertisementTx(holder, key, START_TIME + 60);
+
+    CBlockIndex index_2;
+    index_2.nVersion = 13;
+    index_2.nHeight = 2;
+    index_2.nTime = START_TIME + 60;
+
+    {
+        grc_test::V15HeightGuard v15(1);
+        int DoS = 0;
+
+        BOOST_CHECK(!registry.BlockValidate({by_other.GetContracts().front(), by_other, &index_2}, DoS));
+        BOOST_CHECK_EQUAL(DoS, 25);
+
+        // The CPID the key is pending for may advertise it again.
+        DoS = 0;
+        BOOST_CHECK(registry.BlockValidate({by_holder.GetContracts().front(), by_holder, &index_2}, DoS));
+    }
+
+    registry.Reset();
+}
+
+// Nor one that is active for another CPID. An expired beacon holds its key no longer.
+BOOST_AUTO_TEST_CASE(beacon_registry_refuses_an_advertisement_of_a_key_active_for_another_cpid_from_v15)
+{
+    LOCK(cs_main);
+
+    GRC::BeaconRegistry& registry = GRC::GetBeaconRegistry();
+    registry.Reset();
+
+    CKey key;
+    key.MakeNewKey(true);
+    const GRC::Cpid holder = GRC::Cpid::Parse("00010203040506070809101112131415");
+    const GRC::Cpid other = GRC::Cpid::Parse("15141312111009080706050403020100");
+
+    AddPendingBeacon(registry, holder, key.GetPubKey(), START_TIME, 1);
+    registry.ActivatePending({key.GetPubKey().GetID()}, START_TIME + DAY,
+                             uint256S("0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c"), 2);
+    BOOST_REQUIRE(registry.Try(holder));
+    BOOST_REQUIRE(registry.PendingBeacons().empty());
+
+    const int64_t while_active = START_TIME + 2 * DAY;
+    const int64_t once_expired = START_TIME + GRC::Beacon::MAX_AGE + 2 * DAY;
+
+    BOOST_CHECK(registry.KeyHeldByAnotherCpid(other, key.GetPubKey(), while_active));
+    BOOST_CHECK(!registry.KeyHeldByAnotherCpid(other, key.GetPubKey(), once_expired));
+    BOOST_CHECK(!registry.KeyHeldByAnotherCpid(holder, key.GetPubKey(), while_active));
+
+    // With no time given an expired beacon counts as well, which is what a wallet asks before it uses a key.
+    BOOST_CHECK(registry.KeyHeldByAnotherCpid(other, key.GetPubKey(), std::nullopt));
+
+    grc_test::V15HeightGuard v15(1);
+
+    CBlockIndex index_3;
+    index_3.nVersion = 13;
+    index_3.nHeight = 3;
+    int DoS = 0;
+
+    const CTransaction active_tx = SignedAdvertisementTx(other, key, while_active);
+    index_3.nTime = while_active;
+    BOOST_CHECK(!registry.BlockValidate({active_tx.GetContracts().front(), active_tx, &index_3}, DoS));
+    BOOST_CHECK_EQUAL(DoS, 25);
+
+    DoS = 0;
+    const CTransaction expired_tx = SignedAdvertisementTx(other, key, once_expired);
+    index_3.nTime = once_expired;
+    BOOST_CHECK(registry.BlockValidate({expired_tx.GetContracts().front(), expired_tx, &index_3}, DoS));
+
+    registry.Reset();
+}
+
 BOOST_AUTO_TEST_CASE(beacon_registry_a_block_s_renewal_and_removal_revert_in_inverse_order_from_v15)
 {
     LOCK(cs_main);

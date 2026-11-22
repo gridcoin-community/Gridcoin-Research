@@ -2354,6 +2354,19 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, CValidationState& st
                          "invalid-contract");
     }
 
+    // From v15 an advertisement may not take a key that another CPID holds; BeaconRegistry::BlockValidate requires
+    // this from the same height. It comes after the contracts are validated, so the advertisement's signature is
+    // verified before the registry's beacons are walked, and it carries no misbehaviour score: it depends on what
+    // this node's registry holds.
+    if (IsV15Enabled(nBestHeight + 1)) {
+        for (const auto& contract : tx.GetContracts()) {
+            if (!GRC::GetBeaconRegistry().AdvertisedKeyIsFree(contract, tx.nTime)) {
+                return state.Invalid(error("%s: beacon advertisement of a key that another CPID holds", __func__),
+                                     "bad-beacon-key");
+            }
+        }
+    }
+
     // is it already in the memory pool?
     uint256 hash = tx.GetHash();
     if (pool.exists(hash))

@@ -758,6 +758,39 @@ public:
     bool ContainsActive(const Cpid& cpid, const int64_t now) const EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
+    //! \brief Determine whether another CPID holds a key: whether the key is pending for another CPID, or is the key
+    //! of another CPID's beacon.
+    //!
+    //! From block version 15 an advertisement may not take a key that another CPID holds (BlockValidate). A wallet
+    //! asks before it advertises a key for a CPID.
+    //!
+    //! The pending beacons are kept by key, so that half is a lookup. The beacons are kept by CPID, so that half is
+    //! a pass over them, which ends at the first that carries the key.
+    //!
+    //! \param cpid         The CPID that would advertise the key.
+    //! \param key          The key.
+    //! \param unexpired_at A beacon that is expired at this time holds its key no longer. With no time, an expired
+    //! beacon counts as well.
+    //!
+    //! \return \c true if another CPID holds the key.
+    //!
+    bool KeyHeldByAnotherCpid(
+        const Cpid& cpid,
+        const CPubKey& key,
+        const std::optional<int64_t>& unexpired_at) const EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+
+    //!
+    //! \brief Determine whether the key an advertisement carries is free for its CPID: no other CPID holds it at the
+    //! given time (KeyHeldByAnotherCpid). A contract that is not a beacon advertisement passes.
+    //!
+    //! Block validation requires this from block version 15, and the memory pool from the same height.
+    //!
+    //! \param contract The contract to check.
+    //! \param time     The time at which another CPID's beacon must be unexpired to hold the key.
+    //!
+    bool AdvertisedKeyIsFree(const Contract& contract, const int64_t time) const EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+
+    //!
     //! \brief Determine whether a beacon is active for the specified CPID at
     //! this moment.
     //!

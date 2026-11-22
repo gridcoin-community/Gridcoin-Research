@@ -98,4 +98,53 @@ BOOST_AUTO_TEST_CASE(a_beacon_removal_without_the_current_key_is_refused_without
     BOOST_CHECK_EQUAL(offered.m_score, 0);
 }
 
+// An advertisement of a key that is pending for another CPID is refused from v15. The refusal depends on what the
+// node's registry holds, so it carries no score.
+BOOST_AUTO_TEST_CASE(an_advertisement_of_a_key_held_by_another_cpid_is_refused_without_a_score_from_v15)
+{
+    const grc_test::V15HeightGuard v15(0);
+
+    CKey key;
+    key.MakeNewKey(false);
+
+    const GRC::Cpid holder(InsecureRandBytes(16));
+    const GRC::Cpid other(InsecureRandBytes(16));
+
+    const auto advertisement = [&key](const GRC::Cpid& cpid) {
+        GRC::BeaconPayload payload {2, cpid, GRC::Beacon(key.GetPubKey())};
+        BOOST_REQUIRE(payload.Sign(key));
+        return GRC::MakeContract<GRC::BeaconPayload>(GRC::ContractAction::ADD, payload);
+    };
+
+    {
+        LOCK(cs_main);
+
+        GRC::GetBeaconRegistry().Reset();
+
+        const GRC::Contract contract = advertisement(holder);
+
+        CMutableTransaction pending_tx;
+        pending_tx.nTime = pindexBest->nTime;
+        pending_tx.vContracts.push_back(contract);
+
+        GRC::GetBeaconRegistry().Add({contract, CTransaction(pending_tx), nullptr});
+    }
+
+    const std::vector<COutPoint> coins = SpendablePremineOutputs();
+    BOOST_REQUIRE(!coins.empty());
+
+    const GRC::Contract contract = advertisement(other);
+    const Offered offered(CreateSpendWithContract(
+        PremineCoinbase(), coins[0].n, COIN, contract, 0, contract.RequiredBurnAmount()));
+
+    {
+        LOCK(cs_main);
+        GRC::GetBeaconRegistry().Reset();
+    }
+
+    BOOST_CHECK(!offered.m_accepted);
+    BOOST_CHECK_EQUAL(offered.m_reason, "bad-beacon-key");
+    BOOST_CHECK_EQUAL(offered.m_score, 0);
+}
+
 BOOST_AUTO_TEST_SUITE_END()
