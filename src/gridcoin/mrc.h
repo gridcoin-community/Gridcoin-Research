@@ -362,16 +362,29 @@ public:
 };
 
 //!
+//! \brief Determine whether an MRC's fee leaves the foundation a share.
+//!
+//! The foundation's share of an MRC's fee is the fee times the foundation's allocation of MRC fees, in whole
+//! Halfords, as the miner adds the shares up (CreateMRCRewards).
+//!
+//! \param mrc The MRC to check.
+//!
+//! \return \c true if the share is more than zero, or if the foundation has no allocation of MRC fees.
+//!
+bool MRCLeavesFoundationShare(const MRC& mrc);
+
+//!
 //! \brief Determine whether an MRC is eligible beside a block's claim.
 //!
-//! A block's MRCs may not include its claim's CPID. The rule lives here alone: the miner selects the MRCs it binds by
-//! it, and from block version 15 block validation (BlockRewardRules::CheckMRCRewards) refuses a block whose MRCs
-//! break it.
+//! A block's MRCs may not include its claim's CPID, and each must leave the foundation a share of its fee
+//! (MRCLeavesFoundationShare). The rule lives here alone: the miner selects the MRCs it binds by it, and from block
+//! version 15 block validation (BlockRewardRules::CheckMRCRewards) refuses a block whose MRCs break it.
 //!
 //! \param claim_cpid The CPID of the block's claim, or none for a non-cruncher claim.
 //! \param mrc        The MRC to check.
 //!
-//! \return \c true if the MRC names a CPID and that CPID is not the claim's.
+//! \return \c true if the MRC names a CPID, that CPID is not the claim's, and the MRC's fee leaves the foundation a
+//! share.
 //!
 bool MRCEligibleForClaim(const CpidOption& claim_cpid, const MRC& mrc);
 

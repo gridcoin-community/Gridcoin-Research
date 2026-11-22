@@ -285,11 +285,22 @@ bool GRC::MRCTermsHold(CAmount fee_now, CAmount reward_now, CAmount confirmed_fe
     return fee_now <= confirmed_fee && reward_now - fee_now >= confirmed_net;
 }
 
+bool GRC::MRCLeavesFoundationShare(const MRC& mrc)
+{
+    const Fraction allocation = FoundationSideStakeAllocation();
+
+    if (!allocation.IsNonZero()) {
+        return true;
+    }
+
+    return mrc.m_fee * allocation.GetNumerator() / allocation.GetDenominator() > 0;
+}
+
 bool GRC::MRCEligibleForClaim(const CpidOption& claim_cpid, const MRC& mrc)
 {
     const CpidOption mrc_cpid = mrc.m_mining_id.TryCpid();
 
-    return mrc_cpid && (!claim_cpid || *mrc_cpid != *claim_cpid);
+    return mrc_cpid && (!claim_cpid || *mrc_cpid != *claim_cpid) && MRCLeavesFoundationShare(mrc);
 }
 
 namespace {

@@ -805,6 +805,7 @@ bool CreateRestOfTheBlock(CBlock &block, CMutableTransaction& mtxCoinbase,
                             // The first two are GRC::MRCEligibleForClaim, which block validation also applies from block
                             // version 15. The staker's cpid stands for the claim's here: the claim names it, or names no
                             // CPID if the staker falls back to a non-cruncher claim, and then this is only stricter.
+                            // MRCEligibleForClaim also passes over an MRC whose fee leaves the foundation no share.
                             // The below also ensures that only the highest priority mrc in the mempool get processed
                             // for unique cpids, although the one MRC per cpid is also enforced in the AcceptToMemoryPool.
                             // Overflow mrc transactions beyond the output limit will also be ignored.

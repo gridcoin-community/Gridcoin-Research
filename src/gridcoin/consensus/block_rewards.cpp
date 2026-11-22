@@ -569,11 +569,14 @@ bool BlockRewardRules::CheckMRCRewards(
                         MRC mrc = contract.CopyPayloadAs<MRC>();
 
                         if (const CpidOption cpid = mrc.m_mining_id.TryCpid()) {
-                            // From block version 15 a block's MRCs may not include its claim's CPID, the rule the
-                            // miner selects by (MRCEligibleForClaim).
+                            // From block version 15 a block's MRCs may not include its claim's CPID, and each
+                            // must leave the foundation a share of its fee, the rule the miner selects by
+                            // (MRCEligibleForClaim).
                             if (m_block_version >= 15 && !MRCEligibleForClaim(claim.m_mining_id.TryCpid(), mrc)) {
-                                error_out = strprintf("block's MRCs include its claim's CPID %s",
-                                                      cpid->ToString());
+                                error_out = MRCLeavesFoundationShare(mrc)
+                                    ? strprintf("block's MRCs include its claim's CPID %s", cpid->ToString())
+                                    : strprintf("MRC for CPID %s leaves the foundation no share of its fee",
+                                                cpid->ToString());
                                 return false;
                             }
 
