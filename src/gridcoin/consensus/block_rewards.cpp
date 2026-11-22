@@ -437,9 +437,23 @@ bool BlockRewardRules::CheckReward(
             // For a "full" coinstake, consisting of eight staker outputs (reward + sidestakes), the foundation
             // sidestake, and the 4 MRC sidestakes (currently 14 total), this would be
             // coinstake.vout.size() = 14 - 4 - 1 = 9, which correctly points to the foundation sidestake index.
+            //
+            // The outputs CheckMRCRewards counted for the MRCs, with the foundation's, cannot be more than the
+            // coinstake has.
+            const unsigned int foundation_outputs = foundation_mrc_sidestake_present ? 1 : 0;
+
+            if (mrc_non_zero_outputs + foundation_outputs > coinstake.vout.size()) {
+                error_out = strprintf(
+                    "MRC outputs counted (%u) and foundation output (%u) exceed the coinstake's outputs (%u)",
+                    mrc_non_zero_outputs,
+                    foundation_outputs,
+                    (unsigned int) coinstake.vout.size());
+                return false;
+            }
+
             unsigned int mrc_start_index = coinstake.vout.size()
                 - mrc_non_zero_outputs
-                - (unsigned int) foundation_mrc_sidestake_present;
+                - foundation_outputs;
 
             // Start with the coinstake input value as a negative (because we want the net).
             CAmount total_owed_to_staker = -m_stake_value_in;
