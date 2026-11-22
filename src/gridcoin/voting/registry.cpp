@@ -159,6 +159,8 @@ public:
     //!
     bool Validate(const PollPayload& payload, const CTransaction& tx)
     {
+        m_failed_on_chain_state = false;
+
         const ClaimMessage message = PackPollMessage(payload.m_poll, tx);
 
         try {
@@ -180,8 +182,19 @@ public:
         }
     }
 
+    //!
+    //! \brief Whether the claim last validated failed on what this node's chain holds of a claimed output: the
+    //! node could not find the output's transaction, or found the output spent. That result depends on this node's
+    //! own state.
+    //!
+    bool FailedOnChainState() const
+    {
+        return m_failed_on_chain_state;
+    }
+
 private:
     CTxDB& m_txdb; //!< Used to resolve unspent amount claims.
+    bool m_failed_on_chain_state = false; //!< See FailedOnChainState().
 
     //!
     //! \brief Determine whether the balance claim (multiple addresses)
@@ -257,6 +270,7 @@ private:
 
         if (!m_txdb.ReadTxIndex(txo.hash, tx_index)) {
             LogPrint(LogFlags::VOTE, "%s: failed to read tx index", __func__);
+            m_failed_on_chain_state = true;
             throw InvalidPollError();
         }
 
@@ -267,6 +281,7 @@ private:
 
         if (!tx_index.vSpent[txo.n].IsNull()) {
             error("%s: found spent txo", __func__);
+            m_failed_on_chain_state = true;
             throw InvalidPollError();
         }
 
@@ -1740,13 +1755,21 @@ bool PollFitsHeight(const Contract& contract, const PollPayload& payload, const 
 //! \brief Whether a version 2+ poll ADD or title REMOVE meets the poll rules that do not depend on a height: the
 //! poll's own checks and its claim against the chain.
 //!
-bool PollAndClaimValid(const PollPayload& payload, const CTransaction& tx, int& DoS) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+//! \param claim_failed_on_chain_state Set when the claim failed on what this node's chain holds of a claimed
+//! output (PollClaimValidator::FailedOnChainState).
+//!
+bool PollAndClaimValid(const PollPayload& payload, const CTransaction& tx, int& DoS, bool& claim_failed_on_chain_state)
+    EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
+    claim_failed_on_chain_state = false;
+
     if (!PollValidator(payload, tx).Validate(DoS)) return false;
 
     CTxDB txdb("r");
+    PollClaimValidator claim_validator(txdb);
 
-    if (!PollClaimValidator(txdb).Validate(payload, tx)) {
+    if (!claim_validator.Validate(payload, tx)) {
+        claim_failed_on_chain_state = claim_validator.FailedOnChainState();
         DoS = 25;
         return false;
     }
@@ -1841,7 +1864,19 @@ bool PollRegistry::ValidateAt(const Contract& contract, const CTransaction& tx, 
         return true;
     }
 
-    return PollAndClaimValid(*payload, tx, DoS);
+    bool claim_failed_on_chain_state = false;
+
+    if (!PollAndClaimValid(*payload, tx, DoS, claim_failed_on_chain_state)) {
+        // A claim that fails on what this node's chain holds of a claimed output carries no penalty here: a refusal
+        // that depends on the node's own state carries no misbehavior score.
+        if (claim_failed_on_chain_state) {
+            DoS = 0;
+        }
+
+        return false;
+    }
+
+    return true;
 }
 
 bool PollRegistry::BlockValidate(const ContractContext& ctx, int& DoS) const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
@@ -1874,7 +1909,9 @@ bool PollRegistry::BlockValidate(const ContractContext& ctx, int& DoS) const EXC
         return true;
     }
 
-    return PollAndClaimValid(*payload, ctx.m_tx, DoS);
+    bool claim_failed_on_chain_state = false;
+
+    return PollAndClaimValid(*payload, ctx.m_tx, DoS, claim_failed_on_chain_state);
 }
 
 void PollRegistry::Add(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
