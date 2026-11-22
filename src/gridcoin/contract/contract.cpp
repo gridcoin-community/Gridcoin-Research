@@ -700,15 +700,7 @@ void GRC::ReplayBlock(const CBlock& block, const CBlockIndex* const pindex, cons
     // only a block that connects live announces its polls and votes.
     const PollRegistry::ReplayScope replaying(GetPollRegistry());
 
-    // From block version 15 the replay follows block connection: a superblock's activations, then the block's
-    // contracts.
-    const bool connection_order = IsV15Enabled(pindex->nHeight);
-
-    if (apply_contracts && !connection_order) {
-        ApplyContracts(block, pindex, db_heights, out_found_contract, /* skip_stored_registry_contracts */ true,
-                       beacons_only);
-    }
-
+    // The replay follows block connection at every height: a superblock's activations, then the block's contracts.
     if (pindex->IsSuperblock() && pindex->nVersion >= 11) {
         // Only apply activations that have not already been stored/loaded into the beacon DB. ActivatePending is
         // called at the block level, so if the block's height equals the beacon db height it has already been
@@ -730,7 +722,7 @@ void GRC::ReplayBlock(const CBlock& block, const CBlockIndex* const pindex, cons
         }
     }
 
-    if (apply_contracts && connection_order) {
+    if (apply_contracts) {
         ApplyContracts(block, pindex, db_heights, out_found_contract, /* skip_stored_registry_contracts */ true,
                        beacons_only);
     }

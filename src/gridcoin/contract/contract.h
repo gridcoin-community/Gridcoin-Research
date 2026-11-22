@@ -687,8 +687,8 @@ void RevertContracts(const CTransaction& tx, const CBlockIndex* const pindex) EX
 void RevertContracts(const CBlock& block, const CBlockIndex* const pindex) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
 //!
-//! \brief Replay one block's registry changes. From block version 15 it uses the order block connection applies them:
-//! a superblock's beacon activations first (GridcoinConnectBlock), then the block's contracts.
+//! \brief Replay one block's registry changes, in the order block connection applies them at every height: a
+//! superblock's beacon activations first (GridcoinConnectBlock), then the block's contracts.
 //!
 //! \param block              The block being replayed.
 //! \param pindex             Index entry of that block.
