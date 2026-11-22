@@ -10,6 +10,7 @@
 #include "gridcoin/project.h"
 #include "gridcoin/claim.h"
 #include "gridcoin/superblock.h"
+#include "gridcoin/tx_message.h"
 #include <key_io.h>
 #include "rpc/blockchain.h"
 #include "test/data/testnet_beacon.bin.h"
@@ -3086,6 +3087,70 @@ BOOST_AUTO_TEST_CASE(beacon_registry_checks_a_contract_s_signature_against_its_a
     // An advertisement signed over the removal is.
     const CTransaction after_removal = SignedAdvertisementTx(cpid, key, renewable_at + DAY, 4);
     BOOST_CHECK(taken_at(after_removal, 5, renewable_at + DAY));
+
+    registry.Reset();
+}
+
+// A beacon contract the memory pool holds is stranded, from block version 15, when no block can carry it any more:
+// its payload is of a lower version, or it was signed over a record the CPID no longer has.
+BOOST_AUTO_TEST_CASE(beacon_registry_names_the_pooled_contracts_no_block_can_carry)
+{
+    LOCK(cs_main);
+
+    GRC::BeaconRegistry& registry = GRC::GetBeaconRegistry();
+    registry.Reset();
+
+    grc_test::V15HeightGuard v15(AboveV14(4));
+
+    CKey key;
+    key.MakeNewKey(true);
+    const GRC::Cpid cpid = GRC::Cpid::Parse("00010203040506070809101112131415");
+
+    const auto stranded_at = [&](const CTransaction& tx, const int height) {
+        return registry.IsStrandedAtHeight(tx.GetContracts().front(), AboveV14(height));
+    };
+
+    // Signed while the CPID has no record.
+    const CTransaction v2 = SignedAdvertisementTx(cpid, key, START_TIME, 2);
+    const CTransaction v4 = SignedAdvertisementTx(cpid, key, START_TIME, 4);
+
+    // Below block version 15 nothing is stranded.
+    BOOST_CHECK(!stranded_at(v2, 3));
+    BOOST_CHECK(!stranded_at(v4, 3));
+
+    // From it a lower version is, and a version 4 contract signed over the CPID's record is not.
+    BOOST_CHECK(stranded_at(v2, 4));
+    BOOST_CHECK(!stranded_at(v4, 4));
+
+    // The CPID's record changes: a pending beacon is activated.
+    AddPendingBeacon(registry, cpid, key.GetPubKey(), START_TIME, 2);
+    BOOST_CHECK(!stranded_at(v4, 4));
+
+    registry.ActivatePending({key.GetPubKey().GetID()}, START_TIME + DAY,
+                             uint256S("0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c"), 3);
+    BOOST_REQUIRE(!registry.CurrentRecordHash(cpid).IsNull());
+    BOOST_CHECK(stranded_at(v4, 4));
+    BOOST_CHECK(!stranded_at(v4, 3));
+
+    // A renewal signed over the beacon is not stranded for being early: it can be mined once the beacon is
+    // renewable, so it stays.
+    const CTransaction early_renewal = SignedAdvertisementTx(cpid, key, START_TIME + 2 * DAY, 4);
+    BOOST_CHECK(!stranded_at(early_renewal, 4));
+
+    // A removal signed over the beacon, and the same payload with another action.
+    const CTransaction removal = SignedBeaconTx(
+        GRC::ContractAction::REMOVE, cpid, key, START_TIME + 2 * DAY, 4, registry.CurrentRecordHash(cpid));
+    BOOST_CHECK(!stranded_at(removal, 4));
+
+    CMutableTransaction as_advertisement;
+    as_advertisement.vContracts.push_back(GRC::MakeContract<GRC::BeaconPayload>(
+        3, GRC::ContractAction::ADD, removal.GetContracts().front().CopyPayloadAs<GRC::BeaconPayload>()));
+    BOOST_CHECK(stranded_at(CTransaction(as_advertisement), 4));
+
+    // A contract of another type is none of this rule's.
+    CMutableTransaction other;
+    other.vContracts.push_back(GRC::MakeContract<GRC::TxMessage>(GRC::ContractAction::ADD, "text"));
+    BOOST_CHECK(!stranded_at(CTransaction(other), 4));
 
     registry.Reset();
 }

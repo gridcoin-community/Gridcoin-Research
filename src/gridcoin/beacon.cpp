@@ -1272,9 +1272,7 @@ bool BeaconRegistry::ValidateAt(const Contract& contract, const CTransaction& tx
         return false;
     }
 
-    // The signature of a version 4 payload covers the contract's action and the record the contract acts on, so
-    // it is checked against the CPID's record as the registry holds it.
-    if (!payload->VerifySignature(contract.m_action.Value(), CurrentRecordHash(payload->m_cpid))) {
+    if (!SignatureVerifies(contract, *payload)) {
         DoS = 25;
         LogPrint(LogFlags::CONTRACT, "%s: Invalid beacon signature", __func__);
         return false;
@@ -1434,6 +1432,23 @@ bool BeaconRegistry::PayloadVersionFitsHeight(const Contract& contract, const in
     }
 
     return (contract.SharePayloadAs<BeaconPayload>()->m_version >= 4) == IsV15Enabled(height);
+}
+
+bool BeaconRegistry::SignatureVerifies(const Contract& contract, const BeaconPayload& payload) const
+{
+    // The signature of a version 4 payload covers the contract's action and the record the contract acts on, so
+    // it is checked against the CPID's record as the registry holds it.
+    return payload.VerifySignature(contract.m_action.Value(), CurrentRecordHash(payload.m_cpid));
+}
+
+bool BeaconRegistry::IsStrandedAtHeight(const Contract& contract, const int height) const
+{
+    if (!IsV15Enabled(height) || contract.m_type != ContractType::BEACON || contract.m_version < 2) {
+        return false;
+    }
+
+    return !PayloadVersionFitsHeight(contract, height)
+        || !SignatureVerifies(contract, *contract.SharePayloadAs<BeaconPayload>());
 }
 
 bool BeaconRegistry::RemoveCarriesCurrentKey(const Contract& contract) const

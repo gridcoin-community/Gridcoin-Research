@@ -853,6 +853,38 @@ public:
     static bool PayloadVersionFitsHeight(const Contract& contract, const int height);
 
     //!
+    //! \brief Determine whether a beacon contract the memory pool holds can no longer be mined: the block at a
+    //! height of block version 15 does not carry its payload's version, or its signature does not verify against
+    //! the record the CPID has now.
+    //!
+    //! For the sweep in SetBestChain, as PoolRegistry::IsStrandedAtHeight is for its contracts. Both tests are the
+    //! ones a block's validation applies (PayloadVersionFitsHeight, and the signature check of ValidateAt), so the
+    //! sweep retires what no block can carry and nothing else: a contract that fails for another reason, such as
+    //! a renewal that comes too early, can be valid later and stays.
+    //!
+    //! A record changes forward as blocks connect. A reorganization can bring an earlier record back and with it
+    //! the validity of a retired contract; retirement is not undone for that, as for the other sweeps. The sender
+    //! sends again.
+    //!
+    //! \param contract The contract to check. One that is not a version 2+ beacon contract is never stranded.
+    //! \param height   The height of the next block. Below block version 15 nothing is stranded.
+    //!
+    bool IsStrandedAtHeight(const Contract& contract, const int height) const EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+
+    //!
+    //! \brief Determine whether a beacon payload's signature verifies for its contract: for a version 4 payload,
+    //! over the contract's action and the record the CPID has now (CurrentRecordHash).
+    //!
+    //! The one signature check of a beacon contract, for its validation (ValidateAt) and for the sweep of pooled
+    //! contracts (IsStrandedAtHeight).
+    //!
+    //! \param contract The contract that carries the payload.
+    //! \param payload  The contract's payload.
+    //!
+    bool SignatureVerifies(const Contract& contract, const BeaconPayload& payload) const
+        EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+
+    //!
     //! \brief Determine whether a beacon is active for the specified CPID at
     //! this moment.
     //!
