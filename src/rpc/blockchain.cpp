@@ -1690,6 +1690,11 @@ UniValue advertisebeacon(const UniValue& params)
                 "advertisement, advertising again an hour after sending replaces it");
         case GRC::BeaconError::OUT_OF_SYNC:
             throw JSONRPCError(RPC_MISC_ERROR, "The wallet must be in sync to advertise a beacon.");
+        case GRC::BeaconError::KEY_HELD_BY_ANOTHER_CPID:
+            throw JSONRPCError(
+                RPC_INVALID_ADDRESS_OR_KEY,
+                "The beacon registry knows this beacon key under another CPID. Generate a new beacon key and use "
+                "that one.");
     }
 
     throw JSONRPCError(RPC_INTERNAL_ERROR, "Unexpected error occurred");
@@ -1934,6 +1939,11 @@ UniValue advertisebeaconv3(const UniValue& params)
                 "advertisement, advertising again an hour after sending replaces it");
         case GRC::BeaconError::OUT_OF_SYNC:
             throw JSONRPCError(RPC_MISC_ERROR, "The wallet must be in sync to advertise a beacon.");
+        case GRC::BeaconError::KEY_HELD_BY_ANOTHER_CPID:
+            throw JSONRPCError(
+                RPC_INVALID_ADDRESS_OR_KEY,
+                "The beacon registry knows this beacon key under another CPID. Generate a new beacon key and use "
+                "that one.");
     }
 
     throw JSONRPCError(RPC_INTERNAL_ERROR, "Unexpected error occurred");
@@ -2023,6 +2033,11 @@ UniValue revokebeacon(const UniValue& params)
                 "Beacon transaction for this CPID is already in the mempool");
         case GRC::BeaconError::OUT_OF_SYNC:
             throw JSONRPCError(RPC_MISC_ERROR, "The wallet must be in sync to revoke a beacon.");
+        case GRC::BeaconError::KEY_HELD_BY_ANOTHER_CPID:
+            throw JSONRPCError(
+                RPC_INVALID_ADDRESS_OR_KEY,
+                "The beacon registry knows this beacon key under another CPID. Generate a new beacon key and use "
+                "that one.");
     }
 
     throw JSONRPCError(RPC_INTERNAL_ERROR, "Unexpected error occurred");

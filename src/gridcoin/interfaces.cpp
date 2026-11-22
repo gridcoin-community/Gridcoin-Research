@@ -1195,6 +1195,8 @@ BeaconStatus MapBeaconError(const GRC::BeaconError error)
         case GRC::BeaconError::ALEADY_IN_MEMPOOL:  return BeaconStatus::ALREADY_IN_MEMPOOL;
         // The status the snapshot itself reports while out of sync (DeriveBeacon).
         case GRC::BeaconError::OUT_OF_SYNC:        return BeaconStatus::UNKNOWN;
+        // No status of its own yet: shown as a failed advertisement, as V14_NOT_ENABLED is.
+        case GRC::BeaconError::KEY_HELD_BY_ANOTHER_CPID: return BeaconStatus::ERROR_TX_FAILED;
     }
 
     assert(false); // unreachable: every BeaconError enumerator is handled above

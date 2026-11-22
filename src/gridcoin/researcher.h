@@ -322,7 +322,8 @@ enum class BeaconError
     V14_NOT_ENABLED,    //!< v3 beacons require block version 14 or higher.
     WALLET_LOCKED,      //!< Wallet not fully unlocked.
     ALEADY_IN_MEMPOOL,  //!< A beacon contract for this CPID is already in the mempool.
-    OUT_OF_SYNC         //!< The node is not in sync with the network.
+    OUT_OF_SYNC,        //!< The node is not in sync with the network.
+    KEY_HELD_BY_ANOTHER_CPID //!< The beacon registry knows the key under another CPID.
 };
 
 //!
