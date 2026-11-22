@@ -1318,6 +1318,36 @@ BOOST_AUTO_TEST_CASE(the_poll_title_index_follows_the_pool)
     BOOST_CHECK(!pool.HasPollForTitle("title"));
 }
 
+//! GetBeaconTxs() names the pooled transactions that carry a beacon contract, for
+//! the sweep of the ones the next block cannot carry, and no others.
+BOOST_AUTO_TEST_CASE(beacon_txs_are_listed_while_pooled)
+{
+    CKey key;
+    key.MakeNewKey(true);
+
+    const CTransaction beacon_tx = MakeTx(
+        {GRC::MakeContract<GRC::BeaconPayload>(GRC::ContractAction::ADD, GRC::Cpid(), key.GetPubKey())});
+    const CTransaction plain_tx = MakePlainTx(1000);
+
+    CTxMemPool pool;
+    pool.addUnchecked(plain_tx.GetHash(), MakeEntry(plain_tx));
+    BOOST_CHECK(pool.GetBeaconTxs().empty());
+
+    pool.addUnchecked(beacon_tx.GetHash(), MakeEntry(beacon_tx));
+
+    const std::vector<uint256> found = pool.GetBeaconTxs();
+    BOOST_REQUIRE_EQUAL(found.size(), 1U);
+    BOOST_CHECK(found[0] == beacon_tx.GetHash());
+
+    pool.remove(beacon_tx);
+    BOOST_CHECK(pool.GetBeaconTxs().empty());
+    BOOST_CHECK_EQUAL(pool.size(), 1UL);
+
+    pool.addUnchecked(beacon_tx.GetHash(), MakeEntry(beacon_tx));
+    pool.clear();
+    BOOST_CHECK(pool.GetBeaconTxs().empty());
+}
+
 //! The counter is what keeps GetMessageContractTxs() O(1) for a pool holding no
 //! MESSAGE contract -- which, after the transition, is every pool forever. Pin
 //! both halves: the counter tracks add/remove, and the lookup returns nothing

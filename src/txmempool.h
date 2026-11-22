@@ -490,6 +490,24 @@ public:
         return found;
     }
 
+    //! \brief Hashes of pooled transactions carrying a beacon contract.
+    //!
+    //! For the sweep in SetBestChain of beacon contracts whose payload version
+    //! the next block does not carry. The beacon index answers for a pool that
+    //! holds none without a scan, which is nearly every pool at nearly every
+    //! block: beacon contracts are a handful a day.
+    std::vector<uint256> GetBeaconTxs() const
+    {
+        LOCK(cs);
+        std::vector<uint256> found;
+        if (m_beacon_by_cpid.empty()) return found;
+
+        for (const auto& [hash, entry] : mapTx) {
+            if (entry.HasBeacon()) found.push_back(hash);
+        }
+        return found;
+    }
+
     //! \brief Hashes of pooled transactions carrying a MESSAGE contract.
     //!
     //! No MESSAGE-keyed index exists because the only consumer is the one-shot

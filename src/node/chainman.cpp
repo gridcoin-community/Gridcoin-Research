@@ -930,6 +930,58 @@ EXCLUSIVE_LOCKS_REQUIRED(cs_main)
                 }
             }
 
+            // Retire beacon contracts that can no longer be mined. The same shape as the MESSAGE sweep above, at the
+            // block version 15 height: a block carries beacon payload version 4 from that height and the lower
+            // versions below it (BeaconRegistry::PayloadVersionFitsHeight), which is also what AcceptToMemoryPool
+            // asks of the next block. From the height no block carries a contract of a lower version. The sweep
+            // takes it and its pooled descendants out of the pool, and the wallet abandons its own, which releases
+            // the coins.
+            //
+            // Only from the height on, and so only lower versions: a version 4 contract the pool holds below the
+            // height, after a reorganization across it, becomes valid again as the chain returns.
+            //
+            // Nothing runs below the height. From it the pool admits no lower version, so after the block that
+            // reaches it the loop finds none to retire, and what is left is the listing of the pool's beacon
+            // contracts, which the pool's beacon index answers without a scan when it holds none.
+            {
+                const int next_height = pindex->nHeight + 1;
+
+                if (IsV15Enabled(next_height)) {
+                    for (const uint256& beacon_hash : mempool.GetBeaconTxs()) {
+                        CTransaction beacon_tx;
+
+                        // Already gone as a descendant of one removed earlier in this loop.
+                        if (!mempool.lookup(beacon_hash, beacon_tx)) continue;
+
+                        bool left_behind = false;
+                        for (const auto& contract : beacon_tx.GetContracts()) {
+                            if (!GRC::BeaconRegistry::PayloadVersionFitsHeight(contract, next_height)) {
+                                left_behind = true;
+                                break;
+                            }
+                        }
+                        if (!left_behind) continue;
+
+                        std::vector<CTransaction> removed;
+                        mempool.remove(beacon_tx, /*fRecursive=*/true,
+                                       MemPoolRemovalReason::UNKNOWN, &removed);
+
+                        for (const auto& tx : removed) {
+                            LogPrintf("%s: A block carries beacon payload version 4 from height %d. Removed "
+                                      "transaction %s from the mempool.",
+                                      __func__, next_height, tx.GetHash().ToString());
+
+                            unsigned int inputs_released = 0;
+
+                            if (pwalletMain->AbandonTransaction(tx.GetHash(), &inputs_released)) {
+                                LogPrintf("%s: Abandoned wallet transaction %s, releasing %u input(s).",
+                                          __func__, tx.GetHash().ToString(), inputs_released);
+                            }
+                        }
+                    }
+                }
+            }
+
             // Clean up spent outputs in wallet that are now not spent if mempool transactions erased above. This
             // is ugly and heavyweight and should be replaced when the upstream wallet code is ported. Unlike the
             // repairwallet rpc, this is silent.
