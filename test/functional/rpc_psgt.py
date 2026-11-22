@@ -19,7 +19,7 @@ Amounts are floats (AmountFromValue rejects strings).
 """
 
 from test_framework.test_framework import GridcoinTestFramework
-from test_framework.util import assert_equal
+from test_framework.util import assert_equal, assert_raises_rpc_error
 
 
 class RpcPsgtTest(GridcoinTestFramework):
@@ -50,6 +50,11 @@ class RpcPsgtTest(GridcoinTestFramework):
         assert_equal(decoded["tx"]["vin"][0]["txid"], utxo["txid"])
         assert_equal(len(decoded["tx"]["vout"]), 1)
         self.log.info("createpsgt/decodepsgt round-trip OK")
+
+        # --- createpsgt takes a non-negative ntime as given and refuses a negative one ---
+        assert_equal(node.decodepsgt(node.createpsgt(inputs, outputs, 1000000000))["tx"]["time"], 1000000000)
+        assert_raises_rpc_error(-8, "ntime -1 must not be negative", node.createpsgt, inputs, outputs, -1)
+        self.log.info("createpsgt ntime range OK")
 
         # --- converttopsgt from an equivalent raw tx yields the same input ---
         raw = node.createrawtransaction(inputs, outputs)

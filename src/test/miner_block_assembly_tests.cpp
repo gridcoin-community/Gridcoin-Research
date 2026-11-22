@@ -50,8 +50,10 @@
 #include "primitives/block.h"
 #include "primitives/transaction.h"
 #include "scheduler.h"
+#include "script/interpreter.h"
 #include "script/script.h"
 #include "script/sign.h"
+#include "support/allocators/secure.h"
 #include "gridcoin/tx_message.h"
 #include "test/chain_setup.h"
 #include "test/state_guard.h"
@@ -89,10 +91,10 @@ unsigned int TxSize(const CTransaction& tx)
     return ::GetSerializeSize(tx, SER_NETWORK, PROTOCOL_VERSION);
 }
 
-//! The miner's dFeePerKb for a transaction paying `fee`.
-double FeePerKb(const CTransaction& tx, CAmount fee)
+//! The fee rate the miner ranks a transaction paying `fee` by.
+FeeRate Rate(const CTransaction& tx, CAmount fee)
 {
-    return (double)fee / (double(TxSize(tx)) / 1000.0);
+    return FeeRate{fee, TxSize(tx)};
 }
 
 //! Fund a candidate at `sat_per_byte`, which is how every case here stays above
@@ -102,22 +104,52 @@ CAmount FeeAtRate(const CTransaction& probe, CAmount sat_per_byte)
     return (CAmount)TxSize(probe) * sat_per_byte;
 }
 
+//! Build a spend with `build(fee)` and fund it at `sat_per_byte` of its own
+//! serialized size.
+//!
+//! The fee is part of what is signed, and at some fees the signature is a byte
+//! shorter, so a size measured at one fee need not hold at another. The fee is
+//! worked out from the size at a placeholder fee, and if the spend at that fee
+//! is another size, once more from that size. If the spend at the second fee is
+//! a third size again, it is kept anyway, a byte's worth off `sat_per_byte`:
+//! under 1% for every shape here, and every case asserts the rate relations it
+//! depends on against the transactions it built.
+CTransaction BuildAtRate(const std::function<CTransaction(CAmount)>& build, CAmount sat_per_byte,
+                         CAmount& fee_out)
+{
+    const CTransaction probe = build(COIN);
+    fee_out = FeeAtRate(probe, sat_per_byte);
+
+    const CTransaction tx = build(fee_out);
+
+    if (TxSize(tx) == TxSize(probe)) return tx;
+
+    BOOST_TEST_MESSAGE("a spend is " << TxSize(tx) << " bytes at the fee worked out from "
+                       << TxSize(probe) << " bytes; working the fee out again");
+
+    fee_out = FeeAtRate(tx, sat_per_byte);
+
+    const CTransaction second = build(fee_out);
+
+    if (TxSize(second) != TxSize(tx)) {
+        BOOST_TEST_MESSAGE("a spend is " << TxSize(second) << " bytes at the fee worked out from "
+                           << TxSize(tx) << " bytes; keeping it");
+    }
+
+    return second;
+}
+
 //! Build one candidate spending premine output `index`, sized by `n_outputs`
 //! and funded at `sat_per_byte`. The fee is derived from the transaction's real
-//! serialized size rather than an estimate: a one-byte DER drift would
-//! otherwise move the rate.
+//! serialized size rather than an estimate (see BuildAtRate).
 CTransaction MakeCandidate(size_t index, int n_outputs, CAmount sat_per_byte, CAmount& fee_out)
 {
     const std::vector<COutPoint> coins = SpendablePremineOutputs();
     BOOST_REQUIRE_MESSAGE(index < coins.size(), "not enough spendable premine outputs");
 
-    // Size first, with a placeholder fee, then re-derive the fee from the
-    // measured size and rebuild. The size does not depend on the fee.
-    const CTransaction probe = CreateSpend(PremineCoinbase(), coins[index].n, COIN, n_outputs);
-    fee_out = FeeAtRate(probe, sat_per_byte);
-
-    const CTransaction tx = CreateSpend(PremineCoinbase(), coins[index].n, fee_out, n_outputs);
-    BOOST_REQUIRE_EQUAL(TxSize(tx), TxSize(probe));
+    const CTransaction tx = BuildAtRate([&](CAmount fee) {
+        return CreateSpend(PremineCoinbase(), coins[index].n, fee, n_outputs);
+    }, sat_per_byte, fee_out);
 
     // The rate floor is not the only one. The miner also compares the ABSOLUTE
     // fee against GetMinFee(tx, nBlockSize, GMF_BLOCK), which passes nBytes = 0
@@ -141,15 +173,9 @@ CTransaction MakeCandidateToScript(size_t index, const CScript& script, int n_ou
     const std::vector<COutPoint> coins = SpendablePremineOutputs();
     BOOST_REQUIRE_MESSAGE(index < coins.size(), "not enough spendable premine outputs");
 
-    const CTransaction probe =
-        grc_test::CreateSpendToScript(PremineCoinbase(), coins[index].n, COIN, script, n_outputs);
-    fee_out = FeeAtRate(probe, sat_per_byte);
-
-    const CTransaction tx =
-        grc_test::CreateSpendToScript(PremineCoinbase(), coins[index].n, fee_out, script, n_outputs);
-    BOOST_REQUIRE_EQUAL(TxSize(tx), TxSize(probe));
-
-    return tx;
+    return BuildAtRate([&](CAmount fee) {
+        return grc_test::CreateSpendToScript(PremineCoinbase(), coins[index].n, fee, script, n_outputs);
+    }, sat_per_byte, fee_out);
 }
 
 //! Run block assembly over whatever is in the mempool, returning the selected
@@ -200,34 +226,29 @@ struct MinTxFeeRestorer {
 constexpr CAmount FLAT_FLOOR_WITH_MARGIN = MIN_TX_FEE * 10 * 102 / 100;
 
 //! A size and a raised -mintxfee at which a fee of exactly floor * size / 1000
-//! evaluates below the floor in the miner's double rate.
-struct ExactFloorMisround {
+//! is a whole number of satoshi.
+struct ExactFloor {
     int n_outputs;
     unsigned int size;
     CAmount floor;
     CAmount fee;
 };
 
-//! Search for an ExactFloorMisround. `build(fee, n_outputs)` makes the
-//! transaction to measure; it is called once with a placeholder fee to size a
-//! shape and once more to rebuild it at the found fee.
+//! Search for an ExactFloor. `build(fee, n_outputs)` makes the transaction to
+//! measure; it is called once with a placeholder fee to size a shape and once
+//! more to rebuild it at the found fee.
 //!
 //! A floor F gives a whole-satoshi fee at size s only when F is a multiple of
 //! `step`. A shape is skipped when that step is a multiple of 500, and so is a
-//! floor that is. The misround test is the miner's own rate expression on the
-//! exact-floor fee. A rebuild whose size differs from the probe's moves on to
-//! the next shape. The search starts at FLAT_FLOOR_WITH_MARGIN, the miner's
-//! flat absolute floor plus 2%, so every fee it can return also clears that
-//! floor even if a signature is a byte or two shorter.
-std::optional<ExactFloorMisround> FindExactFloorMisround(
+//! floor that is (see control 2 in the first case below). A rebuild whose size
+//! differs from the probe's moves on to the next shape. The search starts at
+//! FLAT_FLOOR_WITH_MARGIN, the miner's flat absolute floor plus 2%, so every
+//! fee it can return also clears that floor even if a signature is a byte or
+//! two shorter. Nothing here is floating point, so the search finds the same
+//! shape and floor on every platform.
+std::optional<ExactFloor> FindExactFloor(
     const std::function<CTransaction(CAmount, int)>& build)
 {
-    // The miner's own rate expression, on a fee and size rather than a built
-    // transaction.
-    const auto rate_as_double = [](CAmount fee, unsigned int size) {
-        return (double)fee / (double(size) / 1000.0);
-    };
-
     for (int n = 1; n <= 40; ++n) {
         const CTransaction probe = build(COIN, n);
         const unsigned int s = TxSize(probe);
@@ -238,26 +259,12 @@ std::optional<ExactFloorMisround> FindExactFloorMisround(
         CAmount start = (FLAT_FLOOR_WITH_MARGIN * 1000 + s - 1) / s;
         start = (start + step - 1) / step * step;
 
-        CAmount floor = 0;
-
-        for (int k = 0; k < 20000; ++k) {
-            const CAmount candidate = start + k * step;
-
-            if (candidate % 500 == 0) continue;
-
-            if (rate_as_double(candidate * s / 1000, s) < (double)candidate) {
-                floor = candidate;
-                break;
-            }
-        }
-
-        if (floor == 0) continue;
-
+        const CAmount floor = start % 500 == 0 ? start + step : start;
         const CTransaction rebuilt = build(floor * s / 1000, n);
 
         if (TxSize(rebuilt) != s) continue;
 
-        return ExactFloorMisround{n, s, floor, floor * s / 1000};
+        return ExactFloor{n, s, floor, floor * s / 1000};
     }
 
     return std::nullopt;
@@ -267,10 +274,13 @@ std::optional<ExactFloorMisround> FindExactFloorMisround(
 
 // RegistryResetFor is here because the POOL cases below seed the process-global
 // PoolRegistry. StateGuard deliberately does NOT restore registries (state_guard.h
-// -- Reset() is destructive and some suites want it on entry only), and the
-// suite-level leak detector compares registry SIZES, which those cases do not
-// change: they modify an existing builtin seed rather than adding an entry. So the
-// mutation is both unrestored and invisible, and the reset has to be asked for.
+// -- Reset() is destructive and some suites want it on entry only), so the reset
+// has to be asked for. Those cases modify an existing builtin seed rather than
+// adding an entry; the suite-level leak detector compares each registry's
+// current entries one by one, not just the count, so it names the edited entry
+// if this reset is ever dropped. The reset is declared before RegtestChainSetup
+// so that it runs after the chain rewind's contract reverts, as in
+// pool_chain_tests.
 //
 // WalletTxScope is the per-case fixture: the chain is shared, but every
 // unconfirmed entry a case adds is erased at its exit, so no case hands a
@@ -279,7 +289,7 @@ std::optional<ExactFloorMisround> FindExactFloorMisround(
 // case's forced ResendWalletTransactions can erase pre-existing invalid
 // entries -- so this is a no-leak guarantee for what cases add, not a
 // restoration of the whole entry set (see chain_setup.h).
-BOOST_FIXTURE_TEST_SUITE(miner_block_assembly_tests, grc_test::WalletTxScope, *boost::unit_test::fixture<grc_test::RegtestChainSetup>() *boost::unit_test::fixture<grc_test::RegistryResetFor<GRC::ContractType::POOL_REGISTER>>())
+BOOST_FIXTURE_TEST_SUITE(miner_block_assembly_tests, grc_test::WalletTxScope, *boost::unit_test::fixture<grc_test::RegistryResetFor<GRC::ContractType::POOL_REGISTER>>() *boost::unit_test::fixture<grc_test::RegtestChainSetup>())
 
 //!
 //! The fixture's own precondition: a real chain, and premine coins that the
@@ -288,13 +298,15 @@ BOOST_FIXTURE_TEST_SUITE(miner_block_assembly_tests, grc_test::WalletTxScope, *b
 //! elsewhere.
 //!
 //! Asserted as the invariant that holds for the fixture's whole lifetime, not
-//! as the state at suite entry: the cases run in any order, and five of them
-//! mine. The entry state (height 0, ten unspent outputs) is the fixture
-//! constructor's own precondition, checked before the shuffle. What this case
-//! pins is that the transaction index agrees with the chain: the premine
-//! outputs it reports spendable are exactly those no transaction in a block on
-//! the active chain has consumed. The two are independent sources -- vSpent in
-//! the index against block contents read back from disk.
+//! as the state at suite entry: the cases run in any order, and the cases that
+//! mine put the chain back when they end (TipRestorer). The fixture constructor
+//! checks the entry height, 0, before the shuffle;
+//! a_case_that_mines_leaves_the_chain_as_it_found_it checks the ten unspent
+//! outputs. What this case pins, at the state every case enters, is that the
+//! transaction index reports exactly the premine outputs no block on the active
+//! chain has consumed, read against block contents walked back from the tip;
+//! a_case_that_mines_leaves_the_chain_as_it_found_it checks the index while a
+//! mined block is on the chain and again after the restorer undoes it.
 //!
 BOOST_AUTO_TEST_CASE(the_fixture_provides_spendable_coins)
 {
@@ -380,7 +392,7 @@ BOOST_AUTO_TEST_CASE(mempool_transactions_are_selected_into_the_block)
 //!
 //! Ordering is by fee RATE, not absolute fee.
 //!
-//! The heap is keyed on dFeePerKb (miner.cpp), so a large transaction paying
+//! The heap is keyed on the fee rate (miner.cpp), so a large transaction paying
 //! the largest absolute fee in the block still sorts below smaller ones paying
 //! a higher rate. Gridcoin's relay schedule is (1 + bytes/1000) * 0.001 GRC, so
 //! the effective rate FALLS with size and the two orders genuinely differ.
@@ -400,7 +412,7 @@ BOOST_AUTO_TEST_CASE(selection_order_is_by_fee_rate_not_absolute_fee)
     // The premise of the case: the big transaction pays MORE in total and LESS
     // per kilobyte.
     BOOST_REQUIRE_GT(big_fee, small_fee);
-    BOOST_REQUIRE_GT(FeePerKb(small, small_fee), FeePerKb(big, big_fee));
+    BOOST_REQUIRE(Rate(small, small_fee) > Rate(big, big_fee));
 
     // Added in the "wrong" order, so a loop that merely preserved insertion
     // order would fail.
@@ -413,6 +425,69 @@ BOOST_AUTO_TEST_CASE(selection_order_is_by_fee_rate_not_absolute_fee)
     BOOST_REQUIRE_EQUAL(selected.size(), 2u);
     BOOST_CHECK_EQUAL(selected[0].GetHash().ToString(), small.GetHash().ToString());
     BOOST_CHECK_EQUAL(selected[1].GetHash().ToString(), big.GetHash().ToString());
+
+    mempool.clear();
+}
+
+//!
+//! Candidates paying the same fee rate are selected in transaction hash order.
+//!
+//! The heap breaks a tie in the fee rate on the transaction hash, the lower
+//! first, so equal rates come out in the same order on every run. With the
+//! double rate this replaced, a tie fell to the transactions' addresses in
+//! memory. The miner reads the mempool in txid order, so the order the pair is
+//! added in does not reach the heap; what the two passes below change is where
+//! the transactions sit, as the cleared mempool frees and reuses its entries.
+//! Against the double rate the case fails one of the two passes.
+//!
+BOOST_AUTO_TEST_CASE(equal_fee_rates_are_selected_in_transaction_hash_order)
+{
+    mempool.clear();
+
+    const std::vector<COutPoint> coins = SpendablePremineOutputs();
+    BOOST_REQUIRE_GE(coins.size(), 2u);
+
+    // Two spends of the same shape and fee from different coins. They differ
+    // in size only when one signature is a byte shorter, so the first pair of
+    // coins whose spends are the same size is used.
+    const CAmount fee = 200000;
+    std::optional<std::pair<CTransaction, CTransaction>> pair;
+
+    for (size_t i = 0; i < coins.size() && !pair; ++i) {
+        const CTransaction first = CreateSpend(PremineCoinbase(), coins[i].n, fee, 1);
+
+        for (size_t j = i + 1; j < coins.size() && !pair; ++j) {
+            const CTransaction second = CreateSpend(PremineCoinbase(), coins[j].n, fee, 1);
+
+            if (TxSize(first) == TxSize(second)) pair.emplace(first, second);
+        }
+    }
+
+    BOOST_REQUIRE_MESSAGE(pair, "no two spendable coins give spends of the same size");
+
+    const bool first_is_lower = pair->first.GetHash() < pair->second.GetHash();
+    const CTransaction& low = first_is_lower ? pair->first : pair->second;
+    const CTransaction& high = first_is_lower ? pair->second : pair->first;
+
+    // The premise of the case: the same rate, and enough fee to be selected.
+    BOOST_REQUIRE(Rate(low, fee) == Rate(high, fee));
+    BOOST_REQUIRE_GE(fee, GetMinFee(low));
+
+    for (const bool low_added_first : {true, false}) {
+        BOOST_TEST_CONTEXT("lower hash added " << (low_added_first ? "first" : "second")) {
+            mempool.clear();
+
+            AddToMempool(low_added_first ? low : high, fee);
+            AddToMempool(low_added_first ? high : low, fee);
+
+            CAmount fees = 0;
+            const std::vector<CTransaction> selected = AssembleBlock(fees);
+
+            BOOST_REQUIRE_EQUAL(selected.size(), 2u);
+            BOOST_CHECK_EQUAL(selected[0].GetHash().ToString(), low.GetHash().ToString());
+            BOOST_CHECK_EQUAL(selected[1].GetHash().ToString(), high.GetHash().ToString());
+        }
+    }
 
     mempool.clear();
 }
@@ -471,7 +546,7 @@ BOOST_AUTO_TEST_CASE(an_oversized_transaction_is_skipped_and_selection_continues
     const CTransaction small = MakeCandidate(1, 1, 700, small_fee);
 
     BOOST_REQUIRE_GE(TxSize(oversized), (unsigned int)(MAX_BLOCK_SIZE_GEN / 2));
-    BOOST_REQUIRE_GT(FeePerKb(oversized, big_fee), FeePerKb(small, small_fee));
+    BOOST_REQUIRE(Rate(oversized, big_fee) > Rate(small, small_fee));
 
     AddToMempool(oversized, big_fee);
     AddToMempool(small, small_fee);
@@ -509,7 +584,7 @@ BOOST_AUTO_TEST_CASE(a_sigop_heavy_transaction_is_skipped_and_selection_continue
 
     BOOST_REQUIRE_GE(GetLegacySigOpCount(heavy) + 100u, (unsigned int)MAX_BLOCK_SIGOPS);
     BOOST_REQUIRE_LT(TxSize(heavy), (unsigned int)(MAX_BLOCK_SIZE_GEN / 2));
-    BOOST_REQUIRE_GT(FeePerKb(heavy, heavy_fee), FeePerKb(small, small_fee));
+    BOOST_REQUIRE(Rate(heavy, heavy_fee) > Rate(small, small_fee));
 
     AddToMempool(heavy, heavy_fee);
     AddToMempool(small, small_fee);
@@ -567,7 +642,7 @@ BOOST_AUTO_TEST_CASE(a_message_contract_transaction_is_skipped_at_the_disable_he
         GRC::MakeContract<GRC::TxMessage>(GRC::ContractAction::ADD, "stuffed"));
     const CTransaction ordinary = CreateSpend(PremineCoinbase(), coins[1].n, 150000, 1);
 
-    BOOST_REQUIRE_GT(FeePerKb(with_message, 200000), FeePerKb(ordinary, 150000));
+    BOOST_REQUIRE(Rate(with_message, 200000) > Rate(ordinary, 150000));
 
     AddToMempool(with_message, 200000);
     AddToMempool(ordinary, 150000);
@@ -595,7 +670,7 @@ BOOST_AUTO_TEST_CASE(a_transaction_newer_than_the_block_is_skipped)
         CreateSpend(PremineCoinbase(), coins[0].n, 200000, 1, grc_test::FixtureTxTime() + 5000);
     const CTransaction ontime = CreateSpend(PremineCoinbase(), coins[1].n, 150000, 1);
 
-    BOOST_REQUIRE_GT(FeePerKb(late, 200000), FeePerKb(ontime, 150000));
+    BOOST_REQUIRE(Rate(late, 200000) > Rate(ontime, 150000));
 
     AddToMempool(late, 200000);
     AddToMempool(ontime, 150000);
@@ -604,6 +679,98 @@ BOOST_AUTO_TEST_CASE(a_transaction_newer_than_the_block_is_skipped)
     const std::vector<CTransaction> selected = AssembleBlock(fees);
 
     BOOST_CHECK(!Contains(selected, late));
+    BOOST_CHECK(Contains(selected, ontime));
+
+    mempool.clear();
+}
+
+namespace {
+
+//! A signed spend of premine output \p n with nLockTime \p lock_time. The one
+//! input's sequence is non-final, so the lock comparison decides the result:
+//! with a final sequence the transaction would be final whatever its lock.
+//!
+//! Every field is set before signing. SIGHASH_ALL covers nLockTime and
+//! nSequence, and the miner's ConnectInputs verifies the signature, so a
+//! transaction changed after signing would be dropped there on any build and a
+//! case asserting that it is NOT selected could not fail.
+CTransaction CreateTimeLockedSpend(uint32_t n, CAmount fee, uint32_t lock_time)
+{
+    const CTransaction& from = PremineCoinbase();
+    BOOST_REQUIRE(n < from.vout.size());
+
+    const CAmount value_out = from.vout[n].nValue - fee;
+    BOOST_REQUIRE_MESSAGE(value_out > 0, "fee exceeds the value of the input");
+
+    CMutableTransaction mtx;
+    mtx.nTime = static_cast<unsigned int>(grc_test::FixtureTxTime());
+    mtx.nLockTime = lock_time;
+    mtx.vin.resize(1);
+    mtx.vin[0].prevout = COutPoint(from.GetHash(), n);
+    mtx.vin[0].nSequence = 0xfffffffe;
+    mtx.vout.resize(1);
+    mtx.vout[0].nValue = value_out;
+    mtx.vout[0].scriptPubKey = grc_test::PremineScript();
+
+    BOOST_REQUIRE(SignSignature(grc_test::PremineKeystore(), from, mtx, 0));
+
+    const CTransaction tx(mtx);
+    BOOST_REQUIRE(fee >= GetMinFee(tx));
+
+    return tx;
+}
+
+} // anonymous namespace
+
+//!
+//! A transaction that is not final at the block's own time is skipped.
+//!
+//! The miner judges finality at block.GetBlockTime(), the time AcceptBlock uses.
+//! MakeBlockAndCoinstake stamps the block at FixtureTxTime() + 1000, and the
+//! fixture's mock clock starts later, at or after 1700000000. The two REQUIREs
+//! below check that the block and the clock fall where this case needs them,
+//! against the block the miner actually fills.
+//!
+//! `ontime` is built the same way with its lock below the block time. Its selection
+//! shows that a spend built by CreateTimeLockedSpend is valid and selectable, so
+//! the absence of `locked` is down to its lock and nothing else.
+//!
+BOOST_AUTO_TEST_CASE(a_transaction_final_only_at_adjusted_time_is_skipped)
+{
+    mempool.clear();
+
+    const std::vector<COutPoint> coins = SpendablePremineOutputs();
+    BOOST_REQUIRE_GE(coins.size(), 2u);
+
+    const CTransaction locked =
+        CreateTimeLockedSpend(coins[0].n, 200000, grc_test::FixtureTxTime() + 2000);
+    const CTransaction ontime =
+        CreateTimeLockedSpend(coins[1].n, 150000, grc_test::FixtureTxTime() + 500);
+
+    AddToMempool(locked, 200000);
+    AddToMempool(ontime, 150000);
+
+    CBlock block;
+    CMutableTransaction coinbase;
+    CMutableTransaction coinstake;
+    MakeBlockAndCoinstake(block, coinbase, coinstake);
+
+    BOOST_REQUIRE(block.GetBlockTime() <= (int64_t)locked.nLockTime
+                  && (int64_t)locked.nLockTime < GetAdjustedTime());
+    BOOST_REQUIRE((int64_t)ontime.nLockTime < block.GetBlockTime());
+
+    MrcMap mrc_map;
+
+    {
+        LOCK(cs_main);
+        BOOST_REQUIRE(pindexBest != nullptr);
+        BOOST_REQUIRE(CreateRestOfTheBlock(block, coinbase, coinstake, pindexBest, mrc_map));
+    }
+
+    BOOST_REQUIRE(block.vtx.size() >= 2);
+    const std::vector<CTransaction> selected(block.vtx.begin() + 2, block.vtx.end());
+
+    BOOST_CHECK(!Contains(selected, locked));
     BOOST_CHECK(Contains(selected, ontime));
 
     mempool.clear();
@@ -627,6 +794,10 @@ BOOST_AUTO_TEST_CASE(a_transaction_newer_than_the_block_is_skipped)
 //!
 namespace {
 
+//! How many SignalsForThisCase objects are alive. TipRestorer refuses to start
+//! while one is.
+int g_live_signals = 0;
+
 //! Registers the wallet with the validation signals for one case. The
 //! signals are inert in this binary until a scheduler is registered
 //! (chain_setup.cpp explains why); every signal used here is invoked
@@ -637,9 +808,11 @@ struct SignalsForThisCase {
     {
         GetMainSignals().RegisterBackgroundSignalScheduler(m_scheduler);
         RegisterValidationInterface(pwalletMain);
+        ++g_live_signals;
     }
     ~SignalsForThisCase()
     {
+        --g_live_signals;
         UnregisterValidationInterface(pwalletMain);
         GetMainSignals().UnregisterBackgroundSignalScheduler();
     }
@@ -1088,6 +1261,54 @@ void DropFromPoolSilently()
     mempool.clear();
 }
 
+//! Puts the chain back to the tip it found, however the case exits. The cases
+//! share one chain, and each block a case mines stakes one coin, often a
+//! premine output, which the transaction index then records as spent for every
+//! case after it. Every case that mines declares one before anything else, or
+//! holds one in an inner scope around its mining with no SignalsForThisCase
+//! alive, so it runs after the locals that scope holds: no SignalsForThisCase
+//! is alive then, and RegisterBackgroundSignalScheduler takes only one
+//! scheduler; the case's argument guards are already restored, as for the
+//! fixture's own rewind; and the per-case WalletTxScope runs after it, erasing
+//! the coinstakes the disconnect left inactive as it does for the
+//! orphaned-coinstake case. The constructor fails the case if a
+//! SignalsForThisCase is already alive (g_live_signals), rather than let the
+//! destructor trip that scheduler assert. The wallet hears each disconnect, as
+//! in ReorganizeWithTheWallet, which frees the outputs those coinstakes staked.
+//! A disconnect offers a block's other transactions back to the pool, and
+//! FixSpentCoins keeps an output a pooled transaction spends marked spent, so
+//! the pool is emptied afterwards.
+struct TipRestorer {
+    uint256 m_tip;
+
+    TipRestorer()
+    {
+        BOOST_REQUIRE_MESSAGE(g_live_signals == 0, "declare TipRestorer before any SignalsForThisCase");
+
+        LOCK(cs_main);
+        m_tip = hashBestChain;
+    }
+
+    ~TipRestorer()
+    {
+        {
+            LOCK(cs_main);
+            if (hashBestChain == m_tip) return;
+        }
+
+        {
+            const SignalsForThisCase signals;
+            const bool restored = ForceReorganizeToHash(m_tip);
+            BOOST_CHECK_MESSAGE(restored, "could not put the chain back to " << m_tip.ToString());
+        }
+
+        mempool.clear();
+    }
+
+    TipRestorer(const TipRestorer&) = delete;
+    TipRestorer& operator=(const TipRestorer&) = delete;
+};
+
 } // anonymous namespace
 
 //!
@@ -1263,8 +1484,6 @@ BOOST_AUTO_TEST_CASE(an_erased_transaction_takes_its_own_descendants_with_it)
         [&seen](CWallet*, const uint256& hash, ChangeType status) { seen.emplace_back(hash, status); });
 
     const std::vector<COutPoint> coins = SpendablePremineOutputs();
-    // Low indices only: five sibling cases mine and each stakes a premine kernel,
-    // so in some orders as few as five outputs remain.
     BOOST_REQUIRE_GE(coins.size(), 2u);
     const COutPoint message_coin = coins[0];
     const COutPoint co_input = coins[1];
@@ -1609,6 +1828,113 @@ void PutInWallet(const CTransaction& tx)
 }
 
 //!
+//! A case that mines leaves the chain as it found it, so every case finds all
+//! ten premine outputs unspent whatever ran before it (TipRestorer). Checks the
+//! tip, the transaction index and the wallet once the restorer around one
+//! mined block is gone, and the index while that block is on the chain.
+//!
+BOOST_AUTO_TEST_CASE(a_case_that_mines_leaves_the_chain_as_it_found_it)
+{
+    mempool.clear();
+
+    uint256 tip_before;
+    {
+        LOCK(cs_main);
+        tip_before = hashBestChain;
+    }
+
+    // Each case that mines holds a TipRestorer, so none has left a premine
+    // output spent, whatever ran before this one.
+    BOOST_REQUIRE_EQUAL(SpendablePremineOutputs().size(), PremineCoinbase().vout.size());
+
+    COutPoint kernel;
+    uint256 coinstake_hash;
+    {
+        const TipRestorer restore_tip;
+
+        CBlock block;
+        std::string err;
+        BOOST_REQUIRE_MESSAGE(CreateAndProcessBlock(block, err), "could not mine: " << err);
+        // sign-compare checked: size() is size_t; 1U is a non-negative literal, so both sides are unsigned.
+        BOOST_REQUIRE(block.vtx.size() > 1U && block.vtx[1].IsCoinStake());
+        BOOST_REQUIRE(WITH_LOCK(cs_main, return hashBestChain) != tip_before);
+
+        kernel = block.vtx[1].vin[0].prevout;
+        coinstake_hash = block.vtx[1].GetHash();
+
+        // With the block on the chain, the index records its kernel spent.
+        BOOST_REQUIRE(kernel.hash == PremineCoinbase().GetHash());
+        const std::vector<COutPoint> during = SpendablePremineOutputs();
+        BOOST_CHECK_EQUAL(during.size(), PremineCoinbase().vout.size() - 1);
+        BOOST_CHECK(std::find(during.begin(), during.end(), kernel) == during.end());
+    }
+
+    {
+        LOCK(cs_main);
+        BOOST_CHECK_EQUAL(hashBestChain.ToString(), tip_before.ToString());
+    }
+    BOOST_CHECK_EQUAL(SpendablePremineOutputs().size(), PremineCoinbase().vout.size());
+    BOOST_CHECK_MESSAGE(!OwnOutputSpent(kernel.hash, kernel.n), "the wallet still marks the staked output spent");
+    {
+        LOCK(pwalletMain->cs_wallet);
+        const auto it = pwalletMain->mapWallet.find(coinstake_hash);
+        BOOST_CHECK_MESSAGE(it == pwalletMain->mapWallet.end() || !it->second.isConfirmed(),
+                            "the wallet still holds the coinstake of the undone block as confirmed");
+    }
+}
+
+//!
+//! Undoing a block that carries a pooled spend offers the spend back to the
+//! pool. TipRestorer empties the pool afterwards, so no later case finds an
+//! output that a pooled spend still holds.
+//!
+BOOST_AUTO_TEST_CASE(a_restored_tip_leaves_no_re_offered_spend_in_the_pool)
+{
+    mempool.clear();
+
+    uint256 tip_before;
+    {
+        LOCK(cs_main);
+        tip_before = hashBestChain;
+    }
+
+    const std::vector<COutPoint> coins = SpendablePremineOutputs();
+    // sign-compare checked: size() is size_t; 1u is a non-negative literal, so both sides are unsigned.
+    BOOST_REQUIRE_GE(coins.size(), 1u);
+
+    // A fee no other case here uses, so the spend's txid is this case's own.
+    CTransaction spend = CreateSpend(PremineCoinbase(), coins[0].n, 490000, 1);
+    BOOST_REQUIRE_GE(CAmount{490000}, GetMinFee(spend));
+
+    {
+        const SignalsForThisCase signals;
+        LOCK(cs_main);
+
+        CValidationState state;
+        BOOST_CHECK_EQUAL(g_live_signals, 1);
+        BOOST_REQUIRE_MESSAGE(AcceptToMemoryPool(mempool, spend, state, nullptr),
+                              "spend rejected: " + state.GetRejectReason());
+        BOOST_REQUIRE(OwnOutputSpent(coins[0].hash, coins[0].n));
+    }
+
+    {
+        const TipRestorer restore_tip;
+
+        CBlock block;
+        std::string err;
+        BOOST_REQUIRE_MESSAGE(CreateAndProcessBlock(block, err), "could not mine: " << err);
+        BOOST_REQUIRE_MESSAGE(Contains(block.vtx, spend), "the block left out the pooled spend");
+    }
+
+    BOOST_REQUIRE_MESSAGE(WITH_LOCK(cs_main, return hashBestChain) == tip_before,
+                          "the restorer did not rewind, so the pool check below would prove nothing");
+    BOOST_CHECK_MESSAGE(!mempool.exists(spend.GetHash()),
+                        "the restorer left the spend the disconnect re-offered in the pool");
+
+    mempool.clear();
+}
+
+//!
 //! The activation sweep, end to end through real block connection.
 //!
 //! The txmempool cases cover the pieces in isolation -- the entry tag, the
@@ -1621,6 +1947,7 @@ void PutInWallet(const CTransaction& tx)
 //!
 BOOST_AUTO_TEST_CASE(a_pooled_message_transaction_is_swept_when_the_chain_crosses_the_height)
 {
+    const TipRestorer restore_tip;
     mempool.clear();
 
     int mined_height = 0;
@@ -1708,6 +2035,7 @@ BOOST_AUTO_TEST_CASE(a_pooled_message_transaction_is_swept_when_the_chain_crosse
 //!
 BOOST_AUTO_TEST_CASE(a_pooled_message_transaction_is_untouched_below_the_height)
 {
+    const TipRestorer restore_tip;
     mempool.clear();
 
     int mined_height = 0;
@@ -1866,6 +2194,7 @@ BOOST_AUTO_TEST_CASE(message_contract_is_accepted_while_the_next_block_still_all
 //!
 BOOST_AUTO_TEST_CASE(a_pooled_pool_register_is_swept_when_its_authorization_expires)
 {
+    const TipRestorer restore_tip;
     mempool.clear();
     grc_test::V15HeightGuard v15(0);
     grc_test::ForcedArgGuard retention("pendingpoolretention", "1");
@@ -1939,6 +2268,7 @@ BOOST_AUTO_TEST_CASE(a_pooled_pool_register_is_swept_when_its_authorization_expi
 //! is what forbids a sweep that retires POOL contracts unconditionally.
 BOOST_AUTO_TEST_CASE(a_pooled_pool_register_is_untouched_while_its_authorization_holds)
 {
+    const TipRestorer restore_tip;
     mempool.clear();
     grc_test::V15HeightGuard v15(0);
     grc_test::ForcedArgGuard retention("pendingpoolretention", "100000");
@@ -2031,6 +2361,7 @@ BOOST_AUTO_TEST_CASE(a_pooled_pool_register_is_untouched_while_its_authorization
 //!
 BOOST_AUTO_TEST_CASE(a_stale_mrc_is_removed_when_a_block_connects)
 {
+    const TipRestorer restore_tip;
     mempool.clear();
 
     uint256 head;
@@ -2104,12 +2435,13 @@ BOOST_AUTO_TEST_CASE(a_stale_mrc_is_removed_when_a_block_connects)
 //!
 //! A transaction paying exactly a raised -mintxfee is selected.
 //!
-//! -mintxfee is a floor, so a rate equal to it must qualify. The miner's rate is
-//! a double, fee / (bytes / 1000.0), and at some (fee, size) pairs whose exact
-//! rate IS the floor that expression rounds a hair below it. At the default
+//! -mintxfee is a floor, so a rate equal to it must qualify. At the default
 //! floor no relayable transaction gets that close, so the pair is searched for
 //! at a raised one: the first size and floor where a fee of exactly
-//! floor * size / 1000 evaluates below the floor as a double.
+//! floor * size / 1000 is a whole number of satoshi. The comparison itself is
+//! FeeRate's, which fees_tests pins with an exact-floor pair that a double
+//! rounds below the floor; this case checks that the miner applies it to a
+//! raised floor, with a candidate exactly at it and two just under it.
 //!
 //! Two controls pay just under the floor and must stay out. The second has a
 //! size at which floor * size / 1000 is not a whole number, so its fee (rounded
@@ -2127,12 +2459,12 @@ BOOST_AUTO_TEST_CASE(a_transaction_paying_exactly_a_raised_floor_is_selected)
     const std::vector<COutPoint> coins = SpendablePremineOutputs();
     BOOST_REQUIRE_GE(coins.size(), 3u);
 
-    const auto found = FindExactFloorMisround([&](CAmount f, int n) {
+    const auto found = FindExactFloor([&](CAmount f, int n) {
         return CreateSpend(PremineCoinbase(), coins[0].n, f, n);
     });
 
-    BOOST_REQUIRE_MESSAGE(found, "no size and raised floor at which the miner's double "
-                                 "rate misrounds an exact-floor fee");
+    BOOST_REQUIRE_MESSAGE(found, "no size and raised floor at which an exact-floor fee is "
+                                 "a whole number of satoshi");
 
     const int n_outputs = found->n_outputs;
     const unsigned int size = found->size;
@@ -2142,19 +2474,52 @@ BOOST_AUTO_TEST_CASE(a_transaction_paying_exactly_a_raised_floor_is_selected)
     const CTransaction exact = CreateSpend(PremineCoinbase(), coins[0].n, fee, n_outputs);
     BOOST_REQUIRE_EQUAL(TxSize(exact), size);
 
-    // What makes the case discriminate: the fee is exactly the floor rate, yet
-    // the miner's double puts it below the floor.
+    // The fee is exactly the floor rate.
     BOOST_REQUIRE_EQUAL(fee * 1000, floor * (CAmount)size);
-    BOOST_REQUIRE_LT(FeePerKb(exact, fee), (double)floor);
+    BOOST_REQUIRE(Rate(exact, fee) == (FeeRate{floor, 1000}));
     BOOST_REQUIRE_GE(fee, GetMinFee(exact));
 
     // Control 1: the same shape, one satoshi under the smallest fee that meets
-    // the floor at its own size.
-    const CTransaction below_probe = CreateSpend(PremineCoinbase(), coins[1].n, COIN, n_outputs);
-    const unsigned int below_size = TxSize(below_probe);
-    const CAmount below_fee = (floor * below_size + 999) / 1000 - 1;
-    const CTransaction below = CreateSpend(PremineCoinbase(), coins[1].n, below_fee, n_outputs);
-    BOOST_REQUIRE_EQUAL(TxSize(below), below_size);
+    // the floor at its own size. The fee is part of what is signed, and at some
+    // fees the signature is a byte shorter, so the fee worked out from a
+    // spend's size can give a spend of another size. For each coin, the size at
+    // a placeholder fee is tried, then the size the fee worked out from it
+    // gives. If neither size comes back from its own fee (the two fees give
+    // each other's sizes), no fee for that coin is one satoshi under the floor
+    // at its own size, and the next coin is tried. coins[0] and coins[2] are
+    // left to the exact transaction and control 2.
+    //
+    // Which coin comes first varies from run to run, with the outputs the
+    // earlier cases' blocks staked.
+    CTransaction below;
+    CAmount below_fee = 0;
+    unsigned int below_size = 0;
+    bool found_below = false;
+
+    for (size_t i = 1; i < coins.size() && !found_below; ++i) {
+        if (i == 2) continue;
+
+        unsigned int s = TxSize(CreateSpend(PremineCoinbase(), coins[i].n, COIN, n_outputs));
+
+        for (int attempt = 0; attempt < 2 && !found_below; ++attempt) {
+            const CAmount f = (floor * s + 999) / 1000 - 1;
+            const CTransaction tx = CreateSpend(PremineCoinbase(), coins[i].n, f, n_outputs);
+
+            if (TxSize(tx) == s) {
+                below = tx;
+                below_fee = f;
+                below_size = s;
+                found_below = true;
+            } else {
+                BOOST_TEST_MESSAGE("control 1: coin " << coins[i].n << " is " << TxSize(tx)
+                                   << " bytes at the fee worked out from " << s << " bytes");
+                s = TxSize(tx);
+            }
+        }
+    }
+
+    BOOST_REQUIRE_MESSAGE(found_below, "no spendable coin gives control 1 a fee one satoshi "
+                                       "under the floor at its own size");
     BOOST_REQUIRE_LT(below_fee * 1000, floor * (CAmount)below_size);
     BOOST_REQUIRE_GE(below_fee, GetMinFee(below));
 
@@ -2163,10 +2528,12 @@ BOOST_AUTO_TEST_CASE(a_transaction_paying_exactly_a_raised_floor_is_selected)
     // script, so for controls with the same signature length a larger control
     // differs in size by a multiple of 34 bytes, and a floor that is a multiple
     // of 500 would make F * size a multiple of 1000 at every such size, leaving
-    // no control with a fractional fee. FindExactFloorMisround's
-    // `floor % 500 != 0` filter is what makes this control findable: it makes a
-    // size with a fractional fee likely rather than certain, and this upward
-    // scan requires one.
+    // no control with a fractional fee. FindExactFloor never returns a floor
+    // that is a multiple of 500, which makes this control findable: F * size
+    // is then a multiple of 1000 only at sizes that are multiples of
+    // 1000 / gcd(F, 1000), which is 4 or more and does not divide 34, so of any
+    // two consecutive sizes with the same signature length at least one has a
+    // fractional fee.
     bool found_nonintegral = false;
     unsigned int nonintegral_size = 0;
     CAmount nonintegral_fee = 0;
@@ -2223,10 +2590,8 @@ BOOST_AUTO_TEST_CASE(a_transaction_paying_exactly_a_raised_floor_is_selected)
 //! A mempool transaction whose input is another mempool transaction waits as a
 //! COrphan until its parent is included. It then enters the candidate queue
 //! with the fee recorded on the COrphan, and that fee is what the miner
-//! compares against -mintxfee. The child here pays exactly the floor at a
-//! (fee, size) pair where the double rate rounds below it, so it is selected
-//! only if its real integer fee is carried through the orphan path and
-//! compared exactly.
+//! compares against -mintxfee. The child here pays exactly the floor, so it is
+//! selected only if its real integer fee is carried through the orphan path.
 //!
 BOOST_AUTO_TEST_CASE(a_child_paying_exactly_a_raised_floor_is_selected_after_its_parent)
 {
@@ -2239,21 +2604,21 @@ BOOST_AUTO_TEST_CASE(a_child_paying_exactly_a_raised_floor_is_selected_after_its
     const CAmount parent_fee = COIN / 10;
     const CTransaction parent = CreateSpend(PremineCoinbase(), coins[0].n, parent_fee, 1);
 
-    const auto found = FindExactFloorMisround([&](CAmount f, int n) {
+    const auto found = FindExactFloor([&](CAmount f, int n) {
         return CreateSpend(parent, 0, f, n);
     });
 
-    BOOST_REQUIRE_MESSAGE(found, "no size and raised floor at which the child's exact-floor fee misrounds");
+    BOOST_REQUIRE_MESSAGE(found, "no size and raised floor at which the child's exact-floor fee is a whole number");
 
     const CTransaction child = CreateSpend(parent, 0, found->fee, found->n_outputs);
 
     BOOST_REQUIRE_EQUAL(TxSize(child), found->size);
     BOOST_REQUIRE_EQUAL(found->fee * 1000, found->floor * (CAmount)found->size);
-    BOOST_REQUIRE_LT(FeePerKb(child, found->fee), (double)found->floor);
+    BOOST_REQUIRE(Rate(child, found->fee) == (FeeRate{found->floor, 1000}));
     BOOST_REQUIRE_GE(found->fee, GetMinFee(child));
     BOOST_REQUIRE_GE(parent_fee, GetMinFee(parent));
-    // Cannot fail at the floors the search can return (at most about 5.5e6
-    // sat/KB); a guard only.
+    // Cannot fail at the floors the search can return (under 540000 sat/KB);
+    // a guard only.
     BOOST_REQUIRE_GE(parent_fee * 1000, 2 * found->floor * (CAmount)TxSize(parent));
 
     // The child reaches the miner as a COrphan only while its parent is not
@@ -2360,6 +2725,8 @@ BOOST_AUTO_TEST_CASE(the_minimum_stake_age_runs_from_the_confirming_block)
 
 BOOST_AUTO_TEST_CASE(stake_candidates_carry_their_confirming_block_time)
 {
+    const TipRestorer restore_tip;
+
     // Mine one block so that the candidates come from two confirming blocks: the genesis premine outputs and the new
     // block's coinstake.
     CBlock block;
@@ -2386,6 +2753,60 @@ BOOST_AUTO_TEST_CASE(stake_candidates_carry_their_confirming_block_time)
         block_times.insert(candidate.block_time);
     }
     BOOST_CHECK_GE(block_times.size(), 2U);
+}
+
+//!
+//! A wallet unlocked for staking only stakes. The general route to the kernel's
+//! key refuses under that scope; the miner reaches it through its own access and
+//! signs the coinstake and the block with it.
+//!
+//! The wallet is the case's own, holding the premine key, so that encrypting it
+//! leaves pwalletMain, which the other cases stake from, as it was.
+//!
+BOOST_AUTO_TEST_CASE(coinstake_signed_under_staking_only)
+{
+    const TipRestorer restore_tip;
+
+    CWallet staking;
+
+    // The premine key and the outputs it owns, with the spent bits the chain and
+    // the pool give them, all before the wallet is encrypted.
+    PlantRegtestPremineKey(&staking);
+    int mismatch = 0;
+    CAmount in_question = 0;
+    staking.FixSpentCoins(mismatch, in_question);
+
+    const SecureString passphrase("coinstake-staking-only");
+    BOOST_REQUIRE(staking.EncryptWallet(passphrase));
+    BOOST_REQUIRE(staking.Unlock(passphrase, UnlockScope::StakingOnly));
+    BOOST_REQUIRE(staking.IsUnlockedForStakingOnly());
+
+    {
+        CKey general;
+        BOOST_REQUIRE_MESSAGE(!staking.GetKey(grc_test::PremineKey().GetPubKey().GetID(), general),
+                              "the general route to the premine key is open under staking only");
+    }
+
+    CBlock block;
+    std::string err;
+    BOOST_REQUIRE_MESSAGE(CreateAndProcessBlock(staking, block, err), "could not stake: " << err);
+
+    BOOST_REQUIRE(block.vtx.size() >= 2);
+    const CTransaction& coinstake = block.vtx[1];
+    BOOST_REQUIRE(coinstake.IsCoinStake());
+
+    LOCK2(cs_main, staking.cs_wallet);
+
+    BOOST_CHECK(pindexBest->GetBlockHash() == block.GetHash());
+    BOOST_CHECK(CheckBlockSignature(block));
+
+    // Every input of the coinstake carries a signature that spends the output it
+    // names.
+    for (unsigned int i = 0; i < coinstake.vin.size(); ++i) {
+        const auto prev = staking.mapWallet.find(coinstake.vin[i].prevout.hash);
+        BOOST_REQUIRE(prev != staking.mapWallet.end());
+        BOOST_CHECK(VerifySignature(prev->second, coinstake, SCRIPT_VERIFY_P2SH, i, 0));
+    }
 }
 
 BOOST_AUTO_TEST_CASE(stake_weight_is_the_staking_value_of_the_stake_candidates)
@@ -2499,6 +2920,7 @@ struct PlantedSpend {
 //!
 BOOST_AUTO_TEST_CASE(an_orphaned_own_coinstake_adds_nothing_to_the_staking_balance)
 {
+    const TipRestorer restore_tip;
     mempool.clear();
 
     const int64_t balance_before_stake = StakingBalance();
@@ -2797,6 +3219,8 @@ BOOST_AUTO_TEST_CASE(the_resend_pass_passes_over_inactive_coinbases_and_coinstak
 
 BOOST_AUTO_TEST_CASE(kernel_detail_is_logged_only_under_the_miner_category)
 {
+    const TipRestorer restore_tip;
+
     // Restores the MINER category and removes the callback on every exit path.
     struct MinerLogCapture {
         std::vector<std::string> lines;
@@ -2824,6 +3248,865 @@ BOOST_AUTO_TEST_CASE(kernel_detail_is_logged_only_under_the_miner_category)
     BOOST_REQUIRE_MESSAGE(CreateAndProcessBlock(block, err), "could not mine: " << err);
     BOOST_REQUIRE(!capture.lines.empty());
     BOOST_CHECK(capture.lines.back().find(" Diff ") != std::string::npos);
+}
+
+BOOST_AUTO_TEST_SUITE_END()
+
+//!
+//! FixSpentCoins and the inputs of an own unconfirmed transaction that the
+//! wallet still tags in-mempool but the pool does not hold.
+//!
+//! A suite of its own, so it runs on a regtest chain of its own with its own
+//! premine outputs; each case runs under WalletTxScope, as in the suite above.
+//! The helpers it takes from inside that suite's namespace are reached through
+//! the using-declarations below.
+//!
+BOOST_AUTO_TEST_SUITE(wallet_standing_spend_chain_tests, *boost::unit_test::fixture<grc_test::RegistryResetFor<GRC::ContractType::POOL_REGISTER>>() *boost::unit_test::fixture<grc_test::RegtestChainSetup>())
+
+using miner_block_assembly_tests::CountNotices;
+using miner_block_assembly_tests::CreateSignedSpend;
+using miner_block_assembly_tests::DescribeRelayableCandidates;
+using miner_block_assembly_tests::DropFromPoolSilently;
+using miner_block_assembly_tests::InWallet;
+using miner_block_assembly_tests::IsAbandonedInWallet;
+using miner_block_assembly_tests::MaxSizeRestorer;
+using miner_block_assembly_tests::OwnOutputSpent;
+using miner_block_assembly_tests::SignalsForThisCase;
+
+//!
+//! A size eviction takes an own spend and its child out of the pool. The wallet
+//! keeps both tagged in-mempool, the resend pass relays the parent and keeps
+//! the child, and peers whose pools are not full may still hold both. Their
+//! confirmed inputs must stay marked spent, or the wallet can build a
+//! transaction that conflicts with them.
+//!
+//! The calls run in the startup order: ReleaseSpendsNotInActiveChain, then
+//! FixSpentCoins. The check-only call is the count checkwallet reports.
+//!
+BOOST_FIXTURE_TEST_CASE(an_evicted_spend_and_its_kept_child_keep_their_inputs_through_fixspentcoins, grc_test::WalletTxScope)
+{
+    mempool.clear();
+
+    const SignalsForThisCase signals;
+    const MaxSizeRestorer max_size;
+
+    const std::vector<COutPoint> coins = SpendablePremineOutputs();
+    BOOST_REQUIRE_GE(coins.size(), 3u);
+
+    CTransaction parent = CreateSpend(PremineCoinbase(), coins[0].n, 110000, 1);
+    CTransaction child = CreateSignedSpend({{parent, 0}, {PremineCoinbase(), coins[1].n}}, 330000);
+    BOOST_REQUIRE_GE(CAmount{110000}, GetMinFee(parent));
+    BOOST_REQUIRE_GE(CAmount{330000}, GetMinFee(child));
+    const uint256 parent_hash = parent.GetHash();
+    const uint256 child_hash = child.GetHash();
+
+    LOCK(cs_main);
+
+    const std::string leaked = DescribeRelayableCandidates();
+    BOOST_REQUIRE_MESSAGE(leaked.empty(), "relayable candidates left by a sibling case: " << leaked);
+
+    CValidationState state_parent, state_child;
+    BOOST_REQUIRE_MESSAGE(AcceptToMemoryPool(mempool, parent, state_parent, nullptr),
+                          "parent rejected: " + state_parent.GetRejectReason());
+    BOOST_REQUIRE_MESSAGE(AcceptToMemoryPool(mempool, child, state_child, nullptr),
+                          "child rejected: " + state_child.GetRejectReason());
+    BOOST_REQUIRE(InWallet(parent_hash));
+    BOOST_REQUIRE(InWallet(child_hash));
+    BOOST_REQUIRE(OwnOutputSpent(coins[0].hash, coins[0].n));
+    BOOST_REQUIRE(OwnOutputSpent(coins[1].hash, coins[1].n));
+
+    mempool.SetMaxSize(mempool.DynamicMemoryUsage());
+
+    CAmount fee_evictor = 0;
+    CTransaction evictor = MakeCandidate(2, 1, 2100, fee_evictor);
+    CValidationState state_evictor;
+    BOOST_REQUIRE_MESSAGE(AcceptToMemoryPool(mempool, evictor, state_evictor, nullptr),
+                          "evicting spend rejected: " + state_evictor.GetRejectReason());
+    BOOST_REQUIRE_MESSAGE(!mempool.exists(parent_hash), "the size limit did not evict the parent");
+    BOOST_REQUIRE_MESSAGE(!mempool.exists(child_hash), "the recursive removal did not take the child");
+
+    // The parent is relayed; the child, whose input is now in neither the
+    // index nor the pool, is kept for a later pass.
+    BOOST_REQUIRE_EQUAL(pwalletMain->ResendWalletTransactions(/*fForce=*/true), 1u);
+    BOOST_REQUIRE(InWallet(child_hash));
+
+    int released = 0;
+    int64_t amount_released = 0;
+    pwalletMain->ReleaseSpendsNotInActiveChain(released, amount_released);
+    BOOST_CHECK(OwnOutputSpent(coins[0].hash, coins[0].n));
+    BOOST_CHECK(OwnOutputSpent(coins[1].hash, coins[1].n));
+
+    int check_mismatch = 0;
+    int64_t check_amount = 0;
+    pwalletMain->FixSpentCoins(check_mismatch, check_amount, /*fCheckOnly=*/true);
+    BOOST_CHECK_EQUAL(check_mismatch, 0);
+    BOOST_CHECK(OwnOutputSpent(coins[0].hash, coins[0].n));
+    BOOST_CHECK(OwnOutputSpent(coins[1].hash, coins[1].n));
+
+    int mismatch = 0;
+    int64_t in_question = 0;
+    pwalletMain->FixSpentCoins(mismatch, in_question);
+
+    BOOST_CHECK_MESSAGE(OwnOutputSpent(coins[1].hash, coins[1].n),
+                        "FixSpentCoins released the confirmed co-input of a child the resend pass kept");
+    BOOST_CHECK_MESSAGE(OwnOutputSpent(coins[0].hash, coins[0].n),
+                        "FixSpentCoins released the input of an evicted own spend the wallet still rebroadcasts");
+    BOOST_CHECK_EQUAL(mismatch, 0);
+
+    mempool.clear();
+}
+
+//!
+//! The control for the case above: a child whose parent is inactive does not
+//! keep its confirmed co-input. Inactive is the state a restart gives an own
+//! send whose input the chain spent elsewhere. FixSpentCoins judges a parent
+//! from the chain and the pool only, and this one is in neither the index nor
+//! the pool, so the child no longer counts as able to confirm. (A parent a
+//! disconnect stranded is inactive too and may be offered back; on that branch
+//! the pass still errs toward freeing.)
+//!
+//! The first FixSpentCoins call settles whatever the wallet held before the
+//! case, so the second call's count is this case's own.
+//!
+BOOST_FIXTURE_TEST_CASE(a_child_whose_parent_cannot_confirm_releases_its_coinput, grc_test::WalletTxScope)
+{
+    mempool.clear();
+
+    const SignalsForThisCase signals;
+    const MaxSizeRestorer max_size;
+
+    const std::vector<COutPoint> coins = SpendablePremineOutputs();
+    BOOST_REQUIRE_GE(coins.size(), 3u);
+
+    CTransaction parent = CreateSpend(PremineCoinbase(), coins[0].n, 120000, 1);
+    CTransaction child = CreateSignedSpend({{parent, 0}, {PremineCoinbase(), coins[1].n}}, 340000);
+    BOOST_REQUIRE_GE(CAmount{120000}, GetMinFee(parent));
+    BOOST_REQUIRE_GE(CAmount{340000}, GetMinFee(child));
+    const uint256 parent_hash = parent.GetHash();
+    const uint256 child_hash = child.GetHash();
+
+    LOCK(cs_main);
+
+    const std::string leaked = DescribeRelayableCandidates();
+    BOOST_REQUIRE_MESSAGE(leaked.empty(), "relayable candidates left by a sibling case: " << leaked);
+
+    int mismatch = 0;
+    int64_t in_question = 0;
+    pwalletMain->FixSpentCoins(mismatch, in_question);
+
+    CValidationState state_parent, state_child;
+    BOOST_REQUIRE_MESSAGE(AcceptToMemoryPool(mempool, parent, state_parent, nullptr),
+                          "parent rejected: " + state_parent.GetRejectReason());
+    BOOST_REQUIRE_MESSAGE(AcceptToMemoryPool(mempool, child, state_child, nullptr),
+                          "child rejected: " + state_child.GetRejectReason());
+    BOOST_REQUIRE(InWallet(parent_hash));
+    BOOST_REQUIRE(InWallet(child_hash));
+    BOOST_REQUIRE(OwnOutputSpent(coins[0].hash, coins[0].n));
+    BOOST_REQUIRE(OwnOutputSpent(coins[1].hash, coins[1].n));
+
+    mempool.SetMaxSize(mempool.DynamicMemoryUsage());
+
+    CAmount fee_evictor = 0;
+    CTransaction evictor = MakeCandidate(2, 1, 2200, fee_evictor);
+    CValidationState state_evictor;
+    BOOST_REQUIRE_MESSAGE(AcceptToMemoryPool(mempool, evictor, state_evictor, nullptr),
+                          "evicting spend rejected: " + state_evictor.GetRejectReason());
+    BOOST_REQUIRE_MESSAGE(!mempool.exists(parent_hash), "the size limit did not evict the parent");
+    BOOST_REQUIRE_MESSAGE(!mempool.exists(child_hash), "the recursive removal did not take the child");
+
+    {
+        LOCK(pwalletMain->cs_wallet);
+        pwalletMain->mapWallet.at(parent_hash).SetTxState(TxStateInactive{false});
+    }
+
+    pwalletMain->FixSpentCoins(mismatch, in_question);
+
+    BOOST_CHECK_MESSAGE(!OwnOutputSpent(coins[1].hash, coins[1].n),
+                        "a child whose parent can never confirm still holds its confirmed co-input");
+    BOOST_CHECK(!OwnOutputSpent(coins[0].hash, coins[0].n));
+    BOOST_CHECK_EQUAL(mismatch, 2);
+
+    mempool.clear();
+}
+
+//!
+//! A spend whose input a mined block spent elsewhere can never confirm, and
+//! neither can its child, so the child's confirmed co-input is freed.
+//!
+//! The wallet keeps the parent's in-mempool tag after the block; the case
+//! requires that, since a re-tagged parent would test nothing here. The
+//! signals are registered only while the two spends are pooled: the block
+//! reaches the wallet through CreateAndProcessBlock's direct BlockConnected
+//! call.
+//!
+BOOST_FIXTURE_TEST_CASE(a_spend_the_chain_conflicted_releases_its_childs_coinput, grc_test::WalletTxScope)
+{
+    mempool.clear();
+
+    const std::vector<COutPoint> coins = SpendablePremineOutputs();
+    BOOST_REQUIRE_GE(coins.size(), 2u);
+
+    CTransaction parent = CreateSpend(PremineCoinbase(), coins[0].n, 130000, 1);
+    CTransaction child = CreateSignedSpend({{parent, 0}, {PremineCoinbase(), coins[1].n}}, 350000);
+    BOOST_REQUIRE_GE(CAmount{130000}, GetMinFee(parent));
+    BOOST_REQUIRE_GE(CAmount{350000}, GetMinFee(child));
+    const uint256 parent_hash = parent.GetHash();
+    const uint256 child_hash = child.GetHash();
+
+    {
+        const SignalsForThisCase signals;
+        LOCK(cs_main);
+
+        const std::string leaked = DescribeRelayableCandidates();
+        BOOST_REQUIRE_MESSAGE(leaked.empty(), "relayable candidates left by a sibling case: " << leaked);
+
+        CValidationState state_parent, state_child;
+        BOOST_REQUIRE_MESSAGE(AcceptToMemoryPool(mempool, parent, state_parent, nullptr),
+                              "parent rejected: " + state_parent.GetRejectReason());
+        BOOST_REQUIRE_MESSAGE(AcceptToMemoryPool(mempool, child, state_child, nullptr),
+                              "child rejected: " + state_child.GetRejectReason());
+        BOOST_REQUIRE(InWallet(parent_hash));
+        BOOST_REQUIRE(InWallet(child_hash));
+        BOOST_REQUIRE(OwnOutputSpent(coins[0].hash, coins[0].n));
+        BOOST_REQUIRE(OwnOutputSpent(coins[1].hash, coins[1].n));
+
+        DropFromPoolSilently();
+    }
+
+    CTransaction rival = CreateSpend(PremineCoinbase(), coins[0].n, 140000, 1);
+    {
+        LOCK(cs_main);
+        CValidationState state_rival;
+        BOOST_REQUIRE_MESSAGE(AcceptToMemoryPool(mempool, rival, state_rival, nullptr),
+                              "rival spend rejected: " + state_rival.GetRejectReason());
+    }
+
+    CBlock block;
+    std::string err;
+    BOOST_REQUIRE_MESSAGE(CreateAndProcessBlock(block, err), "could not mine: " << err);
+    BOOST_REQUIRE_MESSAGE(Contains(block.vtx, rival), "the block left out the rival spend");
+    {
+        LOCK(pwalletMain->cs_wallet);
+        BOOST_REQUIRE_MESSAGE(pwalletMain->mapWallet.at(parent_hash).isInMempool(),
+                              "the wallet no longer tags the conflicted parent in-mempool");
+    }
+
+    int mismatch = 0;
+    int64_t in_question = 0;
+    pwalletMain->FixSpentCoins(mismatch, in_question);
+
+    BOOST_CHECK_MESSAGE(!OwnOutputSpent(coins[1].hash, coins[1].n),
+                        "a child of a chain-conflicted spend still holds its confirmed co-input");
+    BOOST_CHECK(OwnOutputSpent(coins[0].hash, coins[0].n));
+
+    mempool.clear();
+}
+
+//!
+//! A spend whose input a different pooled transaction spends no longer counts
+//! as able to confirm, judged from the pool, so its other confirmed input is
+//! freed. The rival's coin stays marked: the pool holds its spender.
+//!
+BOOST_FIXTURE_TEST_CASE(a_spend_the_pool_conflicts_releases_its_other_input, grc_test::WalletTxScope)
+{
+    mempool.clear();
+
+    const std::vector<COutPoint> coins = SpendablePremineOutputs();
+    BOOST_REQUIRE_GE(coins.size(), 2u);
+
+    CTransaction spend = CreateSignedSpend({{PremineCoinbase(), coins[0].n}, {PremineCoinbase(), coins[1].n}}, 360000);
+    BOOST_REQUIRE_GE(CAmount{360000}, GetMinFee(spend));
+    const uint256 spend_hash = spend.GetHash();
+
+    {
+        const SignalsForThisCase signals;
+        LOCK(cs_main);
+
+        const std::string leaked = DescribeRelayableCandidates();
+        BOOST_REQUIRE_MESSAGE(leaked.empty(), "relayable candidates left by a sibling case: " << leaked);
+
+        CValidationState state_spend;
+        BOOST_REQUIRE_MESSAGE(AcceptToMemoryPool(mempool, spend, state_spend, nullptr),
+                              "spend rejected: " + state_spend.GetRejectReason());
+        BOOST_REQUIRE(InWallet(spend_hash));
+        BOOST_REQUIRE(OwnOutputSpent(coins[0].hash, coins[0].n));
+        BOOST_REQUIRE(OwnOutputSpent(coins[1].hash, coins[1].n));
+
+        DropFromPoolSilently();
+    }
+
+    CTransaction rival = CreateSpend(PremineCoinbase(), coins[0].n, 370000, 1);
+
+    LOCK(cs_main);
+
+    CValidationState state_rival;
+    BOOST_REQUIRE_MESSAGE(AcceptToMemoryPool(mempool, rival, state_rival, nullptr),
+                          "rival spend rejected: " + state_rival.GetRejectReason());
+    {
+        LOCK(pwalletMain->cs_wallet);
+        BOOST_REQUIRE(pwalletMain->mapWallet.at(spend_hash).isInMempool());
+    }
+    BOOST_REQUIRE(!mempool.exists(spend_hash));
+
+    int mismatch = 0;
+    int64_t in_question = 0;
+    pwalletMain->FixSpentCoins(mismatch, in_question);
+
+    BOOST_CHECK_MESSAGE(!OwnOutputSpent(coins[1].hash, coins[1].n),
+                        "the other input of a spend the pool conflicts is still marked spent");
+    BOOST_CHECK(OwnOutputSpent(coins[0].hash, coins[0].n));
+
+    mempool.clear();
+}
+
+//!
+//! The case above, reached through a real block and a reorganize, so that the
+//! FixSpentCoins call is the one ReorganizeChain makes after it disconnects a
+//! block. The rival is mined, the block is disconnected, and the disconnect
+//! returns the rival to the pool while the own spend stays tagged and unpooled.
+//!
+BOOST_FIXTURE_TEST_CASE(a_reorganize_frees_the_coinput_of_a_spend_the_pool_conflicts, grc_test::WalletTxScope)
+{
+    mempool.clear();
+
+    const std::vector<COutPoint> coins = SpendablePremineOutputs();
+    BOOST_REQUIRE_GE(coins.size(), 2u);
+
+    CTransaction spend = CreateSignedSpend({{PremineCoinbase(), coins[0].n}, {PremineCoinbase(), coins[1].n}}, 380000);
+    BOOST_REQUIRE_GE(CAmount{380000}, GetMinFee(spend));
+    const uint256 spend_hash = spend.GetHash();
+
+    {
+        const SignalsForThisCase signals;
+        LOCK(cs_main);
+
+        const std::string leaked = DescribeRelayableCandidates();
+        BOOST_REQUIRE_MESSAGE(leaked.empty(), "relayable candidates left by a sibling case: " << leaked);
+
+        CValidationState state_spend;
+        BOOST_REQUIRE_MESSAGE(AcceptToMemoryPool(mempool, spend, state_spend, nullptr),
+                              "spend rejected: " + state_spend.GetRejectReason());
+        BOOST_REQUIRE(InWallet(spend_hash));
+        BOOST_REQUIRE(OwnOutputSpent(coins[0].hash, coins[0].n));
+        BOOST_REQUIRE(OwnOutputSpent(coins[1].hash, coins[1].n));
+
+        DropFromPoolSilently();
+    }
+
+    CTransaction rival = CreateSpend(PremineCoinbase(), coins[0].n, 390000, 1);
+    const uint256 rival_hash = rival.GetHash();
+    {
+        LOCK(cs_main);
+        CValidationState state_rival;
+        BOOST_REQUIRE_MESSAGE(AcceptToMemoryPool(mempool, rival, state_rival, nullptr),
+                              "rival spend rejected: " + state_rival.GetRejectReason());
+    }
+
+    CBlock block;
+    std::string err;
+    BOOST_REQUIRE_MESSAGE(CreateAndProcessBlock(block, err), "could not mine: " << err);
+    BOOST_REQUIRE_MESSAGE(Contains(block.vtx, rival), "the block left out the rival spend");
+    BOOST_REQUIRE_MESSAGE(OwnOutputSpent(coins[1].hash, coins[1].n),
+                          "the co-input was released before the reorganize");
+
+    {
+        LOCK(cs_main);
+        BOOST_REQUIRE_MESSAGE(ForceReorganizeToHash(block.hashPrevBlock), "could not reorganize to the block's parent");
+        BOOST_REQUIRE_MESSAGE(hashBestChain == block.hashPrevBlock, "the block's parent is not the tip after the reorganize");
+    }
+
+    BOOST_REQUIRE_MESSAGE(mempool.exists(rival_hash), "the reorganize did not return the rival spend to the pool");
+    {
+        LOCK(pwalletMain->cs_wallet);
+        BOOST_REQUIRE(pwalletMain->mapWallet.at(spend_hash).isInMempool());
+    }
+    BOOST_REQUIRE(!mempool.exists(spend_hash));
+
+    BOOST_CHECK_MESSAGE(!OwnOutputSpent(coins[1].hash, coins[1].n),
+                        "a reorganize left the other input of a spend the pool conflicts marked spent");
+
+    // WalletTxScope leaves confirmed entries alone, so a transaction of the
+    // disconnected block that the wallet still holds as confirmed (the rival,
+    // or the block's coinstake) would outlive this case.
+    for (const CTransaction& tx : block.vtx) {
+        const uint256 hash = tx.GetHash();
+        bool still_confirmed = false;
+        {
+            LOCK(pwalletMain->cs_wallet);
+            const auto it = pwalletMain->mapWallet.find(hash);
+            still_confirmed = it != pwalletMain->mapWallet.end() && it->second.isConfirmed();
+        }
+        BOOST_TEST_MESSAGE("disconnected block's wallet entry after the reorganize: " << hash.ToString() << " "
+                           << (still_confirmed ? "confirmed, erased here" : "not confirmed"));
+        if (still_confirmed) pwalletMain->EraseFromWallet(hash);
+    }
+
+    mempool.clear();
+}
+
+//!
+//! A size eviction takes a low-rate child out of the pool and leaves its
+//! higher-rate parent pooled. The wallet keeps the child tagged in-mempool,
+//! and its parent is in the pool, so its confirmed co-input stays marked.
+//!
+BOOST_FIXTURE_TEST_CASE(an_evicted_child_of_a_pooled_parent_keeps_its_coinput, grc_test::WalletTxScope)
+{
+    mempool.clear();
+
+    const SignalsForThisCase signals;
+    const MaxSizeRestorer max_size;
+
+    const std::vector<COutPoint> coins = SpendablePremineOutputs();
+    BOOST_REQUIRE_GE(coins.size(), 3u);
+
+    CTransaction parent = CreateSpend(PremineCoinbase(), coins[0].n, 600000, 1);
+    CTransaction child = CreateSignedSpend({{parent, 0}, {PremineCoinbase(), coins[1].n}}, 160000);
+    BOOST_REQUIRE_GE(CAmount{600000}, GetMinFee(parent));
+    BOOST_REQUIRE_GE(CAmount{160000}, GetMinFee(child));
+    const uint256 parent_hash = parent.GetHash();
+    const uint256 child_hash = child.GetHash();
+
+    LOCK(cs_main);
+
+    const std::string leaked = DescribeRelayableCandidates();
+    BOOST_REQUIRE_MESSAGE(leaked.empty(), "relayable candidates left by a sibling case: " << leaked);
+
+    CValidationState state_parent, state_child;
+    BOOST_REQUIRE_MESSAGE(AcceptToMemoryPool(mempool, parent, state_parent, nullptr),
+                          "parent rejected: " + state_parent.GetRejectReason());
+    BOOST_REQUIRE_MESSAGE(AcceptToMemoryPool(mempool, child, state_child, nullptr),
+                          "child rejected: " + state_child.GetRejectReason());
+    BOOST_REQUIRE(InWallet(parent_hash));
+    BOOST_REQUIRE(InWallet(child_hash));
+    BOOST_REQUIRE(OwnOutputSpent(coins[0].hash, coins[0].n));
+    BOOST_REQUIRE(OwnOutputSpent(coins[1].hash, coins[1].n));
+
+    mempool.SetMaxSize(mempool.DynamicMemoryUsage());
+
+    CAmount fee_evictor = 0;
+    CTransaction evictor = MakeCandidate(2, 1, 2400, fee_evictor);
+    CValidationState state_evictor;
+    BOOST_REQUIRE_MESSAGE(AcceptToMemoryPool(mempool, evictor, state_evictor, nullptr),
+                          "evicting spend rejected: " + state_evictor.GetRejectReason());
+    BOOST_REQUIRE_MESSAGE(mempool.exists(parent_hash), "the size limit evicted the parent too");
+    BOOST_REQUIRE_MESSAGE(!mempool.exists(child_hash), "the size limit did not evict the child");
+    {
+        LOCK(pwalletMain->cs_wallet);
+        BOOST_REQUIRE(pwalletMain->mapWallet.at(child_hash).isInMempool());
+    }
+
+    int mismatch = 0;
+    int64_t in_question = 0;
+    pwalletMain->FixSpentCoins(mismatch, in_question);
+
+    BOOST_CHECK_MESSAGE(OwnOutputSpent(coins[1].hash, coins[1].n),
+                        "FixSpentCoins released the confirmed co-input of an evicted child whose parent is pooled");
+    BOOST_CHECK(OwnOutputSpent(coins[0].hash, coins[0].n));
+
+    mempool.clear();
+}
+
+//!
+//! A spend whose input a different pooled transaction spends can never
+//! confirm, so neither can its child nor the child's own child, and the
+//! grandchild's confirmed co-input is freed. The grandchild's fee is chosen
+//! so that its hash compares below the child's as a uint256 (byte by byte
+//! over the stored hash, not the order of the hex txids): FixSpentCoins
+//! walks the transactions it still counts as able to confirm in that order,
+//! so it reaches the grandchild while the child still counts, and drops the
+//! grandchild only in a later pass, once the child is gone.
+//!
+//! Which premine outputs the case spends depends on the blocks the earlier
+//! cases mined, so both fees are searched here rather than fixed, and the
+//! case stops at a REQUIRE if no pair of fees in the ranges gives that order.
+//!
+BOOST_FIXTURE_TEST_CASE(a_grandchild_of_a_spend_the_pool_conflicts_releases_its_coinput, grc_test::WalletTxScope)
+{
+    mempool.clear();
+
+    const std::vector<COutPoint> coins = SpendablePremineOutputs();
+    BOOST_REQUIRE_GE(coins.size(), 2u);
+
+    CTransaction parent = CreateSpend(PremineCoinbase(), coins[0].n, 170000, 1);
+    BOOST_REQUIRE_GE(CAmount{170000}, GetMinFee(parent));
+    const uint256 parent_hash = parent.GetHash();
+
+    std::optional<CTransaction> child;
+    CAmount fee_child = 0;
+    for (CAmount fee = 180000; fee < 180000 + 64 * 1000; fee += 1000) {
+        CTransaction candidate = CreateSpend(parent, 0, fee, 1);
+        if (candidate.GetHash().data()[0] >= 0x80) {
+            child = candidate;
+            fee_child = fee;
+            break;
+        }
+    }
+    BOOST_REQUIRE_MESSAGE(child.has_value(), "no child fee in the range gives a hash in the upper half of the uint256 order");
+    BOOST_REQUIRE_GE(fee_child, GetMinFee(*child));
+    const uint256 child_hash = child->GetHash();
+
+    std::optional<CTransaction> grandchild;
+    CAmount fee_grandchild = 0;
+    for (CAmount fee = 450000; fee < 450000 + 64 * 1000; fee += 1000) {
+        CTransaction candidate = CreateSignedSpend({{*child, 0}, {PremineCoinbase(), coins[1].n}}, fee);
+        if (candidate.GetHash() < child_hash) {
+            grandchild = candidate;
+            fee_grandchild = fee;
+            break;
+        }
+    }
+    BOOST_REQUIRE_MESSAGE(grandchild.has_value(), "no grandchild fee in the range gives a hash below the child's as a uint256");
+    const uint256 grandchild_hash = grandchild->GetHash();
+    BOOST_REQUIRE_MESSAGE(grandchild_hash < child_hash, "the grandchild's hash does not compare below the child's as a uint256");
+    BOOST_REQUIRE_GE(fee_grandchild, GetMinFee(*grandchild));
+    BOOST_TEST_MESSAGE("child fee " << fee_child << ", grandchild fee " << fee_grandchild << " give a grandchild hash below the child's");
+
+    {
+        const SignalsForThisCase signals;
+        LOCK(cs_main);
+
+        const std::string leaked = DescribeRelayableCandidates();
+        BOOST_REQUIRE_MESSAGE(leaked.empty(), "relayable candidates left by a sibling case: " << leaked);
+
+        CValidationState state_parent, state_child, state_grandchild;
+        BOOST_REQUIRE_MESSAGE(AcceptToMemoryPool(mempool, parent, state_parent, nullptr),
+                              "parent rejected: " + state_parent.GetRejectReason());
+        BOOST_REQUIRE_MESSAGE(AcceptToMemoryPool(mempool, *child, state_child, nullptr),
+                              "child rejected: " + state_child.GetRejectReason());
+        BOOST_REQUIRE_MESSAGE(AcceptToMemoryPool(mempool, *grandchild, state_grandchild, nullptr),
+                              "grandchild rejected: " + state_grandchild.GetRejectReason());
+        BOOST_REQUIRE(InWallet(parent_hash));
+        BOOST_REQUIRE(InWallet(child_hash));
+        BOOST_REQUIRE(InWallet(grandchild_hash));
+        BOOST_REQUIRE(OwnOutputSpent(coins[0].hash, coins[0].n));
+        BOOST_REQUIRE(OwnOutputSpent(coins[1].hash, coins[1].n));
+
+        DropFromPoolSilently();
+    }
+
+    CTransaction rival = CreateSpend(PremineCoinbase(), coins[0].n, 190000, 1);
+
+    LOCK(cs_main);
+
+    CValidationState state_rival;
+    BOOST_REQUIRE_MESSAGE(AcceptToMemoryPool(mempool, rival, state_rival, nullptr),
+                          "rival spend rejected: " + state_rival.GetRejectReason());
+    {
+        LOCK(pwalletMain->cs_wallet);
+        BOOST_REQUIRE(pwalletMain->mapWallet.at(parent_hash).isInMempool());
+        BOOST_REQUIRE(pwalletMain->mapWallet.at(child_hash).isInMempool());
+        BOOST_REQUIRE(pwalletMain->mapWallet.at(grandchild_hash).isInMempool());
+    }
+    BOOST_REQUIRE(!mempool.exists(parent_hash));
+    BOOST_REQUIRE(!mempool.exists(child_hash));
+    BOOST_REQUIRE(!mempool.exists(grandchild_hash));
+
+    int mismatch = 0;
+    int64_t in_question = 0;
+    pwalletMain->FixSpentCoins(mismatch, in_question);
+
+    BOOST_CHECK_MESSAGE(!OwnOutputSpent(coins[1].hash, coins[1].n),
+                        "a grandchild of a spend the pool conflicts still holds its confirmed co-input");
+    BOOST_CHECK(OwnOutputSpent(coins[0].hash, coins[0].n));
+
+    mempool.clear();
+}
+
+//!
+//! Abandoning a spend leaves an input marked while the pool holds another
+//! spend of it, and releases the input nothing else spends. The wallet never
+//! recorded the pooled spend: it reached the pool while the wallet was not
+//! listening, as a spend from a copy of this wallet can, or one of a key
+//! imported since (the rescan reads blocks, not the pool).
+//!
+BOOST_FIXTURE_TEST_CASE(abandoning_a_spend_keeps_an_input_the_pool_spends_marked, grc_test::WalletTxScope)
+{
+    mempool.clear();
+
+    const std::vector<COutPoint> coins = SpendablePremineOutputs();
+    BOOST_REQUIRE_GE(coins.size(), 2u);
+
+    CTransaction spend = CreateSignedSpend({{PremineCoinbase(), coins[0].n}, {PremineCoinbase(), coins[1].n}}, 420000);
+    BOOST_REQUIRE_GE(CAmount{420000}, GetMinFee(spend));
+    const uint256 spend_hash = spend.GetHash();
+
+    CTransaction rival = CreateSpend(PremineCoinbase(), coins[0].n, 430000, 1);
+    const uint256 rival_hash = rival.GetHash();
+
+    {
+        const SignalsForThisCase signals;
+        LOCK(cs_main);
+
+        const std::string leaked = DescribeRelayableCandidates();
+        BOOST_REQUIRE_MESSAGE(leaked.empty(), "relayable candidates left by a sibling case: " << leaked);
+
+        CValidationState state_spend;
+        BOOST_REQUIRE_MESSAGE(AcceptToMemoryPool(mempool, spend, state_spend, nullptr),
+                              "spend rejected: " + state_spend.GetRejectReason());
+        BOOST_REQUIRE(InWallet(spend_hash));
+        BOOST_REQUIRE(OwnOutputSpent(coins[0].hash, coins[0].n));
+        BOOST_REQUIRE(OwnOutputSpent(coins[1].hash, coins[1].n));
+
+        DropFromPoolSilently();
+    }
+
+    LOCK(cs_main);
+
+    CValidationState state_rival;
+    BOOST_REQUIRE_MESSAGE(AcceptToMemoryPool(mempool, rival, state_rival, nullptr),
+                          "rival spend rejected: " + state_rival.GetRejectReason());
+    BOOST_REQUIRE_MESSAGE(!InWallet(rival_hash), "the wallet recorded a rival it was not listening for");
+
+    BOOST_REQUIRE(pwalletMain->AbandonTransaction(spend_hash));
+    BOOST_REQUIRE(IsAbandonedInWallet(spend_hash));
+
+    BOOST_CHECK_MESSAGE(OwnOutputSpent(coins[0].hash, coins[0].n),
+                        "abandoning a spend released an input the pool spends");
+    BOOST_CHECK_MESSAGE(!OwnOutputSpent(coins[1].hash, coins[1].n),
+                        "abandoning a spend did not release an input nothing else spends");
+
+    mempool.clear();
+}
+
+//!
+//! The same for an input a block spends. The block's spend is erased from the
+//! wallet after the block, so nothing the wallet holds spends the input: the
+//! state of a wallet copy that has not seen the other copy's confirmed spend.
+//! FixSpentCoins marks such an input spent from the index; abandoning must not
+//! clear it first.
+//!
+BOOST_FIXTURE_TEST_CASE(abandoning_a_spend_keeps_an_input_a_block_spends_marked, grc_test::WalletTxScope)
+{
+    mempool.clear();
+
+    const std::vector<COutPoint> coins = SpendablePremineOutputs();
+    BOOST_REQUIRE_GE(coins.size(), 2u);
+
+    CTransaction spend = CreateSignedSpend({{PremineCoinbase(), coins[0].n}, {PremineCoinbase(), coins[1].n}}, 440000);
+    BOOST_REQUIRE_GE(CAmount{440000}, GetMinFee(spend));
+    const uint256 spend_hash = spend.GetHash();
+
+    CTransaction rival = CreateSpend(PremineCoinbase(), coins[0].n, 450000, 1);
+    const uint256 rival_hash = rival.GetHash();
+
+    {
+        const SignalsForThisCase signals;
+        LOCK(cs_main);
+
+        const std::string leaked = DescribeRelayableCandidates();
+        BOOST_REQUIRE_MESSAGE(leaked.empty(), "relayable candidates left by a sibling case: " << leaked);
+
+        CValidationState state_spend;
+        BOOST_REQUIRE_MESSAGE(AcceptToMemoryPool(mempool, spend, state_spend, nullptr),
+                              "spend rejected: " + state_spend.GetRejectReason());
+        BOOST_REQUIRE(InWallet(spend_hash));
+        BOOST_REQUIRE(OwnOutputSpent(coins[0].hash, coins[0].n));
+        BOOST_REQUIRE(OwnOutputSpent(coins[1].hash, coins[1].n));
+
+        DropFromPoolSilently();
+    }
+
+    {
+        LOCK(cs_main);
+        CValidationState state_rival;
+        BOOST_REQUIRE_MESSAGE(AcceptToMemoryPool(mempool, rival, state_rival, nullptr),
+                              "rival spend rejected: " + state_rival.GetRejectReason());
+    }
+
+    CBlock block;
+    std::string err;
+    BOOST_REQUIRE_MESSAGE(CreateAndProcessBlock(block, err), "could not mine: " << err);
+    BOOST_REQUIRE_MESSAGE(Contains(block.vtx, rival), "the block left out the rival spend");
+
+    LOCK(cs_main);
+
+    pwalletMain->EraseFromWallet(rival_hash);
+    BOOST_REQUIRE(!InWallet(rival_hash));
+    BOOST_REQUIRE(OwnOutputSpent(coins[0].hash, coins[0].n));
+
+    BOOST_REQUIRE(pwalletMain->AbandonTransaction(spend_hash));
+    BOOST_REQUIRE(IsAbandonedInWallet(spend_hash));
+
+    BOOST_CHECK_MESSAGE(OwnOutputSpent(coins[0].hash, coins[0].n),
+                        "abandoning a spend released an input a block spends");
+    BOOST_CHECK_MESSAGE(!OwnOutputSpent(coins[1].hash, coins[1].n),
+                        "abandoning a spend did not release an input nothing else spends");
+
+    mempool.clear();
+}
+
+//!
+//! Abandoning a spend announces each parent whose output it released. A
+//! listener that re-reads a transaction's outputs on CT_UPDATED, as the GUI coin
+//! store does, would otherwise keep the released coin out of its list:
+//! committing the spend announced the parent when it marked the output, and the
+//! release is the matching announcement.
+//!
+BOOST_FIXTURE_TEST_CASE(abandoning_a_spend_announces_the_parent_whose_output_it_released, grc_test::WalletTxScope)
+{
+    mempool.clear();
+
+    const std::vector<COutPoint> coins = SpendablePremineOutputs();
+    BOOST_REQUIRE_GE(coins.size(), 1u);
+
+    CTransaction spend = CreateSpend(PremineCoinbase(), coins[0].n, 460000, 1);
+    BOOST_REQUIRE_GE(CAmount{460000}, GetMinFee(spend));
+    const uint256 spend_hash = spend.GetHash();
+
+    {
+        const SignalsForThisCase signals;
+        LOCK(cs_main);
+
+        const std::string leaked = DescribeRelayableCandidates();
+        BOOST_REQUIRE_MESSAGE(leaked.empty(), "relayable candidates left by a sibling case: " << leaked);
+
+        CValidationState state_spend;
+        BOOST_REQUIRE_MESSAGE(AcceptToMemoryPool(mempool, spend, state_spend, nullptr),
+                              "spend rejected: " + state_spend.GetRejectReason());
+        BOOST_REQUIRE(InWallet(spend_hash));
+        BOOST_REQUIRE(OwnOutputSpent(coins[0].hash, coins[0].n));
+
+        DropFromPoolSilently();
+    }
+
+    std::vector<std::pair<uint256, ChangeType>> seen;
+    boost::signals2::scoped_connection watch = pwalletMain->NotifyTransactionChanged.connect(
+        [&seen](CWallet*, const uint256& hash, ChangeType status) { seen.emplace_back(hash, status); });
+
+    LOCK(cs_main);
+
+    const size_t seen_before = seen.size();
+    BOOST_REQUIRE(pwalletMain->AbandonTransaction(spend_hash));
+    BOOST_REQUIRE(!OwnOutputSpent(coins[0].hash, coins[0].n));
+
+    BOOST_CHECK_EQUAL(CountNotices(seen, seen_before, PremineCoinbase().GetHash(), CT_UPDATED), 1);
+
+    mempool.clear();
+}
+
+//!
+//! A send the pool refuses at commit is abandoned there. CommitTransaction
+//! records the send and marks its inputs spent before the pool sees it. The
+//! refusal here is txn-mempool-conflict: the pool holds a spend of one input
+//! that the wallet never recorded, as in
+//! abandoning_a_spend_keeps_an_input_the_pool_spends_marked. That is the
+//! conflict a real send can meet: every caller holds cs_main from coin
+//! selection through the commit, so a spend the wallet had recorded would have
+//! kept the coin out of selection. The user is told the send failed, so its
+//! other input goes back to coin selection while the rival's stays marked,
+//! and the resend pass never offers the send to peers, not even once nothing
+//! in the pool conflicts with it.
+//!
+BOOST_FIXTURE_TEST_CASE(a_send_the_pool_refuses_at_commit_is_abandoned_and_releases_its_other_input, grc_test::WalletTxScope)
+{
+    mempool.clear();
+
+    const std::vector<COutPoint> coins = SpendablePremineOutputs();
+    BOOST_REQUIRE_GE(coins.size(), 2u);
+
+    CTransaction send = CreateSignedSpend({{PremineCoinbase(), coins[0].n}, {PremineCoinbase(), coins[1].n}}, 400000);
+    BOOST_REQUIRE_GE(CAmount{400000}, GetMinFee(send));
+    const uint256 send_hash = send.GetHash();
+
+    CTransaction rival = CreateSpend(PremineCoinbase(), coins[0].n, 410000, 1);
+    const uint256 rival_hash = rival.GetHash();
+
+    LOCK(cs_main);
+
+    const std::string leaked = DescribeRelayableCandidates();
+    BOOST_REQUIRE_MESSAGE(leaked.empty(), "relayable candidates left by a sibling case: " << leaked);
+
+    CValidationState state_alone;
+    BOOST_REQUIRE_MESSAGE(AcceptToMemoryPool(mempool, send, state_alone, nullptr, 0, /*test_only=*/true),
+                          "the pool would refuse the send without the rival: " + state_alone.GetRejectReason());
+
+    CValidationState state_rival;
+    BOOST_REQUIRE_MESSAGE(AcceptToMemoryPool(mempool, rival, state_rival, nullptr),
+                          "rival spend rejected: " + state_rival.GetRejectReason());
+    BOOST_REQUIRE_MESSAGE(!InWallet(rival_hash), "the wallet recorded a rival it was not listening for");
+
+    CValidationState state_conflict;
+    BOOST_REQUIRE(!AcceptToMemoryPool(mempool, send, state_conflict, nullptr, 0, /*test_only=*/true));
+    BOOST_REQUIRE_EQUAL(state_conflict.GetRejectReason(), "txn-mempool-conflict");
+
+    CWalletTx wtx(pwalletMain, send);
+    CReserveKey reservekey(pwalletMain);
+    BOOST_REQUIRE_MESSAGE(!pwalletMain->CommitTransaction(wtx, reservekey),
+                          "the pool accepted a send that conflicts with a pooled spend");
+    BOOST_REQUIRE(!mempool.exists(send_hash));
+    BOOST_REQUIRE_MESSAGE(InWallet(send_hash), "CommitTransaction did not record the send");
+
+    BOOST_CHECK_MESSAGE(IsAbandonedInWallet(send_hash), "a send the pool refused at commit is not abandoned");
+    BOOST_CHECK_MESSAGE(!OwnOutputSpent(coins[1].hash, coins[1].n),
+                        "a send the pool refused at commit still holds an input nothing else spends");
+    BOOST_CHECK_MESSAGE(OwnOutputSpent(coins[0].hash, coins[0].n),
+                        "abandoning the refused send released the input the pooled rival spends");
+
+    BOOST_CHECK_EQUAL(pwalletMain->ResendWalletTransactions(/*fForce=*/true), 0u);
+
+    int check_mismatch = 0;
+    int64_t check_amount = 0;
+    pwalletMain->FixSpentCoins(check_mismatch, check_amount, /*fCheckOnly=*/true);
+    BOOST_CHECK_EQUAL(check_mismatch, 0);
+
+    // With the rival gone the pool would take the send, so a resend pass that
+    // offered an abandoned transaction back would count it here.
+    mempool.clear();
+    BOOST_CHECK_EQUAL(pwalletMain->ResendWalletTransactions(/*fForce=*/true), 0u);
+}
+
+//!
+//! A send committed again after its abandonment is released again. A retry
+//! that rebuilds the same inputs, outputs and time, as a scripted
+//! consolidateunspent retry within the same second can, commits the identical
+//! transaction. AddToWallet merges it into the abandoned entry, which keeps its
+//! state, and CommitTransaction marks the inputs spent once more. The pool
+//! refuses it for the same reason, and the abandon that follows has to release
+//! them again rather than stop at "already abandoned".
+//!
+BOOST_FIXTURE_TEST_CASE(a_send_committed_again_after_its_abandonment_is_released_again, grc_test::WalletTxScope)
+{
+    mempool.clear();
+
+    const std::vector<COutPoint> coins = SpendablePremineOutputs();
+    BOOST_REQUIRE_GE(coins.size(), 2u);
+
+    CTransaction send = CreateSignedSpend({{PremineCoinbase(), coins[0].n}, {PremineCoinbase(), coins[1].n}}, 470000);
+    BOOST_REQUIRE_GE(CAmount{470000}, GetMinFee(send));
+    const uint256 send_hash = send.GetHash();
+
+    CTransaction rival = CreateSpend(PremineCoinbase(), coins[0].n, 480000, 1);
+    const uint256 rival_hash = rival.GetHash();
+
+    LOCK(cs_main);
+
+    const std::string leaked = DescribeRelayableCandidates();
+    BOOST_REQUIRE_MESSAGE(leaked.empty(), "relayable candidates left by a sibling case: " << leaked);
+
+    CValidationState state_rival;
+    BOOST_REQUIRE_MESSAGE(AcceptToMemoryPool(mempool, rival, state_rival, nullptr),
+                          "rival spend rejected: " + state_rival.GetRejectReason());
+    BOOST_REQUIRE_MESSAGE(!InWallet(rival_hash), "the wallet recorded a rival it was not listening for");
+
+    {
+        CWalletTx wtx(pwalletMain, send);
+        CReserveKey reservekey(pwalletMain);
+        BOOST_REQUIRE(!pwalletMain->CommitTransaction(wtx, reservekey));
+    }
+    BOOST_REQUIRE(IsAbandonedInWallet(send_hash));
+    BOOST_REQUIRE(!OwnOutputSpent(coins[1].hash, coins[1].n));
+
+    {
+        CWalletTx wtx(pwalletMain, send);
+        CReserveKey reservekey(pwalletMain);
+        BOOST_REQUIRE(!pwalletMain->CommitTransaction(wtx, reservekey));
+    }
+    BOOST_CHECK(IsAbandonedInWallet(send_hash));
+    BOOST_CHECK_MESSAGE(!OwnOutputSpent(coins[1].hash, coins[1].n),
+                        "a send committed again after its abandonment still holds an input nothing else spends");
+    BOOST_CHECK(OwnOutputSpent(coins[0].hash, coins[0].n));
+
+    mempool.clear();
 }
 
 BOOST_AUTO_TEST_SUITE_END()

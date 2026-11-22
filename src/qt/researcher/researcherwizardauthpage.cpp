@@ -37,6 +37,12 @@ void ResearcherWizardAuthPage::setModel(ResearcherModel* researcher_model)
     }
 
     connect(m_researcher_model, &ResearcherModel::researcherChanged, this, &ResearcherWizardAuthPage::refresh);
+    // The code shown is the pending beacon's, which comes from the chain and
+    // the pool, so it can change on a block without a send: for one, when an
+    // earlier advertisement of this wallet's confirms instead of the one whose
+    // code is on show. A block reports through beaconChanged alone while the
+    // sync state holds.
+    connect(m_researcher_model, &ResearcherModel::beaconChanged, this, &ResearcherWizardAuthPage::refresh);
 }
 
 void ResearcherWizardAuthPage::initializePage()

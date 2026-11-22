@@ -11,9 +11,9 @@ This document details the CMake configuration options available for Gridcoin. Th
 | `ENABLE_TESTS` | `OFF` | Builds the unit test suite (`src/test/`). Recommended for all developers. |
 | `ENABLE_DOCS` | `OFF` | Generates Doxygen documentation. |
 | `STATIC_LIBS` | `OFF` | Forces the build system to look for static libraries (`.a`) instead of shared libraries (`.so`). Required for `depends` builds. |
-| `ENABLE_HARDENING` | `ON` | Exploit-mitigation compiler and linker flags: stack protector, `_FORTIFY_SOURCE`, full RELRO, CET. Each is probed, so a toolchain that lacks one is simply not given it. `_FORTIFY_SOURCE` is skipped for `Debug` and sanitizer builds, which are unoptimised. |
+| `ENABLE_HARDENING` | `ON` | Exploit-mitigation compiler and linker flags: stack protector, `_FORTIFY_SOURCE`, full RELRO, CET. Each is probed, so a toolchain that lacks one is simply not given it. `_FORTIFY_SOURCE` is skipped for `Debug` and sanitizer builds, which are unoptimised, and left alone for C or C++ when that language's flags (`CFLAGS`, `CXXFLAGS`) already set it, so a packager's own level stands. |
 | `ENABLE_PIE` | `OFF` | Position Independent Executables. `OFF` genuinely disables PIE rather than deferring to the toolchain default, so it is a real two-way switch. Not available on Windows, where the linker reports no PIE support and the setting would abort the configure; PE gets its ASLR from `--dynamicbase` instead. |
-| `ENABLE_DEBUG_LOCKORDER` | `OFF` | Enables run-time lock-order checking (`DEBUG_LOCKORDER`). Detects potential deadlocks by tracking lock acquisition order and logging inconsistencies to `debug.log`. Recommended with `Debug` build type. |
+| `ENABLE_DEBUG_LOCKORDER` | `OFF` | Enables run-time lock-order checking (`DEBUG_LOCKORDER`) in any build type. Detects potential deadlocks by tracking lock acquisition order and logging inconsistencies to `debug.log`. A `Debug` build defines `DEBUG_LOCKORDER` (and `ABORT_ON_FAILED_ASSUME`) without it. Do not combine with ThreadSanitizer. |
 
 ---
 
@@ -27,9 +27,25 @@ These options toggle specific functionality within the Gridcoin client.
 | `DEFAULT_UPNP` | `OFF` | Starts with UPnP already enabled. Off by default: the stock configuration makes 8 outbound connections, so there is no reason to ask the router to open an inbound port until the operator asks for one. Ignored when not listening. | `ENABLE_UPNP` |
 | `ENABLE_QRENCODE` | `OFF` | **QR Codes.** Allows the GUI to display QR codes for wallet addresses. Convenient for mobile payments. | `libqrencode` |
 | `USE_DBUS` | `OFF` | **Desktop Bus.** Enables OS notifications on Linux desktops (e.g., "Staked a block!"). | `QtDBus` |
-| `USE_QT6` | `OFF` | Builds against Qt 6 instead of Qt 5. Recommended for modern Linux distributions. | `Qt6` |
+| `USE_QT6` | `ON` | Builds against Qt 6. Set to `OFF` to build against Qt 5 (5.15 or later) instead. | `Qt6` (`Qt5` when `OFF`) |
 | `ENABLE_MULTIPROCESS` | `OFF` | **Multiprocess (IPC) build (RFC #2937).** Builds against Cap'n Proto and the vendored libmultiprocess subtree so the `interfaces::` boundaries can be driven over IPC. Toolchain-only for now; see [multiprocess.md](multiprocess.md). | `CapnProto` (external); libmultiprocess is vendored in-tree |
+| `GRC_DESKTOP_CORE_ACTIONS` | `ON` | Lets the GUI's desktop file offer the launcher actions that attach the GUI to a core: "Connect to your own core", and "Connect to the system service" when the units are installed. They are offered only when the build has the multiprocess GUI and the daemon; `OFF` leaves them out even then, as the Flatpak does. | `ENABLE_GUI`, `ENABLE_MULTIPROCESS`, `ENABLE_DAEMON` |
 | `WITH_EXTERNAL_LIBMULTIPROCESS` | `OFF` | Build the vendored in-tree libmultiprocess subtree (default). Set to `ON` to link an external (system / depends) libmultiprocess instead — mainly useful when developing libmultiprocess itself. | `ENABLE_MULTIPROCESS` |
+
+### systemd units (Linux)
+
+On Linux the daemon install generates the systemd units, the sysusers.d entry and the tmpfiles.d entries from the templates in `contrib/init` for one network. On every UNIX but macOS it installs the daemon execute-only (mode 0711).
+
+| Option | Default | Why Use It? |
+| :--- | :--- | :--- |
+| `GRC_UNIT_NETWORK` | `main` | Network the generated units serve: `main` (`gridcoinresearchd`, account `gridcoin`) or `test` (`gridcointestnetd`, account `gridcointestnet`, `-testnet`). With `test` the daemon is installed as `gridcointestnetd`. |
+| `INSTALL_SYSTEMD_UNITS` | `ON` on Linux, `OFF` elsewhere | Install the core units (system service and per-user `@` template), the sysusers.d entry, the tmpfiles.d entries and gridcoin-service. Linux only: elsewhere it is ignored with a warning. |
+| `INSTALL_SYSTEMD_AUTOUNLOCK` | `ON` | Install the autounlock helper and its four socket and service units. Needs systemd 251 or later; leave it `OFF` on older distributions. gridcoin-service is built knowing the choice: with `OFF` it leaves the helper units alone and refuses `autounlock enable`. |
+| `GRC_UNIT_PRIVATE_PIDS` | `ON` | Set `PrivatePIDs=yes` in the two core units. Needs systemd 257 or later; with `OFF` the line is carried commented out, since an older systemd logs an unknown key at every load of the unit. |
+| `GRC_SYSTEMD_UNITDIR` | `lib/systemd/system` | Unit directory, relative to `CMAKE_INSTALL_PREFIX`. |
+| `GRC_SYSUSERSDIR` | `lib/sysusers.d` | sysusers.d directory, relative to `CMAKE_INSTALL_PREFIX`. |
+| `GRC_TMPFILESDIR` | `lib/tmpfiles.d` | tmpfiles.d directory, relative to `CMAKE_INSTALL_PREFIX`. |
+| `GRC_UNIT_PYTHON3` | `/usr/bin/python3` | Interpreter the helper unit runs (`python3 -I`). |
 
 ---
 
@@ -65,12 +81,12 @@ These options are primarily used by the `depends` system or advanced users.
 cmake -B build -DENABLE_GUI=ON -DENABLE_QRENCODE=ON -DUSE_DBUS=ON \
     -DENABLE_TESTS=ON -DENABLE_UPNP=ON \
     -DCMAKE_BUILD_TYPE=RelWithDebInfo
-````
+```
 
 ### Minimal GUI Developer Build (Linux)
 ```bash
 cmake -B build -DENABLE_GUI=ON -DENABLE_TESTS=ON -DCMAKE_BUILD_TYPE=RelWithDebInfo
-````
+```
 
 ### Minimal GUI Developer Build (Linux) for Detailed Debug
 ```bash

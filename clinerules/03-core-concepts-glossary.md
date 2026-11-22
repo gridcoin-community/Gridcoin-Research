@@ -334,7 +334,7 @@ This glossary provides definitions for Gridcoin-specific terminology. Understand
 - **Status**: Discontinued - snapshot servers disabled
 - **Reason**: Security - full sync from genesis eliminates trust requirements
 - **Sync Time**: Complete sync now takes < 5 hours on modern hardware with good connection
-- **Note**: Snapshot functionality still exists in code but is no longer recommended or supported
+- **Note**: The snapshot download code has been removed; a full sync from genesis is the only path
 
 ### Checkpoint
 - **Definition**: Hardcoded block hash at specific height

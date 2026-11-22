@@ -1577,7 +1577,8 @@ BOOST_AUTO_TEST_CASE(beacon_registry_GetBeaconChainletRoot_test)
 
         // There is only one entry in the chainlet.. so the head and root are the same.
         BOOST_CHECK(chainlet_root->m_hash == chainlet_head->m_hash);
-        BOOST_CHECK_EQUAL(beacon_chain_out_ptr->size(), 1);
+        // sign-compare checked: size() is size_t; 1U is a non-negative literal, so both sides are unsigned.
+        BOOST_CHECK_EQUAL(beacon_chain_out_ptr->size(), 1U);
     }
 
     // Renewal
@@ -1616,7 +1617,8 @@ BOOST_AUTO_TEST_CASE(beacon_registry_GetBeaconChainletRoot_test)
         GRC::Beacon_ptr chainlet_root = registry.GetBeaconChainletRoot(chainlet_head, beacon_chain_out_ptr);
 
         BOOST_CHECK(chainlet_root->m_hash == activated_beacon_hash);
-        BOOST_CHECK_EQUAL(beacon_chain_out_ptr->size(), 2);
+        // sign-compare checked: size() is size_t; 2U is a non-negative literal, so both sides are unsigned.
+        BOOST_CHECK_EQUAL(beacon_chain_out_ptr->size(), 2U);
     }
 
     // Second renewal
@@ -1654,7 +1656,8 @@ BOOST_AUTO_TEST_CASE(beacon_registry_GetBeaconChainletRoot_test)
         GRC::Beacon_ptr chainlet_root = registry.GetBeaconChainletRoot(chainlet_head, beacon_chain_out_ptr);
 
         BOOST_CHECK(chainlet_root->m_hash == activated_beacon_hash);
-        BOOST_CHECK_EQUAL(beacon_chain_out_ptr->size(), 3);
+        // sign-compare checked: size() is size_t; 3U is a non-negative literal, so both sides are unsigned.
+        BOOST_CHECK_EQUAL(beacon_chain_out_ptr->size(), 3U);
     }
 
     // Let's corrupt the activation beacon to have a previous beacon hash that refers circularly back to the chain head...
@@ -1787,7 +1790,8 @@ BOOST_AUTO_TEST_CASE(beacon_registry_GetBeaconChainletRoot_test_2)
 
         // There is only one entry in the chainlet.. so the head and root are the same.
         BOOST_CHECK(chainlet_root->m_hash == chainlet_head->m_hash);
-        BOOST_CHECK_EQUAL(beacon_chain_out_ptr->size(), 1);
+        // sign-compare checked: size() is size_t; 1U is a non-negative literal, so both sides are unsigned.
+        BOOST_CHECK_EQUAL(beacon_chain_out_ptr->size(), 1U);
     }
 
     // Renewal
@@ -1826,7 +1830,8 @@ BOOST_AUTO_TEST_CASE(beacon_registry_GetBeaconChainletRoot_test_2)
         GRC::Beacon_ptr chainlet_root = registry.GetBeaconChainletRoot(chainlet_head, beacon_chain_out_ptr);
 
         BOOST_CHECK(chainlet_root->m_hash == activated_beacon_hash);
-        BOOST_CHECK_EQUAL(beacon_chain_out_ptr->size(), 2);
+        // sign-compare checked: size() is size_t; 2U is a non-negative literal, so both sides are unsigned.
+        BOOST_CHECK_EQUAL(beacon_chain_out_ptr->size(), 2U);
     }
 
     // Second renewal
@@ -1864,7 +1869,8 @@ BOOST_AUTO_TEST_CASE(beacon_registry_GetBeaconChainletRoot_test_2)
         GRC::Beacon_ptr chainlet_root = registry.GetBeaconChainletRoot(chainlet_head, beacon_chain_out_ptr);
 
         BOOST_CHECK(chainlet_root->m_hash == activated_beacon_hash);
-        BOOST_CHECK_EQUAL(beacon_chain_out_ptr->size(), 3);
+        // sign-compare checked: size() is size_t; 3U is a non-negative literal, so both sides are unsigned.
+        BOOST_CHECK_EQUAL(beacon_chain_out_ptr->size(), 3U);
     }
 
     // Let's corrupt the activation beacon to have a previous beacon hash that is the same as its hash...
@@ -1991,6 +1997,22 @@ void ReloadRegistry(GRC::BeaconRegistry& registry)
     registry.Initialize();
 }
 
+//!
+//! \brief Read the beacon entry db version stored in LevelDB, or zero if it cannot be read (none is stored, or the
+//! read fails), as the registry's own version check treats it.
+//!
+uint32_t StoredBeaconDBVersion()
+{
+    CTxDB txdb("r");
+
+    std::pair<std::string, std::string> key = std::make_pair(std::string("beacon_db"), std::string("version"));
+    uint32_t version = 0;
+
+    if (!txdb.ReadGenericSerializable(key, version)) return 0;
+
+    return version;
+}
+
 constexpr int64_t DAY = 60 * 60 * 24;
 constexpr int64_t START_TIME = 1600000000;
 } // anonymous namespace
@@ -2038,6 +2060,48 @@ BOOST_AUTO_TEST_CASE(beacon_registry_deactivate_skips_missing_pending_records)
 
     BOOST_CHECK(registry.PendingBeacons().empty());
     BOOST_CHECK(registry.Try(cpid_1) != nullptr);
+
+    registry.Reset();
+}
+
+// A node upgrading from a beacon entry db at version 3 discards its stored beacon history on the first start and
+// rebuilds it by replaying every beacon contract, so that the history it keeps is the one a fresh sync produces.
+BOOST_AUTO_TEST_CASE(beacon_registry_a_db_stored_at_version_3_is_rebuilt_on_the_next_start)
+{
+    LOCK(cs_main);
+
+    GRC::BeaconRegistry& registry = GRC::GetBeaconRegistry();
+    registry.Reset();
+
+    CKey key;
+    key.MakeNewKey(true);
+    const GRC::Cpid cpid = GRC::Cpid::Parse("00010203040506070809101112131415");
+
+    const uint256 advertisement = AddPendingBeacon(registry, cpid, key.GetPubKey(), START_TIME, 1);
+
+    // At the current version a restart loads the stored history and replays from the stored height.
+    registry.ResetInMemoryOnly();
+    BOOST_REQUIRE_EQUAL(registry.Initialize(), 1);
+    BOOST_REQUIRE_EQUAL(registry.PendingBeacons().size(), 1U);
+
+    // Store version 3, as the nodes before version 4 did.
+    {
+        CTxDB txdb("rw");
+
+        std::pair<std::string, std::string> version_key = std::make_pair(std::string("beacon_db"),
+                                                                         std::string("version"));
+        uint32_t version = 3;
+
+        BOOST_REQUIRE(txdb.WriteGenericSerializable(version_key, version));
+    }
+
+    // The next start erases the stored history and stores the current version, and the replay starts from the
+    // beginning.
+    registry.ResetInMemoryOnly();
+    BOOST_CHECK_EQUAL(registry.Initialize(), 0);
+    BOOST_CHECK(registry.PendingBeacons().empty());
+    BOOST_CHECK(registry.GetBeaconDB().find(advertisement) == registry.GetBeaconDB().end());
+    BOOST_CHECK_EQUAL(StoredBeaconDBVersion(), 4U);
 
     registry.Reset();
 }

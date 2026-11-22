@@ -8,7 +8,10 @@
 # virtual on interfaces::Init must have an override in ipc/serve_init.cpp's
 # ServeInit wrapper, and every override must call RequireAuth(). A missing
 # override fails closed but silently; an override without RequireAuth() fails
-# open. Neither produces a compiler diagnostic, so it is checked here.
+# open. Neither produces a compiler diagnostic, so it is checked here. Every
+# factory whose interface declares bindConnectionScope() must also return
+# BindToConnection(...); the self-test runs first.
 
 export LC_ALL=C
+python3 "$(dirname "$0")/lint-serve-init-complete.py" --self-test || exit 1
 exec python3 "$(dirname "$0")/lint-serve-init-complete.py"

@@ -47,6 +47,7 @@ private slots:
     void refreshSummary();
     void refreshOverallStatus();
     void refreshProjects();
+    void refreshProjectsStatus();
     void reloadProjects();
     void on_reviewBeaconAuthButton_clicked();
     void on_renewBeaconButton_clicked();

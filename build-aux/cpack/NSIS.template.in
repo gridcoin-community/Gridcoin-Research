@@ -1,6 +1,8 @@
 Name "@CPACK_NSIS_PACKAGE_NAME@ (@CPACK_WINDOWS_BITS@-bit)"
 
-RequestExecutionLevel highest
+# Every install and uninstall step needs administrator rights, so a standard user gets the UAC
+# prompt for an administrator's credentials.
+RequestExecutionLevel admin
 SetCompressor /SOLID @CPACK_NSIS_COMPRESSOR@
 Unicode true
 
@@ -12,6 +14,12 @@ Unicode true
 !define ICONDIR "@CPACK_ICONDIR@"
 !define GRIDCOIN_GUI_NAME gridcoinresearch.exe
 !define GRIDCOIN_DAEMON_NAME gridcoinresearchd.exe
+
+# A release build signs the uninstaller the installer writes, through a command CI provides
+# (CPackOptions.cmake takes it from the environment). Without one nothing changes.
+!if "@CPACK_GRIDCOIN_UNINSTALLER_SIGN_COMMAND@" != ""
+!uninstfinalize '@CPACK_GRIDCOIN_UNINSTALLER_SIGN_COMMAND@ "%1"' = 0
+!endif
 
 # MUI Symbol Definitions
 !define MUI_ICON "${ICONDIR}\gridcoin.ico"
@@ -27,24 +35,78 @@ Unicode true
 !define MUI_STARTMENUPAGE_REGISTRY_VALUENAME StartMenuGroup
 !define MUI_STARTMENUPAGE_DEFAULTFOLDER "@CPACK_NSIS_PACKAGE_NAME@"
 !define MUI_FINISHPAGE_RUN $INSTDIR\${GRIDCOIN_GUI_NAME}
+# What Run does follows what the StartCore step restarted (GrcFinishRun, GrcFinishPageShow).
+!define MUI_FINISHPAGE_RUN_FUNCTION GrcFinishRun
+# What the upgrade could not do by itself, and the files whose permissions are wider than this
+# release sets for new ones: written by Invoke-GridcoinInstallStep.ps1, and shown only when there is
+# something to say (GrcFinishPageShow).
+!define MUI_FINISHPAGE_SHOWREADME $INSTDIR\windows\UPGRADE-NOTICE.txt
+!define MUI_FINISHPAGE_SHOWREADME_TEXT "Show the upgrade notes"
 !define MUI_UNWELCOMEFINISHPAGE_UNICON "${ICONDIR}\gridcoin.ico"
 !define MUI_UNFINISHPAGE_NOAUTOCLOSE
 
 # Included files
 !include Sections.nsh
 !include MUI2.nsh
+!include LogicLib.nsh
+!include WinMessages.nsh
 !if "@CPACK_WINDOWS_BITS@" == "64"
 !include x64.nsh
 !endif
 
+# The installer is a 32-bit program. Around each run of $SYSDIR\WindowsPowerShell\v1.0\powershell.exe
+# on 64-bit Windows, file system redirection is off, so that the 64-bit one runs: the
+# install steps read and write the 64-bit registry, Program Files and System32.
+!macro GRC_NATIVE_BEGIN
+!if "@CPACK_WINDOWS_BITS@" == "64"
+    ${DisableX64FSRedirection}
+!endif
+!macroend
+!macro GRC_NATIVE_END
+!if "@CPACK_WINDOWS_BITS@" == "64"
+    ${EnableX64FSRedirection}
+!endif
+!macroend
+
+# The installer keeps its plug-ins (nsExec, and the StartMenu and nsDialogs plug-ins the pages use),
+# the steps of Invoke-GridcoinInstallStep.ps1 and their state files in $PLUGINSDIR, which .onInit and
+# un.onInit first point at a new folder under Program Files. NSIS deletes $PLUGINSDIR when the program
+# exits.
+!if "@CPACK_WINDOWS_BITS@" == "64"
+!define GRC_PROGRAMFILES "$PROGRAMFILES64"
+!else
+!define GRC_PROGRAMFILES "$PROGRAMFILES"
+!endif
+!macro GRC_ADMIN_PLUGINSDIR NAME
+    StrCpy $0 "${GRC_PROGRAMFILES}\@CPACK_PACKAGE_INSTALL_DIRECTORY@.${NAME}"
+    ; Left by a run that did not exit. Only an administrator can have made it.
+    RMDir /r $0
+    ${If} ${FileExists} "$0\*.*"
+        MessageBox MB_OK|MB_ICONSTOP "The folder $0 is left from an earlier run and could not be removed. Remove it, then run this program again." /SD IDOK
+        Abort
+    ${EndIf}
+    ClearErrors
+    CreateDirectory $0
+    ${If} ${Errors}
+        MessageBox MB_OK|MB_ICONSTOP "The folder $0 could not be created, so nothing was changed." /SD IDOK
+        Abort
+    ${EndIf}
+    UnsafeStrCpy $PLUGINSDIR $0
+!macroend
+
 # Variables
 Var StartMenuGroup
+# From the StartCore step: task (the account's own Core-Start was restarted), othr (a service or
+# another account's core was restarted) or none; and the data directory of the task's launcher.
+Var GrcFinishMode
+Var GrcFinishDataDir
 
 # Installer pages
 !insertmacro MUI_PAGE_WELCOME
 !insertmacro MUI_PAGE_DIRECTORY
 !insertmacro MUI_PAGE_STARTMENU Application $StartMenuGroup
 !insertmacro MUI_PAGE_INSTFILES
+!define MUI_PAGE_CUSTOMFUNCTION_SHOW GrcFinishPageShow
 !insertmacro MUI_PAGE_FINISH
 !insertmacro MUI_UNPAGE_CONFIRM
 !insertmacro MUI_UNPAGE_INSTFILES
@@ -63,6 +125,8 @@ CRCCheck force
 XPStyle on
 BrandingText " "
 ShowInstDetails show
+# A file that cannot be overwritten offers Retry or Cancel only; a silent install stops instead of skipping it with exit code 0.
+AllowSkipFiles off
 VIProductVersion "${VERSION}"
 VIAddVersionKey ProductName "@CPACK_NSIS_PACKAGE_NAME@"
 VIAddVersionKey ProductVersion "${VERSION}"
@@ -76,18 +140,88 @@ ShowUninstDetails show
 
 # Installer sections
 Section -Main SEC0000
+    # Before anything is replaced, the steps of Invoke-GridcoinInstallStep.ps1 run from
+    # $PLUGINSDIR (under Program Files, GRC_ADMIN_PLUGINSDIR), as $INSTDIR may not exist yet, may
+    # hold an earlier version, or may be a directory HardenInstallDir has yet to check.
+    # HardenInstallDir comes first, so that a directory it refuses leaves every core running;
+    # StopCore starts again what it stopped when it refuses.
+    File /oname=$PLUGINSDIR\Invoke-GridcoinInstallStep.ps1 @CPACK_TEMPORARY_DIRECTORY@\daemon\windows\Invoke-GridcoinInstallStep.ps1
+    File /oname=$PLUGINSDIR\GridcoinCommon.ps1 @CPACK_TEMPORARY_DIRECTORY@\daemon\windows\GridcoinCommon.ps1
+    DetailPrint "Checking the install directory $INSTDIR ..."
+    !insertmacro GRC_NATIVE_BEGIN
+    nsExec::ExecToLog '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$PLUGINSDIR\Invoke-GridcoinInstallStep.ps1" -Step HardenInstallDir -InstallDir "$INSTDIR" -StateFile "$PLUGINSDIR\upgrade-state.json"'
+    !insertmacro GRC_NATIVE_END
+    Pop $0
+    ${If} $0 != 0
+        MessageBox MB_OK|MB_ICONSTOP "Gridcoin cannot be installed in $INSTDIR, and nothing was changed. The details above say why." /SD IDOK
+        Abort
+    ${EndIf}
+    DetailPrint "Stopping the Gridcoin cores that run from $INSTDIR ..."
+    !insertmacro GRC_NATIVE_BEGIN
+    nsExec::ExecToLog '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$PLUGINSDIR\Invoke-GridcoinInstallStep.ps1" -Step StopCore -InstallDir "$INSTDIR" -StateFile "$PLUGINSDIR\upgrade-state.json"'
+    !insertmacro GRC_NATIVE_END
+    Pop $0
+    ${If} $0 != 0
+        MessageBox MB_OK|MB_ICONSTOP "The Gridcoin cores could not all be stopped, so nothing was installed. The details above say why." /SD IDOK
+        Abort
+    ${EndIf}
+
     SetOutPath $INSTDIR
     SetOverwrite on
     File @CPACK_TEMPORARY_DIRECTORY@\gui\bin\${GRIDCOIN_GUI_NAME}
     SetOutPath $INSTDIR\daemon
     File @CPACK_TEMPORARY_DIRECTORY@\daemon\bin\${GRIDCOIN_DAEMON_NAME}
+    File @CPACK_TEMPORARY_DIRECTORY@\daemon\bin\gridcoin-service.exe
     SetOutPath $INSTDIR\doc
     File /oname=COPYING.txt @CPACK_RESOURCE_FILE_LICENSE@
     File /oname=CHANGELOG.md @CPACK_RESOURCE_FILE_CHANGELOG@
     SetOutPath $INSTDIR\windows
     File @CPACK_TEMPORARY_DIRECTORY@\daemon\windows\*.ps1
     File @CPACK_TEMPORARY_DIRECTORY@\daemon\windows\README.md
+    File @CPACK_TEMPORARY_DIRECTORY@\daemon\windows\release-signer.txt
     SetOutPath $INSTDIR
+
+    # After the files, the steps run from the installed $INSTDIR\windows: the switch-over writes the
+    # Core-Start launcher beside the scripts. A failure here is reported and the install goes on,
+    # as the new files are in place.
+    DetailPrint "Switching the scheduled tasks of earlier versions over ..."
+    !insertmacro GRC_NATIVE_BEGIN
+    nsExec::ExecToLog '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$INSTDIR\windows\Invoke-GridcoinInstallStep.ps1" -Step SwitchOver -InstallDir "$INSTDIR" -StateFile "$PLUGINSDIR\upgrade-state.json"'
+    !insertmacro GRC_NATIVE_END
+    Pop $0
+    ${If} $0 != 0
+        MessageBox MB_OK|MB_ICONEXCLAMATION "The scheduled tasks of the earlier version were not all switched over. The details above say why. To set unattended start up again, run Install-GridcoinCoreTask.ps1 from $INSTDIR\windows in an elevated window." /SD IDOK
+    ${EndIf}
+    DetailPrint "Starting the Gridcoin cores that ran before ..."
+    !insertmacro GRC_NATIVE_BEGIN
+    nsExec::ExecToLog '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$INSTDIR\windows\Invoke-GridcoinInstallStep.ps1" -Step StartCore -InstallDir "$INSTDIR" -StateFile "$PLUGINSDIR\upgrade-state.json"'
+    !insertmacro GRC_NATIVE_END
+    Pop $0
+    ${If} $0 != 0
+        MessageBox MB_OK|MB_ICONEXCLAMATION "A Gridcoin core that ran before the upgrade did not start again. The details above say why." /SD IDOK
+    ${EndIf}
+    # What StartCore restarted: the first four characters are the case, the rest the data directory.
+    StrCpy $GrcFinishMode none
+    StrCpy $GrcFinishDataDir ""
+    ClearErrors
+    FileOpen $1 "$PLUGINSDIR\finish-run.txt" r
+    ${IfNot} ${Errors}
+        FileRead $1 $2
+        FileClose $1
+        StrCpy $GrcFinishMode $2 4
+        StrCpy $GrcFinishDataDir $2 "" 4
+    ${EndIf}
+    # Report only: the files of this account's data directories whose permissions are wider than
+    # this release sets for new files go into UPGRADE-NOTICE.txt. Nothing is changed.
+    DetailPrint "Checking the permissions of this account's Gridcoin data directories ..."
+    !insertmacro GRC_NATIVE_BEGIN
+    nsExec::ExecToLog '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$INSTDIR\windows\Invoke-GridcoinInstallStep.ps1" -Step ReportPermissions -InstallDir "$INSTDIR" -StateFile "$PLUGINSDIR\upgrade-state.json"'
+    !insertmacro GRC_NATIVE_END
+    Pop $0
+    ${If} $0 != 0
+        DetailPrint "The permission check did not finish (exit code $0)."
+    ${EndIf}
+
     WriteRegStr HKLM "${REGKEY}\Components" Main 1
 SectionEnd
 
@@ -130,6 +264,18 @@ done${UNSECTION_ID}:
 
 # Uninstaller sections
 Section /o -un.Main UNSEC0000
+    # Before any file is deleted: stop the cores, then remove the scheduled tasks, the Group Policy
+    # shutdown script, the firewall rules and the services (disabled and empty, as un.onInit
+    # checked), with the scripts and gridcoin-service.exe that are still here.
+    DetailPrint "Removing the Gridcoin tasks, shutdown script, firewall rules and services ..."
+    !insertmacro GRC_NATIVE_BEGIN
+    nsExec::ExecToLog '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$INSTDIR\windows\Invoke-GridcoinInstallStep.ps1" -Step PreUninstall -InstallDir "$INSTDIR"'
+    !insertmacro GRC_NATIVE_END
+    Pop $0
+    ${If} $0 != 0
+        MessageBox MB_OK|MB_ICONSTOP "The Gridcoin cores, tasks or services could not all be removed, so no file was deleted. The details above say why." /SD IDOK
+        Abort
+    ${EndIf}
     Delete /REBOOTOK $INSTDIR\${GRIDCOIN_GUI_NAME}
     RMDir /r /REBOOTOK $INSTDIR\daemon
     RMDir /r /REBOOTOK $INSTDIR\doc
@@ -163,8 +309,20 @@ no_smgroup:
 SectionEnd
 
 # Installer functions
+# An install that stops after StopCore (a file that cannot be written, or Cancel) starts again what
+# StopCore stopped. StopCore writes the state only when it stopped everything, and starts things again itself when it refuses.
+Function .onInstFailed
+    IfFileExists "$PLUGINSDIR\upgrade-state.json" 0 grc_no_restart
+    DetailPrint "The install stopped, so the Gridcoin cores that were stopped for it are started again ..."
+    !insertmacro GRC_NATIVE_BEGIN
+    nsExec::ExecToLog '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$PLUGINSDIR\Invoke-GridcoinInstallStep.ps1" -Step RestartStopped -InstallDir "$INSTDIR" -StateFile "$PLUGINSDIR\upgrade-state.json"'
+    !insertmacro GRC_NATIVE_END
+    Pop $0
+grc_no_restart:
+FunctionEnd
+
 Function .onInit
-    InitPluginsDir
+    !insertmacro GRC_ADMIN_PLUGINSDIR setup
     SetShellVarContext all
 !if "@CPACK_WINDOWS_BITS@" == "64"
     ${If} ${RunningX64}
@@ -175,43 +333,83 @@ Function .onInit
     ${EndIf}
 !endif
     loop:
-    ExpandEnvStrings $1 "%COMSPEC%"
-    ExecWait '$1 /C "$\"$SYSDIR\tasklist.exe$\" /NH /FI $\"IMAGENAME eq ${GRIDCOIN_GUI_NAME}$\" | $\"$SYSDIR\find.exe$\" /I $\"${GRIDCOIN_GUI_NAME}$\""' $0
+    ; The system's own cmd.exe, with /D.
+    StrCpy $1 "$SYSDIR\cmd.exe"
+    ExecWait '$1 /D /C "$\"$SYSDIR\tasklist.exe$\" /NH /FI $\"IMAGENAME eq ${GRIDCOIN_GUI_NAME}$\" | $\"$SYSDIR\find.exe$\" /I $\"${GRIDCOIN_GUI_NAME}$\""' $0
     StrCmp $0 0 0 notRunning_gui
-    MessageBox MB_OKCANCEL|MB_ICONEXCLAMATION 'The Gridcoin wallet (${GRIDCOIN_GUI_NAME}) is running. Please close before continuing.' IDOK loop IDCANCEL end
+    MessageBox MB_OKCANCEL|MB_ICONEXCLAMATION 'The Gridcoin wallet (${GRIDCOIN_GUI_NAME}) is running. Please close before continuing.' /SD IDCANCEL IDOK loop IDCANCEL end
     notRunning_gui:
-    ExecWait '$1 /C "$\"$SYSDIR\tasklist.exe$\" /NH /FI $\"IMAGENAME eq ${GRIDCOIN_DAEMON_NAME}$\" | $\"$SYSDIR\find.exe$\" /I $\"${GRIDCOIN_DAEMON_NAME}$\""' $0
-    StrCmp $0 0 0 notRunning_daemon
-    MessageBox MB_OKCANCEL|MB_ICONEXCLAMATION 'The Gridcoin wallet daemon (${GRIDCOIN_DAEMON_NAME}) is running. Please close before continuing.' IDOK loop IDCANCEL end
-    notRunning_daemon:
-    ; Check for HKCU Path registry and prompt for uninstallation if found
+    # A running core is not a reason to stop here: the StopCore step of the -Main section stops
+    # the cores that run from $INSTDIR, and StartCore starts them again.
+    ; An old version installed for this account only (HKCU) is not uninstalled from here: the user
+    ; removes it, then runs this installer again.
     ReadRegStr $0 HKCU "${REGKEY}" "Path"
     ${IfThen} $0 == "" ${|} Return ${|}
-    ${IfNot} ${Cmd} \
-        'MessageBox MB_YESNO|MB_ICONEXCLAMATION \
-          "An old version is found on your system and will be uninstalled first to migrate registry entries and shortcuts. \
-          Your wallet data will not be affected. Continue?" \
-          /SD IDYES IDYES'
-      Abort
+    ; Gone already, and its registry entries left behind: removing those runs nothing.
+    ${IfNot} ${FileExists} "$0\uninstall.exe"
+      DeleteRegValue HKCU "${REGKEY}" "Path"
+      DeleteRegKey HKCU "SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\$(^Name)"
+      Return
     ${EndIf}
-    ReadRegStr $1 HKCU "SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\$(^Name)" "UninstallString"
-    ${If} ${Silent}
-      StrCpy $1 "$1 /S"
-    ${EndIf}
-    ExecWait "$1 _?=$0" $0
-    ${IfThen} $0 != 0 ${|} Abort ${|}
+    MessageBox MB_OK|MB_ICONSTOP \
+      "An old version installed for your account only is in $0. Uninstall it first, from Apps in Settings or with its own uninstaller, then run this installer again. Your wallet data is not affected." \
+      /SD IDOK
+    Abort
     end:
     Abort
 FunctionEnd
 
+# The finish page offers the upgrade notes only when Invoke-GridcoinInstallStep.ps1 wrote some in
+# this run: not after an install that stopped before the switch-over, which removes earlier notes.
+Function GrcFinishPageShow
+    ${If} $GrcFinishMode == othr
+        SendMessage $mui.FinishPage.Run ${BM_SETCHECK} ${BST_UNCHECKED} 0
+    ${EndIf}
+    ${If} ${Abort}
+    ${OrIfNot} ${FileExists} "$INSTDIR\windows\UPGRADE-NOTICE.txt"
+        SendMessage $mui.FinishPage.ShowReadme ${BM_SETCHECK} ${BST_UNCHECKED} 0
+        ShowWindow $mui.FinishPage.ShowReadme ${SW_HIDE}
+    ${EndIf}
+FunctionEnd
+
+# Run starts the GUI that attaches to the account's own core when StartCore restarted it, with the
+# data directory of its launcher if that names one; otherwise the plain GUI.
+Function GrcFinishRun
+    ${If} $GrcFinishMode == task
+        ${If} $GrcFinishDataDir != ""
+            Exec '"$INSTDIR\${GRIDCOIN_GUI_NAME}" -multiprocess -datadir="$GrcFinishDataDir"'
+        ${Else}
+            Exec '"$INSTDIR\${GRIDCOIN_GUI_NAME}" -multiprocess'
+        ${EndIf}
+    ${Else}
+        Exec '"$INSTDIR\${GRIDCOIN_GUI_NAME}"'
+    ${EndIf}
+FunctionEnd
+
 # Uninstaller functions
 Function un.onInit
+    !insertmacro GRC_ADMIN_PLUGINSDIR uninstall
     SetShellVarContext all
 !if "@CPACK_WINDOWS_BITS@" == "64"
     ${If} ${RunningX64}
       SetRegView 64 ; disable registry redirection (enable access to 64-bit portion of registry)
     ${EndIf}
 !endif
+    # Refused while service mode is on: the service runs this program, and its wallet would be
+    # left where only an administrator can reach it.
+    !insertmacro GRC_NATIVE_BEGIN
+    nsExec::ExecToStack '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$INSTDIR\windows\Invoke-GridcoinInstallStep.ps1" -Step UninstallCheck -InstallDir "$INSTDIR"'
+    !insertmacro GRC_NATIVE_END
+    Pop $0
+    Pop $1
+    ${If} $0 == 3
+        MessageBox MB_OK|MB_ICONSTOP "Service mode is on. Run gridcoin-service.exe disable for each network first.$\r$\n$\r$\n$1" /SD IDOK
+        Abort
+    ${ElseIf} $0 != 0
+        MessageBox MB_OKCANCEL|MB_ICONEXCLAMATION "The uninstaller could not check whether service mode is on (exit code $0).$\r$\n$\r$\n$1$\r$\n$\r$\nUninstall anyway?" /SD IDCANCEL IDOK checked
+        Abort
+    ${EndIf}
+    checked:
     !insertmacro MUI_STARTMENU_GETFOLDER Application $StartMenuGroup
     !insertmacro SELECT_UNSECTION Main ${UNSEC0000}
 FunctionEnd

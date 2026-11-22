@@ -5,9 +5,25 @@
 #ifndef BITCOIN_QT_GUIEVENTLOOP_H
 #define BITCOIN_QT_GUIEVENTLOOP_H
 
+#include <QThread>
 #include <QThreadPool>
 
 #include <utility>
+
+//! Waits until QThreadPool::globalInstance() has no task queued or running,
+//! and leaves its threads alive. Not waitForDone(): that also ends the pool's
+//! threads, and a pool thread that has made IPC calls must not end while the
+//! connection to the core is open or is being destroyed after a drop (see
+//! GuiIpcWorker). GuiMain() sets the pool's threads never to expire, so they
+//! end only in ~QCoreApplication, after the connection is gone. A pool thread
+//! is counted active from when it is handed a task until it is idle again
+//! with the queue empty.
+inline void WaitForGlobalPoolTasks()
+{
+    while (QThreadPool::globalInstance()->activeThreadCount() > 0) {
+        QThread::msleep(5);
+    }
+}
 
 //! Waits for every job on QThreadPool::globalInstance() when it goes out of
 //! scope, on every exit path, exception unwinding included. Declare it AFTER
@@ -16,9 +32,10 @@
 //! A catch clause cannot do this job, because the unwind has already destroyed
 //! the try block's locals by the time the handler runs.
 //!
-//! Waiting on an idle pool returns at once, so a later waitForDone() on the
-//! same path, such as the explicit one in StartGridcoinQt after
-//! RunGuiEventLoop returns, finds nothing left to join.
+//! Waiting on an idle pool returns at once, so a later
+//! WaitForGlobalPoolTasks() on the same path, such as the explicit one in
+//! StartGridcoinQt after RunGuiEventLoop returns, finds nothing left to wait
+//! for.
 //!
 //! Destroy it while the QCoreApplication is alive: ~QCoreApplication deletes
 //! the global pool, and globalInstance() returns null from then on.
@@ -26,7 +43,7 @@ class GlobalPoolReapGuard
 {
 public:
     GlobalPoolReapGuard() = default;
-    ~GlobalPoolReapGuard() { QThreadPool::globalInstance()->waitForDone(); }
+    ~GlobalPoolReapGuard() { WaitForGlobalPoolTasks(); }
 
     GlobalPoolReapGuard(const GlobalPoolReapGuard&) = delete;
     GlobalPoolReapGuard& operator=(const GlobalPoolReapGuard&) = delete;

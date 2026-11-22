@@ -163,8 +163,8 @@ std::vector<CursorDelta> Cursor::applyStoreRemove(std::size_t P, std::size_t cou
         if (pos != NPOS) positions.push_back(pos);
     }
     std::sort(positions.begin(), positions.end());
-    for (std::size_t i = positions.size(); i-- > 0;) {
-        m_view_index.erase(m_view_index.begin() + positions[i]);   // high to low
+    for (auto it = positions.rbegin(); it != positions.rend(); ++it) {
+        m_view_index.erase(m_view_index.begin() + *it);   // high to low
     }
 
     // (b) the table shrank by `count` at P → later survivors shift -count. This

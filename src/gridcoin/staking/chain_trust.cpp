@@ -3,8 +3,8 @@
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
 // chain_trust.h and spam.h rely on their includer supplying a complete
-// CBlockIndex first (the ChainTrustCache constructor news one inline), so
-// primitives/block.h must precede them here.
+// CBlockIndex first (ChainTrustCache's bootstrap placeholder is one, defined
+// inline), so primitives/block.h must precede them here.
 #include "primitives/block.h"
 
 #include "gridcoin/staking/chain_trust.h"

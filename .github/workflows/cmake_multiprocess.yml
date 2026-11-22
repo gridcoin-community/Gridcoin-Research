@@ -40,8 +40,7 @@ on:
     branches:
       - '**'
     tags:
-      - "v*"
-      - "5.*"
+      - "[0-9]*"
   pull_request:
     branches:
       - '**'
@@ -51,10 +50,58 @@ env:
   BUILD_TYPE: RelWithDebInfo
 
 jobs:
+  # Skips the rest of this run when it would repeat a pull request run on the
+  # identical tree. contrib/devtools/ci-gate.py holds the rule. Every other job
+  # in this workflow needs this one and runs unless it answers 'false', so a
+  # gate that fails still gives a full run.
+  ci-gate:
+    name: CI Gate
+    runs-on: ubuntu-24.04
+    permissions:
+      actions: read
+      contents: read
+      pull-requests: read
+    outputs:
+      run: ${{ steps.gate.outputs.run }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          # The gate, and the files the cache keys below are hashed from.
+          sparse-checkout: |
+            contrib/devtools/ci-gate.py
+            depends/Makefile
+            depends/packages
+            depends/qt.include
+          sparse-checkout-cone-mode: false
+      - name: Decide
+        id: gate
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CI_GATE_RECORD: ${{ runner.temp }}/ci-tested-tree.txt
+          # The caches of this workflow that later pull requests can restore only from
+          # this branch, by the keys of the "Cache Depends (multiprocess)" step below,
+          # one per matrix host. A run that would be skipped does its work when the
+          # branch does not hold one of them, which saves it again. A key or a host
+          # added to that step is added here.
+          CI_GATE_SEEDED_CACHES: |
+            ubuntu-24.04-depends-mp-x86_64-pc-linux-gnu-${{ hashFiles('depends/packages/*', 'depends/Makefile', 'depends/qt.include') }}
+            ubuntu-24.04-depends-mp-x86_64-w64-mingw32-${{ hashFiles('depends/packages/*', 'depends/Makefile', 'depends/qt.include') }}
+        run: python3 -I contrib/devtools/ci-gate.py
+      - name: Record the tested tree
+        if: steps.gate.outputs.tested-tree != ''
+        uses: actions/upload-artifact@v5
+        with:
+          name: ci-tested-tree-${{ steps.gate.outputs.tested-tree }}
+          path: ${{ runner.temp }}/ci-tested-tree.txt
+          retention-days: 30
+          overwrite: true
+
   # ----------------------------------------------------------------------
   # Linux Native (amd64) — system apt Cap'n Proto (pkg-config-fallback config)
   # ----------------------------------------------------------------------
   mp-linux-native:
+    needs: ci-gate
+    if: ${{ !cancelled() && needs.ci-gate.outputs.run != 'false' }}
     name: MP Linux Native (System Qt6)
     runs-on: ubuntu-24.04
     steps:
@@ -69,17 +116,20 @@ jobs:
 
       - name: Build + Test (multiprocess)
         run: |
-          chmod +x install_dependencies.sh build_targets.sh
+          chmod +x install_dependencies.sh build_targets.sh contrib/devtools/check-build-warnings.sh
           ./build_targets.sh \
             TARGET=native \
             BUILD_TYPE=${{ env.BUILD_TYPE }} \
             USE_CCACHE=true \
-            ENABLE_MULTIPROCESS=true
+            ENABLE_MULTIPROCESS=true \
+            FAIL_ON_WARNINGS=true
 
   # ----------------------------------------------------------------------
   # Depends builds — Linux Static + Windows Cross (depends-built Cap'n Proto)
   # ----------------------------------------------------------------------
   mp-depends:
+    needs: ci-gate
+    if: ${{ !cancelled() && needs.ci-gate.outputs.run != 'false' }}
     name: MP ${{ matrix.name }}
     runs-on: ubuntu-24.04
     strategy:
@@ -129,12 +179,13 @@ jobs:
       # cmake_production.yml still runs the full test suite under Wine.
       - name: Build + Test (multiprocess)
         run: |
-          chmod +x install_dependencies.sh build_targets.sh
+          chmod +x install_dependencies.sh build_targets.sh contrib/devtools/check-build-warnings.sh
           ./build_targets.sh \
             TARGET=${{ matrix.target }} \
             BUILD_TYPE=${{ env.BUILD_TYPE }} \
             USE_CCACHE=true \
-            ENABLE_MULTIPROCESS=true
+            ENABLE_MULTIPROCESS=true \
+            FAIL_ON_WARNINGS=true
 
   # ----------------------------------------------------------------------
   # Linux ARMhf — 32-bit (the ODROID-XU4 environment). Regression coverage for the
@@ -154,6 +205,8 @@ jobs:
   # functional suite on a non-x86-64, 32-bit target.
   # ----------------------------------------------------------------------
   mp-linux-armhf:
+    needs: ci-gate
+    if: ${{ !cancelled() && needs.ci-gate.outputs.run != 'false' }}
     name: MP Linux ARMhf (cross-compiled)
     runs-on: ubuntu-24.04
     steps:
@@ -205,10 +258,10 @@ jobs:
           sudo apt-get update
           sudo apt-get -f install -y
           sudo apt-get install -y --no-install-recommends \
-            build-essential cmake ninja-build zipcmp zipmerge ziptool qemu-user-static \
+            build-essential cmake ninja-build qemu-user-static \
             g++-arm-linux-gnueabihf qt6-base-dev:armhf qt6-svg-dev:armhf \
             qt6-l10n-tools:armhf qt6-tools-dev:armhf qt6-tools-dev-tools:armhf \
-            libssl-dev:armhf libzip-dev:armhf \
+            libssl-dev:armhf zlib1g-dev:armhf \
             libcurl4-openssl-dev:armhf libboost-system-dev:armhf libboost-filesystem-dev:armhf \
             libboost-thread-dev:armhf libboost-iostreams-dev:armhf libboost-program-options-dev:armhf \
             libboost-chrono-dev:armhf libboost-test-dev:armhf \
@@ -241,7 +294,7 @@ jobs:
         run: |
           cmake -B build_mpgen_native -S src/ipc/libmultiprocess -GNinja \
             -DCMAKE_BUILD_TYPE=Release
-          cmake --build build_mpgen_native --target mpgen -j"${CMAKE_BUILD_PARALLEL_LEVEL:-$(nproc)}"
+          ./contrib/devtools/check-build-warnings.sh -- cmake --build build_mpgen_native --target mpgen -j"${CMAKE_BUILD_PARALLEL_LEVEL:-$(nproc)}"
           MPGEN_BIN=$(find build_mpgen_native -name mpgen -type f -perm -u+x | head -n 1)
           test -x "$MPGEN_BIN" || { echo "native mpgen not found"; exit 1; }
           echo "MPGEN_BIN=$MPGEN_BIN" >> $GITHUB_ENV
@@ -269,8 +322,11 @@ jobs:
             -DCMAKE_C_COMPILER_LAUNCHER=ccache \
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
 
+      # check-build-warnings.sh fails the step on any compiler or linker warning in
+      # the tree's own build. Every build of the tree in these workflows goes
+      # through it.
       - name: Build
-        run: cmake --build build_armhf
+        run: ./contrib/devtools/check-build-warnings.sh -- cmake --build build_armhf
 
       - name: Test (QEMU Emulation)
         env:

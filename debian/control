@@ -4,7 +4,6 @@ Priority: optional
 Maintainer: Gridcoin Developers <dev@gridcoin.us>
 Standards-Version: 4.6.2
 Build-Depends:
- build-essential,
  pkg-config,
  bsdmainutils,
  python3,
@@ -29,17 +28,16 @@ Build-Depends:
  capnproto (>= 0.9),
  libcapnp-dev (>= 0.9),
  libqrencode-dev,
- libzip-dev,
+ zlib1g-dev,
  libcurl4-openssl-dev,
  libgl-dev,
- zipcmp,
- zipmerge,
- ziptool,
  qt6-base-dev (>= 6.2),
  qt6-tools-dev,
  qt6-l10n-tools,
  qt6-tools-dev-tools,
  libqt6svg6-dev,
+# systemctl --version decides whether the autounlock units are built (debian/rules).
+ systemd,
  debhelper-compat (= 13)
 
 Homepage: https://gridcoin.us
@@ -51,10 +49,10 @@ Architecture: any
 Depends:
  ${shlibs:Depends},
  ${misc:Depends},
- adduser
+ python3,
+ systemd
 Recommends:
- bash-completion,
- python3
+ bash-completion
 Description: Gridcoin Research daemon
  Gridcoin is a proof-of-stake cryptocurrency that rewards BOINC
  (Berkeley Open Infrastructure for Network Computing) participants

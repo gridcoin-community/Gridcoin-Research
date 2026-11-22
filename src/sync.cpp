@@ -3,9 +3,11 @@
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #include "sync.h"
+#include "chain.h"
 #include "util.h"
 #include <util/threadnames.h>
 
+#include <atomic>
 #include <stdio.h>
 #include <set>
 #include <memory>
@@ -37,13 +39,13 @@ struct CLockLocation {
         int nLine,
         bool fTryIn,
         bool fOrderExemptIn,
-        const std::string& thread_name
+        std::string&& thread_name
         )
         : fTry(fTryIn),
           fOrderExempt(fOrderExemptIn),
           mutexName(pszName),
           sourceFile(pszFile),
-          m_thread_name(thread_name),
+          m_thread_name(std::move(thread_name)),
           sourceLine(nLine) {}
 
     std::string ToString() const
@@ -70,7 +72,9 @@ private:
     bool fOrderExempt;
     std::string mutexName;
     std::string sourceFile;
-    const std::string& m_thread_name;
+    //! A copy: the stack entry outlives the call that pushed it, and the
+    //! lock-order map keeps it after its thread has exited.
+    const std::string m_thread_name;
     int sourceLine;
 };
 
@@ -221,8 +225,30 @@ static void pop_lock()
     }
 }
 
+//! The calling thread's GUI mark (MarkGuiThread). A plain bool, so the
+//! thread-local is trivially destructible (see util/threadnames.cpp).
+static thread_local bool g_gui_thread{false};
+
+//! How many times cs_main was taken on a marked thread in this process.
+static std::atomic<uint64_t> g_gui_thread_cs_main_reports{0};
+
+void MarkGuiThread() { g_gui_thread = true; }
+bool IsGuiThread() { return g_gui_thread; }
+uint64_t GuiThreadCsMainReports() { return g_gui_thread_cs_main_reports; }
+
 void EnterCritical(const char* pszName, const char* pszFile, int nLine, void* cs, bool fTry, bool fOrderExempt)
 {
+    // The GUI never takes cs_main (doc/developer-notes.md, GUI). The lock is
+    // identified by its address, not its stringified macro argument, so a lock
+    // that merely has the same name is not matched and one reached through a
+    // reference or another name is. The report is a log line and a count; it
+    // never aborts and never throws, so the acquisition goes on as before.
+    if (g_gui_thread && cs == static_cast<void*>(&cs_main)) {
+        ++g_gui_thread_cs_main_reports;
+        LogPrintf("GUI-THREAD-CS_MAIN: cs_main taken on the GUI thread at %s:%d%s",
+                  pszFile, nLine, fTry ? " (try-lock)" : "");
+    }
+
     push_lock(cs, CLockLocation(pszName, pszFile, nLine, fTry, fOrderExempt, util::ThreadGetInternalName()));
 }
 

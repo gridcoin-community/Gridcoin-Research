@@ -48,6 +48,7 @@
 #cmakedefine HAVE_SYS_PRCTL_H
 
 #cmakedefine01 HAVE_DECL_FORK
+#cmakedefine01 HAVE_POSIX_SPAWN_CLOSEFROM
 #cmakedefine01 HAVE_DECL_PIPE2
 #cmakedefine01 HAVE_DECL_SETSID
 #cmakedefine01 HAVE_DECL_GETIFADDRS

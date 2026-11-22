@@ -221,7 +221,8 @@ BOOST_AUTO_TEST_CASE(it_initializes_to_a_new_project_contract)
 {
     const GRC::Project project("Enigma", "http://enigma.test/@");
 
-    BOOST_CHECK_EQUAL(project.m_version, 1);
+    // sign-compare checked: m_version is uint32_t; 1U is a non-negative literal, so both sides are unsigned.
+    BOOST_CHECK_EQUAL(project.m_version, 1U);
     BOOST_CHECK_EQUAL(project.m_name, "Enigma");
     BOOST_CHECK_EQUAL(project.m_url, "http://enigma.test/@");
     BOOST_CHECK_EQUAL(project.m_timestamp, 0);
@@ -1867,10 +1868,14 @@ BOOST_AUTO_TEST_CASE(v2_walker_matches_v1_where_no_correction_applies)
                                 label + "/" + iter->first + ": TC_7 sum mismatch");
             BOOST_CHECK_MESSAGE(v1_entry.m_TC_40_SB_sum == v2_entry.m_TC_40_SB_sum,
                                 label + "/" + iter->first + ": TC_40 sum mismatch");
-            BOOST_CHECK_MESSAGE(v1_entry.GetWAS().ToDouble() == v2_entry.GetWAS().ToDouble(),
+            // The fractions themselves, as the greylist rule compares them. Their
+            // ToDouble() values are no substitute: on 32-bit x86 the x87 unit can
+            // leave one quotient at 80 bits and round the other to a 64-bit
+            // double, and two equal fractions then compare unequal.
+            BOOST_CHECK_MESSAGE(v1_entry.GetWAS() == v2_entry.GetWAS(),
                                 label + "/" + iter->first + ": WAS mismatch V1="
-                                    + ToString(v1_entry.GetWAS().ToDouble())
-                                    + " V2=" + ToString(v2_entry.GetWAS().ToDouble()));
+                                    + v1_entry.GetWAS().ToString()
+                                    + " V2=" + v2_entry.GetWAS().ToString());
             BOOST_CHECK_MESSAGE(v1_entry.GetUpdateHistory().size() == v2_entry.GetUpdateHistory().size(),
                                 label + "/" + iter->first + ": history length mismatch");
 
@@ -2166,8 +2171,7 @@ BOOST_AUTO_TEST_CASE(v2_corrections_produce_the_enumerated_deltas)
         // real): V1 spuriously greylists on the head and j=40 zeros, and inflates WAS at
         // j=7. (Head/j40: WAS collapses; j7: WAS explodes. Either way != V2's clean value.)
         auto v1_zero_entry = zero_run.m_v1.at("p"); // copy: V1 accessors are non-const
-        BOOST_CHECK_MESSAGE(v1_zero_entry.GetWAS().ToDouble()
-                                != zero_run.m_v2.m_candidates.at("p").GetWAS().ToDouble(),
+        BOOST_CHECK_MESSAGE(v1_zero_entry.GetWAS() != zero_run.m_v2.m_candidates.at("p").GetWAS(),
                             label + ": delta vs V1 must exist");
     }
 
@@ -2183,7 +2187,7 @@ BOOST_AUTO_TEST_CASE(v2_corrections_produce_the_enumerated_deltas)
         auto v1_entry = run.m_v1.at("p"); // copy: V1 accessors are non-const
 
         BOOST_CHECK_EQUAL((int) run.m_v2.m_candidates.at("p").GetZCD(), (int) v1_entry.GetZCD() + 1);
-        BOOST_CHECK(run.m_v2.m_candidates.at("p").GetWAS().ToDouble() == v1_entry.GetWAS().ToDouble());
+        BOOST_CHECK(run.m_v2.m_candidates.at("p").GetWAS() == v1_entry.GetWAS());
     }
 
     // ---- 3. Divisor contraction at missing endpoints (approved vectors). ----
@@ -3063,12 +3067,12 @@ BOOST_AUTO_TEST_CASE(facade_record_is_advisory_below_the_gate)
 //!
 //! \brief Snapshot's auto-greylist overlay must NOT mutate the underlying registry entries.
 //!
-//! Reproduces the consensus bug in Whitelist::Snapshot(): the override working copy at
-//! project.cpp:665 is a SHALLOW copy of ProjectEntryMap (std::map<std::string,
-//! std::shared_ptr<ProjectEntry>>), so setting m_status = AUTO_GREYLISTED on the copy
-//! (project.cpp:680) mutates the SHARED registry ProjectEntry in place. There is no revert
-//! path, so a recovered project stays stuck AUTO_GREYLISTED in memory while a restarted node
-//! reloads ACTIVE from LevelDB -- the in-memory-vs-persisted divergence that splits the network.
+//! Reproduces the consensus bug in Whitelist::Snapshot(): the override working copy is a
+//! SHALLOW copy of ProjectEntryMap (std::map<std::string, std::shared_ptr<ProjectEntry>>),
+//! so setting m_status = AUTO_GREYLISTED on the copy mutates the SHARED registry ProjectEntry
+//! in place. There is no revert path, so a recovered project stays stuck AUTO_GREYLISTED in
+//! memory while a restarted node reloads ACTIVE from LevelDB -- the in-memory-vs-persisted
+//! divergence that splits the network.
 //!
 //! Drives a project into the auto-greylist (reusing the it_auto_greylists_correctly "horrible
 //! project" series through the point it meets criteria), takes a Snapshot with the overlay,

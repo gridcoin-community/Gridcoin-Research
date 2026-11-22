@@ -163,6 +163,14 @@ public:
     int maxPollProjectUrlLength() const;
 
     OptionsModel& getOptionsModel();
+
+    //! Whether polls and votes are available: only once the wallet is synced
+    //! (not out of sync by age, not in initial download), from the state the
+    //! core pushes. The one place that knows; the voting page, the poll tabs and
+    //! the expiry handling read it. While false the model does no poll work in
+    //! the core (the table, the title, the latest poll time). The core keeps its
+    //! own checks.
+    bool available() const { return m_available; }
     QString getCurrentPollTitle() const;
     QStringList getActiveProjectNames() const;
     QStringList getActiveProjectUrls() const;
@@ -208,6 +216,8 @@ public:
             const std::vector<uint8_t>& choice_offsets) const;
 
 signals:
+    //! Emitted when available() changes.
+    void availableChanged(bool available);
     void newPollReceived();
     void newVoteReceived(QString poll_txid_string);
 
@@ -226,6 +236,12 @@ private:
     OptionsModel& m_options_model;
     WalletModel& m_wallet_model;
     int64_t m_last_poll_time;
+
+    //! available(), as of the last pushed state.
+    bool m_available;
+
+    //! Whether m_last_poll_time was read from the core (once, when first available).
+    bool m_last_poll_time_read;
 
     //!
     //! \brief m_pollitems. A GUI-side store of the poll items last returned by
@@ -254,6 +270,7 @@ private:
     NotificationLifetime m_notify_lifetime;
 
 private slots:
+    void applyPushedState();
     void handleNewPoll(int64_t poll_time);
     void handleNewVote(QString poll_txid_string);
 }; // VotingModel

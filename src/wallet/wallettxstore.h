@@ -101,8 +101,8 @@ public:
     //!
     //! \brief Producer: a transaction is no longer visible / was deleted.
     //! Enqueues a removal by \p hash for the worker (O(1), same threading
-    //! contract as enqueueInsert). Safe from the CT_DELETED path (no wallet
-    //! locks held).
+    //! contract as enqueueInsert). Safe from the CT_DELETED path: it needs no
+    //! wallet lock (it takes cs_intake, and the logger's mutex if it warns).
     //!
     void enqueueRemove(const uint256& hash);
 
@@ -161,6 +161,14 @@ public:
     {
         LOCK(cs_store);
         m_refresh_fault_hook = std::move(hook);
+    }
+
+    //! Test seam: whether the store-worker has nothing left to apply, i.e. the intake queue is empty and no item is
+    //! being applied. By then every event the applied items pushed is in the event queue. Unused in production.
+    bool IntakeIdleForTests() const LOCKS_EXCLUDED(cs_intake)
+    {
+        LOCK(cs_intake);
+        return m_intake.empty() && !m_worker_busy;
     }
 
     //!
@@ -467,6 +475,7 @@ private:
     bool m_stop GUARDED_BY(cs_intake){false};          //!< shutdown request (dtor)
     bool m_rebuilding GUARDED_BY(cs_intake){false};    //!< prime wants the worker parked
     bool m_worker_parked GUARDED_BY(cs_intake){false}; //!< worker has acknowledged the pause
+    bool m_worker_busy GUARDED_BY(cs_intake){false};   //!< worker is applying a dequeued item
     //! Next intake depth at which to warn, doubled after each warning.
     std::size_t m_intake_warn_at GUARDED_BY(cs_intake){kIntakeBacklogWarn};
     CConditionVariable m_intake_cv;  //!< worker waits for work / stop / resume

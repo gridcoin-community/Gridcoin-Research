@@ -52,22 +52,6 @@ modules:
         sha256: 1bed88e40401b2cb7a1f76d4bab499e352fa4d0c5f31c0dbae64e24d34d7513b
 
   # ------------------------------------------------------------------
-  # libzip 1.11.2
-  # ------------------------------------------------------------------
-  - name: libzip
-    buildsystem: cmake-ninja
-    config-opts:
-      - -DCMAKE_INSTALL_LIBDIR=lib
-      - -DBUILD_TOOLS=OFF
-      - -DBUILD_REGRESS=OFF
-      - -DBUILD_EXAMPLES=OFF
-      - -DBUILD_DOC=OFF
-    sources:
-      - type: archive
-        url: https://libzip.org/download/libzip-1.11.2.tar.xz
-        sha256: 5d471308cef4c4752bbcf973d9cd37ba4cb53739116c30349d4764ba1410dfc1
-
-  # ------------------------------------------------------------------
   # miniupnpc 2.2.8
   # ------------------------------------------------------------------
   - name: miniupnpc
@@ -134,6 +118,14 @@ modules:
       # matching the other release artifacts. The capnproto module above supplies
       # Cap'n Proto; libmultiprocess is a vendored subtree in this repository.
       - -DENABLE_MULTIPROCESS=ON
+      # The Flatpak ships the daemon: inside the sandbox it is the RPC command-line
+      # client (flatpak run --command=gridcoinresearchd ...), and the only way to run a
+      # core there for a hand-started multiprocess setup. It ships no systemd units,
+      # sysusers.d or tmpfiles.d entries and no gridcoin-service, and its launcher
+      # offers no core actions (cmake/desktop_file.cmake): the sandbox reaches neither a
+      # core run outside it nor the system service in /run.
+      - -DINSTALL_SYSTEMD_UNITS=OFF
+      - -DGRC_DESKTOP_CORE_ACTIONS=OFF
       # ENABLE_PIE defaults OFF and OFF now genuinely disables PIE rather than
       # deferring to the toolchain, so a shipped artifact has to ask for it.
       - -DENABLE_PIE=ON

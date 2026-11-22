@@ -31,6 +31,7 @@ public:
     void showMain(bool minimized) override;
     WId nativeWindowId() override;
     void requestQuit() override;
+    void requestQuitForCoreStop() override;
 
 protected:
     void hideMain() override;

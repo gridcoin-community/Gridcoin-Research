@@ -190,6 +190,8 @@ void CoinControlDialog::setModel(WalletModel *model)
                 this, &CoinControlDialog::modelSelectionChanged);
         connect(m_selection_model, &CoinSelectionModel::loadingFinished,
                 this, &CoinControlDialog::modelLoadingFinished);
+        connect(m_selection_model, &CoinSelectionModel::loadingFailed,
+                this, &CoinControlDialog::modelLoadingFailed);
 
         // default view is sorted by amount desc
         ui->treeView->header()->setSortIndicator(CoinSelectionModel::COLUMN_AMOUNT, Qt::DescendingOrder);
@@ -202,6 +204,12 @@ void CoinControlDialog::setModel(WalletModel *model)
 
         CoinControlDialog::updateLabels(model, coinControl, payAmounts, this, m_fSubtractFeeFromAmount);
     }
+}
+
+void CoinControlDialog::modelLoadingFailed(const QString& message)
+{
+    // The tree stays disabled: nothing was loaded.
+    ui->treeView->showLoadFailed(message);
 }
 
 void CoinControlDialog::modelLoadingFinished()

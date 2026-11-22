@@ -173,7 +173,7 @@ std::vector<CoinRecord> WalletCoinStore::DecomposeCoins(
     EXCLUSIVE_LOCKS_REQUIRED(cs_main, wallet->cs_wallet)
 {
     // Reproduces the CWallet::AvailableCoins(fOnlyConfirmed=true,
-    // coinControl=nullptr, fIncludeStakedCoins=false) conditions the retired
+    // coinControl=nullptr, fIncludeStakingCoins=false) conditions the retired
     // listCoins() applied, per transaction. Exclusions that depend on global
     // chain state (finality, the IsTrusted confirmation gate, generation
     // maturity) flag pending_out: no notification fires for THIS hash when

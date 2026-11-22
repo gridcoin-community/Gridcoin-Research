@@ -25,8 +25,8 @@ Three crash scenarios during block write:
 
 Phase 2 logic runs between two existing call sites in `src/init.cpp`:
 
-- **`LoadBlockIndex()` at init.cpp:1325-1335** — populates the in-memory `mapBlockIndex` tree and sets `pindexBest`. After this, the chain tree is loaded but no contract state exists in memory.
-- **`GRC::Initialize(threads, pindexBest)` at init.cpp:1510** — internally runs `InitializeContracts`, which calls each registry's `Initialize()` to load LevelDB-backed state into memory, then `ApplyContracts` to replay contracts forward from the last bookmark.
+- **`LoadBlockIndex()` in `AppInit2` (src/init.cpp)** — populates the in-memory `mapBlockIndex` tree and sets `pindexBest`. After this, the chain tree is loaded but no contract state exists in memory.
+- **`GRC::Initialize(threads, pindexBest)` in `AppInit2` (src/init.cpp)** — internally runs `InitializeContracts`, which calls each registry's `Initialize()` to load LevelDB-backed state into memory, then `ApplyContracts` to replay contracts forward from the last bookmark.
 
 The Phase 2 hook slots in this window. Critically: **registries have not been initialized yet**, so we can mutate their LevelDB-stored bookmarks (`height_stored`) without having to invalidate any in-memory state.
 
@@ -119,16 +119,16 @@ The scan cost is **O(txdb size), not O(abandoned range)**. A deeper rewind (with
 
 This is the Gridcoin-specific complication and the source of subtlety worth documenting carefully.
 
-Each contract registry with LevelDB backing (`BeaconRegistry`, `ProjectRegistry`, `ProtocolRegistry`, `ScraperRegistry`, `SideStakeRegistry` — enumerated at `src/gridcoin/contract/registry.cpp:9-15` as `CONTRACT_TYPES_WITH_REG_DB`) stores a "highest block I've processed" bookmark under the LevelDB key `("<keytype>_db", "height_stored")` (e.g. `("beacon_db", "height_stored")`). Format and access:
+Each contract registry with LevelDB backing (`BeaconRegistry`, `Whitelist` (the project registry), `ProtocolRegistry`, `ScraperRegistry`, `SideStakeRegistry`, `PoolRegistry` — enumerated in `src/gridcoin/contract/registry.cpp` as `CONTRACT_TYPES_WITH_REG_DB`, where `POOL_REGISTER` and `POOL_APPROVE` both map to the one `PoolRegistry`) stores a "highest block I've processed" bookmark under the LevelDB key `("<keytype>_db", "height_stored")` (e.g. `("beacon_db", "height_stored")`). Format and access:
 
-- Write: `RegistryDB::StoreDBHeight()` at `src/gridcoin/contract/registry_db.h:414`.
-- Read: `RegistryDB::LoadDBHeight()` at `src/gridcoin/contract/registry_db.h:437`.
+- Write: `RegistryDB::StoreDBHeight()` in `src/gridcoin/contract/registry_db.h`.
+- Read: `RegistryDB::LoadDBHeight()` in `src/gridcoin/contract/registry_db.h`.
 
 If we rewind `hashBestChain` without clamping these bookmarks, two failure modes appear:
 
-1. **Phantom in-memory entries.** `RegistryDB::Initialize()` (registry_db.h:76-197) loads *all* entries for its key_type from LevelDB regardless of `height_stored` (the load at line 139 is unfiltered), then populates `m_historical`, `entries`, etc. So entries written by contracts in the abandoned blocks will reload into memory as if they were still part of the chain.
+1. **Phantom in-memory entries.** `RegistryDB::Initialize()` (in `registry_db.h`) loads *all* entries for its key_type from LevelDB regardless of `height_stored` (its load is unfiltered), then populates `m_historical`, `entries`, etc. So entries written by contracts in the abandoned blocks will reload into memory as if they were still part of the chain.
 
-2. **`ApplyContracts` short-circuit.** The skip check at `src/gridcoin/contract/contract.cpp:535-547`:
+2. **`ApplyContracts` short-circuit.** The skip check in `GRC::ApplyContracts()` (`src/gridcoin/contract/contract.cpp`):
    ```cpp
    std::optional<int> db_height = db_heights.GetRegistryBlockHeight(contract_type);
    if (db_height && pindex->nHeight < *db_height) {
@@ -142,7 +142,7 @@ If we rewind `hashBestChain` without clamping these bookmarks, two failure modes
 
 ### What the clamp does *not* do — important distinction
 
-**The clamp does not bound what `RegistryDB::Initialize()` loads from LevelDB.** It is tempting to assume that lowering `height_stored` causes Initialize to skip entries past that height during load. It does not — Initialize's read at line 139 is unconditional. The phantom entries from abandoned blocks *will* load into `m_historical` and active maps.
+**The clamp does not bound what `RegistryDB::Initialize()` loads from LevelDB.** It is tempting to assume that lowering `height_stored` causes Initialize to skip entries past that height during load. It does not — Initialize's read is unconditional. The phantom entries from abandoned blocks *will* load into `m_historical` and active maps.
 
 **Important — this "phantoms harmless" framing applies to registry entries only.** It does *not* apply to chainstate (`CTxIndex` / `vSpent` in the txdb). Chainstate phantoms would silently break `ConnectInputs` validation when re-arriving blocks try to spend outputs that the abandoned blocks already marked spent — that's why chainstate gets the surgical `CleanTxdbAbandonedRange` treatment above instead of being left alone. Registry entries don't have that problem because the registry handler's insert is idempotent under the entry's content hash.
 
@@ -156,17 +156,17 @@ The cost of the clamp is therefore a small amount of dead LevelDB weight in the 
 
 ## Beacon registry rebuild on superblock boundary cross
 
-The clamp-and-tolerate-phantoms approach above works cleanly for `ProjectRegistry`, `ProtocolRegistry`, `ScraperRegistry`, and `SideStakeRegistry` because those registries are mutated only by their contract transactions — the in-memory state is a deterministic function of the contracts that have been applied.
+The clamp-and-tolerate-phantoms approach above works cleanly for `Whitelist` (the project registry), `ProtocolRegistry`, `ScraperRegistry`, `SideStakeRegistry`, and `PoolRegistry` because those registries are mutated only by their contract transactions — the in-memory state is a deterministic function of the contracts that have been applied.
 
 `BeaconRegistry` is different. Beacons have a two-step lifecycle:
 
 1. `advertisebeacon` contract → `m_pending[id] = beacon` (status PENDING). Normal contract write, identical to other registries.
 2. **At superblock commit**, `BeaconRegistry::ActivatePending(beacon_ids, sb_time, sb_hash, height)` runs (called from the superblock processing path, *not* contract replay):
    - Moves each verified beacon from `m_pending` into `m_beacons` under the **composite hash** `Hash(sb_hash, original_pending_hash)`. This composite hash is what `Deactivate` uses to reverse activations.
-   - Clears the prior `m_expired_pending` set (`beacon.cpp:1149`).
+   - Clears the prior `m_expired_pending` set (in `ActivatePending`, `beacon.cpp`).
    - Recomputes a fresh `m_expired_pending` from pending beacons that aged out by this SB's time. These get persisted to LevelDB as `EXPIRED_PENDING` entries.
 
-The reverse path (`BeaconRegistry::Deactivate`, called from `DisconnectBlocksBatch` when a SB block is disconnected) restores activations to pending and resurrects expired-pending beacons from the current `m_expired_pending`. The hard limitation is spelled out in the comments at `beacon.cpp:1265-1273`:
+The reverse path (`BeaconRegistry::Deactivate`, called from `DisconnectBlocksBatch` when a SB block is disconnected) restores activations to pending and resurrects expired-pending beacons from the current `m_expired_pending`. The hard limitation is spelled out in the comments in `BeaconRegistry::Deactivate` (`beacon.cpp`):
 
 > Note that making this foolproof in a reorganization across more than one SB boundary means we would have to repopulate the expired pending beacon map from the PREVIOUS set of expired pending beacons. This would require a traversal of the entire leveldb beacon structure for beacons, as it is keyed by beacon hash, not CPID or CKeyID. The expense is not worth it.
 
@@ -186,16 +186,15 @@ If the canonical chain re-supplies the same SBs with the same content, the phant
 
 If the rewind (whether abandonment or standard reorg-disconnect) crosses one or more superblock boundaries, we do **not** rely on the clamp-and-tolerate-phantoms approach for beacons. Instead:
 
-1. `BeaconRegistry::ResetInMemory()` — clears `m_beacons`, `m_pending`, `m_expired_pending`, `m_historical`, `m_pending_ownership_proofs`, and the beacon-side `BeaconDB`'s in-memory maps.
-2. `BeaconRegistry::ClearLevelDB()` — wraps `m_beacon_db.clear_leveldb()` (`registry_db.h:292`), wiping all `beacon` and `beacon_db` LevelDB entries and re-writing the schema version.
-3. Set the beacon `height_stored` bookmark to 0 so `ApplyContracts` will replay beacon contracts from `V11_height` forward.
-4. Other registries (project / protocol / scraper / sidestake) get the regular clamp — they have no analogous superblock-level state.
+1. `BeaconRegistry::Reset()` — clears `m_beacons`, `m_pending`, `m_pending_ownership_proofs` and `m_expired_pending`, then calls `m_beacon_db.clear()`, which clears the beacon-side `BeaconDB`'s in-memory historical map and bookmarks (`clear_in_memory_only()`) and wipes all `beacon` and `beacon_db` LevelDB entries, re-writing the schema version (`clear_leveldb()`). The first draft split this into two methods; it shipped as this one call.
+2. Because `clear_leveldb()` erases the `beacon_db` height bookmark and `clear_in_memory_only()` zeroes `m_height_stored`, the next contract replay starts from `V11_height`; no separate bookmark step shipped.
+3. Other registries (project / protocol / scraper / sidestake / pool) get the regular clamp — they have no analogous superblock-level state.
 
-The cost is one full beacon contract replay from `V11_height` (around block 1,144,000) up to the recovered tip. Beacon contracts are sparse in the contract stream — `ApplyContracts` walks the chain but only does meaningful work on blocks that actually contain beacon contracts. On the order of minutes on a modern machine, not hours. Acceptable as the rare-corruption-recovery and rare-multi-SB-reorg cost.
+The cost is one full beacon contract replay from `V11_height` (block 2,053,000 on mainnet) up to the recovered tip. Beacon contracts are sparse in the contract stream — `ApplyContracts` walks the chain but only does meaningful work on blocks that actually contain beacon contracts. On the order of minutes on a modern machine, not hours. Acceptable as the rare-corruption-recovery and rare-multi-SB-reorg cost.
 
 ### Detection — single shared primitive
 
-A small helper, probably in `src/gridcoin/quorum.h+cpp` adjacent to `Quorum::PopHistory()`:
+The first draft proposed a small helper in `src/gridcoin/quorum.h+cpp`, next to `Quorum::PopSuperblock()`. It did not ship; see "As shipped" at the end of the next subsection.
 
 ```cpp
 //! Returns true if any superblock was committed at a height strictly greater
@@ -206,16 +205,16 @@ A small helper, probably in `src/gridcoin/quorum.h+cpp` adjacent to `Quorum::Pop
 bool Quorum::SuperblockCommittedInRange(int floor_height, int ceil_height);
 ```
 
-Both the Phase 2 abandonment hook and the standard reorg path call this with `floor_height = pindex_consistent->nHeight` (or `pcommon->nHeight` for the reorg case) and `ceil_height = pre_rewind_pindexBest->nHeight`. If it returns true, the rebuild is triggered.
+The draft had both the Phase 2 abandonment hook and the standard reorg path call this with `floor_height = pindex_consistent->nHeight` (or `pcommon->nHeight` for the reorg case) and `ceil_height = pre_rewind_pindexBest->nHeight`. If it returned true, the rebuild would be triggered.
 
 ### Standard fork/reorg also gets this treatment
 
 This rebuild applies on **both** paths:
 
-- **Phase 2 abandonment** (this design doc's main subject): walk-back finds `pindex_consistent`, check for SB-cross, rebuild beacon registry if crossed, then clamp the other four registries normally.
+- **Phase 2 abandonment** (this design doc's main subject): walk-back finds `pindex_consistent`, check for SB-cross, rebuild beacon registry if crossed, then clamp the other five registries normally.
 - **Standard reorg** (existing `DisconnectBlocksBatch` / `ReorganizeChain`): after the disconnect loop succeeds, check whether the disconnect range crossed any SB. If yes, trigger the same beacon-registry rebuild. This fixes the latent limitation the beacon.cpp comments already acknowledge ("almost inconceivable") and treats it correctly instead of accepting drift.
 
-Each lives in its own commit on the Phase 2 PR. The rebuild trigger is the same helper function on both paths, so future maintainers can't add a third rewind site that forgets it.
+Each lives in its own commit on the Phase 2 PR. **As shipped:** there is no shared helper. `GRC::VerifyChainCoherence()` (`src/node/coherence.cpp`) counts the superblocks in the abandoned range into `CoherenceResult::sb_cross_count`, and `GRC::RunStartupCoherenceRecovery()` calls `GetBeaconRegistry().Reset()` when that count is above 0. `DisconnectBlocksBatch()` (`src/node/chainman.cpp`) counts the superblocks it disconnects and calls `GRC::RebuildBeaconRegistry()` (`src/gridcoin/gridcoin.cpp`, which runs `GetBeaconRegistry().Reset()` and then `InitializeContracts()`) only when it disconnected two or more; for a single superblock it relies on `BeaconRegistry::Deactivate`. A new rewind site has to count and trigger for itself.
 
 ## Design decisions captured during review
 
@@ -244,7 +243,7 @@ Safety: the erasure runs at a specific point in init (after `LoadBlockIndex`, be
 
 ### Block-index pool allocation — never `delete` a `CBlockIndex*`
 
-`CBlockIndex` objects are allocated from `GRC::BlockIndexPool` (`src/gridcoin/block_index.h`), backed by `std::forward_list<std::array<CBlockIndex, CHUNK_SIZE>>` — chunks of 32,768 contiguous objects with no per-object deallocation path. The class comment is explicit (block_index.h:54-55): *"The pool does not provide a way to return discarded objects because the application never removes or destroys block index entries."*
+`CBlockIndex` objects are allocated from `GRC::BlockIndexPool` (`src/gridcoin/block_index.h`), backed by `std::forward_list<std::array<CBlockIndex, CHUNK_SIZE>>` — chunks of 32,768 contiguous objects with no per-object deallocation path. `BlockIndexPool`'s class comment is explicit: *"The pool does not provide a way to return discarded objects because the application never removes or destroys block index entries."*
 
 **Hard rule:** `mapBlockIndex.erase(hash)` is safe (only removes the lookup); calling `delete p` on a pool-allocated `CBlockIndex*` is **undefined behavior**. The address is in the middle of a `std::array`, not a heap allocation; `operator delete` corrupts the C++ runtime's free list at that address. The corruption surfaces *much later* — sometimes in a different thread, sometimes after another network round-trip — as `bad_alloc` or assertion failures in unrelated code.
 
@@ -295,7 +294,7 @@ All rebuilt inside `GRC::Initialize`, which runs *after* the Phase 2 hook. They 
 
 ## Alternatives considered (and rejected) — registry path
 
-These alternatives apply to the four "regular" registries (`ProjectRegistry`, `ProtocolRegistry`, `ScraperRegistry`, `SideStakeRegistry`). `BeaconRegistry` has its own rebuild path described above when an SB boundary is crossed. Chainstate (`CTxIndex` / `vSpent`) is handled by the surgical `CleanTxdbAbandonedRange` scan documented earlier, not by any of these.
+These alternatives apply to the five "regular" registries (`Whitelist`, `ProtocolRegistry`, `ScraperRegistry`, `SideStakeRegistry`, `PoolRegistry`). `BeaconRegistry` has its own rebuild path described above when an SB boundary is crossed. Chainstate (`CTxIndex` / `vSpent`) is handled by the surgical `CleanTxdbAbandonedRange` scan documented earlier, not by any of these.
 
 - **Targeted registry reset.** For each registry where `GetDBHeight() > pindex_consistent->nHeight`, call `registry.Reset()` to clear both in-memory maps and LevelDB storage, then let `InitializeContracts` do a full contract replay from `V11_height`. Safe and well-tested (equivalent to `-clearallregistryhistory`), but the full replay grows linearly with chain height and is increasingly expensive — punishing every rare corruption recovery with a from-genesis registry rebuild.
 - **Selective revert via `m_previous_hash` chains.** Walk backward through registry entries to undo phantom entries from blocks above the rewound tip. Faster than full replay, but requires writing a new revert path that works without block data (the existing `Revert()` needs `ContractContext` which requires `ReadBlockFromDisk` — the very blocks we cannot read). Significant new code with its own edge cases.
@@ -386,7 +385,7 @@ The initial misdiagnosis ("system under memory pressure") delayed the catch — 
 
 **Symptom:** Phase 2 reported clean completion; wallet caught up to peers via P2P; on the first P2P-delivered block past the rewound tip, `assert(!pindexBest->pnext)` fired inside `DisconnectBlocksBatch`.
 
-**Root cause:** `CBlockIndex` objects are allocated from `GRC::BlockIndexPool` (chunked `std::array`-backed; see `src/gridcoin/block_index.h:54-55`). Calling `delete` on a pool slot is undefined behavior — `operator delete` tried to free a heap chunk at the middle of a `std::array`, corrupting the C++ runtime's free list. The corruption surfaced minutes later when subsequent `CBlockIndex` pool slots got back garbage from the corrupted free list, including `pindex_consistent->pnext`.
+**Root cause:** `CBlockIndex` objects are allocated from `GRC::BlockIndexPool` (chunked `std::array`-backed; see `BlockIndexPool`'s class comment in `src/gridcoin/block_index.h`). Calling `delete` on a pool slot is undefined behavior — `operator delete` tried to free a heap chunk at the middle of a `std::array`, corrupting the C++ runtime's free list. The corruption surfaced minutes later when subsequent `CBlockIndex` pool slots got back garbage from the corrupted free list, including `pindex_consistent->pnext`.
 
 **Fix:** remove the `delete p` call. Pool slots leak by design (a few hundred bytes per abandoned block, bounded by `-coherencewalkmax`). Future maintainers must NEVER call `delete` on a `CBlockIndex*` — the constraint is documented in `src/gridcoin/block_index.h` and reiterated in the `PurgeOrphanedBlockIndexEntries` doc comment.
 

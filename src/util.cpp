@@ -12,6 +12,7 @@
 #include "node/ui_interface.h"
 #include <random.h>
 #include "util.h"
+#include <util/childreaper.h>
 #include <util/strencodings.h>
 #include <util/string.h>
 
@@ -24,7 +25,6 @@
 #include <boost/iostreams/filter/newline.hpp>
 #include <openssl/crypto.h>
 #include <cstdarg>
-#include <codecvt>
 
 using namespace std;
 
@@ -362,7 +362,52 @@ static void StoreTimeOffset(const std::optional<int64_t>& median) EXCLUSIVE_LOCK
     // the entire network is displaced for some reason. Without a quorum of live votes, our own
     // clock is all we have.
     g_time_median = median;
-    int64_t offset = median ? static_cast<int64_t>(0.95 * *median) : 0;
+    // The offset is 95% of the median, truncated toward zero, and it is worked
+    // out in integers on purpose. Do not put back 0.95 * median.
+    //
+    // 0.95 has no exact binary form. The nearest double is a little under it,
+    // 0.94999999999999995559..., so 0.95 * 100 is 94.99999999999999556 before
+    // it is rounded. What happens next depends on the floating-point unit:
+    //
+    //   - x86_64 (SSE2), ARM, and every other unit that does double arithmetic
+    //     in 64 bits rounds the product to the nearest double, which is exactly
+    //     95.0, and the cast gives 95.
+    //   - 32-bit x86 builds use the x87 unit, which keeps intermediate results
+    //     in 80 bits with a 64-bit mantissa. Rounded to that precision the
+    //     product is still just under 95, nothing rounds it up, and the cast
+    //     truncates it to 94. That is GCC's default, -fexcess-precision=fast,
+    //     which the tree's GNU dialect (-std=gnu++17) gets with every GCC.
+    //     GCC 13 and later in a strict ISO dialect (-std=c++17) use
+    //     -fexcess-precision=standard instead, round the product to a double
+    //     at the cast, and get 95.
+    //
+    // So a 32-bit x86 node stored an offset one second nearer zero than every
+    // other node at each nonzero median that is a multiple of 20, where 95% is a
+    // whole number. At any other median 95% is at least 0.05 from a whole
+    // number, far more than the error, and all builds agree.
+    //
+    // Worse, which answer a 32-bit build got was up to the compiler. A product
+    // it folded at build time, or stored to memory as a 64-bit double before the
+    // cast, came out 95; one cast straight from an x87 register came out 94. The
+    // unit test worked out its expected value with this very expression, the
+    // compiler folded the test's copy, and the test and the code it tested
+    // disagreed on the same machine (94 != 95). GCC 12 and GCC 14 on Debian i386
+    // both do this.
+    //
+    // Adjusted time is local to this node, not consensus, so the error was
+    // harmless. It is the reason consensus code uses no floating point: the same
+    // expression need not give the same answer on every machine.
+    //
+    // The integer form equals the x86_64 double result at every median in
+    // +/-2e7, far wider than any median the handshake lets through: it refuses
+    // a peer more than 8 minutes from our adjusted time, so with the 70-minute
+    // limit below no sample is more than about 78 minutes from this computer's
+    // clock. Splitting the median at 100 keeps median * 95 from overflowing
+    // for any int64_t median: TimeOffsetVotes takes any vote, and a median that
+    // large ends at the 70-minute limit below either way. median - median / 20
+    // is not the same thing: it truncates the 5% instead of the 95%, so 99 gives
+    // 95 where 95% of 99 is 94.05.
+    int64_t offset = median ? *median / 100 * 95 + *median % 100 * 95 / 100 : 0;
     // Only let other nodes change our time by so much. A median beyond this
     // still raises the clock warning (see GetClockState).
     if (abs64(offset) >= 70 * 60)
@@ -531,12 +576,24 @@ std::vector<std::string> split(const std::string& s, const std::string& delim)
 void runCommand(std::string strCommand)
 {
 #ifndef WIN32
-    int nErr = ::system(strCommand.c_str());
+    int nErr = util::RunShellCommand(strCommand);
 #else
-    int nErr = ::_wsystem(std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>,wchar_t>().from_bytes(strCommand).c_str());
+    // The callers run this on threads of their own, where an uncaught exception
+    // ends the program, so a command that is not valid UTF-8, as from a
+    // configuration file saved in a legacy code page, is logged and not run.
+    std::wstring command;
+    try {
+        command = Utf8ToWide(strCommand);
+    } catch (const std::range_error&) {
+        // The command is not logged: a notify command may hold a token.
+        LogPrintf("runCommand error: a command is not valid UTF-8 and was not run");
+        return;
+    }
+    int nErr = ::_wsystem(command.c_str());
 #endif
+    // The command is not logged: a notify command may hold a token.
     if (nErr)
-        LogPrintf("runCommand error: system(%s) returned %d", strCommand, nErr);
+        LogPrintf("runCommand error: a shell command returned %d", nErr);
 }
 #endif
 
@@ -684,11 +741,16 @@ void ThreadHandler::interruptAll(){
     threadGroup.interrupt_all();
 }
 
+// boost::thread_group deletes the threads it holds when it is destroyed, but
+// remove_thread() hands that ownership back to the caller, so both of these
+// delete each thread they remove.
 void ThreadHandler::removeByName(const std::string tname)
 {
-    threadGroup.remove_thread(threadMap[tname]);
-    threadMap[tname]->join();
+    boost::thread* thread = threadMap[tname];
+    threadGroup.remove_thread(thread);
+    thread->join();
     threadMap.erase(tname);
+    delete thread;
 }
 
 void ThreadHandler::removeAll()
@@ -698,6 +760,7 @@ void ThreadHandler::removeAll()
     for (auto it=threadMap.begin(); it!=threadMap.end(); ++it)
     {
         threadGroup.remove_thread(it->second);
+        delete it->second;
     }
     threadMap.clear();
 }

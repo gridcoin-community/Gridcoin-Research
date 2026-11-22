@@ -16,8 +16,6 @@ leaves it pending. Without it, "the beacon is active after a superblock" would
 also pass if activation happened for some unrelated reason.
 """
 
-import os
-
 from test_framework.test_framework import GridcoinTestFramework
 from test_framework.util import assert_equal, assert_raises_rpc_error
 
@@ -53,24 +51,10 @@ class BeaconActivationTest(GridcoinTestFramework):
         ]]
 
     def setup_network(self):
-        # Point the CPID probe inside the test directory: without this the node
-        # reads whatever BOINC installation the host happens to have, so the
-        # result would depend on the machine. client_state.xml has to exist and
-        # be readable, or the node puts "Could not access BOINC data directory"
-        # on stderr and the framework fails any node that writes to stderr. An
-        # empty <client_state> carries no <project> sections, which is what we
-        # want -- the CPID comes from -forcecpid, not from BOINC.
-        boinc_dir = os.path.join(self.options.tmpdir, "boinc")
-        os.makedirs(boinc_dir, exist_ok=True)
-
-        # lint-python-utf8-encoding.sh greps line by line, so the encoding
-        # argument has to stay on the same line as the call itself.
-        client_state_path = os.path.join(boinc_dir, "client_state.xml")
-        with open(client_state_path, "w", encoding="utf-8") as client_state:
-            client_state.write("<client_state>\n</client_state>\n")
-
-        self.extra_args[0].append(f"-boincdatadir={boinc_dir}")
-
+        # The framework gives the node a BOINC data directory of its own whose
+        # client_state.xml names no project (initialize_datadir in
+        # test_framework/util.py), so the CPID comes from -forcecpid alone.
+        #
         # As in feature_generatesuperblock.py: the base setup_nodes() regtest
         # branch calls import_deterministic_coinbase_privkeys() -> createwallet,
         # which Gridcoin does not have.

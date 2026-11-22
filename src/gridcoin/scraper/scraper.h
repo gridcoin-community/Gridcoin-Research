@@ -155,6 +155,8 @@ bool IsScraperAuthorized();
  * @brief Returns whether this node is authorized to broadcast statistics manifests to the network as a scraper.
  * @param AddressOut
  * @param KeyOut
+ * @param access The scraper thread's staking access, with which the key is reached while the wallet is unlocked for
+ * staking only. nullptr for any other caller, which then needs a full unlock of an encrypted wallet.
  * @return bool
  *
  * The idea here is that there are two levels of authorization. The first level is whether any
@@ -175,7 +177,7 @@ bool IsScraperAuthorized();
  * modified to bypass this check, so messages sent will also be validated on receipt by the complement
  * to this function, IsManifestAuthorized(CKey& Key) in the CScraperManifest class.
  */
-bool IsScraperAuthorizedToBroadcastManifests(CTxDestination& AddressOut, CKey& KeyOut);
+bool IsScraperAuthorizedToBroadcastManifests(CTxDestination& AddressOut, CKey& KeyOut, const StakingKeyAccess* access);
 /**
  * @brief Returns whether the scraper with the input public key at the input time has exceeded the maximum allowable
  * manifest publishing rate. This is a DoS function and is used to issue misbehavior points, which could result in banning
@@ -266,6 +268,17 @@ const std::string GetTextForscraperSBvalidationtype(scraperSBvalidationtype Scra
 double MagRound(double dMag);
 
 /**
+ * @brief Computes statistics from a provided project object
+ * @param project
+ * @param ProjectData
+ * @param projectmag
+ * @param mScraperStats
+ * @return bool true if successful. On false, mScraperStats is empty.
+ */
+bool LoadProjectObjectToStatsByCPID(const std::string& project, const SerializeData& ProjectData, const double& projectmag,
+                                    ScraperStats& mScraperStats);
+
+/**
  * @brief Returns the number of scrapers required for a supermajority when determining a convergence. This is a CONSENSUS
  * critical function
  * @param nScraperCount
@@ -312,5 +325,17 @@ const ScraperPendingBeaconMap::value_type* FindOwnershipProofVerifiedBeacon(
     uint32_t user_account_id,
     const std::map<std::string, std::string>& project_public_keys,
     unsigned int& signature_failures);
+
+/**
+ * @brief Gives a string as it is used for part of a file name.
+ *
+ * savescraperfilemanifest builds the name of each file it writes from a project name and its ETag, and writes
+ * each file under a plain name in the dump directory.
+ *
+ * @param str A project name or an ETag.
+ * @return The string without the characters / \ : * ? " < > | and without control characters. Other characters,
+ * spaces included, are kept.
+ */
+std::string ToPlainFileNamePart(const std::string& str);
 
 #endif // GRIDCOIN_SCRAPER_SCRAPER_H

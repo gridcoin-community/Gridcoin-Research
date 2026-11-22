@@ -17,7 +17,7 @@
 #include <QString>
 #include <boost/thread.hpp>
 
-#ifdef Q_OS_MAC
+#ifdef Q_OS_MACOS
 #include "macdockiconhandler.h"
 #endif
 

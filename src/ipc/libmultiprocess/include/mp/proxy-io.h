@@ -25,6 +25,7 @@
 #include <memory>
 #include <optional>
 #include <sstream>
+#include <stdexcept>
 #include <string>
 #include <thread>
 
@@ -624,7 +625,29 @@ ProxyClientBase<Interface, Impl>::ProxyClientBase(typename Interface::Client cli
         });
     }
     });
-    Sub::construct(*this);
+    // GRIDCOIN: Init's construct() is a round trip (the bootstrap), and it
+    // throws when the connection drops while it waits, as it does when a client
+    // gives up on a peer that never answers and shuts the socket down. This
+    // object then never finishes constructing and its destructor never runs, so
+    // run the cleanup the destructor would: disconnect_cb is not left on the
+    // connection pointing at this object, the capability is released on the
+    // event-loop thread, and a connection this object owns is deleted.
+    //
+    // That cleanup deletes the connection only if it still exists, and the
+    // check is sound only under an assumption about kj's ordering, which the
+    // destructor's own path shares: ConnectStream's onDisconnect handler, which
+    // also deletes the connection, runs before the loop->sync() the cleanup
+    // posts. The end of stream that fails construct() is handled in one drain
+    // of the event queue, which needs no I/O while no write is pending, and that
+    // drain queues and runs the handler (evalLater); a posted sync is seen only
+    // when the loop next polls, after the drain. Re-check this on every upstream
+    // sync of this subtree.
+    try {
+        Sub::construct(*this);
+    } catch (...) {
+        CleanupRun(m_context.cleanup_fns);
+        throw;
+    }
 }
 
 template <typename Interface, typename Impl>
@@ -690,7 +713,10 @@ ProxyServerBase<Interface, Impl>::~ProxyServerBase()
 
 //! If the capnp interface defined a special "destroy" method, as described the
 //! ProxyClientBase class, this method will be called and synchronously destroy
-//! m_impl before returning to the client.
+//! m_impl before returning to the client. If a call on the object is still
+//! running (a peer may send destroy at any time), the object is marked and the
+//! last call to finish destroys it, in the same order; calls that arrive after
+//! a destroy are refused (CallGuard).
 //!
 //! If the capnp interface does not define a "destroy" method, this will never
 //! be called and the ~ProxyServerBase destructor will be responsible for
@@ -708,8 +734,47 @@ ProxyServerBase<Interface, Impl>::~ProxyServerBase()
 template <typename Interface, typename Impl>
 void ProxyServerBase<Interface, Impl>::invokeDestroy()
 {
-    m_impl.reset();
+    std::shared_ptr<Impl> impl;
+    {
+        const std::lock_guard<std::mutex> lock(m_impl_mutex);
+        if (m_destroy_requested) return;
+        m_destroy_requested = true;
+        if (m_calls_in_flight > 0) return;
+        impl = std::move(m_impl);
+    }
+    impl.reset();
     CleanupRun(m_context.cleanup_fns);
+}
+
+template <typename Interface, typename Impl>
+Impl* ProxyServerBase<Interface, Impl>::enterCall()
+{
+    const std::lock_guard<std::mutex> lock(m_impl_mutex);
+    if (!m_impl || m_destroy_requested) {
+        throw std::runtime_error("IPC method called on an object the client has destroyed.");
+    }
+    ++m_calls_in_flight;
+    return m_impl.get();
+}
+
+template <typename Interface, typename Impl>
+void ProxyServerBase<Interface, Impl>::leaveCall()
+{
+    std::shared_ptr<Impl> impl;
+    {
+        const std::lock_guard<std::mutex> lock(m_impl_mutex);
+        if (--m_calls_in_flight > 0 || !m_destroy_requested || !m_impl) return;
+        impl = std::move(m_impl);
+    }
+    // The client destroyed the object while this call ran: finish the destroy
+    // here, as invokeDestroy would have. This runs in a destructor, so a
+    // cleanup function that throws is logged instead of ending the process.
+    impl.reset();
+    try {
+        CleanupRun(m_context.cleanup_fns);
+    } catch (const std::exception& e) {
+        MP_LOG(*m_context.loop, Log::Error) << "IPC cleanup after a deferred destroy failed: " << e.what();
+    }
 }
 
 //! Map from Connection to local or remote thread handle which will be used over
@@ -977,14 +1042,20 @@ void ListenConnections(EventLoop& loop, SocketId fd, InitImpl& init, std::option
 //! `is_authenticated` + `auth_deadline` are optional (pass an empty function or a
 //! zero duration to disable). When set, the connection is dropped if the predicate
 //! still reports false once the deadline elapses. See ipc::IPC_AUTH_DEADLINE for
-//! why: the listener serves ONE connection at a time and does not re-arm accept()
-//! while the slot is taken, so a peer that connects and never authenticates would
-//! otherwise lock the real client out for as long as it cares to sit there.
+//! why: the listener serves a bounded number of connections and does not re-arm
+//! accept() while they are all taken, so a peer that connects and never
+//! authenticates would otherwise lock the real client out for as long as it cares
+//! to sit there.
+//!
+//! GRIDCOIN: `on_close` is optional too. When set, it runs once on the event loop
+//! thread when the connection is torn down, and finishes before the listener can
+//! accept another connection in its place (see below). It must not throw.
 template <typename InitInterface, typename InitImpl, typename OnDisconnect>
 void _ServeOwned(EventLoop& loop, kj::Own<kj::AsyncIoStream>&& stream, std::shared_ptr<InitImpl> init,
                  OnDisconnect&& on_disconnect,
                  std::function<bool(InitImpl&)> is_authenticated = {},
-                 std::chrono::seconds auth_deadline = std::chrono::seconds{0})
+                 std::chrono::seconds auth_deadline = std::chrono::seconds{0},
+                 std::function<void(InitImpl&)> on_close = {})
 {
     loop.m_incoming_connections.emplace_front(loop, kj::mv(stream), [init](Connection& connection) {
         return kj::heap<ProxyServer<InitInterface>>(init, connection);
@@ -1016,6 +1087,22 @@ void _ServeOwned(EventLoop& loop, kj::Own<kj::AsyncIoStream>&& stream, std::shar
     // moves m_impl into the async cleanup queue, so the Init's shared_ptr — and
     // therefore weak_init.lock() — can outlive the Connection.
     it->addSyncCleanup([closed] { *closed = true; });
+
+    // GRIDCOIN: run the caller's teardown for this connection, with the same
+    // coverage as the cleanup above: ~Connection runs its sync cleanups on the
+    // event loop thread for a peer disconnect, the authentication deadline and
+    // disconnectIncoming() alike. close_conn calls on_disconnect(), which re-arms
+    // accept(), only after erase(it) has returned, so the hook has finished before
+    // the listener can serve another connection. The strong `init` keeps the Init
+    // alive for the hook, since ~ProxyServerBase may already have handed its own
+    // reference to the async cleanup thread; the hook then passes this reference
+    // on there too, so the Init is never destroyed on the event loop thread.
+    if (on_close) {
+        it->addSyncCleanup([&loop, init, on_close]() mutable {
+            on_close(*init);
+            loop.addAsyncCleanup([init = std::move(init)]() mutable { init.reset(); });
+        });
+    }
 
     auto close_conn = std::make_shared<std::function<void()>>();
     *close_conn = [&loop, it, closed, on_disconnect = std::forward<OnDisconnect>(on_disconnect)]() mutable {
@@ -1055,35 +1142,36 @@ template <typename InitInterface, typename InitImpl>
 void _ListenFactory(const std::shared_ptr<Listener>& listener, EventLoop& loop,
                     std::function<std::shared_ptr<InitImpl>(int)> make_init,
                     std::function<bool(InitImpl&)> is_authenticated = {},
-                    std::chrono::seconds auth_deadline = std::chrono::seconds{0})
+                    std::chrono::seconds auth_deadline = std::chrono::seconds{0},
+                    std::function<void(InitImpl&)> on_close = {})
 {
     if (listener->atCapacity()) return;
 
     auto* receiver = listener->m_receiver.get();
     loop.m_task_set->add(receiver->accept().then(
-        [&loop, make_init, listener, is_authenticated, auth_deadline](kj::Own<kj::AsyncIoStream>&& stream) {
+        [&loop, make_init, listener, is_authenticated, auth_deadline, on_close](kj::Own<kj::AsyncIoStream>&& stream) {
             int peer_fd = -1;
             KJ_IF_MAYBE(fd, stream->getFd()) { peer_fd = *fd; }
             std::shared_ptr<InitImpl> init = make_init(peer_fd);
             if (init) {
                 ++listener->m_active_connections;
                 _ServeOwned<InitInterface>(loop, kj::mv(stream), std::move(init),
-                    [&loop, make_init, listener, is_authenticated, auth_deadline] {
+                    [&loop, make_init, listener, is_authenticated, auth_deadline, on_close] {
                         const bool resume_accept{listener->atCapacity()};
                         assert(listener->m_active_connections > 0);
                         --listener->m_active_connections;
                         if (resume_accept) {
                             _ListenFactory<InitInterface>(listener, loop, make_init, is_authenticated,
-                                                          auth_deadline);
+                                                          auth_deadline, on_close);
                         }
                     },
-                    is_authenticated, auth_deadline);
+                    is_authenticated, auth_deadline, on_close);
             } else {
                 MP_LOG(loop, Log::Info) << "IPC server: connection rejected before serving.";
                 // stream dropped here => socket closed; the connection is never
                 // counted, so only the re-arm below applies (no double-arm).
             }
-            _ListenFactory<InitInterface>(listener, loop, make_init, is_authenticated, auth_deadline);
+            _ListenFactory<InitInterface>(listener, loop, make_init, is_authenticated, auth_deadline, on_close);
         }));
 }
 
@@ -1093,14 +1181,15 @@ void ListenConnectionsFactory(EventLoop& loop, SocketId fd,
                               std::function<std::shared_ptr<InitImpl>(int)> make_init,
                               std::optional<size_t> max_connections = std::nullopt,
                               std::function<bool(InitImpl&)> is_authenticated = {},
-                              std::chrono::seconds auth_deadline = std::chrono::seconds{0})
+                              std::chrono::seconds auth_deadline = std::chrono::seconds{0},
+                              std::function<void(InitImpl&)> on_close = {})
 {
     loop.sync([&]() {
         auto listener{std::make_shared<Listener>(
             loop.m_io_context.lowLevelProvider->wrapListenSocketFd(fd, kj::LowLevelAsyncIoProvider::TAKE_OWNERSHIP),
             max_connections)};
         _ListenFactory<InitInterface>(listener, loop, std::move(make_init), std::move(is_authenticated),
-                                      auth_deadline);
+                                      auth_deadline, std::move(on_close));
     });
 }
 

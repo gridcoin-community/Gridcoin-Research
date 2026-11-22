@@ -1,0 +1,3 @@
+# gridcoin-service keeps its own state here, for both networks. Both networks
+# install this file under the same name, so the path is declared once.
+d /var/lib/gridcoin-service 0700 root root -

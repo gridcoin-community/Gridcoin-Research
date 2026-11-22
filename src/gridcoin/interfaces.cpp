@@ -3,6 +3,7 @@
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #include "interfaces/staking.h"
+#include "interfaces/connection_scope.h"
 #include "interfaces/mrc.h"
 #include "interfaces/psgt.h"
 #include "interfaces/researcher.h"
@@ -37,9 +38,11 @@
 #include "gridcoin/voting/registry.h"
 #include "gridcoin/voting/result.h"
 #include "interfaces/handler.h"
+#include "interfaces/notification_dispatcher.h"
 #include "key_io.h"
 #include "chain.h"
 #include "net_processing.h"
+#include "node/access_policy.h"
 #include "node/psgt_pool.h"
 #include "node/ui_interface.h"
 #include "psgt.h"
@@ -52,6 +55,7 @@
 #include "util/string.h"
 #include "validation.h"
 #include "version.h"
+#include "wallet/capability.h"
 #include "wallet/wallet.h"
 
 #include <algorithm>
@@ -61,6 +65,7 @@
 #include <limits>
 #include <map>
 #include <memory>
+#include <optional>
 #include <set>
 #include <string>
 #include <utility>
@@ -70,12 +75,170 @@
 extern CWallet* pwalletMain;
 extern ConvergedScraperStats ConvergedScraperStatsCache;
 
+//! The body of interfaces::MRC::snapshot() (declared in gridcoin/mrc.h). Kept
+//! here beside the MRC interface it was written for; the node's GUI state cache
+//! calls it too, for the unboosted quote it pushes.
+interfaces::MRCSnapshot GRC::BuildMRCSnapshot(CWallet* wallet, CAmount fee_boost, bool no_sign,
+                                              bool researcher_eligible)
+{
+    AssertLockHeld(cs_main);
+
+    interfaces::MRCSnapshot snap;
+
+    // Defensive: before the chain tip exists, present as out-of-sync rather
+    // than dereferencing a null tip. In practice the GUI models are built
+    // well past genesis load, so pindexBest is set.
+    if (!pindexBest) {
+        snap.out_of_sync = true;
+        return snap;
+    }
+
+    // Populate the chain-state flags up front (cheap tip reads) so the GUI
+    // can classify OUT_OF_SYNC vs INVALID_BLOCK_VERSION correctly. In
+    // particular block_version_valid must reflect the current tip even while
+    // out of sync, matching MRCModel::getMRCModelStatus()'s former ordering
+    // (IsV12Enabled(m_block_height) checked before OutOfSyncByAge()).
+    snap.block_height = pindexBest->nHeight;
+    snap.block_version_valid = IsV12Enabled(pindexBest->nHeight);
+    snap.out_of_sync = OutOfSyncByAge();
+
+    // Out of sync: the GUI shows the out-of-sync state and ignores the rest.
+    if (snap.out_of_sync) {
+        return snap;
+    }
+
+    // The caller decides researcher eligibility (active beacon / not-noncruncher /
+    // not-pool): ResearcherModel for the GUI's call (migrated in 1d-iv), the
+    // researcher part for the GUI state cache's. When the user is not a valid
+    // researcher, CreateMRC would throw MRC_error on every block; skip the trial
+    // claim and queue scan and let the GUI classify.
+    if (!researcher_eligible) {
+        return snap;
+    }
+
+    // The balance check MRCModel::refresh() makes before the version gate (a
+    // claim needs a mature balance of at least 1 GRC), so the GUI needs no
+    // getBalance() of its own.
+    snap.mature_balance = wallet->GetBalance();
+
+    if (!snap.block_version_valid) {
+        return snap;
+    }
+
+    snap.output_limit = static_cast<int>(GetMRCOutputLimit(pindexBest->nVersion, false));
+
+    GRC::MRC mrc;
+    CAmount reward = 0;
+    CAmount min_fee = 0;
+
+    // First run with fee = 0 computes the minimum required fee. CreateMRC
+    // takes the wallet lock in its own scope. Quiet: an error is reported in the
+    // snapshot, and "no positive research reward pending" is routine for a
+    // researcher just paid, on every tip the GUI state cache quotes.
+    try {
+        GRC::CreateMRC(pindexBest, mrc, reward, min_fee, wallet, no_sign, /*quiet=*/true);
+    } catch (GRC::MRC_error& e) {
+        snap.create_error = true;
+        snap.create_error_msg = e.what();
+    }
+
+    snap.min_fee = min_fee;
+
+    // The total fee the caller is requesting: min_fee + boost when a boost is
+    // set, 0 otherwise. This intended value drives the excessive-fee
+    // classification GUI-side.
+    const CAmount total_fee = (fee_boost != 0) ? min_fee + fee_boost : 0;
+    snap.fee = total_fee;
+
+    if (fee_boost != 0) {
+        // Rerun with the boosted fee so the mempool queue comparison below
+        // uses the fee the request would actually carry (mrc.m_fee).
+        // CreateMRC takes the fee by non-const reference and resets it to the
+        // computed minimum when the provided fee is out of range (before
+        // throwing), so pass a scratch copy to keep snap.fee = the intended
+        // total.
+        CAmount rerun_fee = total_fee;
+        try {
+            GRC::CreateMRC(pindexBest, mrc, reward, rerun_fee, wallet, no_sign, /*quiet=*/true);
+        } catch (GRC::MRC_error& e) {
+            snap.boosted_fee_error = true;
+            snap.boosted_fee_error_msg = e.what();
+        }
+    }
+
+    // reward is fee-independent; both runs set it to the research subsidy, so
+    // read it after the (last) run.
+    snap.reward = reward;
+
+    // Fee-ordered mempool MRC queue evaluated against this request's object
+    // fee (mrc.m_fee == min_fee with no boost, the boosted fee otherwise).
+    CAmount tail = std::numeric_limits<CAmount>::max();
+    CAmount head = 0;
+    bool found = false;
+
+    const std::vector<std::pair<CAmount, GRC::Cpid>> mrc_queue = mempool.GetMRCQueue();
+
+    GRC::Cpid mrc_cpid;
+    if (auto cpid = mrc.m_mining_id.TryCpid()) mrc_cpid = *cpid;
+
+    for (const auto& [mempool_fee, mempool_cpid] : mrc_queue) {
+        found |= mempool_cpid == mrc_cpid;
+
+        if (!found && mempool_fee >= mrc.m_fee) ++snap.pos;
+        head = std::max(head, mempool_fee);
+        tail = std::min(tail, mempool_fee);
+
+        ++snap.queue_length;
+    }
+
+    // Tail converges from CAmount max, but cannot exceed head (e.g. an empty
+    // queue leaves tail at max and head at 0).
+    tail = std::min(head, tail);
+
+    // The last queue slot that would still be paid: min(queue size,
+    // output_limit) - 1, capped at the head fee.
+    int pay_limit_fee_pos = std::min<int>(mrc_queue.size(), snap.output_limit) - 1;
+
+    CAmount pay_limit = std::numeric_limits<CAmount>::max();
+    if (pay_limit_fee_pos >= 0) {
+        pay_limit = mrc_queue[pay_limit_fee_pos].first;
+    }
+    pay_limit = std::min(head, pay_limit);
+
+    snap.found_in_queue = found;
+    snap.queue_head_fee = head;
+    snap.queue_tail_fee = tail;
+    snap.queue_pay_limit_fee = pay_limit;
+
+    return snap;
+}
+
 namespace interfaces {
 
 static_assert(STAKE_WEIGHT_UNITS_PER_COIN == GRC::STAKE_WEIGHT_UNITS_PER_COIN,
               "the interface's stake weight units per GRC must match the kernel's");
 
 namespace {
+
+//! Run \p fn under the capability of \p kind that the client began for
+//! \p wallet (interfaces::Wallet::beginElevation()), and return what it
+//! returns. With no wallet there is nothing to authorise, and \p fn runs as it
+//! is. The scope lives on this thread for the call and ends with it.
+//! \p connection_closed is the check of the connection the caller is served on
+//! (bindConnectionScope): once that has closed, \p fn runs under no capability,
+//! whatever the slot holds. Empty in process.
+template <typename Fn>
+auto RunUnderIpcCapability(CWallet* wallet, const std::function<bool()>& connection_closed, CapabilityKind kind,
+                           Fn&& fn)
+{
+    if (!wallet) {
+        return fn();
+    }
+
+    CapabilityScope scope(*wallet, wallet->IpcCapability(connection_closed), kind);
+
+    return fn();
+}
 
 //! In-process StakingStatus implementation wrapping g_miner_status and the
 //! staking difficulty helpers. The try* variants preserve the GUI's
@@ -133,132 +296,72 @@ public:
 
     MRCSnapshot snapshot(CAmount fee_boost, bool wallet_locked, bool researcher_eligible) override
     {
-        MRCSnapshot snap;
-
         LOCK(cs_main);
 
-        // Defensive: before the chain tip exists, present as out-of-sync rather
-        // than dereferencing a null tip. In practice the GUI models are built
-        // well past genesis load, so pindexBest is set.
-        if (!pindexBest) {
-            snap.out_of_sync = true;
-            return snap;
-        }
-
-        // Populate the chain-state flags up front (cheap tip reads) so the GUI
-        // can classify OUT_OF_SYNC vs INVALID_BLOCK_VERSION correctly. In
-        // particular block_version_valid must reflect the current tip even while
-        // out of sync, matching MRCModel::getMRCModelStatus()'s former ordering
-        // (IsV12Enabled(m_block_height) checked before OutOfSyncByAge()).
-        snap.block_height = pindexBest->nHeight;
-        snap.block_version_valid = IsV12Enabled(pindexBest->nHeight);
-        snap.out_of_sync = OutOfSyncByAge();
-
-        // Out of sync: the GUI shows the out-of-sync state and ignores the rest.
-        if (snap.out_of_sync) {
-            return snap;
-        }
-
-        // The GUI owns researcher eligibility (active beacon / not-noncruncher /
-        // not-pool; ResearcherModel, migrated in 1d-iv). When the user is not a
-        // valid researcher, CreateMRC would throw MRC_error on every block; skip
-        // the trial claim and queue scan and let the GUI classify.
-        if (!researcher_eligible) {
-            return snap;
-        }
-
-        if (!snap.block_version_valid) {
-            return snap;
-        }
-
-        snap.output_limit = static_cast<int>(GetMRCOutputLimit(pindexBest->nVersion, false));
-
-        GRC::MRC mrc;
-        CAmount reward = 0;
-        CAmount min_fee = 0;
-
-        // First run with fee = 0 computes the minimum required fee. CreateMRC
-        // takes the wallet lock in its own scope. wallet_locked -> no_sign
-        // (a locked wallet cannot sign the trial claim).
-        try {
-            GRC::CreateMRC(pindexBest, mrc, reward, min_fee, m_wallet, wallet_locked);
-        } catch (GRC::MRC_error& e) {
-            snap.create_error = true;
-            snap.create_error_msg = e.what();
-        }
-
-        snap.min_fee = min_fee;
-
-        // The total fee the caller is requesting: min_fee + boost when a boost is
-        // set, 0 otherwise. This intended value drives the excessive-fee
-        // classification GUI-side.
-        const CAmount total_fee = (fee_boost != 0) ? min_fee + fee_boost : 0;
-        snap.fee = total_fee;
-
-        if (fee_boost != 0) {
-            // Rerun with the boosted fee so the mempool queue comparison below
-            // uses the fee the request would actually carry (mrc.m_fee).
-            // CreateMRC takes the fee by non-const reference and resets it to the
-            // computed minimum when the provided fee is out of range (before
-            // throwing), so pass a scratch copy to keep snap.fee = the intended
-            // total.
-            CAmount rerun_fee = total_fee;
-            try {
-                GRC::CreateMRC(pindexBest, mrc, reward, rerun_fee, m_wallet, wallet_locked);
-            } catch (GRC::MRC_error& e) {
-                snap.boosted_fee_error = true;
-                snap.boosted_fee_error_msg = e.what();
-            }
-        }
-
-        // reward is fee-independent; both runs set it to the research subsidy, so
-        // read it after the (last) run.
-        snap.reward = reward;
-
-        // Fee-ordered mempool MRC queue evaluated against this request's object
-        // fee (mrc.m_fee == min_fee with no boost, the boosted fee otherwise).
-        CAmount tail = std::numeric_limits<CAmount>::max();
-        CAmount head = 0;
-        bool found = false;
-
-        const std::vector<std::pair<CAmount, GRC::Cpid>> mrc_queue = mempool.GetMRCQueue();
-
-        GRC::Cpid mrc_cpid;
-        if (auto cpid = mrc.m_mining_id.TryCpid()) mrc_cpid = *cpid;
-
-        for (const auto& [mempool_fee, mempool_cpid] : mrc_queue) {
-            found |= mempool_cpid == mrc_cpid;
-
-            if (!found && mempool_fee >= mrc.m_fee) ++snap.pos;
-            head = std::max(head, mempool_fee);
-            tail = std::min(tail, mempool_fee);
-
-            ++snap.queue_length;
-        }
-
-        // Tail converges from CAmount max, but cannot exceed head (e.g. an empty
-        // queue leaves tail at max and head at 0).
-        tail = std::min(head, tail);
-
-        // The last queue slot that would still be paid: min(queue size,
-        // output_limit) - 1, capped at the head fee.
-        int pay_limit_fee_pos = std::min<int>(mrc_queue.size(), snap.output_limit) - 1;
-
-        CAmount pay_limit = std::numeric_limits<CAmount>::max();
-        if (pay_limit_fee_pos >= 0) {
-            pay_limit = mrc_queue[pay_limit_fee_pos].first;
-        }
-        pay_limit = std::min(head, pay_limit);
-
-        snap.found_in_queue = found;
-        snap.queue_head_fee = head;
-        snap.queue_tail_fee = tail;
-        snap.queue_pay_limit_fee = pay_limit;
-
-        return snap;
+        // The trial claim is built unsigned when the wallet cannot use its keys:
+        // when the caller says it is locked, or it is locked, or unlocked for
+        // staking only with no capability scope open on this thread. The
+        // preview needs the fee, not a signature; submit() builds and signs the
+        // claim it sends.
+        const bool can_use_keys = m_wallet->CanUseKeys() && !m_wallet->IsLocked();
+        return GRC::BuildMRCSnapshot(m_wallet, fee_boost, wallet_locked || !can_use_keys, researcher_eligible);
     }
 
     MRCSubmitResult submit(CAmount fee_boost, bool wallet_locked) override
+    {
+        return RunUnderIpcCapability(m_wallet, m_connection_closed, CapabilityKind::Contract,
+                                     [&] { return SubmitGuarded(fee_boost, wallet_locked, nullptr); });
+    }
+
+    MRCSubmitResult submitConfirmed(CAmount fee_boost, bool wallet_locked,
+                                    CAmount confirmed_fee, CAmount confirmed_net) override
+    {
+        const std::pair<CAmount, CAmount> terms{confirmed_fee, confirmed_net};
+
+        return RunUnderIpcCapability(m_wallet, m_connection_closed, CapabilityKind::Contract,
+                                     [&] { return SubmitGuarded(fee_boost, wallet_locked, &terms); });
+    }
+
+    bool isOutOfSync() override
+    {
+        // OutOfSyncByAge() is a lock-free time comparison (GetAdjustedTime() vs
+        // the g_previous_block_time global), matching the former direct GUI-thread
+        // call in MRCModel::getMRCModelStatus().
+        return OutOfSyncByAge();
+    }
+
+    std::unique_ptr<Handler> handleMRCChanged(MRCChangedFn fn) override
+    {
+        return MakeSignalHandler(uiInterface.MRCChanged_connect(interfaces::ForwardNotify(std::move(fn))));
+    }
+
+    void bindConnectionScope(std::shared_ptr<ConnectionScope> scope) override
+    {
+        m_connection_closed = ConnectionClosedCheck(std::move(scope));
+    }
+
+private:
+    //! submit() and submitConfirmed() sign the claim under the client's Contract
+    //! capability, which each opens itself. Nothing may escape to the caller: in
+    //! the single-process build that is the GUI thread, where an exception ends
+    //! the application.
+    MRCSubmitResult SubmitGuarded(CAmount fee_boost, bool wallet_locked, const std::pair<CAmount, CAmount>* terms)
+    {
+        try {
+            return Submit(fee_boost, wallet_locked, terms);
+        } catch (const std::exception& e) {
+            LogPrintf("ERROR: MRC submit: %s", e.what());
+
+            MRCSubmitResult res;
+            res.error = e.what();
+            return res;
+        }
+    }
+
+    //! The body of submit() and submitConfirmed(), without the capability scope and
+    //! the exception boundary. With \p terms (the confirmed fee
+    //! and net payout) the rebuilt claim is broadcast only if it still meets them.
+    MRCSubmitResult Submit(CAmount fee_boost, bool wallet_locked, const std::pair<CAmount, CAmount>* terms)
     {
         MRCSubmitResult res;
 
@@ -267,11 +370,12 @@ public:
         // The GUI only reaches submit() from the ELIGIBLE state (never locked),
         // but enforce the interface contract here so a future or out-of-process
         // caller cannot broadcast an unsigned claim.
-        // Trust-boundary guard, before any signing work. The GUI asks for an
-        // elevation before submitting (MRCRequestPage::submitMRC), which is the
-        // friendly answer for a researcher who unlocked for staking: the claim
-        // proceeds and the staking-only scope is handed back afterwards. The
-        // node must not rely on the client having done that.
+        // Trust-boundary guard, before any signing work. The GUI begins a
+        // Contract capability before submitting (MRCRequestPage::submitMRC),
+        // which is the friendly answer for a researcher who unlocked for
+        // staking: the claim proceeds under it, and the wallet stays unlocked
+        // for staking only throughout. The node must not rely on the client
+        // having done that.
         //
         // Placed with the other lock check rather than at the send, so a
         // refusal costs nothing: CreateMRC signs the claim, twice on the fee
@@ -280,10 +384,10 @@ public:
         // MRCModel CAN see this state now: WalletModel's status enum carries
         // UnlockedForStakingOnly, and walletStatusChanged() receives it. It
         // deliberately does not treat that as locked, so the submit button
-        // stays enabled and the claim path asks for a temporary elevation
-        // instead of refusing. This refusal is what backstops that -- it is
-        // reached only if the elevation did not happen.
-        if (m_wallet->IsUnlockedForStakingOnly()) {
+        // stays enabled and the claim path asks for the passphrase instead of
+        // refusing. This refusal is what backstops that -- it is reached only
+        // if no Contract capability is open for this call.
+        if (m_wallet->IsUnlockedForStakingOnly() && !m_wallet->CanUseKeys()) {
             res.error = "The wallet is unlocked for staking only. Unlock it fully to submit a "
                         "manual research claim.";
             return res;
@@ -298,6 +402,14 @@ public:
 
         if (!pindexBest) {
             res.error = "No chain tip.";
+            return res;
+        }
+
+        // A user action re-checks the state in the core. The GUI's eligibility comes from a pushed
+        // snapshot that can be seconds old, so a claim could otherwise be built and sent against a tip
+        // that has fallen behind. Nothing has been built yet.
+        if (OutOfSyncByAge()) {
+            res.error = "The wallet is out of sync; the claim was not sent.";
             return res;
         }
 
@@ -323,6 +435,17 @@ public:
             return res;
         }
 
+        // The user confirmed a fee and a net payout. If the rebuilt claim no longer
+        // meets them, broadcast nothing and hand back the fresh figures.
+        if (terms && !GRC::MRCTermsHold(fee, reward, terms->first, terms->second)) {
+            res.terms_changed = true;
+            res.fresh_fee = fee;
+            res.fresh_reward = reward;
+            res.error = "The fee or the net payout of your MRC changed since you confirmed it. "
+                        "Review the new figures and confirm again.";
+            return res;
+        }
+
         uint32_t contract_version = IsV13Enabled(nBestHeight) ? 3 : 2;
 
         auto [wtx, e_str] = GRC::SendContract(GRC::MakeContract<GRC::MRC>(contract_version,
@@ -339,21 +462,11 @@ public:
         return res;
     }
 
-    bool isOutOfSync() override
-    {
-        // OutOfSyncByAge() is a lock-free time comparison (GetAdjustedTime() vs
-        // the g_previous_block_time global), matching the former direct GUI-thread
-        // call in MRCModel::getMRCModelStatus().
-        return OutOfSyncByAge();
-    }
-
-    std::unique_ptr<Handler> handleMRCChanged(MRCChangedFn fn) override
-    {
-        return MakeSignalHandler(uiInterface.MRCChanged_connect(interfaces::GuardNotify(std::move(fn))));
-    }
-
-private:
     CWallet* m_wallet;
+    //! Whether the IPC connection this is served on has closed
+    //! (bindConnectionScope), asked as the IPC capability is read. Empty in
+    //! process, where there is no connection.
+    std::function<bool()> m_connection_closed{};
 };
 
 //! In-process SideStakeManager over the global sidestake registry (Phase 1d-ii).
@@ -362,6 +475,15 @@ private:
 //! methods, so no GUI code holds a GRC::SideStake or calls GetSideStakeRegistry()
 //! directly. Mutations return the post-mutation local sidestake revision (design
 //! §4.4) for read-your-writes.
+//!
+//! Every mutation changes side stakes, which needs the wallet passphrase. Each
+//! runs under the Settings capability the client began for the wallet, when it
+//! began one and its connection is still open (bindConnectionScope). It
+//! validates first, so an edit that would change nothing (invalid
+//! input, no such entry, the value already set) gets its own answer without the
+//! passphrase. Then, before it changes anything, it answers ELEVATION_REQUIRED
+//! unless the wallet's keys are usable: a capability, a full unlock, or no
+//! encryption.
 class SideStakeManagerImpl : public SideStakeManager
 {
 public:
@@ -400,6 +522,9 @@ public:
                                  double allocation_percent,
                                  const std::string& description) override
     {
+        std::optional<CapabilityScope> scope;
+        if (pwalletMain) scope.emplace(*pwalletMain, pwalletMain->IpcCapability(m_connection_closed), CapabilityKind::Settings);
+
         GRC::SideStakeRegistry& registry = GRC::GetSideStakeRegistry();
 
         const CTxDestination destination = DecodeDestination(address);
@@ -444,6 +569,8 @@ public:
             return Result(SideStakeEditStatus::INVALID_DESCRIPTION);
         }
 
+        if (!HoldsElevation()) return Result(SideStakeEditStatus::ELEVATION_REQUIRED);
+
         registry.NonContractAdd(GRC::LocalSideStake(destination,
                                                     new_allocation,
                                                     sanitized,
@@ -455,6 +582,9 @@ public:
     SideStakeEditResult setAllocation(const std::string& address,
                                       double allocation_percent) override
     {
+        std::optional<CapabilityScope> scope;
+        if (pwalletMain) scope.emplace(*pwalletMain, pwalletMain->IpcCapability(m_connection_closed), CapabilityKind::Settings);
+
         GRC::SideStakeRegistry& registry = GRC::GetSideStakeRegistry();
 
         GRC::SideStake original;
@@ -479,6 +609,8 @@ public:
             return Result(SideStakeEditStatus::INVALID_ALLOCATION);
         }
 
+        if (!HoldsElevation()) return Result(SideStakeEditStatus::ELEVATION_REQUIRED);
+
         // Change only the allocation. Rebuilding the whole entry from `original`
         // and writing it back through NonContractAdd() would carry the description
         // and status from a read taken in an earlier lock scope, so a config reload
@@ -495,6 +627,9 @@ public:
     SideStakeEditResult setDescription(const std::string& address,
                                        const std::string& description) override
     {
+        std::optional<CapabilityScope> scope;
+        if (pwalletMain) scope.emplace(*pwalletMain, pwalletMain->IpcCapability(m_connection_closed), CapabilityKind::Settings);
+
         GRC::SideStakeRegistry& registry = GRC::GetSideStakeRegistry();
 
         GRC::SideStake original;
@@ -511,6 +646,8 @@ public:
             return Result(SideStakeEditStatus::INVALID_DESCRIPTION);
         }
 
+        if (!HoldsElevation()) return Result(SideStakeEditStatus::ELEVATION_REQUIRED);
+
         // Change only the description; see setAllocation for why the surviving
         // fields must not be round-tripped through the earlier read.
         if (!registry.NonContractSetDescription(original.GetDestination(), sanitized)) {
@@ -523,6 +660,9 @@ public:
 
     SideStakeEditResult deleteLocal(const std::string& address) override
     {
+        std::optional<CapabilityScope> scope;
+        if (pwalletMain) scope.emplace(*pwalletMain, pwalletMain->IpcCapability(m_connection_closed), CapabilityKind::Settings);
+
         GRC::SideStakeRegistry& registry = GRC::GetSideStakeRegistry();
 
         GRC::SideStake original;
@@ -531,6 +671,8 @@ public:
         if (!FindLocal(registry, address, original)) {
             return Result(SideStakeEditStatus::INVALID_ADDRESS);
         }
+
+        if (!HoldsElevation()) return Result(SideStakeEditStatus::ELEVATION_REQUIRED);
 
         registry.NonContractDelete(original.GetDestination());
 
@@ -545,15 +687,25 @@ public:
         // emission-time revision could predate the reload. The consumer reads
         // localRevision() itself when handling the notification — see
         // interfaces/sidestake.h.
-        return MakeSignalHandler(uiInterface.RwSettingsUpdated_connect(interfaces::GuardNotify(std::move(fn))));
+        return MakeSignalHandler(uiInterface.RwSettingsUpdated_connect(interfaces::ForwardNotify(std::move(fn))));
     }
 
     std::unique_ptr<Handler> handleMandatorySideStakeChanged(MandatorySideStakeChangedFn fn) override
     {
-        return MakeSignalHandler(uiInterface.MandatorySideStakeChanged_connect(interfaces::GuardNotify(std::move(fn))));
+        return MakeSignalHandler(uiInterface.MandatorySideStakeChanged_connect(interfaces::ForwardNotify(std::move(fn))));
+    }
+
+    void bindConnectionScope(std::shared_ptr<ConnectionScope> scope) override
+    {
+        m_connection_closed = ConnectionClosedCheck(std::move(scope));
     }
 
 private:
+    //! Whether the IPC connection this is served on has closed
+    //! (bindConnectionScope), asked as the IPC capability is read. Empty in
+    //! process, where there is no connection.
+    std::function<bool()> m_connection_closed{};
+
     //! Build a result stamped with the current local sidestake revision.
     static SideStakeEditResult Result(SideStakeEditStatus status, std::string address = {})
     {
@@ -754,7 +906,23 @@ public:
         return latest;
     }
 
+    // The poll and the vote are signed under the client's Contract capability,
+    // and nothing may escape to the caller (the GUI thread, in the
+    // single-process build).
     VotingSubmitResult submitPoll(const PollSubmission& poll) override
+    {
+        return RunUnderIpcCapability(pwalletMain, m_connection_closed, CapabilityKind::Contract, [&] {
+            try {
+                return SubmitPollUnderScope(poll);
+            } catch (const std::exception& e) {
+                LogPrintf("ERROR: poll submission: %s", e.what());
+                return Failed(e.what());
+            }
+        });
+    }
+
+    //! submitPoll() without its capability scope and exception boundary.
+    VotingSubmitResult SubmitPollUnderScope(const PollSubmission& poll)
     {
         // The payload version (and, pre-v3, the forced SURVEY type) depend on the
         // chain height, so they are resolved node-side rather than in the GUI.
@@ -808,6 +976,20 @@ public:
     VotingSubmitResult submitVote(const std::string& poll_txid,
                                   const std::vector<uint8_t>& choice_offsets) override
     {
+        return RunUnderIpcCapability(pwalletMain, m_connection_closed, CapabilityKind::Contract, [&] {
+            try {
+                return SubmitVoteUnderScope(poll_txid, choice_offsets);
+            } catch (const std::exception& e) {
+                LogPrintf("ERROR: vote submission: %s", e.what());
+                return Failed(e.what());
+            }
+        });
+    }
+
+    //! submitVote() without its capability scope and exception boundary.
+    VotingSubmitResult SubmitVoteUnderScope(const std::string& poll_txid,
+                                            const std::vector<uint8_t>& choice_offsets)
+    {
         const uint256 txid = uint256S(poll_txid);
 
         // Look up and read the poll under cs_poll_registry, then copy out the poll
@@ -849,7 +1031,7 @@ public:
 
     std::unique_ptr<Handler> handleNewPollReceived(NewPollReceivedFn fn) override
     {
-        return MakeSignalHandler(uiInterface.NewPollReceived_connect(interfaces::GuardNotify(std::move(fn))));
+        return MakeSignalHandler(uiInterface.NewPollReceived_connect(interfaces::ForwardNotify(std::move(fn))));
     }
 
     std::unique_ptr<Handler> handleNewVoteReceived(NewVoteReceivedFn fn) override
@@ -857,7 +1039,12 @@ public:
         // The core signal carries a uint256; hand the consumer its hex form so no
         // core type crosses the boundary.
         return MakeSignalHandler(uiInterface.NewVoteReceived_connect(
-            interfaces::GuardNotify([fn = std::move(fn)](const uint256& poll_txid) { fn(poll_txid.ToString()); })));
+            interfaces::ForwardNotify([fn = std::move(fn)](const uint256& poll_txid) { fn(poll_txid.ToString()); })));
+    }
+
+    void bindConnectionScope(std::shared_ptr<ConnectionScope> scope) override
+    {
+        m_connection_closed = ConnectionClosedCheck(std::move(scope));
     }
 
 private:
@@ -952,6 +1139,11 @@ private:
         res.error = std::move(error);
         return res;
     }
+
+    //! Whether the IPC connection this is served on has closed
+    //! (bindConnectionScope), asked as the IPC capability is read. Empty in
+    //! process, where there is no connection.
+    std::function<bool()> m_connection_closed{};
 };
 
 //! Maps a core BeaconError to the interface BeaconStatus. Ported verbatim from
@@ -970,6 +1162,8 @@ BeaconStatus MapBeaconError(const GRC::BeaconError error)
         case GRC::BeaconError::V14_NOT_ENABLED:    return BeaconStatus::ERROR_TX_FAILED;
         case GRC::BeaconError::WALLET_LOCKED:      return BeaconStatus::ERROR_WALLET_LOCKED;
         case GRC::BeaconError::ALEADY_IN_MEMPOOL:  return BeaconStatus::ALREADY_IN_MEMPOOL;
+        // The status the snapshot itself reports while out of sync (DeriveBeacon).
+        case GRC::BeaconError::OUT_OF_SYNC:        return BeaconStatus::UNKNOWN;
     }
 
     assert(false); // unreachable: every BeaconError enumerator is handled above
@@ -1271,15 +1465,40 @@ public:
         return false;
     }
 
+    // The beacon methods below sign or make the beacon key under the client's
+    // Contract capability, and nothing may escape to the caller (the GUI
+    // thread, in the single-process build).
     BeaconAdvertiseResult advertiseBeacon() override
     {
-        const GRC::ResearcherPtr researcher = GRC::Researcher::Get();
-        const GRC::AdvertiseBeaconResult result = researcher->AdvertiseBeacon();
+        return RunUnderIpcCapability(m_wallet, m_connection_closed, CapabilityKind::Contract, [&]() -> BeaconAdvertiseResult {
+            try {
+                const GRC::ResearcherPtr researcher = GRC::Researcher::Get();
+                const GRC::AdvertiseBeaconResult result =
+                    researcher->AdvertiseBeacon(/*force=*/false, /*renewal_access=*/nullptr);
 
-        return {MapBeaconError(result.Error())};
+                return {MapBeaconError(result.Error())};
+            } catch (const std::exception& e) {
+                LogPrintf("ERROR: beacon advertisement: %s", e.what());
+                return {BeaconStatus::ERROR_TX_FAILED};
+            }
+        });
     }
 
     std::string generateBeaconKeyForV3() override
+    {
+        return RunUnderIpcCapability(m_wallet, m_connection_closed, CapabilityKind::Contract, [&] {
+            try {
+                return GenerateBeaconKeyForV3UnderScope();
+            } catch (const std::exception& e) {
+                LogPrintf("ERROR: beacon key generation: %s", e.what());
+                return std::string();
+            }
+        });
+    }
+
+    //! generateBeaconKeyForV3() without its capability scope and exception
+    //! boundary.
+    std::string GenerateBeaconKeyForV3UnderScope()
     {
         const GRC::ResearcherPtr researcher = GRC::Researcher::Get();
         const GRC::CpidOption cpid = researcher->Id().TryCpid();
@@ -1293,7 +1512,10 @@ public:
         // pwalletMain is the node's single wallet (== m_wallet); referencing it
         // directly matches SendBeaconContractV3/GenerateBeaconKey's
         // EXCLUSIVE_LOCKS_REQUIRED(cs_main, pwalletMain->cs_wallet) annotation.
-        // Enforce the single-wallet invariant this relies on.
+        // Enforce the single-wallet invariant this relies on. It holds until
+        // shutdown: the GUI's event loop has ended and the daemon has
+        // disconnected IPC clients before Shutdown() deletes the wallet. Guards
+        // against a change to that order, or a second wallet.
         assert(pwalletMain && pwalletMain == m_wallet);
         LOCK2(cs_main, pwalletMain->cs_wallet);
 
@@ -1307,6 +1529,19 @@ public:
     }
 
     BeaconAdvertiseResult advertiseBeaconV3(const std::string& ownership_proof_xml) override
+    {
+        return RunUnderIpcCapability(m_wallet, m_connection_closed, CapabilityKind::Contract, [&]() -> BeaconAdvertiseResult {
+            try {
+                return AdvertiseBeaconV3UnderScope(ownership_proof_xml);
+            } catch (const std::exception& e) {
+                LogPrintf("ERROR: beacon advertisement: %s", e.what());
+                return {BeaconStatus::ERROR_TX_FAILED};
+            }
+        });
+    }
+
+    //! advertiseBeaconV3() without its capability scope and exception boundary.
+    BeaconAdvertiseResult AdvertiseBeaconV3UnderScope(const std::string& ownership_proof_xml)
     {
         const GRC::ResearcherPtr researcher = GRC::Researcher::Get();
         const GRC::CpidOption cpid = researcher->Id().TryCpid();
@@ -1344,7 +1579,8 @@ public:
 
         // pwalletMain (== the node's single wallet m_wallet) is used to satisfy
         // SendBeaconContractV3's EXCLUSIVE_LOCKS_REQUIRED(pwalletMain->cs_wallet)
-        // annotation; enforce that single-wallet invariant.
+        // annotation; enforce that single-wallet invariant. It holds until
+        // shutdown, as in generateBeaconKeyForV3().
         assert(pwalletMain && pwalletMain == m_wallet);
         LOCK2(cs_main, pwalletMain->cs_wallet);
 
@@ -1378,26 +1614,35 @@ public:
 
     std::unique_ptr<Handler> handleResearcherChanged(ResearcherChangedFn fn) override
     {
-        return MakeSignalHandler(uiInterface.ResearcherChanged_connect(interfaces::GuardNotify(std::move(fn))));
+        return MakeSignalHandler(uiInterface.ResearcherChanged_connect(interfaces::ForwardNotify(std::move(fn))));
     }
 
     std::unique_ptr<Handler> handleBeaconChanged(BeaconChangedFn fn) override
     {
-        return MakeSignalHandler(uiInterface.BeaconChanged_connect(interfaces::GuardNotify(std::move(fn))));
+        return MakeSignalHandler(uiInterface.BeaconChanged_connect(interfaces::ForwardNotify(std::move(fn))));
     }
 
     std::unique_ptr<Handler> handleAccrualChanged(AccrualChangedFn fn) override
     {
-        return MakeSignalHandler(uiInterface.AccrualChangedFromStakeOrMRC_connect(interfaces::GuardNotify(std::move(fn))));
+        return MakeSignalHandler(uiInterface.AccrualChangedFromStakeOrMRC_connect(interfaces::ForwardNotify(std::move(fn))));
     }
 
     std::unique_ptr<Handler> handleBlocksChanged(BlocksChangedFn fn) override
     {
-        return MakeSignalHandler(uiInterface.NotifyBlocksChanged_connect(interfaces::GuardNotify(std::move(fn))));
+        return MakeSignalHandler(uiInterface.NotifyBlocksChanged_connect(interfaces::ForwardNotify(std::move(fn))));
+    }
+
+    void bindConnectionScope(std::shared_ptr<ConnectionScope> scope) override
+    {
+        m_connection_closed = ConnectionClosedCheck(std::move(scope));
     }
 
 private:
     CWallet* m_wallet;
+    //! Whether the IPC connection this is served on has closed
+    //! (bindConnectionScope), asked as the IPC capability is read. Empty in
+    //! process, where there is no connection.
+    std::function<bool()> m_connection_closed{};
 
     //! Build the full snapshot with cs_main held. Shared by snapshot() (blocking)
     //! and trySnapshot() (TRY_LOCK). The whole snapshot is built under one cs_main
@@ -1462,7 +1707,7 @@ private:
 
     //! Ports ResearcherModel::updateBeacon(): derive the beacon status and flatten
     //! the committed active/pending beacons into the snapshot's value fields.
-    void DeriveBeacon(const GRC::Researcher& researcher, ResearcherSnapshot& snap)
+    void DeriveBeacon(const GRC::Researcher& researcher, ResearcherSnapshot& snap) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     {
         const GRC::CpidOption cpid = researcher.Id().TryCpid();
 
@@ -1488,6 +1733,13 @@ private:
         if (auto beacon_option = researcher.TryPendingBeacon()) {
             pending_beacon = std::make_unique<GRC::Beacon>(std::move(*beacon_option));
             beacon_key_present = pending_beacon->WalletHasPrivateKey(m_wallet);
+        } else if (m_wallet) {
+            // Shown as pending while it waits to confirm; the send path still
+            // refuses on the mempool check, not on this.
+            if (auto advertisement = GRC::TryRecentBeaconAdvertisement(*m_wallet, *cpid)) {
+                pending_beacon = std::make_unique<GRC::Beacon>(std::move(*advertisement));
+                beacon_key_present = true;
+            }
         }
 
         BeaconStatus beacon_status;
@@ -1501,6 +1753,18 @@ private:
         }
 
         const int64_t now = GetAdjustedTime();
+
+        // A beacon is pending only once it is on chain. Until a new beacon's
+        // advertisement confirms, say that it is in the mempool, rather than that
+        // there is no beacon or that the expired one needs renewing. An active
+        // beacon keeps its own status.
+        if ((beacon_status == BeaconStatus::ACTIVE || beacon_status == BeaconStatus::NO_BEACON)
+            && !pending_beacon
+            && (!beacon || beacon->Expired(now))
+            && mempool.HasBeaconForCpid(*cpid))
+        {
+            beacon_status = BeaconStatus::ALREADY_IN_MEMPOOL;
+        }
 
         if (beacon_status != BeaconStatus::ACTIVE) {
             // Keep the mapped/derived status.
@@ -1537,11 +1801,12 @@ private:
         snap.beacon_expired = beacon && beacon->Expired(now);
         snap.has_renewable_beacon = beacon && beacon->Renewable(now);
 
-        bool has_pending = false;
-        if (pending) {
-            GRC::PendingBeacon pending_beacon(*pending);
-            has_pending = !pending_beacon.PendingExpired(now);
-        }
+        // Pending until a superblock activates it or sweeps it out as expired,
+        // not merely until its pending age passes: up to that superblock it can
+        // still activate, and the send path refuses a second advertisement for
+        // as long (TryOwnPendingBeacon). Shown any shorter, the wizard would
+        // offer a send that is then refused.
+        const bool has_pending = pending != nullptr;
         snap.has_pending_beacon = has_pending;
 
         if (!has_pending) {
@@ -1560,7 +1825,9 @@ private:
         }
 
         if (pending) {
-            snap.time_to_pending_beacon_expiration = GRC::PendingBeacon::RETENTION_AGE - pending->Age(now);
+            // Zero once the pending age has passed: the next superblock decides.
+            snap.time_to_pending_beacon_expiration =
+                std::max<int64_t>(0, GRC::PendingBeacon::RETENTION_AGE - pending->Age(now));
             snap.beacon_verification_code = pending->GetVerificationCode();
         }
     }
@@ -1678,13 +1945,31 @@ public:
         if (!TryImageFromHex(image_hex, image)) {
             return PSGTSignStatus::NOT_FOUND;
         }
-        // SignAndAdvancePSGT takes cs_main + the wallet lock internally; the GUI
-        // holds the wallet unlocked (WalletModel::UnlockContext) around this.
-        uint256 tx_hash;
-        const PSGTSignStatus status =
-            MapPSGTSignResult(SignAndAdvancePSGT(image, error, &tx_hash));
-        txid = tx_hash.ToString(); // meaningful only for COMPLETED_AND_BROADCAST
-        return status;
+
+        // Signed under the client's SignPSGT capability; the GUI holds an
+        // UnlockContext for it around this call. Nothing may escape to the
+        // caller (the GUI thread, in the single-process build).
+        return RunUnderIpcCapability(m_wallet, m_connection_closed, CapabilityKind::SignPSGT, [&] {
+            // Refused here as well as at each key, so the caller is told why
+            // rather than finding no signature added.
+            if (m_wallet && !m_wallet->CanUseKeys()) {
+                error = SIGN_REFUSED;
+                return PSGTSignStatus::FAILED;
+            }
+
+            try {
+                // SignAndAdvancePSGT takes cs_main + the wallet lock internally.
+                uint256 tx_hash;
+                const PSGTSignStatus status =
+                    MapPSGTSignResult(SignAndAdvancePSGT(image, error, &tx_hash));
+                txid = tx_hash.ToString(); // meaningful only for COMPLETED_AND_BROADCAST
+                return status;
+            } catch (const std::exception& e) {
+                LogPrintf("ERROR: PSGT pool signing: %s", e.what());
+                error = e.what();
+                return PSGTSignStatus::FAILED;
+            }
+        });
     }
 
     bool removePoolEntry(const std::string& image_hex) override
@@ -1812,13 +2097,39 @@ public:
 
     PSGTSignResult signPSGT(const PSGTBytes& bytes) override
     {
+        // Signed under the client's SignPSGT capability; the GUI holds an
+        // UnlockContext for it around this call. Nothing may escape to the
+        // caller (the GUI thread, in the single-process build).
+        return RunUnderIpcCapability(m_wallet, m_connection_closed, CapabilityKind::SignPSGT, [&] {
+            // Refused here as well as at each key, so the caller is told why
+            // rather than handed back a PSGT with nothing signed.
+            if (!m_wallet->CanUseKeys()) {
+                PSGTSignResult res;
+                res.error = SIGN_REFUSED;
+                return res;
+            }
+
+            try {
+                return SignPSGTUnderScope(bytes);
+            } catch (const std::exception& e) {
+                LogPrintf("ERROR: PSGT signing: %s", e.what());
+
+                PSGTSignResult res;
+                res.error = e.what();
+                return res;
+            }
+        });
+    }
+
+    //! signPSGT() without its capability scope, refusal and exception boundary.
+    PSGTSignResult SignPSGTUnderScope(const PSGTBytes& bytes)
+    {
         PSGTSignResult res;
         PartiallySignedTransaction psgt;
         if (!DecodePSGTBytes(psgt, bytes, res.error)) {
             return res; // ok == false
         }
 
-        // The GUI holds the wallet unlocked (UnlockContext) around this call.
         LOCK2(cs_main, m_wallet->cs_wallet);
 
         // Updater: fill non_witness_utxo + redeem_script (mirrors walletprocesspsgt).
@@ -2040,8 +2351,22 @@ public:
         return WITH_LOCK(m_wallet->cs_wallet, return PSGTKeyHeldBy(*m_wallet, arrangement));
     }
 
+    void bindConnectionScope(std::shared_ptr<ConnectionScope> scope) override
+    {
+        m_connection_closed = ConnectionClosedCheck(std::move(scope));
+    }
+
 private:
     CWallet* m_wallet;
+    //! Whether the IPC connection this is served on has closed
+    //! (bindConnectionScope), asked as the IPC capability is read. Empty in
+    //! process, where there is no connection.
+    std::function<bool()> m_connection_closed{};
+
+    //! Why signPSGT() and signPoolEntry() refuse a wallet that cannot use its
+    //! keys on this call.
+    static constexpr const char* SIGN_REFUSED =
+        "The wallet is locked or unlocked for staking only. Enter the wallet passphrase to sign.";
 
     //! Parse a pool image hex into a CScriptID, rejecting anything that is not a
     //! full 20-byte hash. uint160::SetHex() silently maps malformed input to 0, so

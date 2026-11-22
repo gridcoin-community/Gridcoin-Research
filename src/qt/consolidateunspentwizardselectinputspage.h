@@ -80,6 +80,7 @@ private slots:
     void SetOutputWarningStop(InputStatus input_status);
     void modelSelectionChanged();
     void modelLoadingFinished();
+    void modelLoadingFailed(const QString& message);
 };
 
 #endif // BITCOIN_QT_CONSOLIDATEUNSPENTWIZARDSELECTINPUTSPAGE_H

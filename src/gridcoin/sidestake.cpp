@@ -3,6 +3,7 @@
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #include "sidestake.h"
+#include "chain.h"
 #include "node/ui_interface.h"
 #include "univalue.h"
 
@@ -40,7 +41,7 @@ Allocation::Allocation()
     : Fraction()
 {}
 
-Allocation::Allocation(const double& allocation)
+Allocation::Allocation(double allocation)
     : Fraction(static_cast<int64_t>(std::round(allocation * static_cast<double>(10000.0))), static_cast<int64_t>(10000), true)
 {}
 
@@ -48,11 +49,11 @@ Allocation::Allocation(const Fraction& f)
     : Fraction(f)
 {}
 
-Allocation::Allocation(const int64_t& numerator, const int64_t& denominator)
+Allocation::Allocation(int64_t numerator, int64_t denominator)
     : Fraction(numerator, denominator)
 {}
 
-Allocation::Allocation(const int64_t& numerator, const int64_t& denominator, const bool& simplify)
+Allocation::Allocation(int64_t numerator, int64_t denominator, bool simplify)
     : Fraction(numerator, denominator, simplify)
 {}
 
@@ -71,7 +72,7 @@ Allocation Allocation::operator+(const Allocation& rhs) const
     return static_cast<Allocation>(Fraction::operator+(rhs));
 }
 
-Allocation Allocation::operator+(const int64_t& rhs) const
+Allocation Allocation::operator+(int64_t rhs) const
 {
     return static_cast<Allocation>(Fraction::operator+(rhs));
 }
@@ -81,7 +82,7 @@ Allocation Allocation::operator-(const Allocation& rhs) const
     return static_cast<Allocation>(Fraction::operator-(rhs));
 }
 
-Allocation Allocation::operator-(const int64_t& rhs) const
+Allocation Allocation::operator-(int64_t rhs) const
 {
     return static_cast<Allocation>(Fraction::operator-(rhs));
 }
@@ -91,7 +92,7 @@ Allocation Allocation::operator*(const Allocation& rhs) const
     return static_cast<Allocation>(Fraction::operator*(rhs));
 }
 
-Allocation Allocation::operator*(const int64_t& rhs) const
+Allocation Allocation::operator*(int64_t rhs) const
 {
     return static_cast<Allocation>(Fraction::operator*(rhs));
 }
@@ -101,7 +102,7 @@ Allocation Allocation::operator/(const Allocation& rhs) const
     return static_cast<Allocation>(Fraction::operator/(rhs));
 }
 
-Allocation Allocation::operator/(const int64_t& rhs) const
+Allocation Allocation::operator/(int64_t rhs) const
 {
     return static_cast<Allocation>(Fraction::operator/(rhs));
 }
@@ -112,7 +113,7 @@ Allocation& Allocation::operator+=(const Allocation& rhs)
     return *this;
 }
 
-Allocation& Allocation::operator+=(const int64_t& rhs)
+Allocation& Allocation::operator+=(int64_t rhs)
 {
     Fraction::operator+=(rhs);
     return *this;
@@ -124,7 +125,7 @@ Allocation& Allocation::operator-=(const Allocation& rhs)
     return *this;
 }
 
-Allocation& Allocation::operator-=(const int64_t& rhs)
+Allocation& Allocation::operator-=(int64_t rhs)
 {
     Fraction::operator-=(rhs);
     return *this;
@@ -136,7 +137,7 @@ Allocation& Allocation::operator*=(const Allocation& rhs)
     return *this;
 }
 
-Allocation& Allocation::operator*=(const int64_t& rhs)
+Allocation& Allocation::operator*=(int64_t rhs)
 {
     Fraction::operator*=(rhs);
     return *this;
@@ -148,7 +149,7 @@ Allocation& Allocation::operator/=(const Allocation& rhs)
     return *this;
 }
 
-Allocation& Allocation::operator/=(const int64_t& rhs)
+Allocation& Allocation::operator/=(int64_t rhs)
 {
     Fraction::operator/=(rhs);
     return *this;
@@ -184,32 +185,32 @@ bool Allocation::operator>(const Allocation& rhs) const
     return Fraction::operator>(rhs);
 }
 
-bool Allocation::operator==(const int64_t& rhs) const
+bool Allocation::operator==(int64_t rhs) const
 {
     return Fraction::operator==(rhs);
 }
 
-bool Allocation::operator!=(const int64_t& rhs) const
+bool Allocation::operator!=(int64_t rhs) const
 {
     return Fraction::operator!=(rhs);
 }
 
-bool Allocation::operator<=(const int64_t& rhs) const
+bool Allocation::operator<=(int64_t rhs) const
 {
     return Fraction::operator<=(rhs);
 }
 
-bool Allocation::operator>=(const int64_t& rhs) const
+bool Allocation::operator>=(int64_t rhs) const
 {
     return Fraction::operator>=(rhs);
 }
 
-bool Allocation::operator<(const int64_t& rhs) const
+bool Allocation::operator<(int64_t rhs) const
 {
     return Fraction::operator<(rhs);
 }
 
-bool Allocation::operator>(const int64_t& rhs) const
+bool Allocation::operator>(int64_t rhs) const
 {
     return Fraction::operator>(rhs);
 }
@@ -982,6 +983,11 @@ void SideStakeRegistry::Revert(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUI
 
 bool SideStakeRegistry::Validate(const Contract& contract, const CTransaction& tx, int &DoS) const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
+    return ValidateAtHeight(contract, nBestHeight + 1, DoS);
+}
+
+bool SideStakeRegistry::ValidateAtHeight(const Contract& contract, const int height, int& DoS) const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+{
     const auto payload = contract.SharePayloadAs<SideStakePayload>();
 
     if (contract.m_version < 3) {
@@ -998,12 +1004,45 @@ bool SideStakeRegistry::Validate(const Contract& contract, const CTransaction& t
 
     Allocation allocation = payload->m_entry.m_allocation;
 
+    // From version 15 a new mandatory allocation must be positive and in basis points: its reduced denominator
+    // divides 10000, which is what Allocation(double) builds and what the addition fast paths are tuned for. The reduction
+    // is computed from the pair, because the simplified flag is carried as the wire delivered it. Entries accepted
+    // before version 15 are not judged again.
+    if (IsV15Enabled(height) && contract.m_action == ContractAction::ADD) {
+        const Fraction reduced(allocation.GetNumerator(), allocation.GetDenominator(), true);
+
+        if (!reduced.IsPositive() || 10000 % reduced.GetDenominator() != 0) {
+            DoS = 25;
+            error("%s: Mandatory sidestake allocation %s refused: it must be positive and in basis points",
+                  __func__,
+                  reduced.ToString());
+            return false;
+        }
+    }
+
     // Contracts that would result in a total active mandatory sidestake allocation greater than the maximum allowed by consensus
     // protocol must be rejected. Note that this is not a perfect validation, because there could be more than one sidestake
     // contract transaction in the memory pool, and this is using already committed sidestake contracts (i.e. in blocks already
     // accepted) as a basis.
-    if (GetMandatoryAllocationsTotal() + allocation > Params().GetConsensus().MaxMandatorySideStakeTotalAlloc) {
+    //
+    // Before version 15 the contract's allocation is added to the active total whatever the action or destination, so an
+    // ADD that changes a destination's allocation counted the old one too, and a REMOVE that carried its allocation counted
+    // it twice. From version 15 an ADD is judged on the total it would leave, with its destination's current allocation
+    // replaced, and a REMOVE, which cannot raise the total, is not judged on it.
+    const Allocation max_total = Params().GetConsensus().MaxMandatorySideStakeTotalAlloc;
+
+    if (!IsV15Enabled(height)) {
+        if (GetMandatoryAllocationsTotal() + allocation > max_total) {
+            DoS = 25;
+            return false;
+        }
+    } else if (contract.m_action == ContractAction::ADD
+               && GetMandatoryAllocationsTotalExcept(payload->m_entry.m_destination) + allocation > max_total) {
         DoS = 25;
+        error("%s: Mandatory sidestake allocation %s would raise the total above %s",
+              __func__,
+              allocation.ToString(),
+              max_total.ToString());
         return false;
     }
 
@@ -1012,7 +1051,9 @@ bool SideStakeRegistry::Validate(const Contract& contract, const CTransaction& t
 
 bool SideStakeRegistry::BlockValidate(const ContractContext& ctx, int& DoS) const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
-    return (IsV13Enabled(ctx.m_pindex->nHeight) && Validate(ctx.m_contract, ctx.m_tx, DoS));
+    const int height = ctx.m_pindex->nHeight;
+
+    return (IsV13Enabled(height) && ValidateAtHeight(ctx.m_contract, height, DoS));
 }
 
 int SideStakeRegistry::Initialize()
@@ -1032,6 +1073,8 @@ int SideStakeRegistry::Initialize()
 
     // Add the local sidestakes specified in the config file(s) to the local sidestakes map.
     LoadLocalSideStakesFromConfig();
+
+    LogLocalSideStakes();
 
     m_local_entry_already_saved_to_config.store(false, std::memory_order_relaxed);
 
@@ -1261,6 +1304,32 @@ void SideStakeRegistry::LoadLocalSideStakesFromConfig()
     ++m_local_sidestake_revision;
 }
 
+void SideStakeRegistry::LogLocalSideStakes() const
+{
+    std::vector<LocalSideStake_ptr> active;
+
+    {
+        LOCK(cs_lock);
+
+        for (const auto& entry : m_local_sidestake_entries) {
+            if (entry.second->m_status == LocalSideStake::LocalSideStakeStatus::ACTIVE) {
+                active.push_back(entry.second);
+            }
+        }
+    }
+
+    LogPrintf("Local side stakes at start (side staking %s): %u",
+              gArgs.GetBoolArg("-enablesidestaking") ? "enabled" : "disabled",
+              active.size());
+
+    for (const auto& entry : active) {
+        LogPrintf("Local side stake: %s %.4f%% \"%s\"",
+                  EncodeDestination(entry->m_destination),
+                  entry->m_allocation.ToPercent(),
+                  SanitizeString(entry->m_description));
+    }
+}
+
 bool SideStakeRegistry::SaveLocalSideStakesToConfig()
 {
     std::string addresses;
@@ -1328,6 +1397,20 @@ Allocation SideStakeRegistry::GetMandatoryAllocationsTotal() const
 
     for (const auto& entry : sidestakes) {
         allocation_total += entry->GetAllocation();
+    }
+
+    return allocation_total;
+}
+
+Allocation SideStakeRegistry::GetMandatoryAllocationsTotalExcept(const CTxDestination& destination) const
+{
+    std::vector<SideStake_ptr> sidestakes = ActiveSideStakeEntries(SideStake::FilterFlag::MANDATORY, false);
+    Allocation allocation_total;
+
+    for (const auto& entry : sidestakes) {
+        if (entry->GetDestination() != destination) {
+            allocation_total += entry->GetAllocation();
+        }
     }
 
     return allocation_total;

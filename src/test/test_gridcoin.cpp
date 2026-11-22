@@ -18,6 +18,7 @@
 #include "wallet/db.h"
 #include "random.h"
 #include "wallet/wallet.h"
+#include "util/tls_libraries.h"
 
 #include <cerrno>
 #include <cstdio>
@@ -108,13 +109,24 @@ static void ReportSetupThrow()
 }
 
 struct TestingSetup {
+    //! First, so that it is built before anything here can reach OpenSSL or
+    //! libcurl, as in the programs' main().
+    const util::TlsLibrariesScope m_tls_libraries;
+
+    //! The suite's data directory. It has to exist: GetDataDir() returns an
+    //! empty path for a -datadir that is not a directory, so everything placed
+    //! under it -- banlist.dat, which BanMan writes when it is destroyed --
+    //! landed in whatever directory the binary was run from.
+    fs::path m_path_root;
+
     TestingSetup() {
         try {
             g_setup_step = "SetupEnvironment()";
             SetupEnvironment();
 
             g_setup_step = "fs::temp_directory_path()";
-            fs::path m_path_root = fs::temp_directory_path() / "test_common_" PACKAGE_NAME / InsecureRand256().ToString();
+            m_path_root = fs::temp_directory_path() / "test_common_" PACKAGE_NAME / InsecureRand256().ToString();
+            fs::create_directories(m_path_root);
             fUseFastIndex = true; // Don't verify block hashes when loading
             g_setup_step = "gArgs -datadir / SelectParams";
             gArgs.ForceSetArg("-datadir", m_path_root.string());
@@ -146,6 +158,12 @@ struct TestingSetup {
         assert(leveldb::DB::Open(db_options, "", &txdb).ok());
         noui_connect();
         bitdb.MakeMock();
+        // No background wallet flush in the unit tests. The flush thread runs
+        // until a shutdown is requested, which a test run never does, and keeps
+        // a reference to this wallet's file name. Deleting the wallet at teardown
+        // while the thread flushes, two seconds after any wallet's last write,
+        // is a use-after-free that ThreadSanitizer reports. No test relies on it.
+        gArgs.ForceSetArg("-flushwallet", "0");
         bool fFirstRun;
         pwalletMain = new CWallet("wallet.dat");
         pwalletMain->LoadWallet(fFirstRun);
@@ -191,6 +209,10 @@ struct TestingSetup {
         txdb_env = nullptr;
         g_mock_deterministic_tests = false;
         ECC_Stop();
+        // The non-throwing overload: a destructor must not throw, and a
+        // directory left behind is not worth failing a run that passed.
+        boost::system::error_code ec;
+        fs::remove_all(m_path_root, ec);
     }
 };
 

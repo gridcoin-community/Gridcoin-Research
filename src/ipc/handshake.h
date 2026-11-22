@@ -8,10 +8,14 @@
 #include "fs.h"
 #include "interfaces/init.h"
 
+#include <chrono>
 #include <cstdint>
 #include <optional>
 #include <string>
 #include <vector>
+#ifndef WIN32
+#include <sys/types.h> // gid_t
+#endif
 
 namespace ipc {
 
@@ -96,13 +100,152 @@ namespace ipc {
 //! back client-side as a std::runtime_error thrown out of the send, vote or
 //! claim path, where nothing catches it. The minor turns that into the "Update
 //! the node" hard fail at connect instead.
-constexpr uint32_t IPC_SCHEMA_MAJOR = 4;
-constexpr uint32_t IPC_SCHEMA_MINOR = 1;
-constexpr uint32_t IPC_PROTOCOL_VERSION = 1;
+//!
+//! Minor 2 (under major 4): Init gained `makeGuiState @15` and its interface,
+//! GuiState (gui_state.capnp), through which the node pushes the state the GUI
+//! shows that needs cs_main, so the GUI no longer takes cs_main to refresh it;
+//! and MRCSnapshot gained `matureBalance @17` (mrc.capnp), so the MRC page needs
+//! no balance read of its own; and MRC gained `submitConfirmed @5`, which carries
+//! the fee and net payout the user confirmed, with MRCSubmitResult gaining
+//! `termsChanged @4`, `freshFee @5` and `freshReward @6`, so a claim whose terms
+//! moved is refused instead of broadcast. Additive, but each part fails against
+//! an older node: makeGuiState and submitConfirmed are methods it does not serve,
+//! so a GUI that calls either gets the UNIMPLEMENTED reply back as a
+//! std::runtime_error; and its MRCSnapshot arrives with the mature balance 0, so
+//! a page that reads it reports every wallet short of the 1 GRC mature balance a
+//! claim needs. The minor turns all of it into the "Update the node" hard fail at
+//! connect.
+//!
+//! Also in minor 2: ResearcherSnapshot gained `cpidPresent @36` and
+//! `magnitudePresent @37` (researcher.capnp), which carry `has_cpid` and
+//! `has_magnitude`. The released `hasCpid @1` and `hasMagnitude @7` sit beside
+//! fields named `cpid` and `magnitude`, so mpgen read each as that field's
+//! presence companion and mapped no member to it: neither flag ever crossed, and
+//! the GUI's hasMagnitude() was always false. Additive; an older node leaves
+//! both false, which is what it always sent, and the minor already turns the
+//! mismatch into the "Update the node" hard fail.
+//!
+//! Major 5: every method that uses the wallet's keys for the GUI runs under the
+//! capability the GUI holds, one operation kind at a time. The additions:
+//! - Wallet gained `beginElevation @37` and `endElevation @38` (wallet.capnp).
+//!   `elevateWallet @36` stays in the schema, because a released ordinal cannot
+//!   be dropped, but it always returns false.
+//! - RpcConsoleResult gained `walletUnlockNeeded @2` (node.capnp), which the
+//!   console reads to ask for the passphrase and run a refused command again.
+//! - SettingChangeResult gained `elevationRequired @7` (node.capnp), and
+//!   SideStakeEditStatus, which crosses as its Int32 value (sidestake.capnp),
+//!   gained ELEVATION_REQUIRED.
+//! - Wallet gained `getTransactionFeeRate @39` (wallet.capnp), which the send
+//!   confirmation reads.
+//! - Node gained `executeRpcConsoleSecretCommand @43` (node.capnp), which
+//!   carries the console's wallet passphrases as SecureString.
+//! - Node gained `getCorePaths @44` (node.capnp) and the CorePaths struct
+//!   (datadir, debug log, config, settings and wallet file paths as the core
+//!   sees them), which the GUI's "Open debug log" and "Open config" read.
+//! - Init gained `holdsAttachSlot @16` (init.capnp), which tells a second GUI
+//!   that another is attached.
+//! - Wallet gained `beginBackup @40` (wallet.capnp), which returns a FileSource
+//!   streaming a snapshot the core makes in its own transfer directory.
+//!   `backupWallet @20` and `backupConfigFile @21` stay in the schema, but they
+//!   always return false: the core no longer writes to a path the client names.
+//! - file_transfer.capnp is new: the FileSource and FileSink interfaces and
+//!   their structs.
+//! - Wallet gained `beginConsoleDownload @41` and `beginConsoleUpload @42`
+//!   (wallet.capnp), which run the console's file commands through the
+//!   transfer channel, under a FileTransfer capability when the wallet is
+//!   encrypted and not fully unlocked: the first returns a
+//!   FileSource of what dumpwallet or dumpcontracts writes, the second a
+//!   FileSink for what importwallet or parseaccrualsnapshotfile reads. The
+//!   core puts its own value where the command takes its file.
+//! - Wallet gained `getPreEncryptionBackups @43` (wallet.capnp), the paths of
+//!   the core's automatic wallet backups made before an encryptWallet() on the
+//!   same interface, which the GUI names after the encryption. A method of its
+//!   own: libmultiprocess maps `result` only as the last result field, so the
+//!   list could not follow it in encryptWallet's results, and putting it first
+//!   would renumber `result`.
+//!
+//! The new methods alone would be additive, which is why the reason for the
+//! major is the other direction. A GUI and a node of different majors disagree
+//! on how an operation is authorised, so each such action would fail with a
+//! message the user cannot act on. The major turns both pairings into the "use
+//! matching builds" refusal at connect.
+//!
+//! Major 5 carries everything major 4 had through minor 2 (above), and the
+//! minor restarts at 0.
+//!
+//! Protocol 2: on Windows the GUI identifies itself to the node before it
+//! authenticates. It calls Init.beginAttest (@17), writes the nonce into the
+//! one-shot named pipe that names, and calls Init.finishAttest (@18)
+//! (ipc/win_attest.h), and the node refuses authenticate() on a connection whose
+//! peer that check has not admitted. The order is what changed: a GUI of
+//! protocol 1 presents its cookie first and is refused, and a GUI of protocol 2
+//! meets UNIMPLEMENTED from an older node's beginAttest and stops before it
+//! presents its cookie. On POSIX the order is unchanged.
+constexpr uint32_t IPC_SCHEMA_MAJOR = 5;
+constexpr uint32_t IPC_SCHEMA_MINOR = 0;
+constexpr uint32_t IPC_PROTOCOL_VERSION = 2;
 
 //! Domain-separation tag hashed into the node identity token. Bump the suffix if
 //! the token *algorithm* ever changes (independent of the capnp schema version).
 constexpr char IDENTITY_TOKEN_DOMAIN[] = "gridcoin-node-identity-v1";
+
+//! How long ConnectToNode waits for the core to answer, from the transport's
+//! bootstrap round trip to the end of the client handshake, before it shuts the
+//! connection down and reports a timeout.
+constexpr std::chrono::seconds IPC_CLIENT_HANDSHAKE_TIMEOUT{30};
+//! How often the GUI tries again while it waits for a core that is starting.
+constexpr std::chrono::seconds IPC_CONNECT_RETRY_INTERVAL{2};
+//! How long, from its first attempt, the GUI waits for a core that is starting.
+constexpr std::chrono::seconds IPC_CONNECT_WAIT_MAX{300};
+//! How long, from its first attempt, the GUI tries again on a cookie it may not open before it says
+//! so: the core replacing or deleting the file can deny an open for a moment.
+constexpr std::chrono::seconds IPC_COOKIE_DENIED_WAIT{10};
+
+//! Why ConnectToNode did not connect.
+enum class ConnectFailureKind {
+    NoCookie,        //!< No ipc.cookie: no core serves the directory, or it is still starting.
+    CookieDenied,    //!< ipc.cookie is there and this account may not read it.
+    NotListening,    //!< Nothing listens on node.sock: no socket file, or one a stopped core left.
+    PeerRefused,     //!< The listening process failed the client peer check or, on Windows, the identity check.
+    AlreadyAttached, //!< Another GUI holds the core's attach slot.
+    Timeout,         //!< The core did not finish the handshake within the timeout.
+    Handshake,       //!< Any other connect or handshake failure.
+};
+
+//! A failed connect: its kind, and a message to log and show.
+struct ConnectFailure {
+    ConnectFailureKind kind{ConnectFailureKind::Handshake};
+    std::string message;
+};
+
+//! What the GUI does after a failed connect.
+enum class ConnectStep {
+    Retry,  //!< Try again after IPC_CONNECT_RETRY_INTERVAL.
+    GiveUp, //!< Report the failure.
+};
+
+//! Retry NoCookie and NotListening while elapsed < IPC_CONNECT_WAIT_MAX: those two are how a
+//! core that is still starting looks. Retry CookieDenied while elapsed < IPC_COOKIE_DENIED_WAIT,
+//! for a cookie the core is replacing or deleting. Every other kind is a core that answered, or
+//! one that cannot be reached, and waiting does not change it. \p elapsed counts from the start of
+//! what is being timed: for the denied cookie, ConnectRetry gives it the time since the first denial.
+ConnectStep NextConnectStep(const ConnectFailure& f, std::chrono::seconds elapsed);
+
+//! The retry decision of one wait for the core, across its attempts. It is NextConnectStep, except
+//! that the IPC_COOKIE_DENIED_WAIT of a denied cookie counts from the first denial of an unbroken
+//! run of denials (a failure of another kind ends the run), not from the first attempt, so a core
+//! that was slow to start does not leave a momentary denial with no time to clear. The cap of
+//! IPC_CONNECT_WAIT_MAX on the whole wait holds for every kind.
+class ConnectRetry
+{
+public:
+    //! \p elapsed counts from the first attempt.
+    ConnectStep Next(const ConnectFailure& f, std::chrono::seconds elapsed);
+
+private:
+    //! When, on that clock, the current run of denials began.
+    std::optional<std::chrono::seconds> m_denied_since;
+};
 
 //! This process's build fingerprint (git commit, build time, schema/protocol
 //! versions) for the handshake build-info exchange.
@@ -113,19 +256,47 @@ interfaces::BuildInfo GetLocalBuildInfo();
 bool ConstantTimeEqual(const std::string& a, const std::string& b);
 
 //! Node side: write a fresh 256-bit cookie to <dir>/ipc.cookie (0600, atomic
-//! rename) and return its hex. Called once per node startup.
-std::string WriteCookie(const fs::path& dir);
+//! rename) and return its hex. Called once per node startup. On POSIX, with a
+//! \p group the file is instead 0640 in that group, set through the temp file's
+//! fd before it is renamed into place. On Windows the file is created with
+//! ipc::win::EndpointAclSpec(Cookie, ...) for this account and, when given, the
+//! group whose SID string is \p group_sid (ipc::win::AttachGroupSid()), and that
+//! list is applied again and read back before the rename.
+#ifndef WIN32
+std::string WriteCookie(const fs::path& dir, std::optional<gid_t> group = std::nullopt);
+#else
+std::string WriteCookie(const fs::path& dir, const std::optional<std::string>& group_sid = std::nullopt);
+#endif
 
-//! GUI side: read the hex cookie from <dir>/ipc.cookie. Returns nullopt when the
-//! file is absent (the node is not running -- do not dial).
-std::optional<std::string> ReadCookie(const fs::path& dir);
+//! How reading <dir>/ipc.cookie went.
+enum class CookieStatus {
+    Read,       //!< The file was read.
+    Missing,    //!< There is no such file (or no such directory).
+    Unreadable, //!< The file cannot be opened: access denied, or any other open error.
+};
+
+//! What ReadCookie found: \p cookie is set only when \p status is Read; \p error is the system's
+//! reason, in ASCII, when it is Unreadable.
+struct CookieRead {
+    CookieStatus status{CookieStatus::Missing};
+    std::optional<std::string> cookie;
+    std::string error;
+};
+
+//! GUI side: read the hex cookie from <dir>/ipc.cookie. Missing means no -multiprocess node is
+//! serving <dir> (none is running with -multiprocess, one is still starting, or the last one shut
+//! down cleanly) -- do not dial. Unreadable means a file is there that this account may not open
+//! (an account just added to the attach group has not signed in again, for one): a node is
+//! probably serving <dir>. A denial can also last a moment while the node replaces or deletes the
+//! file.
+CookieRead ReadCookie(const fs::path& dir);
 
 //! Node side: remove <dir>/ipc.cookie at shutdown, mirroring upstream's
 //! DeleteAuthCookie(). The cookie is a live 256-bit credential for as long as the
-//! file exists, and it outlived the process that minted it: a stale file is
-//! readable by anything that can read the datadir, and its presence is also what
-//! ReadCookie() uses to mean "the node is running", so a GUI dials a socket nobody
-//! is listening on and reports a connection failure instead of "not running".
+//! file exists, and it outlived the process that minted it: a stale file's
+//! presence is what ConnectToNode checks before dialling, so a GUI dials a socket
+//! nobody is listening on and reports a connection failure instead of asking
+//! whether the daemon is running with -multiprocess.
 //!
 //! Never throws: shutdown is the wrong place to raise, and the file legitimately
 //! may not be there (an unclean previous exit, or a user who removed it by hand).
@@ -148,6 +319,8 @@ enum class SoftWarn {
 //! valid and \p soft carries any non-fatal findings.
 struct HandshakeResult {
     bool ok = false;
+    //! The core is compatible, but another GUI holds its attach slot (ok is false).
+    bool already_attached = false;
     std::string error;
     interfaces::BuildInfo remote_build;
     interfaces::NodeIdentity remote_ident;
@@ -156,12 +329,16 @@ struct HandshakeResult {
 
 //! GUI side: the authentication + compatibility half of the connect handshake
 //! (design section 4.3). Against a freshly-connected remote Init, calls
-//! authenticate(cookie), getBuildInfo() and getIdentity() -- all inside one
-//! try/catch, so an IPC throw (daemon vanished mid-handshake) becomes a clean
-//! ok==false rather than an escaping exception. Hard-fail (ok==false) on: wrong
-//! cookie, schema_major mismatch, protocol_version mismatch, GUI schema_minor >
-//! node's, and a network mismatch vs \p local_network. Soft findings (git_commit
-//! mismatch, GUI older minor) are returned in \p soft, not failures. The identity
+//! authenticate(cookie), getBuildInfo(), getIdentity() and holdsAttachSlot() --
+//! all inside one try/catch, so an IPC throw (daemon vanished mid-handshake)
+//! becomes a clean ok==false rather than an escaping exception. Hard-fail
+//! (ok==false) on: wrong cookie, schema_major mismatch, protocol_version
+//! mismatch, GUI schema_minor > node's, a network mismatch vs \p local_network,
+//! and, after all of those, another GUI holding the core's attach slot
+//! (already_attached). The slot is asked for last because a core of another
+//! schema may not serve holdsAttachSlot; its mismatch is reported as itself.
+//! Soft findings (git_commit mismatch, GUI older minor) are returned in \p soft,
+//! not failures. The identity
 //! token is returned in \p remote_ident for the caller's GUI-side binding step
 //! (CheckIdentityBinding) -- this function does not judge it.
 //! \p local defaults to this build's GetLocalBuildInfo(); it is a parameter only

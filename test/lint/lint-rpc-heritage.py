@@ -177,13 +177,13 @@ def _reachable_bodies(impl):
 
 
 # vRPCCommands[] row:
-#   { "name", &impl, cat_xxx, &help_helpman, heritage_<bucket>, "<fp>" }
+#   { "name", &impl, cat_xxx, &help_helpman, heritage_<bucket>, "<fp>", access_<class> }
 # The heritage classification + fingerprint baseline are read straight off this row
 # (issue #3069) -- the lint reads the same table the dispatcher does; no C++-body or
 # comment parsing for the classification. The CRPCCommand constructor makes all fields
 # mandatory, so a new row cannot omit the bucket (classify-at-birth).
 ROW_RE = re.compile(r'\{\s*"([a-z0-9]+)"\s*,\s*&(\w+)\s*,\s*\w+\s*,\s*&(\w+)\s*,'
-                    r'\s*heritage_(\w+)\s*,\s*"([0-9a-f]{12}|manual|)"\s*\}')
+                    r'\s*heritage_(\w+)\s*,\s*"([0-9a-f]{12}|manual|)"\s*,\s*access_\w+\s*\}')
 ENUM_LABEL = {"pure_upstream": "pure-upstream", "mixed": "mixed",
               "removed_upstream": "removed-upstream", "pure_gridcoin": "pure-gridcoin"}
 

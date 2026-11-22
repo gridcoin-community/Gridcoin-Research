@@ -26,7 +26,7 @@ constexpr int REFERENCE_DPI = 96;
 //! causes rendering calculated from a reference DPI to appear smaller on
 //! Macs which creates legibility and layout issues.
 //!
-#ifdef Q_OS_MAC
+#ifdef Q_OS_MACOS
 constexpr int OS_BASE_DPI = 72;
 #else
 constexpr int OS_BASE_DPI = 96;

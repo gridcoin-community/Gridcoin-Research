@@ -51,8 +51,8 @@ private:
     Ui::AboutDialog *ui;
     //! Node settings/query surface; set in setModel(). Captured by value into the
     //! background checkForLatestUpdate() worker, so it is NOT process-lifetime:
-    //! StartGridcoinQt owns the Node and destroys it at teardown, and joins the
-    //! global QThreadPool immediately before doing so -- THAT is what keeps the
+    //! StartGridcoinQt owns the Node and destroys it at teardown, and waits for the
+    //! global QThreadPool's tasks immediately before doing so -- THAT is what keeps the
     //! captured pointer valid for as long as the worker can dereference it.
     //! ~AboutDialog deliberately does NOT join (see the comment there): the worker
     //! never touches the dialog, so closing it is not the lifetime hazard, and

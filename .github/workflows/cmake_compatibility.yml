@@ -6,8 +6,7 @@ on:
     branches:
       - '**'
     tags:
-      - "v*"
-      - "5.*"
+      - "[0-9]*"
   pull_request:
     branches:
       - '**'
@@ -25,10 +24,45 @@ env:
   CCACHE_DIR: /home/runner/.ccache
 
 jobs:
+  # Skips the rest of this run when it would repeat a pull request run on the
+  # identical tree. contrib/devtools/ci-gate.py holds the rule. Every other job
+  # in this workflow needs this one and runs unless it answers 'false', so a
+  # gate that fails still gives a full run.
+  ci-gate:
+    name: CI Gate
+    runs-on: ubuntu-24.04
+    permissions:
+      actions: read
+      contents: read
+      pull-requests: read
+    outputs:
+      run: ${{ steps.gate.outputs.run }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          sparse-checkout: contrib/devtools/ci-gate.py
+          sparse-checkout-cone-mode: false
+      - name: Decide
+        id: gate
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CI_GATE_RECORD: ${{ runner.temp }}/ci-tested-tree.txt
+        run: python3 -I contrib/devtools/ci-gate.py
+      - name: Record the tested tree
+        if: steps.gate.outputs.tested-tree != ''
+        uses: actions/upload-artifact@v5
+        with:
+          name: ci-tested-tree-${{ steps.gate.outputs.tested-tree }}
+          path: ${{ runner.temp }}/ci-tested-tree.txt
+          retention-days: 30
+          overwrite: true
+
   # ----------------------------------------------------------------------
   # JOB 1: Linux Native
   # ----------------------------------------------------------------------
   linux-native:
+    needs: ci-gate
+    if: ${{ !cancelled() && needs.ci-gate.outputs.run != 'false' }}
     name: Linux Native (System Qt6)
     runs-on: ubuntu-24.04
     steps:
@@ -72,8 +106,11 @@ jobs:
             -DCMAKE_C_COMPILER_LAUNCHER=ccache \
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
 
+      # check-build-warnings.sh fails the step on any compiler or linker warning in
+      # the tree's own build. Every build of the tree in these workflows goes
+      # through it.
       - name: Build
-        run: cmake --build build_native
+        run: ./contrib/devtools/check-build-warnings.sh -- cmake --build build_native
 
       - name: Test
         run: ctest --test-dir build_native --output-on-failure
@@ -82,6 +119,8 @@ jobs:
   # JOB 2: Linux ARM64
   # -------------------------------------------------------------------------
   linux-arm64-system:
+    needs: ci-gate
+    if: ${{ !cancelled() && needs.ci-gate.outputs.run != 'false' }}
     name: Linux ARM64 (System Qt6)
     runs-on: ubuntu-24.04
     steps:
@@ -138,10 +177,10 @@ jobs:
           sudo apt-get update
           sudo apt-get -f install -y
           sudo apt-get install -y --no-install-recommends \
-            build-essential cmake ninja-build zipcmp zipmerge ziptool qemu-user-static \
+            build-essential cmake ninja-build qemu-user-static \
             g++-aarch64-linux-gnu qt6-base-dev:arm64 qt6-svg-dev:arm64 \
             qt6-l10n-tools qt6-tools-dev:arm64 qt6-tools-dev-tools:arm64 \
-            libssl-dev:arm64 libzip-dev:arm64 \
+            libssl-dev:arm64 zlib1g-dev:arm64 \
             libcurl4-openssl-dev:arm64 libboost-system-dev:arm64 libboost-filesystem-dev:arm64 \
             libboost-thread-dev:arm64 libboost-iostreams-dev:arm64 libboost-program-options-dev:arm64 \
             libboost-chrono-dev:arm64 libboost-test-dev:arm64 \
@@ -189,7 +228,7 @@ jobs:
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
 
       - name: Build
-        run: cmake --build build_arm64
+        run: ./contrib/devtools/check-build-warnings.sh -- cmake --build build_arm64
 
       - name: Test (QEMU Emulation)
         env:
@@ -200,6 +239,8 @@ jobs:
   # JOB 3: Linux ARMhf
   # -------------------------------------------------------------------------
   linux-armhf-system:
+    needs: ci-gate
+    if: ${{ !cancelled() && needs.ci-gate.outputs.run != 'false' }}
     name: Linux ARMhf (System Qt6)
     runs-on: ubuntu-24.04
     steps:
@@ -240,10 +281,10 @@ jobs:
           sudo apt-get update
           sudo apt-get -f install -y
           sudo apt-get install -y --no-install-recommends \
-            build-essential cmake ninja-build zipcmp zipmerge ziptool qemu-user-static \
+            build-essential cmake ninja-build qemu-user-static \
             g++-arm-linux-gnueabihf qt6-base-dev:armhf qt6-svg-dev:armhf \
             qt6-l10n-tools:armhf qt6-tools-dev:armhf qt6-tools-dev-tools:armhf \
-            libssl-dev:armhf libzip-dev:armhf \
+            libssl-dev:armhf zlib1g-dev:armhf \
             libcurl4-openssl-dev:armhf libboost-system-dev:armhf libboost-filesystem-dev:armhf \
             libboost-thread-dev:armhf libboost-iostreams-dev:armhf libboost-program-options-dev:armhf \
             libboost-chrono-dev:armhf libboost-test-dev:armhf \
@@ -291,7 +332,7 @@ jobs:
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
 
       - name: Build
-        run: cmake --build build_armhf
+        run: ./contrib/devtools/check-build-warnings.sh -- cmake --build build_armhf
 
       - name: Test (QEMU Emulation)
         env:

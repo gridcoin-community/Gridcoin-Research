@@ -17,6 +17,7 @@
 // (upstream: util/ui_change_type.h) so interface headers stop pulling the
 // signal hub transitively.
 #include "node/ui_interface.h"
+#include "support/allocators/secure.h" // For SecureString.
 #include "uint256.h"
 
 #include <cstdint>
@@ -28,6 +29,8 @@
 #include <vector>
 
 namespace interfaces {
+
+class ConnectionScope;
 
 //! A banned peer, as a value row for the GUI ban table.
 struct BannedNode
@@ -62,6 +65,19 @@ struct PeerInfo
     double min_ping = 0;
 };
 
+//! The files and directories the core uses, as the core sees them. In the
+//! split build the core can run under another account, so the GUI's own idea of
+//! these paths is not the core's. A path is empty when the core has no such file
+//! (no wallet loaded, no settings file).
+struct CorePaths
+{
+    std::string datadir;
+    std::string debug_log;
+    std::string config_file;
+    std::string settings_file;
+    std::string wallet_file;
+};
+
 //! Result of running one RPC-console command. The whole UniValue round trip
 //! (arg conversion, dispatch, result/error formatting) happens node-side; only
 //! the already-formatted text crosses the boundary.
@@ -72,6 +88,11 @@ struct RpcConsoleResult
     //! Formatted reply text on success, or the formatted error message on
     //! failure ("<message> (code <n>)", or raw JSON / "Error: <what>").
     std::string output;
+    //! The command was refused because it needs the wallet's keys
+    //! (RPC_WALLET_UNLOCK_NEEDED). On a wallet unlocked for staking only, the
+    //! console can ask for the passphrase, begin an RpcRequest capability and
+    //! run the same command again.
+    bool wallet_unlock_needed = false;
 };
 
 //! Result of Node::changeSettings, mirroring the changesettings RPC. `ok` false
@@ -84,6 +105,10 @@ struct SettingChangeResult
     bool ok = false;
     bool invalid_input = false;
     std::string error;
+    //! Nothing was changed because a setting in the batch needs the wallet
+    //! passphrase (invalid_input is set too). The GUI can ask for it, begin a
+    //! Settings capability with it and send the same batch again.
+    bool elevation_required = false;
     //! At least one changed setting does not take effect until restart.
     bool requires_restart = false;
     //! name=value strings, categorized like the changesettings RPC.
@@ -227,6 +252,10 @@ public:
     //! has to ask for it directly rather than infer it.
     virtual bool isMainNet() = 0;
 
+    //! The core's data directory, debug log, config file, settings file and
+    //! wallet file, as paths on the core's side.
+    virtual CorePaths getCorePaths() = 0;
+
     //! Request that the node begin shutting down (the GUI->core direction, e.g.
     //! a Windows WM_QUERYENDSESSION). Wraps the core StartShutdown(); in the
     //! monolith this brings the whole app down, matching the prior direct call.
@@ -276,9 +305,21 @@ public:
     //! Run one RPC-console command: convert the positional string args per the
     //! command's conversion table, dispatch it, and format the reply/error. All
     //! UniValue handling stays node-side. Blocks while the command runs, so the
-    //! GUI calls it from its off-thread RPC executor.
+    //! GUI calls it from its off-thread RPC executor. The methods with passphrase
+    //! parameters (RpcConsolePassphraseIndexes) are refused before anything runs:
+    //! ok = false, output "Error: <method> takes a passphrase; the console sends it
+    //! separately". They go to executeRpcConsoleSecretCommand.
     virtual RpcConsoleResult executeRpcConsoleCommand(const std::string& method,
                                                       const std::vector<std::string>& args) = 0;
+
+    //! As executeRpcConsoleCommand, for the methods with passphrase parameters
+    //! (RpcConsolePassphraseIndexes). The passphrases cross as SecureString; args
+    //! are the other parameters in order. Any other method: ok = false, output
+    //! "Error: <method> takes no passphrase". wallet_unlock_needed is always
+    //! false: a passphrase method is not run again under a capability.
+    virtual RpcConsoleResult executeRpcConsoleSecretCommand(const std::string& method,
+                                                            const std::vector<SecureString>& passphrases,
+                                                            const std::vector<std::string>& args) = 0;
 
     //! The list of RPC command names, for the console's autocomplete.
     virtual std::vector<std::string> listRpcCommands() = 0;
@@ -359,16 +400,33 @@ public:
     using NotifyScraperEventFn =
         std::function<void(const scrapereventtypes& event_type, ChangeType status, const std::string& message)>;
     virtual std::unique_ptr<Handler> handleNotifyScraperEvent(NotifyScraperEventFn fn) = 0;
+
+    //! LOCAL ONLY: not served over capnp (no ordinal), so no peer can call it,
+    //! and the GUI's proxy keeps this default, which does nothing. Binds this to
+    //! the IPC connection it is served on, so what it runs under the client's
+    //! capability reads the IPC capability for that connection: none once the
+    //! connection has closed (see Wallet::bindConnectionScope). The serving Init
+    //! calls it once, before handing it out.
+    virtual void bindConnectionScope(std::shared_ptr<ConnectionScope> /*scope*/) {}
 };
 
 //! Return an in-process Node interface implementation.
 std::unique_ptr<Node> MakeNode();
 
+//! The positions of a console command's passphrase parameters, counted from 0
+//! after the method name, in parameter order: walletpassphrase {0},
+//! walletpassphrasechange {0, 1}, encryptwallet {0}. These are the methods
+//! Node::executeRpcConsoleSecretCommand runs and Node::executeRpcConsoleCommand
+//! refuses. nullptr for every other method. It reads the table in
+//! rpc/passphrase_params.cpp (PassphraseParamIndexes) in the calling process,
+//! with no call to the node.
+const std::vector<int>* RpcConsolePassphraseIndexes(const std::string& method);
 
 // Marshalability pins (interfaces/marshal.h): each DTO above must stay a
 // copyable value type the node side can fill and ship across the boundary.
 INTERFACES_ASSERT_MARSHALABLE(BannedNode);
 INTERFACES_ASSERT_MARSHALABLE(PeerInfo);
+INTERFACES_ASSERT_MARSHALABLE(CorePaths);
 INTERFACES_ASSERT_MARSHALABLE(RpcConsoleResult);
 INTERFACES_ASSERT_MARSHALABLE(SettingChangeResult);
 INTERFACES_ASSERT_MARSHALABLE(ScraperConvergenceSnapshot);

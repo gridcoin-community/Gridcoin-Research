@@ -284,7 +284,7 @@ void MultisignPSGTDialog::on_signButton_clicked()
     if (!syncWorkingFromInput())
         return;
 
-    WalletModel::UnlockContext ctx(model->requestUnlock());
+    WalletModel::UnlockContext ctx(model->requestUnlock(CapabilityKind::SignPSGT));
     if (!ctx.isValid())
     {
         setStatus(tr("Wallet unlock was cancelled."), true);

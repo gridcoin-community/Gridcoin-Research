@@ -12,6 +12,7 @@ Developer Notes
       - [Generating Documentation](#generating-documentation)
     - [Development tips and tricks](#development-tips-and-tricks)
         - [Compiling for debugging](#compiling-for-debugging)
+        - [Running the node under a debugger](#running-the-node-under-a-debugger)
         - [Compiling for gprof profiling](#compiling-for-gprof-profiling)
         - [`debug.log`](#debuglog)
         - [Testnet mode](#testnet-mode)
@@ -32,6 +33,7 @@ Developer Notes
     - [C++ data structures](#c-data-structures)
     - [Strings and formatting](#strings-and-formatting)
     - [Shadowing](#shadowing)
+    - [Signed and unsigned comparisons](#signed-and-unsigned-comparisons)
     - [Threads and synchronization](#threads-and-synchronization)
     - [Scripts](#scripts)
         - [Shebang](#shebang)
@@ -276,6 +278,23 @@ cmake --build build -j $(nproc)
 Note: The default build type `RelWithDebInfo` provides debug symbols with
 optimizations enabled, which is sufficient for most debugging with `gdb`.
 
+### Running the node under a debugger
+
+On Linux the node (`gridcoinresearchd`) and the GUI (`gridcoinresearch`) mark themselves non-dumpable as
+the first thing `main` does, so other programs of the same user cannot attach a debugger to them or read
+their memory, and no core dump is written. For the same reason each refuses to start when a debugger or
+tracer is already attached (`TracerPid` in `/proc/self/status` is not 0).
+
+To run under `gdb` or `strace`, pass `-debugallowtracer` on the command line:
+
+```shell
+gdb --args build/bin/gridcoinresearchd -regtest -datadir=<scratch> -debugallowtracer
+```
+
+The option lets the process start under a tracer and makes it dumpable again, which a tracer needs to
+read the process's memory after the first non-dumpable call. The process logs a warning at startup.
+Never use it with a wallet you care about.
+
 ### Compiling for gprof profiling
 
 gprof is not currently supported as a dedicated option in the CMake build
@@ -314,12 +333,12 @@ testnet so that your nodes can be identified.
 ### DEBUG_LOCKORDER
 
 Gridcoin is a multi-threaded application, and deadlocks or other
-multi-threading bugs can be very difficult to track down. Building with
-`-DENABLE_DEBUG_LOCKORDER=ON` adds `-DDEBUG_LOCKORDER` to the compiler
-flags. This inserts run-time checks to keep track of which locks are held
-and adds warnings to the `debug.log` file if inconsistencies are detected.
-This option is independent of `CMAKE_BUILD_TYPE` so it can be used with any
-build configuration.
+multi-threading bugs can be very difficult to track down. `DEBUG_LOCKORDER`
+inserts run-time checks to keep track of which locks are held and adds
+warnings to the `debug.log` file if inconsistencies are detected. A `Debug`
+build defines it, along with `ABORT_ON_FAILED_ASSUME`, as Bitcoin Core's
+Debug builds do; `-DENABLE_DEBUG_LOCKORDER=ON` adds it to any other build
+type.
 
 ### Assertions and Checks
 
@@ -362,6 +381,19 @@ $ valgrind --suppressions=contrib/valgrind.supp --leak-check=full \
       --show-leak-kinds=all build/src/test/test_gridcoin --log_level=test_suite
 $ valgrind -v --leak-check=full build/bin/gridcoinresearchd -printtoconsole
 ```
+
+The Valgrind CI job builds with Clang, `RelWithDebInfo`, and runs the unit
+suite as in the first line, then the functional suite with `--valgrind`, which
+runs every node under memcheck and stops it at its first error:
+
+```shell
+$ GRIDCOIND=$PWD/build/bin/gridcoinresearchd GRIDCOINCLI=$PWD/build/bin/gridcoinresearchd \
+      test/functional/test_runner.py --configfile=$PWD/build/test/config.ini \
+      --valgrind --timeout-factor=10
+```
+
+Valgrind reports what ASan does not: reads of uninitialised memory. Expect the
+unit suite to take about nine times as long as it does natively.
 
 ### Compiling for test coverage
 
@@ -530,36 +562,65 @@ conditions, or undefined behavior. These sanitizers have runtime overhead,
 so they are most useful when testing changes or producing debugging builds.
 Sanitizers are actively used in CI (see `.github/workflows/cmake_quality.yml`).
 
-To build with AddressSanitizer (ASan) and UndefinedBehaviorSanitizer (UBSan),
-pass the flags via `CMAKE_CXX_FLAGS` and `CMAKE_EXE_LINKER_FLAGS`:
+To build with AddressSanitizer (ASan) and UndefinedBehaviorSanitizer (UBSan)
+the way the CI sanitizer job does, pass the flags via `CMAKE_C_FLAGS`,
+`CMAKE_CXX_FLAGS` and the linker flags:
 
 ```bash
+SAN="-fsanitize=address,float-divide-by-zero,integer,undefined -fno-omit-frame-pointer -ftrivial-auto-var-init=pattern"
 cmake -B build_asan \
+  -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ \
   -DCMAKE_BUILD_TYPE=Debug \
+  -DENABLE_GUI=ON -DUSE_QT6=ON -DENABLE_MULTIPROCESS=ON -DENABLE_TESTS=ON \
   -DUSE_ASM=OFF \
-  -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer" \
-  -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address,undefined"
+  -DCMAKE_C_FLAGS="$SAN" \
+  -DCMAKE_CXX_FLAGS="$SAN -DARENA_DEBUG" \
+  -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address,float-divide-by-zero,integer,undefined" \
+  -DCMAKE_SHARED_LINKER_FLAGS="-fsanitize=address,float-divide-by-zero,integer,undefined"
 cmake --build build_asan -j $(nproc)
 
-# Run tests with suppression files:
-LSAN_OPTIONS=suppressions=test/sanitizer_suppressions/lsan \
-UBSAN_OPTIONS=suppressions=test/sanitizer_suppressions/ubsan:print_stacktrace=1:halt_on_error=1 \
-ASAN_OPTIONS=malloc_context_size=0:check_initialization_order=1 \
-  ctest --test-dir build_asan --output-on-failure
+# Run the tests with the options and suppression files CI uses:
+build_asan/test/with_sanitizer_env.py ctest --test-dir build_asan --output-on-failure
 ```
+
+`with_sanitizer_env.py` is generated into every build with tests. It runs its
+arguments with the sanitizer options and suppression files the CI jobs use,
+leak checking included, and any option already in the environment wins, e.g.
+`ASAN_OPTIONS=detect_leaks=0 build_asan/test/with_sanitizer_env.py ctest ...`.
+It also works for running a single binary or a daemon by hand. Do not set
+`malloc_context_size=0`: it removes the allocation and free stacks from every
+use-after-free report, and it stops LeakSanitizer from reporting anything.
+
+A Debug build defines `DEBUG_LOCKORDER`, so the runtime lock checks run too, as
+in the CI job.
+
+`integer` is a Clang sanitizer, so the recipe selects Clang, as the CI job does.
+It reports behaviour that is defined but usually unintended: unsigned
+wrap-around, and implicit conversions that change a value. The places that
+mean it, mostly hash arithmetic and dependencies, are listed in
+`test/sanitizer_suppressions/ubsan`. A new report is a finding: fix the code, or
+add a suppression that names the function and says why the wrap is intended.
 
 To build with ThreadSanitizer (TSan) instead:
 
 ```bash
 cmake -B build_tsan \
-  -DCMAKE_BUILD_TYPE=Debug \
-  -DCMAKE_CXX_FLAGS="-fsanitize=thread" \
-  -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=thread"
+  -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+  -DENABLE_MULTIPROCESS=ON -DENABLE_TESTS=ON \
+  -DCMAKE_C_FLAGS="-fsanitize=thread -fno-omit-frame-pointer" \
+  -DCMAKE_CXX_FLAGS="-fsanitize=thread -fno-omit-frame-pointer" \
+  -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=thread" \
+  -DCMAKE_SHARED_LINKER_FLAGS="-fsanitize=thread"
 cmake --build build_tsan -j $(nproc)
 
-TSAN_OPTIONS=suppressions=test/sanitizer_suppressions/tsan \
-  ctest --test-dir build_tsan --output-on-failure
+build_tsan/test/with_sanitizer_env.py ctest --test-dir build_tsan --output-on-failure
 ```
+
+This is what the ThreadSanitizer CI job builds. Do not build TSan as Debug, and
+do not add `ENABLE_DEBUG_LOCKORDER`: the lock-order checker records every lock
+acquisition under one global mutex, so any two threads that take a lock are
+ordered through it, and TSan treats their unsynchronised accesses as ordered
+and does not report them.
 
 Suppression files for known issues in dependencies are located in
 `test/sanitizer_suppressions/` (lsan, tsan, ubsan).
@@ -636,6 +697,15 @@ order to prevent deadlocks:
 1. `cs_main` (blockchain state)
 2. `cs_wallet` (wallet operations)
 3. Subsystem-specific locks (e.g. `cs_poll_registry`, `cs_ScraperGlobals`)
+
+`CWallet::m_capability_mutex`, which guards the wallet's issued capabilities
+and its IPC capability slot, is a leaf: it may be taken under any of the locks
+above, `cs_KeyStore` included, but no other lock is taken and nothing is called
+out to while it is held. `CWallet::m_passphrase_turn_mutex`, which guards the
+order in which passphrase attempts are checked, is a leaf too: no other lock is
+taken under it, and nothing is called but lock-free reads of the shutdown flag
+and the attempt's cancel token. A passphrase attempt waits for its turn on it,
+so it is never taken under `cs_main` or `cs_wallet`.
 
 This ordering applies regardless of whether you use `LOCK2` or separate `LOCK`
 statements. The `DEBUG_LOCKORDER` build flag will detect violations at runtime
@@ -729,10 +799,10 @@ The two sides are the socket handler (`grc-net`) and the message handler
 No cycle can close, because of two invariants the net code keeps:
 
 1. **A thread that holds `m_nodes_mutex` or `cs_main` takes `cs_vRecvMsg` only
-   with `TRY_LOCK`.** The only blocking `LOCK(cs_vRecvMsg)` in the tree is the
-   VERACK handler in `src/net_processing.cpp`, which runs inside
-   `ProcessMessages()` under the same lock, so it is a re-entrant acquisition
-   of a recursive mutex, never a wait.
+   with `TRY_LOCK`.** There is no blocking `LOCK(cs_vRecvMsg)` in the tree. The
+   message handlers in `src/net_processing.cpp` that need it run inside
+   `ProcessMessages()`, which is entered with the lock held, and are annotated
+   as requiring it.
 2. **A thread that holds `cs_vSend` never waits for `m_nodes_mutex` or
    `cs_main`.** `SendMessages()` and `SocketSendData()` take neither, and
    `PushMessage()` holds `cs_vSend` only around the message framing. The
@@ -828,6 +898,7 @@ Gridcoin is a multi-threaded application. Key threads include:
 | `ThreadDNSAddressSeed` | `src/net.cpp` | Resolves DNS seeds to bootstrap peer discovery |
 | `ThreadDumpAddress` | `src/net.cpp` | Periodically dumps known peer addresses to `peers.dat` |
 | RPC threads | `src/rpc/server.cpp` | Thread pool serving JSON-RPC requests |
+| `grc-guistate` | `src/node/gui_cache.cpp` | The GUI state cache's timer thread: computes the state the GUI needs (under `cs_main`, on this thread) and pushes it to the subscribed GUI; runs only while a GUI is subscribed |
 | Scheduler | `src/scheduler.cpp` | Runs deferred and periodic tasks |
 
 Ignoring IDE/editor files
@@ -1024,6 +1095,15 @@ Strings and formatting
   - *Rationale*: Confusion of these can result in runtime exceptions due to
     formatting mismatch, and it is easy to get wrong because of subtly similar naming.
 
+- Every log call (`LogPrintf`, `LogPrint`, `error`) writes exactly one line; the logger appends the
+  newline. Do not end a format string with `\n`: it leaves a blank line in `debug.log`.
+
+  - *Rationale*: This differs from Bitcoin Core on purpose. There the caller must append the `\n`,
+    and a call that forgets it runs the next message, from whichever thread logs next, onto the same
+    line without its timestamp, so two unrelated messages read as one. Starting a new line is the
+    logger's job, not every caller's. When porting from Bitcoin Core, drop the trailing `\n` from its
+    log calls.
+
 - Use `std::string`, avoid C string manipulation functions.
 
   - *Rationale*: C++ string handling is marginally safer, less scope for
@@ -1097,6 +1177,44 @@ please name variables so that their names do not shadow variables defined in the
 
 When using nested cycles, do not name the inner cycle variable the same as in
 the upper cycle, etc.
+
+Signed and unsigned comparisons
+-------------------------------
+
+Comparing a signed value with an unsigned one converts the signed value to
+unsigned, so a negative value becomes a very large one and the comparison can
+give the wrong answer. `-Wsign-compare` reports these. The answer is always to
+fix the code, never to silence the warning.
+
+- Evaluate the comparison by hand and make sure the signed side cannot be
+  negative there. This matters most for `<`, `<=`, `>` and `>=`, where a
+  negative value converted to unsigned reverses the result.
+- Then convert the signed side to the unsigned type explicitly: a `static_cast`
+  for a variable or an expression, a `U` suffix for a literal.
+- Comment every such comparison, literals included, saying why the signed side
+  cannot be negative, so that it is plain the comparison was checked:
+
+  ```cpp
+  // sign-compare checked: size() is size_t; 1U is a non-negative literal, so both sides are unsigned.
+  BOOST_CHECK_EQUAL(entries.size(), 1U);
+  ```
+
+- A value that cannot be negative, such as a count, a size or a bit width,
+  should have an unsigned type in the first place. `Fraction::BitWidth()`
+  returns `unsigned int` for this reason. Fixing the type removes the mixed
+  comparison instead of casting at it.
+
+The compiler does not report every such comparison: it stays silent when the
+signed side is a constant it can see is non-negative, as in `i < 63` with an
+unsigned `i`. Apply the same rule there in code you write or change.
+
+`BOOST_CHECK_EQUAL` and its relatives compare their two sides inside Boost.Test's
+own templates, so a mixed-sign check is reported from a Boost.Test header. The
+test build therefore compiles Boost.Test's headers as user headers, not system
+headers, on every platform (see `src/test/CMakeLists.txt`), and they must stay
+that way: as system headers they would hide these warnings. Warnings in
+Boost.Test's own declarations, which are Boost's code, are silenced in
+`src/test/boost_test_prelude.h` and nowhere else.
 
 Threads and synchronization
 ----------------------------
@@ -1276,6 +1394,43 @@ GUI
 
   - *Rationale*: Blocking the GUI thread can increase latency, and lead to
     hangs and deadlocks.
+
+- The GUI does not take `cs_main`. The core computes the state and pushes it.
+
+  The rule, in jco's words: "Look blockchain and state machine stuff that
+  requires cs_main should be done by the core at all times AND PUSHED to the
+  GUI. The only exceptions are actions INITIATED BY THE USER, such as a spend,
+  and similar that REQUIRE a momentary canonical lock on the core to complete
+  the action properly. (The lock is taken in the core after the IPC boundary.)"
+
+  What follows from it:
+
+  - The GUI never takes `cs_main`, directly or through an `interfaces::` method
+    that takes it. It reads the copy the core pushed (`GuiState` and the other
+    pushed parts), which is held under a leaf lock and costs the GUI thread no
+    wait on block connection.
+  - A user action (a spend, a vote, an MRC submission) is the one exception.
+    The lock is taken in the core, after the IPC boundary, for the action only.
+    The action re-checks the state in the core and does not trust what the GUI
+    last showed.
+  - A push is computed by the core, never by the GUI: in SetBestChain's scope
+    under the `cs_main` it already holds, or on the cache's own thread, which
+    takes `cs_main` first. Updates triggered by blocks are at least four seconds
+    apart, so a catch-up makes a few pushes and not one per block.
+  - The GUI thread never blocks, even on a user action: the action runs off the
+    GUI thread and reports back.
+  - A rare race is never fixed with a lock that makes a freeze certain for
+    every user who is syncing.
+
+  In a monolithic build with `ENABLE_DEBUG_LOCKORDER`, the Qt main thread is
+  marked, and taking `cs_main` on it logs a `GUI-THREAD-CS_MAIN` line with the
+  file and line. The check only logs: it never aborts. Every such line is a
+  place that still breaks the rule and is to be fixed, not silenced. A
+  `-multiprocess` GUI is not marked, because it has no `cs_main`.
+
+  - *Rationale*: Block connection holds `cs_main`, so a GUI thread that waits
+    for it waits for the block in flight, and every click queued behind it
+    stalls.
 
 Subtrees
 ----------
@@ -1526,9 +1681,9 @@ some RPCs are faithful ports, some share upstream's name and argument list but h
 Gridcoin-specific wrinkle inside, and many have no upstream analogue at all. To make that
 relationship explicit and *enforced* (rather than a comforting fiction of separation),
 every registered RPC carries its classification as a **column on its `vRPCCommands[]` row**
-in `src/rpc/server.cpp` — `{ "name", &impl, cat, &help, heritage_<bucket>, "<fp>" }`. The
+in `src/rpc/server.cpp` — `{ "name", &impl, cat, &help, heritage_<bucket>, "<fp>", access_<class> }`. The
 `CRPCCommand` constructor makes all fields mandatory, so a command cannot be registered
-without a bucket (classify-at-birth, compiler-enforced). `test/lint/lint-rpc-heritage.py`
+without a bucket or an access class (classify-at-birth, compiler-enforced). `test/lint/lint-rpc-heritage.py`
 (run by `lint-all.sh`) reads that column — the same table the dispatcher reads — and
 re-checks the surface fingerprint. The human-readable roll-up is
 [`doc/rpc-heritage.md`](rpc-heritage.md) (issue #3069; this supersedes the folder-isolation
@@ -1604,8 +1759,10 @@ required, documented decision.
   `diverges` note in `doc/rpc-heritage.md`. (3) update the row's `heritage_fp` to the
   recomputed value **and** the matching row in `doc/rpc-heritage.md` (the lint checks the two
   agree, per-row).
-- *new RPC won't compile* — `CRPCCommand` requires a `heritage_<bucket>` and `heritage_fp` on
-  the row; that's classify-at-birth. Pick the bucket, run the lint to get the fingerprint, fill
+- *new RPC won't compile* — `CRPCCommand` requires a `heritage_<bucket>`, a `heritage_fp` and an
+  `access_<class>` on the row; that's classify-at-birth. Pick the access class (`access_elevate` if
+  the RPC signs, reveals or writes keys, moves or redirects value or widens exposure; see the RPC
+  Heritage Ledger section of `CLAUDE.md`), pick the bucket, run the lint to get the fingerprint, fill
   both in, and add a `doc/rpc-heritage.md` row (`pure-gridcoin` takes an empty `heritage_fp`).
 - *"result-builder reachable from an RPC only at depth N > MAX_DESCENT"* — a contract-payload
   builder chain grew deeper than the descent cap; raise `MAX_DESCENT` in the lint so the
@@ -1613,6 +1770,71 @@ required, documented decision.
 - *"command row did not parse into the heritage table"* — a `vRPCCommands[]` row's shape
   doesn't match `ROW_RE` (e.g. a malformed `heritage_fp`); fix the row, or update `ROW_RE` in
   the lint if the table format itself changed, so no RPC is silently unenforced.
+
+### Entry-point access classes
+
+`src/rpc/entry_point_classes.json` gives every RPC row and every capnp interface method
+(keyed `Interface.method`) an access class and an effect. `test/lint/lint-entry-point-classes.py`,
+run by `lint-all.sh` and as the CTest case `lint_entry_point_classes`, checks the file against
+`src/rpc/server.cpp`, the schemas in `src/ipc/capnp/` and the IPC method bodies, and
+`rpc_tests/every_rpc_row_matches_the_classification_file` checks it against the running RPC table.
+
+Each entry is `{"class": C, "effect": E}` with the optional fields `kind` (the `CapabilityKind`
+an Elevate IPC method opens), `authority`, `path` (`true` when the entry takes a path from the
+caller), `minted_by` and `note`. The file is kept exactly as
+`json.dumps(data, indent=2, sort_keys=True)` plus a newline; the lint rejects any other layout.
+
+| Class | Meaning | Enforced by |
+|---|---|---|
+| `read_only` | Changes no core state, takes no caller path, reveals no key. | nothing to enforce |
+| `free` | Changes core state that neither moves nor redirects value, nor widens who can reach the node or run code on it, nor moves secrets out. | nothing to enforce |
+| `elevate` | Signs or reveals keys, writes key material, moves or redirects value (spend, fee, side stake, change address), widens network exposure, deletes or exports wallet files. Needs a capability or a standing full unlock. | RPC: the `CRPCTable::execute` gate. IPC: `CapabilityScope(..., <kind>)` in the method body. |
+| `elevate` + `authority: passphrase_argument` | The entry verifies a wallet passphrase given as its own argument (unlock, passphrase change, `beginElevation`). | RPC column `access_elevate_inband`: the dispatcher does not gate it; the method verifies. IPC: no kind. |
+| `elevate` + `authority: unencrypted_only` | Acts only on an unencrypted wallet, which always has its keys. | RPC column `access_elevate_unencrypted`: the dispatcher does not gate it, its help has no passphrase line, and the method refuses an encrypted wallet itself (`RPC_WALLET_WRONG_ENC_STATE`). IPC: no kind. |
+| `settings` | `changesettings` and `Node.changeSettings`: the class of each setting applies. | `ChangeSettings()`, per setting |
+| `dispatch` | `Node.executeRpcConsoleCommand`, and `Node.executeRpcConsoleSecretCommand` for the RPCs with passphrase parameters: the class of the RPC row carried applies. | the `CRPCTable::execute` gate (`CRPCTable::admit`, which the passphrase call runs before the method) |
+| `elevated_handle` | A method of an object that only Elevate methods make (`FileSource`, `FileSink`). `minted_by` lists exactly the capnp methods that return that interface, as a result or in a `List` result, each of class `elevate`; while none does yet it is `[]`, and the entry's `note` says why. A result type the lint cannot resolve, or a struct result that carries an interface, fails it, so no handle is returned unseen. | the minting method's capability |
+| `refuse` | Never performed: `Wallet.elevateWallet`, `Wallet.backupWallet` and `Wallet.backupConfigFile`, which always return false (`Wallet.beginBackup` streams a backup instead). | the method itself |
+
+The effects are `read_only`, `state`, `value`, `keys` and `key_writer`. An effect of `value`,
+`keys` or `key_writer` needs class `elevate`, `settings`, `dispatch`, `elevated_handle` or
+`refuse`; an effect of `read_only` needs class `read_only`, or `free` with `"path": true`; and
+class `read_only` needs effect `read_only` and no `path`.
+
+**The baseline rule.** The plain GUI runs no RPC server, so `free` is limited to what a program
+of the desktop account can already do, without the passphrase, to a monolithic wallet unlocked
+for staking only (edit the config or settings file and restart, stop the node, lock the wallet,
+manage peers), and to node-operator housekeeping that a restart or the owner can undo.
+Everything else that changes state is `elevate`. The gate lives in `CRPCTable::execute` and in
+the IPC method bodies, so HTTP RPC, the IPC console and the plain GUI with `-server=1` get the
+same answer.
+
+**Checklist:**
+
+- A new RPC row takes `access_<class>` as its seventh field and an entry under `"rpc"` whose
+  class matches it (`access_elevate_inband` is `elevate` with `"authority": "passphrase_argument"`;
+  `access_elevate_unencrypted` is `elevate` with `"authority": "unencrypted_only"`;
+  `access_elevate` is any other `elevate`). The help of an `access_elevate` row gains the line
+  "Needs the wallet passphrase." from `CRPCTable`, so its description need not say so.
+- A new capnp method takes an entry under `"ipc"`. An Elevate one without an authority names
+  its `kind`, and its method body passes `CapabilityKind::<kind>` as an argument of the
+  capability it opens: a `CapabilityScope` declaration, an `emplace()` into a
+  `std::optional<CapabilityScope>`, or `RunUnderIpcCapability()`. The lint looks for the one
+  definition of the method in the implementing class; a second definition of the same name there
+  (an overload) needs an `EXEMPT` entry with the reason. A method on an interface that is not
+  yet in the lint's `IMPLEMENTATIONS` map needs a line there naming the file and class that
+  implement the interface.
+- A new argument goes into one list of `init_tests/every_registered_argument_has_its_settings_class`,
+  takes `ArgsManager::SETTING_FREE` if it is Free, and, if it is Refuse (any command, path, URL,
+  RPC/IPC or process-mode option), gets a pattern in `share/gridcoin/refused-setting-keys.txt`.
+  A `COMMAND_LINE_ONLY` argument must match a pattern.
+- Every RPC and IPC method that `src/test/data/key_entry_points.json` lists as reaching the
+  wallet's keys must be of class `elevate`, or `dispatch` for a console method, which reaches
+  the keys only through the RPC it carries (that RPC's own row is `elevate`). The lint fails
+  when that list is missing. Conversely, an entry here whose effect is `keys` or `key_writer`
+  (other than an `elevated_handle`) must appear in that list, as a row the staking-only test
+  drives or as a `*_not_rows` entry with its reason.
+- When unsure of a class, choose `elevate`.
 
 Functional tests
 ----------------

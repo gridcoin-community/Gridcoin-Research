@@ -71,7 +71,9 @@ public:
         ProtocolEntryOption protocol_entry = GetProtocolRegistry().TryLastBeforeTimestamp("magnitudeunit", m_superblock.m_timestamp);
 
         // If their is an entry prior or equal in timestamp to the superblock and it is active then set the magnitude unit
-        // to that value. If the last entry is not active (i.e. deleted), then leave at the default.
+        // to that value. If the last entry is not active (i.e. deleted), then leave at the default. From block version 15
+        // the entry's reduced terms are at most MAX_MAGNITUDE_ENTRY_TERM (protocol.h), which keeps the arithmetic below in
+        // range.
         if (protocol_entry != nullptr && protocol_entry->m_status == ProtocolEntryStatus::ACTIVE) {
             magnitude_unit = Fraction::FromString(protocol_entry->m_value);
         }
@@ -111,7 +113,9 @@ public:
         ProtocolEntryOption protocol_entry = GetProtocolRegistry().TryLastBeforeTimestamp("magnitudeunit", sb_index->GetBlockTime());
 
         // If their is an entry prior or equal in timestamp to the superblock and it is active then set the magnitude unit
-        // to that value. If the last entry is not active (i.e. deleted), then leave at the default.
+        // to that value. If the last entry is not active (i.e. deleted), then leave at the default. From block version 15
+        // the entry's reduced terms are at most MAX_MAGNITUDE_ENTRY_TERM (protocol.h), which keeps the arithmetic below in
+        // range.
         if (protocol_entry != nullptr && protocol_entry->m_status == ProtocolEntryStatus::ACTIVE) {
             magnitude_unit = Fraction::FromString(protocol_entry->m_value);
         }
@@ -168,13 +172,28 @@ public:
         //   accrual_days * CurrentMagnitude(cpid) * MagnitudeUnit() * COIN
         //
         // We deconstruct the magnitude unit coefficient ratio as a reminder to
-        // review this value if the protocol rule changes in the future:
+        // review this value if the protocol rule changes in the future.
         //
+        // The product below is SIGNED int64_t (the timespan and the numerator
+        // are int64_t; Scaled() is uint32_t and promotes) and has no wider
+        // fallback; only the later "* COIN" step does. Its bound comes from the
+        // magnitude unit entry: from block version 15 its reduced numerator is
+        // at most MAX_MAGNITUDE_ENTRY_TERM (10^6), so with a CPID at the
+        // magnitude cap (32,767, scaled 3,276,700) the product stays under 2^63
+        // for a superblock up to 32 days old. The longest mainnet superblock gap
+        // since December 2019 is 1.4 days; the static_assert holds the 7-day
+        // case the bound was chosen for (4.65 times under 2^63). See the
+        // analysis at MAX_MAGNITUDE_ENTRY_TERM in protocol.h.
+        //
+        static_assert(int64_t {7 * 86400} * Magnitude::MAX * static_cast<int64_t>(Magnitude::SCALE_FACTOR)
+                          <= std::numeric_limits<int64_t>::max() / MAX_MAGNITUDE_ENTRY_TERM,
+                      "a 7-day accrual at the magnitude cap must fit int64_t at the magnitude unit entry bound");
+
         const uint64_t base_accrual = accrual_timespan
             * CurrentMagnitude(cpid).Scaled()
             * GetMagnitudeUnit().GetNumerator();
 
-        // If the accrual calculation will overflow a 64-bit integer, we need
+        // If the multiplication by COIN will overflow a 64-bit integer, we need
         // more bits. Arithmetic with the big integer type is much slower and
         // unnecessary in the majority of cases so switch only when required:
         //
@@ -609,7 +628,18 @@ public:
     //! rebuild the stored snapshot state to fix a bug for v5.2.3. Disk format
     //! does not change.
     //!
-    static constexpr uint32_t CURRENT_VERSION = 2;
+    //! Version 3: On a network with a newbie correction window table, the first
+    //! start after an upgrade from version 2 rebuilds the accrual snapshots
+    //! once. Disk format does not change.
+    //!
+    static constexpr uint32_t CURRENT_VERSION = 3;
+
+    //!
+    //! \brief The previous registry version. A registry of this version loads
+    //! as an upgrade in progress instead of forcing a rebuild (see
+    //! UpgradePending()).
+    //!
+    static constexpr uint32_t UPGRADABLE_VERSION = 2;
 
     //!
     //! \brief A record of an accrual snapshot in the registry.
@@ -695,6 +725,23 @@ public:
     //! \return Zero if no baseline snapshot exists yet.
     //!
     uint64_t LatestHeight() const;
+
+    //!
+    //! \brief Whether the registry loaded from UPGRADABLE_VERSION and the
+    //! upgrade has not completed yet.
+    //!
+    //! While this is \c true, the registry keeps writing UPGRADABLE_VERSION to
+    //! disk, so an upgrade interrupted by a crash runs again at the next start.
+    //!
+    bool UpgradePending() const;
+
+    //!
+    //! \brief Record that the upgrade completed by rewriting the registry
+    //! with CURRENT_VERSION.
+    //!
+    //! \return \c false if an IO error occurred.
+    //!
+    bool CompleteUpgrade();
 
     //!
     //! \brief Get the registry entry for the specified height if it exists.
@@ -791,8 +838,9 @@ private:
         }
     }; // DiskEntry
 
-    FILE* m_file = nullptr;       //!< Handle of the registry file.
-    std::vector<Entry> m_entries; //!< Ordered heights of each snapshot.
+    FILE* m_file = nullptr;          //!< Handle of the registry file.
+    std::vector<Entry> m_entries;    //!< Ordered heights of each snapshot.
+    bool m_upgrade_pending = false;  //!< Loaded from UPGRADABLE_VERSION.
 
     //!
     //! \brief Get the path to the accrual snapshot registry file.
@@ -800,15 +848,25 @@ private:
     static fs::path RegistryPath();
 
     //!
-    //! \brief Truncate the registry file and reopen it for writing.
+    //! \brief Get the path of the temporary file that a rewrite writes before
+    //! it replaces the registry file.
+    //!
+    static fs::path TempRegistryPath();
+
+    //!
+    //! \brief Open the registry file to append new entries.
     //!
     //! \return \c false if an IO error occurred.
     //!
-    bool ReopenForWrite();
+    bool ReopenForAppend();
 
     //!
     //! \brief Prunes the registry file of any non-current entries and opens it
     //! for writing.
+    //!
+    //! The compacted registry goes to a temporary file that is committed to
+    //! disk and then moved over the registry file, so a crash leaves either the
+    //! old registry or the new one, never a truncated file.
     //!
     //! \return \c false if an IO error occurred.
     //!
@@ -884,6 +942,26 @@ public:
     //! system.
     //!
     bool HasBaseline() const;
+
+    //!
+    //! \brief Get the height of the most recent stored accrual snapshot.
+    //!
+    //! \return Zero if no baseline snapshot exists yet.
+    //!
+    uint64_t LatestHeight() const;
+
+    //!
+    //! \brief Whether the snapshot registry loaded from its previous version
+    //! and the upgrade has not completed yet.
+    //!
+    bool UpgradePending() const;
+
+    //!
+    //! \brief Record that the upgrade completed.
+    //!
+    //! \return \c false if an IO error occurred.
+    //!
+    bool CompleteUpgrade();
 
     //!
     //! \brief Store a snapshot of accrual for each account as the baseline.

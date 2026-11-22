@@ -191,7 +191,9 @@ bool DisconnectBlock(CBlock& block, CTxDB& txdb, CBlockIndex* pindex) EXCLUSIVE_
 bool ConnectBlock(CBlock& block, CValidationState& state, CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck=false) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 bool AddToBlockIndex(CBlock& block, unsigned int nFile, unsigned int nBlockPos, const uint256& hashProof) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 bool CheckBlock(const CBlock& block, CValidationState& state, int height1, bool fCheckPOW=true, bool fCheckMerkleRoot=true, bool fCheckSig=true, bool fLoadingIndex=false) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
-bool AcceptBlock(CBlock& block, CValidationState& state, bool generated_by_me) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+//! \p imported is true for a block read from a block data file (-reindex, -loadblock, bootstrap.dat). Such a block is
+//! not refused for a stake proof that another block used: see the check in AcceptBlock().
+bool AcceptBlock(CBlock& block, CValidationState& state, bool generated_by_me, bool imported) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
 //! Where a block's stamp falls against the timestamp window.
 enum class BlockTimeCheck {

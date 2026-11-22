@@ -560,6 +560,48 @@ BOOST_AUTO_TEST_CASE(DoS_checkblock_validation_state)
     }
 }
 
+// The sweep erases entries that have decayed to zero and keeps the rest.
+BOOST_AUTO_TEST_CASE(DoS_misbehavior_sweep_erases_decayed_entries)
+{
+    const int64_t start = GetTime();
+    SetMockTime(start);
+
+    const CNetAddr decayed = ip(0x0a0b0c0e);
+    const CNetAddr current = ip(0x0a0b0c0f);
+
+    g_peerman->Misbehaving(CAddress(CService(decayed, 40000)), 10);
+
+    // Twelve hours on, the first entry has decayed to zero and the second is new.
+    SetMockTime(start + 12 * 60 * 60);
+    g_peerman->Misbehaving(CAddress(CService(current, 40000)), 90);
+
+    BOOST_CHECK_GE(g_peerman->SweepDecayedMisbehavior(), 1U);
+    BOOST_CHECK_EQUAL(g_peerman->ClearMisbehaviorForSubnet(CSubNet(decayed)), 0U);
+    BOOST_CHECK_EQUAL(g_peerman->ClearMisbehaviorForSubnet(CSubNet(current)), 1U);
+
+    SetMockTime(0);
+}
+
+// A transaction that spends one output twice is refused with a DoS score of 100.
+BOOST_AUTO_TEST_CASE(DoS_duplicate_inputs_are_scored)
+{
+    CMutableTransaction mtx;
+    mtx.nVersion = 2;
+    const COutPoint prevout(InsecureRand256(), 0);
+    mtx.vin.emplace_back(prevout);
+    mtx.vin.emplace_back(prevout);
+    mtx.vout.emplace_back();
+    mtx.vout[0].nValue = COIN;
+    mtx.vout[0].scriptPubKey = CScript() << OP_TRUE;
+
+    CValidationState state;
+    BOOST_CHECK(!CheckTransaction(CTransaction(mtx), state));
+
+    int dos = 0;
+    BOOST_CHECK(state.IsInvalid(dos));
+    BOOST_CHECK_EQUAL(dos, 100);
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 
 #if defined(__clang__)

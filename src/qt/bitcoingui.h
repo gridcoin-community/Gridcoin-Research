@@ -5,14 +5,16 @@
 #include <QSystemTrayIcon>
 #include <QMenu>
 #include <stdint.h>
+#include <functional>
 #include <memory>
 #include <vector>
 #include "guiconstants.h"
 #include "guiipcinfo.h"
 #include "psgttoastdamp.h"
+#include "interfaces/wallet.h" // CapabilityKind for unlockWalletForOperation
 #include "interfaces/wallet_tx_channel.h" // GRC::WalletEvent for processDrainedTransactions
 
-#ifdef Q_OS_MAC
+#ifdef Q_OS_MACOS
 #include <qt/macos_appnap.h>
 
 class MacDockShutdownHandler;
@@ -37,6 +39,7 @@ class MultisignPSGTDialog;
 class Notificator;
 
 namespace interfaces {
+class Node;
 class PSGTPoolContext;
 } // namespace interfaces
 class RPCConsole;
@@ -117,6 +120,35 @@ public:
     bool isPrivacyModeActivated() const;
 
     /**
+     * @brief Builds the tooltip for the staking icon in the status bar.
+     * @param staking Whether the miner is currently staking.
+     * @param net_weight The network weight.
+     * @param coin_weight The wallet's coin weight. When it is zero and the miner
+     * is not staking, the tooltip reports that staking is not possible.
+     * @param etts_seconds Estimated time to stake in seconds, as
+     * GetEstimatedStakingFrequency reads it.
+     * @param masked Whether mask values (privacy mode) is on. When it is, the
+     * coin weight and the staking frequency are shown as "#.##".
+     * @param warnings The miner warnings to show when not staking.
+     * @return The tooltip text.
+     */
+    static QString StakingToolTip(bool staking,
+                                  double net_weight,
+                                  double coin_weight,
+                                  unsigned int etts_seconds,
+                                  bool masked,
+                                  const QString& warnings);
+
+    /**
+     * Whether Settings offers "Autounlock for staking": only in the split
+     * (-multiprocess) build, and only when the core's store, as \p status reads
+     * it, says this platform has one. \p status is called only in the split
+     * build: a monolithic GUI does not ask the core at all, and its in-process
+     * store, which on Windows is supported, does not count.
+     */
+    static bool AutoUnlockActionVisible(bool multiprocess, const std::function<AutoUnlockStoreStatus()>& status);
+
+    /**
      * Begin an explicit application shutdown: the menu Exit / Ctrl-Q / tray
      * Exit, a snapshot or reset-blockchain restart, the post-encryption
      * restart, or a core-initiated QueueShutdown. Sets a flag so closeEvent()
@@ -127,8 +159,38 @@ public:
      * On Qt6 quit() routes through closeAllWindows(); our closeEvent()'s
      * minimize-on-close handling would otherwise ignore that close and veto the
      * quit, so an explicit Exit only minimized the window. See issue #2995.
+     *
+     * Made at once, also while a QuitHold exists: a termination signal
+     * (logout, system shutdown, the service manager) asks for it here.
      */
     static void requestQuit();
+
+    //! requestQuit() for a quit the core's going asks for: the core stopped
+    //! (QueueShutdown), or the connection to it was lost. While a QuitHold
+    //! exists it waits, and is made when the last one goes.
+    static void requestQuitForCoreStop();
+
+    //! The quit for the end of the user's session (Windows WM_QUERYENDSESSION).
+    //! In the monolith (\p multiprocess false) the node runs in this process: it
+    //! is shut down, and its shutdown quits the GUI (QueueShutdown). In the split
+    //! build the core is another process: the GUI posts requestQuit(), which a
+    //! QuitHold does not hold, and \p node, the GUI's local one, is left alone.
+    static void requestQuitForSessionEnd(interfaces::Node& node, bool multiprocess);
+
+    //! While one exists, requestQuitForCoreStop() does not quit: the quit is
+    //! made when the last one goes. For a message the user must be able to read
+    //! to its end although the core may stop meanwhile: the one after an
+    //! encryption in the split build. Every other quit is made at once. GUI
+    //! thread only.
+    class QuitHold
+    {
+    public:
+        QuitHold();
+        ~QuitHold();
+
+        QuitHold(const QuitHold&) = delete;
+        QuitHold& operator=(const QuitHold&) = delete;
+    };
 
 protected:
     void changeEvent(QEvent *e);
@@ -190,6 +252,11 @@ private:
     //! plain bool is sufficient. See requestQuit() / issue #2995.
     static bool m_quit_requested;
 
+    //! The QuitHolds that exist, and whether requestQuitForCoreStop() was
+    //! called while one did. GUI thread only, as m_quit_requested.
+    static int m_quit_holds;
+    static bool m_quit_deferred;
+
     QLabel *statusbarAlertsLabel;
     QLabel *labelEncryptionIcon;
     QLabel *labelStakingIcon;
@@ -200,7 +267,7 @@ private:
 
     // Windows and Linux: collapse the main application's menu bar into a menu
     // button. On macOS, we'll continue to use the system's separate menu bar.
-#ifdef Q_OS_MAC
+#ifdef Q_OS_MACOS
     QMenuBar *appMenuBar;
 #else
     QMenu *appMenuBar;
@@ -231,6 +298,8 @@ private:
     QAction *encryptWalletAction;
     QAction *backupWalletAction;
     QAction *changePassphraseAction;
+    //! Settings -> "Autounlock for staking". Hidden unless AutoUnlockActionVisible().
+    QAction* m_autounlock_action{nullptr};
     QAction *unlockWalletAction;
     QAction *lockWalletAction;
     QAction *openRPCConsoleAction;
@@ -248,12 +317,23 @@ private:
 
     QMovie *syncIconMovie;
 
-#ifdef Q_OS_MAC
+#ifdef Q_OS_MACOS
     CAppNapInhibitor* m_app_nap_inhibitor = nullptr;
     MacDockShutdownHandler* m_dock_shutdown_handler = nullptr;
 #endif
     // name extension to change icons according to stylesheet
     QString sSheet;
+
+    // The image each of these status icons shows, as its resource name without
+    // the stylesheet extension, so that a theme change can redraw it.
+    QString m_connections_icon;
+    QString m_staking_icon;
+    QString m_scraper_icon;
+
+    /** Show \p icon, in the current theme, in \p label, and keep its name in \p shown. */
+    void setStatusIcon(QLabel* label, QString& shown, const QString& icon);
+    /** Redraw \p label with \p shown in the current theme, if it shows an image yet. */
+    void redrawStatusIcon(QLabel* label, const QString& shown);
 
     /** Create the main UI actions. */
     void createActions();
@@ -269,6 +349,9 @@ private:
     void setIcons();
     /** Re-check the toolbar action that matches the currently displayed page. */
     void recheckCurrentTabAction();
+
+    /** Format the staking frequency for an estimated time to stake in seconds. */
+    static QString GetEstimatedStakingFrequency(unsigned int nEstimateTime);
 
 
 public slots:
@@ -344,7 +427,7 @@ private slots:
     void openGuidesClicked();
     bool tryQuit();
 
-#ifndef Q_OS_MAC
+#ifndef Q_OS_MACOS
     /** Handle tray icon clicked */
     void trayIconActivated(QSystemTrayIcon::ActivationReason reason);
 #endif
@@ -362,12 +445,14 @@ private slots:
     void backupWallet();
     /** Change encrypted wallet passphrase */
     void changePassphrase();
+    /** Set up autounlock for staking, store the passphrase again, or turn it off. */
+    void autoUnlock();
     /** The Unlock BUTTON: a directive, offering the staking-only choice. */
     void unlockWallet();
 
-    /** An operation needs the passphrase. \p elevate comes from the model,
-     *  which read the wallet state; do not re-derive it here. */
-    void unlockWalletForOperation(bool elevate);
+    /** An operation of \p kind needs the wallet's keys: ask for the
+     *  passphrase and begin a capability for it. */
+    void unlockWalletForOperation(CapabilityKind kind);
 
     void lockWallet();
 
@@ -378,8 +463,7 @@ private slots:
     void updateScraperIcon(int scraperEventtype, int status);
     void updateBeaconIcon();
 
-    QString GetEstimatedStakingFrequency(unsigned int nEstimateTime);
-
+    void updateCurrentPollTitle();
     void handleNewPoll();
     void extracted(QStringList& expiring_polls, QString& notification);
     void handleExpiredPoll();

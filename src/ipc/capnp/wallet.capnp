@@ -11,6 +11,7 @@ using Proxy = import "/mp/proxy.capnp";
 $Proxy.include("interfaces/wallet.h");
 $Proxy.includeTypes("ipc/capnp/wallet-types.h");
 
+using FileTransfer = import "file_transfer.capnp";
 using Handler = import "handler.capnp";
 using Node = import "node.capnp";
 
@@ -41,7 +42,21 @@ interface Wallet $Proxy.wrap("interfaces::Wallet") {
     unlockWallet @12 (context :Proxy.Context, passphrase :Data, stakingOnly :Bool) -> (result :Bool);
     restrictToStakingOnly @35 (context :Proxy.Context) -> (result :Bool);
     elevateWallet @36 (context :Proxy.Context, passphrase :Data) -> (result :Bool);
+    beginElevation @37 (context :Proxy.Context, passphrase :Data, kind :UInt8) -> (result :Bool);
+    endElevation @38 (context :Proxy.Context) -> ();
+    getTransactionFeeRate @39 (context :Proxy.Context) -> (result :Int64);
+    # After encryptWallet on this interface: the core's automatic wallet backups made
+    # before the encryption, by path. Its own method rather than a field after `result`
+    # in encryptWallet's results, which the generated proxies cannot map.
+    getPreEncryptionBackups @43 (context :Proxy.Context) -> (result :List(Text));
     changeWalletPassphrase @13 (context :Proxy.Context, oldPassphrase :Data, newPassphrase :Data) -> (result :Bool);
+    # Autounlock setup. The passphrase comes with the call, not from the connection's
+    # capability, because the store needs the passphrase itself. The result is an
+    # AutoUnlockSetupResult (wallet/autounlock_setup.h) as its integer value; a value
+    # outside the enumeration is refused when the client reads it.
+    setAutoUnlockSecret @44 (context :Proxy.Context, passphrase :Data) -> (result :UInt8);
+    clearAutoUnlockSecret @45 (context :Proxy.Context, passphrase :Data) -> (result :UInt8);
+    getAutoUnlockStatus @46 (context :Proxy.Context) -> (result :AutoUnlockStatus);
     getPubKey @14 (context :Proxy.Context, address :Data) -> (pubKeyOut :Data, result :Bool);
     getKeyFromPool @15 (context :Proxy.Context, label :Text) -> (pubKeyOut :Data, result :Bool);
     getOutputs @16 (context :Proxy.Context, outpoints :List(OutPoint)) -> (result :List(WalletOutput));
@@ -50,6 +65,9 @@ interface Wallet $Proxy.wrap("interfaces::Wallet") {
     sendCoins @19 (context :Proxy.Context, recipients :List(WalletSendRecipient), coinControl :WalletCoinControl, acceptedFee :Int64) -> (result :SendCoinsResult);
     backupWallet @20 (context :Proxy.Context, dest :Text) -> (result :Bool);
     backupConfigFile @21 (context :Proxy.Context, dest :Text) -> (result :Bool);
+    beginBackup @40 (context :Proxy.Context, items :UInt8) -> (errorOut :Text, result :FileTransfer.FileSource);
+    beginConsoleDownload @41 (context :Proxy.Context, method :Text, args :List(Text)) -> (errorOut :Text, result :FileTransfer.FileSource);
+    beginConsoleUpload @42 (context :Proxy.Context, method :Text, args :List(Text), size :UInt64) -> (errorOut :Text, result :FileTransfer.FileSink);
     signMessage @22 (context :Proxy.Context, address :Text, message :Text) -> (signatureOut :Text, result :Int32);
     verifyMessage @23 (context :Proxy.Context, address :Text, message :Text, signature :Data) -> (result :Int32);
     getAddresses @24 (context :Proxy.Context) -> (result :List(WalletAddress));
@@ -92,6 +110,15 @@ struct WalletBalances $Proxy.wrap("interfaces::WalletBalances") {
     stake @1 :Int64;
     unconfirmedBalance @2 :Int64 $Proxy.name("unconfirmed_balance");
     immatureBalance @3 :Int64 $Proxy.name("immature_balance");
+}
+
+# What the core's autounlock store reports (wallet/autounlock_store.h).
+struct AutoUnlockStatus $Proxy.wrap("AutoUnlockStoreStatus") {
+    supported @0 :Bool;
+    configured @1 :Bool;
+    scope @2 :Text;
+    location @3 :Text;
+    problem @4 :Text;
 }
 
 struct WalletLockState $Proxy.wrap("interfaces::WalletLockState") {

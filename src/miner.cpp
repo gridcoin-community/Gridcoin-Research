@@ -31,12 +31,12 @@
 #include "util.h"
 #include "util/threadnames.h"
 #include "validation.h"
+#include "wallet/staking_signer.h"
 #include "wallet/wallet.h"
 #include "txmempool.h"
 
 #include <memory>
 #include <algorithm>
-#include <tuple>
 
 using namespace std;
 
@@ -79,53 +79,61 @@ int32_t ComputeBlockVersion(int height)
     return CBlock::CURRENT_VERSION;
 }
 
+//! \brief The miner's token for the staking accessor.
+//!
+//! Defined and used only in this file; test/lint/lint-staking-key-access.py
+//! fails if it appears anywhere else. With it the miner reaches the keys that
+//! sign its coinstake, its block and its research reward claims while the
+//! wallet is unlocked for staking only.
+StakingKeyAccess MinerStakingKeyAccess()
+{
+    return StakingKeyAccess();
+}
+
 namespace {
 class COrphan
 {
 public:
     const CTransaction* ptx;
     set<uint256> setDependsOn;
-    double dFeePerKb;
-    CAmount nFee;
+    //! The fee and size it enters the candidate heap with once its parents are in.
+    FeeRate rate;
 
     COrphan(const CTransaction* ptxIn)
     {
         ptx = ptxIn;
-        dFeePerKb = 0;
-        nFee = 0;
     }
 
 };
 
-//! Whether `fee` over `tx_size` bytes pays less than `fee_rate` per 1000 bytes,
-//! i.e. fee * 1000 < fee_rate * tx_size, evaluated exactly: fee < ceil(fee_rate *
-//! tx_size / 1000), with the rate split into whole satoshi per byte and a remainder
-//! so neither product can overflow.
-bool PaysBelowFeeRate(CAmount fee, unsigned int tx_size, CAmount fee_rate)
+//! A transaction waiting for a place in the block. The heap pops the greatest
+//! first: the highest fee rate, compared exactly (FeeRate), and between equal
+//! rates the lower transaction hash, so that ties come out in the same order on
+//! every run. "Lower" is uint256's operator<, a memcmp of the hash's bytes in
+//! memory order, which is not the order of the hex strings shown in logs and by
+//! RPC. The double rate this replaced broke ties on the transactions' addresses
+//! in memory.
+struct BlockCandidate
 {
-    const CAmount per_byte = fee_rate / 1000;
-    const CAmount remainder = fee_rate % 1000;
-    if (per_byte > MAX_MONEY / (CAmount)tx_size) return true; // no valid fee reaches it
-    const CAmount required = per_byte * tx_size + (remainder * tx_size + 999) / 1000;
-    return fee < required;
-}
+    FeeRate rate;
+    uint256 hash;
+    const CTransaction* tx = nullptr;
 
-//!
-//! \brief Sign the research reward claim context for a newly-minted block.
-//!
-//! \param pwallet Supplies beacon private keys for signing.
-//! \param claim   An initialized claim to sign for a block.
-//! \param block   Block that contains the claim.
-//! \param dry_run If true, only check that the node can sign.
-//!
-//! \return \c true if the miner holds active beacon keys used to successfully
-//! sign the claim.
-//!
+    bool operator<(const BlockCandidate& other) const
+    {
+        if (rate < other.rate) return true;
+        if (other.rate < rate) return false;
+
+        return other.hash < hash;
+    }
+};
+} // anonymous namespace
+
 bool TrySignClaim(
     CWallet* pwallet,
     GRC::Claim& claim,
     const CBlock& block,
-    const bool dry_run = false) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+    const bool dry_run) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     AssertLockHeld(cs_main);
 
@@ -150,7 +158,7 @@ bool TrySignClaim(
 
     CKey beacon_key;
 
-    if (!pwallet->GetKey(beacon->m_public_key.GetID(), beacon_key)) {
+    if (!pwallet->GetKeyForStaking(beacon->m_public_key.GetID(), beacon_key, MinerStakingKeyAccess())) {
         return error("%s: Missing beacon private key", __func__);
     }
 
@@ -177,7 +185,6 @@ bool TrySignClaim(
              HexStr(claim.m_signature));
 
     return true;
-}
 }
 
 // This is in anonymous namespace because it is only to be used by miner code here in this file.
@@ -417,7 +424,7 @@ bool CreateRestOfTheBlock(CBlock &block, CMutableTransaction& mtxCoinbase,
         map<uint256, vector<COrphan*> > mapDependers;
 
         // This vector will be sorted into a priority queue:
-        std::vector<std::tuple<double, const CTransaction*, CAmount>> vecPriority;
+        std::vector<BlockCandidate> vecPriority;
         vecPriority.reserve(mempool.mapTx.size());
 
         Fraction foundation_fee_fraction = FoundationSideStakeAllocation();
@@ -425,7 +432,8 @@ bool CreateRestOfTheBlock(CBlock &block, CMutableTransaction& mtxCoinbase,
         for (const auto& [_, entry] : mempool.mapTx)
         {
             const CTransaction& tx = entry.GetTx();
-            if (tx.IsCoinBase() || tx.IsCoinStake() || !IsFinalTx(tx, nHeight))
+            // Finality is judged at the block's own time, as AcceptBlock judges it.
+            if (tx.IsCoinBase() || tx.IsCoinStake() || !IsFinalTx(tx, nHeight, block.GetBlockTime()))
                 continue;
 
             // Double-check that contracts pass contextual validation again so
@@ -547,7 +555,6 @@ bool CreateRestOfTheBlock(CBlock &block, CMutableTransaction& mtxCoinbase,
                         porphan = &vOrphan.back();
                         LogPrint(BCLog::LogFlags::NOISY, "Orphan tx %s ",tx.GetHash().GetHex());
                     }
-                    mapDependers[txin.prevout.hash].push_back(porphan);
                     porphan->setDependsOn.insert(txin.prevout.hash);
                     nTotalIn += mempool.mapTx.at(txin.prevout.hash).GetTx().vout[txin.prevout.n].nValue;
 
@@ -557,6 +564,15 @@ bool CreateRestOfTheBlock(CBlock &block, CMutableTransaction& mtxCoinbase,
                 nTotalIn += nValueIn;
             }
             if (fMissingInputs) continue;
+
+            // Register the candidate with each pooled parent it waits for.
+            if (porphan)
+            {
+                for (const uint256& parent_hash : porphan->setDependsOn)
+                {
+                    mapDependers[parent_hash].push_back(porphan);
+                }
+            }
 
             unsigned int nTxSize = ::GetSerializeSize(tx, SER_NETWORK, PROTOCOL_VERSION);
 
@@ -570,16 +586,15 @@ bool CreateRestOfTheBlock(CBlock &block, CMutableTransaction& mtxCoinbase,
                 total_fee += mrc.m_fee - mrc.m_fee * foundation_fee_fraction.GetNumerator()
                                                    / foundation_fee_fraction.GetDenominator();
             }
-            double dFeePerKb =  (double)total_fee / (double(nTxSize)/1000.0);
+            const FeeRate rate{total_fee, nTxSize};
 
             if (porphan)
             {
-                porphan->dFeePerKb = dFeePerKb;
-                porphan->nFee = total_fee;
+                porphan->rate = rate;
             }
             else
             {
-                vecPriority.emplace_back(dFeePerKb, &tx, total_fee);
+                vecPriority.push_back(BlockCandidate{rate, tx.GetHash(), &tx});
             }
         }
 
@@ -606,9 +621,8 @@ bool CreateRestOfTheBlock(CBlock &block, CMutableTransaction& mtxCoinbase,
         while (!vecPriority.empty())
         {
             // Take highest priority transaction off the priority queue:
-            double dFeePerKb = std::get<0>(vecPriority.front());
-            const CTransaction& tx = *std::get<1>(vecPriority.front());
-            const CAmount nCandidateFee = std::get<2>(vecPriority.front());
+            const FeeRate rate = vecPriority.front().rate;
+            const CTransaction& tx = *vecPriority.front().tx;
 
             std::pop_heap(vecPriority.begin(), vecPriority.end());
             vecPriority.pop_back();
@@ -639,24 +653,27 @@ bool CreateRestOfTheBlock(CBlock &block, CMutableTransaction& mtxCoinbase,
             // thinnest at the top: 100001 sat/KB at 99999 bytes, i.e. 1 sat/KB.
             // The floor bites only when an operator raises the option.
             //
-            // The check uses the exact integer fee, not dFeePerKb. At a raised
-            // floor a rate exactly at the floor can evaluate below it as a
-            // double: 137751 sat over 340 bytes is exactly 405150 sat/KB, yet
-            // the double comes out just under 405150. The option is a floor, so
-            // paying exactly the floor must pass.
+            // The check compares the candidate's exact FeeRate with the floor as
+            // a FeeRate over 1000 bytes, the same comparison the heap ranks by.
+            // As a double, a rate exactly at a raised floor could come out below
+            // it: 137751 sat over 340 bytes is exactly 405150 sat/KB, yet with
+            // 64-bit doubles (x86_64, ARM) it came out just under 405150. (The
+            // x87 unit of 32-bit x86 happens to get exactly 405150 there; it
+            // misrounds other pairs.) The option is a floor, so paying exactly
+            // the floor must pass. fees_tests pins that pair.
             //
             // Note this is stricter than the pre-1421209a0 check, which also
             // required (nBlockSize + nTxSize >= nBlockMinSize) and so left a
             // free area at the front of the block. nBlockMinSize went with the
             // free-transaction path; the floor is unconditional now, which is
             // what -mintxfee's documented meaning describes.
-            if (PaysBelowFeeRate(nCandidateFee, nTxSize, nMinTxFee))
+            if (rate < FeeRate{nMinTxFee, 1000})
             {
                 ++nMinTxFeeRejected;
 
                 LogPrint(BCLog::LogFlags::NOISY,
-                         "Not including tx %s: fee rate %.0f below -mintxfee %" PRId64,
-                         tx.GetHash().GetHex(), dFeePerKb, nMinTxFee);
+                         "Not including tx %s: fee %" PRId64 " sat over %u bytes is below -mintxfee %" PRId64 " sat/KB",
+                         tx.GetHash().GetHex(), rate.fee, rate.size, nMinTxFee);
                 continue;
             }
 
@@ -697,7 +714,7 @@ bool CreateRestOfTheBlock(CBlock &block, CMutableTransaction& mtxCoinbase,
 
                 // continue, not break. This compares an ABSOLUTE fee against
                 // an absolute threshold while the heap is ordered by fee RATE
-                // (dFeePerKb), and the two orders are not the same: a larger
+                // (FeeRate), and the two orders are not the same: a larger
                 // transaction popped later, at a lower rate, can pay more in
                 // total than this one and clear a threshold this one missed.
                 //
@@ -808,8 +825,8 @@ bool CreateRestOfTheBlock(CBlock &block, CMutableTransaction& mtxCoinbase,
 
             if (LogInstance().WillLogCategory(BCLog::LogFlags::NOISY) || gArgs.GetBoolArg("-printpriority"))
             {
-                LogPrintf("feerate %.1f sat/KB txid %s",
-                       dFeePerKb, tx.GetHash().ToString());
+                LogPrintf("fee %" PRId64 " sat over %u bytes txid %s",
+                       rate.fee, rate.size, tx.GetHash().ToString());
             }
 
             // Add transactions that depend on this one to the priority queue
@@ -823,7 +840,7 @@ bool CreateRestOfTheBlock(CBlock &block, CMutableTransaction& mtxCoinbase,
                         porphan->setDependsOn.erase(hash);
                         if (porphan->setDependsOn.empty())
                         {
-                            vecPriority.emplace_back(porphan->dFeePerKb, porphan->ptx, porphan->nFee);
+                            vecPriority.push_back(BlockCandidate{porphan->rate, porphan->ptx->GetHash(), porphan->ptx});
                             std::push_heap(vecPriority.begin(), vecPriority.end());
                         }
                     }
@@ -965,7 +982,7 @@ bool CreateCoinStake(CBlock &blocknew, CMutableTransaction& txnew, CKey &key,
             if (whichType == TX_PUBKEYHASH) // pay to address type
             {
                 // convert to pay to public key type
-                if (!wallet.GetKey(uint160(vSolutions[0]), key))
+                if (!wallet.GetKeyForStaking(uint160(vSolutions[0]), key, MinerStakingKeyAccess()))
                 {
                     LogPrintf("CreateCoinStake: failed to get key for kernel type = %d", whichType);
                     break;  // unable to find corresponding public key
@@ -975,7 +992,7 @@ bool CreateCoinStake(CBlock &blocknew, CMutableTransaction& txnew, CKey &key,
             else if (whichType == TX_PUBKEY)  // pay to public key type
             {
                 valtype& vchPubKey = vSolutions[0];
-                if (!wallet.GetKey(Hash160(vchPubKey), key)
+                if (!wallet.GetKeyForStaking(Hash160(vchPubKey), key, MinerStakingKeyAccess())
                     || key.GetPubKey() != CPubKey(vchPubKey))
                 {
                     LogPrintf("CreateCoinStake: failed to get key for kernel type = %d", whichType);
@@ -1405,10 +1422,15 @@ bool SignStakeBlock(CBlock &block, CKey &key,
     //Sign the coinstake transaction. Post-F3 CTransaction fields are const, so
     //sign on a local CMutableTransaction and copy back when complete.
     CMutableTransaction mtxCoinstake(block.vtx[1]);
+
+    // Through the staking accessor, so that a wallet unlocked for staking only
+    // signs its coinstake.
+    const StakingSigningProvider provider(*pwallet, MinerStakingKeyAccess());
+
     unsigned nIn = 0;
     for (auto const& pcoin : StakeInputs)
     {
-        if (!SignSignature(*pwallet, *pcoin, mtxCoinstake, nIn++))
+        if (!SignSignature(provider, *pcoin, mtxCoinstake, nIn++))
         {
             return error("SignStakeBlock: failed to sign coinstake");
         }

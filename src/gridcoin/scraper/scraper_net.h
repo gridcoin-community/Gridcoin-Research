@@ -6,6 +6,7 @@
 #define GRIDCOIN_SCRAPER_SCRAPER_NET_H
 
 #include <array>
+#include <atomic>
 #include <string>
 #include <string_view>
 
@@ -83,10 +84,21 @@ public:
      */
     static bool RecvPart(CNode* pfrom, CDataStream& vRecv);
 
-    /** Forward requested Part of Blob.
-     * @returns whether something was sent
+    /** Copy a requested Part of Blob for sending.
+     *
+     * The caller sends the copy after the call returns, with no scraper lock held: a send takes the peer's
+     * cs_vSend, which the message handler holds while SendMessages takes the scraper locks. Takes cs_mapParts.
+     *
+     * @returns whether the part's data is here; \p out then holds it
      */
-    static bool SendPartTo(CNode* pto, const uint256& hash);
+    static bool CopyPart(const uint256& hash, CDataStream& out);
+
+    /** Whether a part is needed here: a split object references it and its data has not arrived.
+     *
+     * UseAsSource() asks for those parts. A part that no split object references, and a part whose data is
+     * already here, are not needed. Takes cs_mapParts.
+     */
+    static bool PartNeeded(const uint256& hash);
 
     // public methods
     /** Boolean that returns whether all parts for the split object have been received. */
@@ -110,6 +122,10 @@ public:
      *
      * Returns the index of the new part, or -1 if \p vData is empty, in which
      * case nothing is registered.
+     *
+     * The part is counted as received. The caller completes the object when
+     * the last part is in, as CScraperManifest::addManifest() does: a part
+     * whose data was already here does not lead to a call of Complete().
      */
     int addPartData(CDataStream&& vData, const bool &publish_in_progress = false);
 
@@ -159,6 +175,17 @@ public: /* static methods */
     // ------------ hash -------------- nTime ------- pointer to CScraperManifest
     static std::map<uint256, std::pair<int64_t, std::shared_ptr<CScraperManifest>>> mapPendingDeletedManifest GUARDED_BY(cs_mapManifest);
 
+    /** Counts the changes to the manifests held here with all of their parts, which are the manifests a convergence
+     * is formed from. Complete() and DeleteManifest() each add one, while they hold the lock under which the change
+     * is seen: cs_manifest for a manifest that is completed, cs_mapManifest for one that is deleted. A convergence
+     * formed from manifests binned at one count is the convergence for the manifests held for as long as the count
+     * stays the same.
+     *
+     * This is an atomic and is not guarded by cs_mapManifest, because the arrival of a manifest's last part completes
+     * the manifest without that lock.
+     */
+    static std::atomic<uint64_t> nManifestGeneration;
+
     /** Process a message containing Index of Scraper Data.
      * @returns whether the data was useful and valid
      */
@@ -167,20 +194,29 @@ public: /* static methods */
     /** Check if we already have this object.
      * @returns false only if we need this object
      * Additionally sender node is used as fetch source if needed
+     * A part is needed as PartNeeded() says.
      */
     static bool AlreadyHave(CNode* pfrom, const CInv& inv);
 
-    /** Send Inv to that node about data files we have.
+    /** Send Inv to that node about the manifests we have with all of their parts.
      * Called when a node connects.
      */
     static void PushInvTo(CNode* pto);
 
-    /** Send manifest pointed to by the provided smart pointer to node.
-     * @returns whether something was sent
+    /** Serialize the manifest pointed to by the provided smart pointer for sending.
+     *
+     * The caller sends the result after it has released the scraper locks, for the reason given at
+     * CSplitBlob::CopyPart. Takes the manifest's cs_manifest.
      */
-    static bool SendManifestTo(CNode* pfrom, std::shared_ptr<CScraperManifest> manifest);
+    static CDataStream SerializeForSend(const std::shared_ptr<CScraperManifest>& manifest);
 
-    /** Add new manifest object into list of known manifests */
+    /** Add new manifest object into list of known manifests
+     *
+     * This does not mark the converged stats cache dirty, because it runs with cs_mapParts held and
+     * cs_ConvergedScraperStatsCache is taken before cs_mapParts: a manifest destroyed while the cache is locked
+     * takes cs_mapParts in ~CSplitBlob. When this returns true the caller marks the cache dirty after it has
+     * released cs_mapParts and while it still holds cs_mapManifest, as ScraperSendFileManifestContents does.
+     */
     static bool addManifest(std::shared_ptr<CScraperManifest> m, CKey& keySign);
 
     /** Validate whether received manifest is authorized */

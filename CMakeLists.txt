@@ -4,6 +4,19 @@ cmake_minimum_required(VERSION 3.21)
 set(CMAKE_MODULE_PATH "${CMAKE_MODULE_PATH}" "${CMAKE_CURRENT_SOURCE_DIR}/build-aux/cmake")
 set(CPACK_MODULE_PATH "${CPACK_MODULE_PATH}" "${CMAKE_CURRENT_SOURCE_DIR}/build-aux/cpack")
 
+# Without this policy CMake repeats static libraries on a link line, as a
+# single-pass linker needs to resolve references between them. Apple's linker
+# since Xcode 15 resolves archives across the whole link, needs no repeats, and
+# warns "ignoring duplicate libraries" for each one -- here when linking the GUI
+# and test_gridcoin. CMP0156 (CMake 3.29) de-duplicates for the linkers that
+# need no repeats: Apple's, MSVC's, LLD and mold. GNU ld, which the Linux and
+# MinGW builds use, is not among them, and their link lines are unchanged. It is
+# set here, ahead of every target. Older CMake keeps the repeats, and on macOS
+# the warnings with them.
+if(POLICY CMP0156)
+    cmake_policy(SET CMP0156 NEW)
+endif()
+
 
 # Hunter Package Manager
 # ======================
@@ -30,7 +43,8 @@ HunterGate(
 # TARGET=macos, and any plain cmake invocation -- would stamp the bundle with an
 # empty minimum. The Intel CI job passes the same value explicitly
 # (MACOS_DEPLOYMENT_TARGET in .github/workflows/cmake_production.yml); this makes
-# local bundles agree with the released ones instead of depending on the caller.
+# a local Intel bundle agree with the released one, unless the Mac doing the
+# build runs an older macOS or MACOSX_DEPLOYMENT_TARGET is set (both below).
 # The Apple Silicon job declares a higher floor; see below.
 #
 # FORCE is required, not tidiness. On macOS, CMake's own
@@ -51,17 +65,57 @@ HunterGate(
 #
 # 14.0 is what the Intel dependency stack supports: every library the Intel CI
 # job links is built on macOS 14 and carries minos 14.0 (see
-# contrib/devtools/macos-pinned-kegs.txt for how that is held true), and Qt 6
-# does not support anything below macOS 13. The Apple Silicon CI job declares
-# 15.0 instead, because Homebrew has stopped building Apple Silicon bottles for
-# macOS 14; a local Apple Silicon bundle meant to match the release needs
-# -DCMAKE_OSX_DEPLOYMENT_TARGET=15.0.
+# contrib/devtools/macos-pinned-kegs.txt for how that is held true), and Qt 6.10
+# and later do not support anything below macOS 13. The Apple Silicon CI job
+# declares 15.0 instead, because Homebrew has stopped building Apple Silicon
+# bottles for macOS 14; a local Apple Silicon bundle meant to match the release
+# needs -DCMAKE_OSX_DEPLOYMENT_TARGET=15.0.
+#
+# The default is never above the Mac doing the build. Built for 14.0 on macOS
+# 12, a bundle would not launch on the machine that built it; so a Mac older
+# than macOS 14 gets its own version instead: the major version from macOS 11
+# on (12.0 on Monterey), and 10.x before that, macOS 10 being versioned by its
+# minor number. That is below every floor a release supports, and configure
+# warns about it. CMAKE_HOST_APPLE is set this early but
+# CMAKE_HOST_SYSTEM_VERSION is not, hence sw_vers.
+#
+# A MACOSX_DEPLOYMENT_TARGET in the environment is used as given, ahead of this
+# default, as Darwin-Initialize.cmake itself would use it; only an explicit -D
+# comes before it.
 if(NOT CMAKE_TOOLCHAIN_FILE AND NOT CMAKE_OSX_DEPLOYMENT_TARGET)
-    set(CMAKE_OSX_DEPLOYMENT_TARGET "14.0" CACHE STRING "Minimum macOS version (ignored off Apple platforms)" FORCE)
+    set(_macos_floor "14.0")
+    if(NOT "$ENV{MACOSX_DEPLOYMENT_TARGET}" STREQUAL "")
+        set(_macos_floor "$ENV{MACOSX_DEPLOYMENT_TARGET}")
+    elseif(CMAKE_HOST_APPLE)
+        execute_process(COMMAND sw_vers -productVersion
+            OUTPUT_VARIABLE _macos_host_version
+            OUTPUT_STRIP_TRAILING_WHITESPACE
+            RESULT_VARIABLE _macos_sw_vers_status
+            ERROR_QUIET)
+        if(_macos_sw_vers_status EQUAL 0 AND _macos_host_version MATCHES "^(10\\.[0-9]+|[0-9]+)")
+            set(_macos_host_floor "${CMAKE_MATCH_1}")
+            if(NOT _macos_host_floor MATCHES "\\.")
+                string(APPEND _macos_host_floor ".0")
+            endif()
+            if(_macos_host_floor VERSION_LESS _macos_floor)
+                set(_macos_floor "${_macos_host_floor}")
+                message(WARNING "This Mac runs macOS ${_macos_host_version}, so the build targets "
+                    "macOS ${_macos_floor} instead of 14.0, and the app will need macOS "
+                    "${_macos_floor} or newer. Releases require macOS 14 (Intel) or 15 (Apple "
+                    "Silicon). Pass -DCMAKE_OSX_DEPLOYMENT_TARGET=<version>, or set "
+                    "MACOSX_DEPLOYMENT_TARGET, to choose the target yourself.")
+            endif()
+        endif()
+    endif()
+    set(CMAKE_OSX_DEPLOYMENT_TARGET "${_macos_floor}" CACHE STRING "Minimum macOS version (ignored off Apple platforms)" FORCE)
+    unset(_macos_floor)
+    unset(_macos_host_version)
+    unset(_macos_host_floor)
+    unset(_macos_sw_vers_status)
 endif()
 
 project("Gridcoin"
-    VERSION 5.5.1.10
+    VERSION 5.5.3.1
     DESCRIPTION "POS-based cryptocurrency that rewards BOINC computation"
     HOMEPAGE_URL "https://gridcoin.us"
     LANGUAGES C CXX
@@ -116,12 +170,8 @@ include(CheckAVX2)
 include(CheckSHANI)
 include(CheckARMSHANI)
 
-# Runtime checks must still be skipped during cross-compilation
-if(NOT CMAKE_CROSSCOMPILING)
-    include(CheckStrerrorR)
-else()
-    message(STATUS "Cross-compiling: skipping CheckStrerrorR probe.")
-endif()
+# The strerror_r variant check is compile-only, so it is safe for cross-compilation.
+include(CheckStrerrorR)
 
 include(FindPkgConfig)
 include(HunterGate)
@@ -168,7 +218,7 @@ option(ENABLE_QRENCODE  "Enable generation of QR Codes for receiving payments" O
 option(ENABLE_UPNP      "Enable UPnP port mapping support" ON)
 option(DEFAULT_UPNP     "Turn UPnP on startup" OFF)
 option(USE_DBUS         "Enable DBus support" OFF)
-option(USE_QT6          "Use Qt 6 instead of Qt 5" OFF)
+option(USE_QT6          "Use Qt 6 instead of Qt 5" ON)
 
 # Multiprocess (Phase 2 GUI/node IPC split, RFC #2937). OFF = the monolithic
 # build with direct in-process calls (current behavior); ON = build against
@@ -194,7 +244,6 @@ option(SYSTEM_XXD       "Find system xxd binary" OFF)
 option(BUNDLED_BOOST    "Use the bundled version of Boost" ${HUNTER_ENABLED})
 option(BUNDLED_CURL     "Use the bundled version of cURL" ${HUNTER_ENABLED})
 option(BUNDLED_OPENSSL  "Use the bundled version of OpenSSL" ${HUNTER_ENABLED})
-option(BUNDLED_QT5      "Use the bundled version of Qt 5" ${HUNTER_ENABLED})
 
 
 # Handle dependencies
@@ -205,7 +254,6 @@ set(MINIUPNPC_USE_STATIC_LIBS ${STATIC_LIBS})
 set(QT5_MINIMUM_VERSION 5.15.0)
 set(QT6_MINIMUM_VERSION 6.2.0)
 set(QT_COMPONENTS Core Concurrent Gui LinguistTools Network Widgets Svg)
-set(QT_HUNTER_COMPONENTS qtbase qttools)
 if(USE_DBUS)
     list(APPEND QT_COMPONENTS DBus)
 endif()
@@ -231,11 +279,25 @@ if(ENABLE_TESTS)
     list(APPEND BOOST_HUNTER_COMPONENTS test)
 endif()
 
+# Boost.Asio is header-only, and from Boost 1.92 its configuration follows the
+# language standard: on macOS with a 14.4 or later deployment target a C++20
+# translation unit gets a mutex built on std::atomic::wait, a C++17 one the
+# pthread mutex. Most of this tree is C++17, and what links gridcoin_ipc is
+# C++20, so the two would share asio's inline code with two layouts of its
+# classes. This keeps asio's configuration the same under both.
+add_compile_definitions(BOOST_ASIO_DISABLE_STD_ATOMIC_WAIT)
+
 find_package(Atomics REQUIRED)
 find_package(Threads REQUIRED)
 
 if(SYSTEM_BDB)
     find_package(BerkeleyDB 5.3...<5.4 COMPONENTS CXX REQUIRED)
+    if(WIN32)
+        message(WARNING "SYSTEM_BDB on Windows: the wallet gives Berkeley DB its paths in UTF-8, which it "
+                        "reads correctly only if it was built with UNICODE and _UNICODE, as the bundled copy "
+                        "is (src/bdb53/CMakeLists.txt). Otherwise a data directory or wallet file with a "
+                        "non-ASCII character in its name will not open.")
+    endif()
 else()
     find_program(SH_EXE NAMES sh bash REQUIRED)
     find_program(MAKE_EXE NAMES gmake nmake make REQUIRED)
@@ -305,6 +367,13 @@ endif()
 if(BUNDLED_OPENSSL)
     hunter_add_package(OpenSSL)
 endif()
+# A static Windows build links the static OpenSSL from depends. With
+# OPENSSL_USE_STATIC_LIBS, FindOpenSSL adds the system libraries it needs
+# (ws2_32 and crypt32) to the OpenSSL targets, so they follow libcrypto.a on the
+# link line. A value a user or toolchain file set is kept.
+if(WIN32 AND STATIC_LIBS AND NOT DEFINED OPENSSL_USE_STATIC_LIBS)
+    set(OPENSSL_USE_STATIC_LIBS TRUE)
+endif()
 find_package(OpenSSL 1.1.0 REQUIRED)
 
 if(BUNDLED_CURL)
@@ -312,6 +381,14 @@ if(BUNDLED_CURL)
     find_package(CURL CONFIG REQUIRED)
 else()
     find_package(CURL REQUIRED)
+    # FindCURL adds no system libraries for a static MinGW libcurl. Add the ones
+    # its libcurl.pc lists (zlib comes from ZLIB::ZLIB): curl 8's Schannel
+    # backend needs secur32, and crypt32 is for its certificate handling. A curl
+    # found through its own CMake package (CURL_DIR) carries them already.
+    if(WIN32 AND NOT CURL_DIR)
+        set_property(TARGET CURL::libcurl APPEND PROPERTY INTERFACE_LINK_LIBRARIES
+            secur32 bcrypt advapi32 crypt32 ws2_32 iphlpapi)
+    endif()
 endif()
 
 find_package(ZLIB REQUIRED)
@@ -326,9 +403,6 @@ if(ENABLE_GUI)
         find_package(Qt6 ${QT6_MINIMUM_VERSION} COMPONENTS ${QT_COMPONENTS} REQUIRED)
         set(QT Qt6)
     else()
-        if(BUNDLED_QT5)
-            hunter_add_package(Qt COMPONENTS ${QT_HUNTER_COMPONENTS})
-        endif()
         find_package(Qt5 ${QT5_MINIMUM_VERSION} COMPONENTS ${QT_COMPONENTS} REQUIRED)
         set(QT Qt5)
 
@@ -427,6 +501,15 @@ if(ENABLE_TESTS)
     if(SYSTEM_XXD)
         find_program(XXD xxd REQUIRED)
     endif()
+
+    # build/test/with_sanitizer_env.py COMMAND... runs COMMAND with the sanitizer
+    # options and suppression files the CI sanitizer jobs use; any option already
+    # set in the environment wins. It is harmless on a build without sanitizers.
+    configure_file(
+        "${CMAKE_SOURCE_DIR}/test/with_sanitizer_env.py.in"
+        "${CMAKE_BINARY_DIR}/test/with_sanitizer_env.py"
+        USE_SOURCE_PERMISSIONS @ONLY
+    )
 endif()
 
 if(UNIX)
@@ -438,7 +521,56 @@ if(WIN32)
     find_program(MAKENSIS makensis)
 elseif(APPLE)
     enable_language(OBJCXX)
+
+    # Apple's clang driver adds /usr/local/include to every compile as a USER
+    # include path (-I, not -internal-isystem; see `clang++ -###`). CMake finds
+    # it in the compiler's default search list, records it as an implicit
+    # include directory, and so never emits it itself -- not even as the
+    # -isystem that imported targets installed there ask for. Everything under
+    # it, which on Intel is all of Homebrew and Boost among it, was therefore
+    # compiled as project code: 244 Boost warnings per Intel CI build. Taken off
+    # the implicit list, it is emitted as -isystem, and clang drops its own -I
+    # copy in favour of the system entry. /opt/homebrew on Apple Silicon was
+    # never implicit, so it already got -isystem.
+    foreach(lang IN ITEMS C CXX OBJCXX)
+        list(REMOVE_ITEM CMAKE_${lang}_IMPLICIT_INCLUDE_DIRECTORIES /usr/local/include)
+    endforeach()
 endif()
+
+
+# Optimisation level
+# ==================
+
+# Release compiles at -O2, as the Autotools build did (autoconf's default
+# "-g -O2", and -O2 from depends) and as Bitcoin Core does. CMake's own default
+# for CMAKE_<LANG>_FLAGS_RELEASE is "-O3 -DNDEBUG" with GCC and Clang, and
+# nothing here replaced it, so Release builds -- the CI release artifacts among
+# them -- have compiled at -O3 since the migration. RelWithDebInfo is already
+# -O2.
+#
+# Only while the value is still CMake's stock "-O3 -DNDEBUG", both in the cache
+# and in CMAKE_<LANG>_FLAGS_RELEASE_INIT, so a value anyone has changed is left
+# alone. That includes a toolchain file's CMAKE_<LANG>_FLAGS_RELEASE_INIT:
+# CMake appends its own " -O3 -DNDEBUG" to it, so a cache that matches the
+# _INIT value is not necessarily stock. Comparing with the stock value, rather
+# than asking whether the variable was given on the command line, also
+# corrects a build directory configured before this rule: build_targets.sh
+# reconfigures existing directories by default (CLEAN_BUILD=false), and its
+# cache would otherwise keep -O3. The one value this cannot tell from "never
+# set" is the stock string itself, so the rewrite is announced along with how
+# to keep -O3. After the language enables above, so that OBJCXX is covered.
+foreach(lang IN ITEMS C CXX OBJCXX)
+    if(NOT CMAKE_${lang}_COMPILER_LOADED)
+        continue()
+    endif()
+    string(STRIP "${CMAKE_${lang}_FLAGS_RELEASE}" release_flags)
+    string(STRIP "${CMAKE_${lang}_FLAGS_RELEASE_INIT}" init_flags)
+    if(release_flags STREQUAL "-O3 -DNDEBUG" AND init_flags STREQUAL release_flags)
+        message(STATUS "CMAKE_${lang}_FLAGS_RELEASE: CMake's stock \"-O3 -DNDEBUG\" replaced "
+                       "with \"-O2 -DNDEBUG\"; any other value, such as \"-O3\", is kept as given")
+        set_property(CACHE CMAKE_${lang}_FLAGS_RELEASE PROPERTY VALUE "-O2 -DNDEBUG")
+    endif()
+endforeach()
 
 
 # Run probes
@@ -494,9 +626,25 @@ if(ENABLE_HARDENING)
         # at -O0, and FORTIFY then warns on every translation unit while checking
         # nothing. doc/build.md describes that configuration, so it is reachable.
         if(CMAKE_BUILD_TYPE OR CMAKE_CONFIGURATION_TYPES)
+            # A _FORTIFY_SOURCE already in CMAKE_C_FLAGS or CMAKE_CXX_FLAGS is the
+            # packager's choice, and it stands for that language, as it did under
+            # Autotools, where the user's CPPFLAGS and CXXFLAGS came after the
+            # hardening ones. Ours could not override one passed through -Wp
+            # anyway: -Wp options reach the preprocessor after every driver -U and
+            # -D. Fedora's -Wp,-U_FORTIFY_SOURCE,-D_FORTIFY_SOURCE=3 wins quietly;
+            # the Flatpak SDK's -Wp,-D_FORTIFY_SOURCE=3, with no -U, wins with a
+            # warning in every translation unit that the macro was redefined.
+            set(_hardening_fortify_when "$<NOT:$<CONFIG:Debug>>")
+            foreach(_hardening_lang C CXX)
+                string(FIND "${CMAKE_${_hardening_lang}_FLAGS}" "_FORTIFY_SOURCE" _hardening_fortify_pos)
+                if(NOT _hardening_fortify_pos EQUAL -1)
+                    string(APPEND _hardening_fortify_when ",$<NOT:$<COMPILE_LANGUAGE:${_hardening_lang}>>")
+                    message(STATUS "Hardening: _FORTIFY_SOURCE left as CMAKE_${_hardening_lang}_FLAGS set it")
+                endif()
+            endforeach()
             add_compile_options(
-                "$<$<NOT:$<CONFIG:Debug>>:-U_FORTIFY_SOURCE>"
-                "$<$<NOT:$<CONFIG:Debug>>:-D_FORTIFY_SOURCE=2>")
+                "$<$<AND:${_hardening_fortify_when}>:-U_FORTIFY_SOURCE>"
+                "$<$<AND:${_hardening_fortify_when}>:-D_FORTIFY_SOURCE=2>")
         else()
             message(STATUS "Hardening: _FORTIFY_SOURCE skipped (no build type, so no optimisation)")
         endif()
@@ -815,6 +963,10 @@ check_symbol_exists(fork "unistd.h" HAVE_DECL_FORK)
 list(APPEND CMAKE_REQUIRED_DEFINITIONS -D_GNU_SOURCE)
 check_symbol_exists(pipe2 "unistd.h" HAVE_DECL_PIPE2)
 list(REMOVE_ITEM CMAKE_REQUIRED_DEFINITIONS -D_GNU_SOURCE)
+# Lets the spawned notify shells be started without inherited descriptors.
+list(APPEND CMAKE_REQUIRED_DEFINITIONS -D_GNU_SOURCE)
+check_symbol_exists(posix_spawn_file_actions_addclosefrom_np "spawn.h" HAVE_POSIX_SPAWN_CLOSEFROM)
+list(REMOVE_ITEM CMAKE_REQUIRED_DEFINITIONS -D_GNU_SOURCE)
 check_symbol_exists(setsid "unistd.h" HAVE_DECL_SETSID)
 
 # randomenv.cpp gathers entropy from the network interface list under
@@ -887,6 +1039,22 @@ endif()
 #   * a convenience target `check-functional` (run via `cmake --build . --target check-functional`)
 # both of which drive test/functional/test_runner.py.
 if(ENABLE_TESTS AND ENABLE_DAEMON)
+    # How many times the functional_tests case runs a script that failed with one
+    # of test_runner.py's known transient slow-node signatures (--attempts). The
+    # CI sanitizer jobs set 1: a node halted by a sanitizer can fail its test with
+    # one of those signatures, and a retry that passes would hide it.
+    set(FUNCTIONAL_TEST_ATTEMPTS 3 CACHE STRING "test_runner.py --attempts for the functional_tests ctest case")
+
+    # The --timeout-factor the functional_tests case passes to test_runner.py.
+    # Empty leaves it to --ci, whose factor of 4 gives a node 120 s to answer
+    # one RPC call. The CI sanitizer job sets a larger factor, because a node
+    # built with its checks answers several times slower.
+    set(FUNCTIONAL_TEST_TIMEOUT_FACTOR "" CACHE STRING "test_runner.py --timeout-factor for the functional_tests ctest case (empty: the --ci factor)")
+    set(_functional_timeout_factor "")
+    if(FUNCTIONAL_TEST_TIMEOUT_FACTOR)
+        set(_functional_timeout_factor "--timeout-factor=${FUNCTIONAL_TEST_TIMEOUT_FACTOR}")
+    endif()
+
     find_package(Python3 COMPONENTS Interpreter)
     if(Python3_Interpreter_FOUND)
         set(PACKAGE_NAME "${PROJECT_NAME}")
@@ -924,12 +1092,21 @@ if(ENABLE_TESTS AND ENABLE_DAEMON)
                 COMMAND ${Python3_EXECUTABLE}
                         "${CMAKE_SOURCE_DIR}/test/functional/test_runner.py"
                         "--configfile=${CMAKE_BINARY_DIR}/test/config.ini"
-                        --ci --quiet --combinedlogslen=4000 --attempts=3
+                        --ci --quiet --combinedlogslen=4000 --attempts=${FUNCTIONAL_TEST_ATTEMPTS}
+                        ${_functional_timeout_factor}
             )
             set_tests_properties(functional_tests PROPERTIES
                 ENVIRONMENT "${_functional_env}"
                 RUN_SERIAL TRUE   # tests spin up daemons; don't overlap with other ctest cases
                 TIMEOUT 1800
+            )
+
+            # Every RPC row and capnp method has an access class in
+            # src/rpc/entry_point_classes.json that agrees with the code.
+            add_test(
+                NAME lint_entry_point_classes
+                COMMAND ${Python3_EXECUTABLE} "${CMAKE_SOURCE_DIR}/test/lint/lint-entry-point-classes.py"
+                WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
             )
         endif()
 

@@ -1,0 +1,17 @@
+# Read by openssl_noconfig_probe only. It activates OpenSSL's built-in "null"
+# provider, which nothing loads by default, so the probe can tell whether a
+# configuration file was read.
+openssl_conf = openssl_init
+
+[openssl_init]
+providers = provider_sect
+
+[provider_sect]
+default = default_sect
+null = null_sect
+
+[default_sect]
+activate = 1
+
+[null_sect]
+activate = 1

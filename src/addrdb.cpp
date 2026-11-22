@@ -16,6 +16,7 @@
 #include "util.h"
 #include "net.h"
 #include "fs.h"
+#include "util/fsmodes.h"
 
 namespace {
 
@@ -44,13 +45,18 @@ bool SerializeFileDB(const std::string& prefix, const fs::path& path, const Data
 
     // open temp output file, and associate with CAutoFile
     fs::path pathTmp = GetDataDir() / tmpfn;
-    FILE *file = fsbridge::fopen(pathTmp, "wb");
+    // The temporary file is owner-only and has the permissions of the file it will replace, if
+    // there is one.
+    std::string create_error;
+    std::optional<std::string> create_warning;
+    FILE *file = fsmodes::CreateReplacementFile(path, pathTmp, create_error, create_warning, /*binary=*/true);
     CAutoFile fileout(file, SER_DISK, CLIENT_VERSION);
     if (fileout.IsNull()) {
         fileout.fclose();
         remove(pathTmp);
-        return error("%s: Failed to open file %s", __func__, pathTmp.string());
+        return error("%s: Failed to open file %s: %s", __func__, pathTmp.string(), create_error);
     }
+    if (create_warning) LogPrintf("WARNING: %s: %s", __func__, *create_warning);
 
     // Serialize
     if (!SerializeDB(fileout, data)) {
@@ -145,7 +151,13 @@ bool CAddrDB::Write(const AddrMan& addr)
 
 bool CAddrDB::Read(AddrMan& addr)
 {
-    return DeserializeFileDB(pathAddr, addr);
+    bool ret = DeserializeFileDB(pathAddr, addr);
+    if (!ret) {
+        // A damaged peers.dat can fail partway through, so ensure addrman is
+        // left in a clean state rather than half loaded
+        addr.Clear();
+    }
+    return ret;
 }
 
 bool CAddrDB::Read(AddrMan& addr, CDataStream& ssPeers)

@@ -25,7 +25,7 @@ This document covers these build targets:
   * **CMake:** 3.21 or later
   * **Compiler:** GCC (C++17 support required) or Clang. If your system compiler is not compliant, you will need to install
     a compiler that is C++17 compliant and use -DCMAKE_CXX_COMPILER=\< C++ compiler \> and -DCMAKE_C_COMPILER=\< C compiler \>
-  * **Qt:** Version 5.15 or later (Qt 5), or 6.2.0 or later (Qt 6)
+  * **Qt:** Version 6.2.0 or later (Qt 6, the default), or 5.15 or later (Qt 5, with -DUSE_QT6=OFF)
   * **Boost:** Version 1.66 or later
   * Please refer to [link](build-dependencies.md) (build-dependencies.md) for packages that must be installed before building.
 
@@ -105,7 +105,7 @@ This procedure uses your operating system's installed libraries (OpenSSL, Boost,
 
 Run the following from the repository root:
 
-Note that if your distribution has Qt6, you will need to add -DUSE_QT6. You can also leave out -DENABLE_QRENCODE and -DENABLE_UPNP if you do not use that functionality.
+Qt 6 is the default. If your distribution has only Qt 5, add -DUSE_QT6=OFF. You can also leave out -DENABLE_QRENCODE=ON, or pass -DENABLE_UPNP=OFF, if you do not use that functionality.
 
 ```bash
 rm -rf build

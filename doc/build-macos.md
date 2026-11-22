@@ -42,8 +42,8 @@ is the highest minimum among every library it ships -- not whatever
 `LSMinimumSystemVersion` claims. Two things raise that floor without saying so:
 a formula that publishes a bottle for a newer macOS (Homebrew prefers the
 newest), and a formula with no bottle for your architecture at all, which is
-built from source against the machine you are on. Qt 6 does not support anything
-below macOS 13 in any case.
+built from source against the machine you are on. Qt 6.10 and later do not
+support anything below macOS 13 in any case.
 
 The ARM job runs on a macOS 15 runner, so its bottles carry a 15.0 minimum and
 the Apple Silicon app declares 15.0. It used to run on macOS 14, but Homebrew has
@@ -63,6 +63,15 @@ The released binaries declare the floor explicitly: CI passes
 project default for builds that do not pass one; pass
 `-DCMAKE_OSX_DEPLOYMENT_TARGET=15.0` for an Apple Silicon bundle that matches the
 release.
+
+The default is never newer than the Mac doing the build. On a Mac older than
+macOS 14 it is that Mac's own version instead (12.0 on Monterey), so the app
+launches on the machine that built it; configure warns, because that is below
+the floor any release supports. A `MACOSX_DEPLOYMENT_TARGET` set in the
+environment replaces the default and is used as given, with no cap and no
+warning; `-DCMAKE_OSX_DEPLOYMENT_TARGET` overrides both. The target is stored in
+the build directory's CMake cache and kept when that directory is reconfigured,
+so after upgrading macOS, configure a fresh build directory or pass `-D`.
 
 If you use the build helper script above:
 
@@ -91,7 +100,7 @@ xcode-select --install
 3. Homebrew: The standard package manager for macOS (see [https://brew.sh](https://brew.sh)). If you don't have it, install it by running the following in your terminal:
 
 ```
-/bin/bash -c "$(curl -fsSL [https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh](https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh))"
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
 ```
 
 ### 1. Install Dependencies
@@ -102,7 +111,7 @@ Open your terminal and run:
 
 ```
 brew update
-brew install qtbase qttools qtsvg qttranslations qtdeclarative boost openssl libevent miniupnpc qrencode libzip ccache cmake
+brew install qtbase qttools qtsvg qttranslations qtdeclarative boost openssl libevent miniupnpc qrencode ccache cmake
 ```
 
 Then pass the brew prefix when you configure (e.g.
@@ -133,7 +142,7 @@ absolute paths.
 Clone the repository and enter the directory (substitute the desired branch if not master):
 
 ```
-git clone [https://github.com/gridcoin-community/Gridcoin-Research.git](https://github.com/gridcoin-community/Gridcoin-Research.git)
+git clone https://github.com/gridcoin-community/Gridcoin-Research.git
 cd Gridcoin-Research
 git checkout master
 ```

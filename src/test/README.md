@@ -45,15 +45,23 @@ and after, and the first test case that changed it. The invariant set is
 `grc_test::StateSnapshot` in state_guard.h: the chain tip and the mapBlockIndex
 key set, the selected network, the consensus globals `LoadBlockIndex()`
 overwrites, mock time, `g_mock_deterministic_tests`, the mempool size, the
-miner status, `fUseFastIndex`, the ArgsManager settings, and the registry
-sizes that have a cheap accessor.
+miner status, `fUseFastIndex`, the ArgsManager settings, and, key by key, a
+content hash of each current entry of the beacon (active beacons only),
+protocol, scraper and pool registries; pending beacons and each registry's
+historical store are not compared.
 
-Two rules of the comparison matter when reading a report:
+Three rules of the comparison matter when reading a report:
 
-- Size-like fields (mempool, mapBlockIndex, registries, miner status) fail on
-  **growth only**. A suite that clears an earlier suite's residue is reported
-  as a cleaner in a note, not as a leaker; several fixtures clear on exit by
+- Size-like fields (mempool, mapBlockIndex, miner status) fail on **growth
+  only**. A suite that clears an earlier suite's residue is reported as a
+  cleaner in a note, not as a leaker; several fixtures clear on exit by
   design.
+- A registry is compared entry by entry, and any change is a leak, including
+  one that keeps the entry count: editing an entry in place is a leak. Two
+  changes are reported as a cleaner instead: the registry ends exactly as
+  the first suite found it, or the suite only removed entries the first
+  suite did not have and left every other entry unchanged. A registry
+  report names up to five changed keys.
 - The settings comparison is **presence-sensitive**. A key that is present
   at its default value is a different state from an absent key: an empty
   string parses as `true` for a boolean argument and as `0` for an integer
@@ -65,8 +73,9 @@ note. An entry is a tolerance for a leak that is tracked and not yet fixed,
 never a requirement: whether it fires depends on which suite ran first (two
 suites that exit with the same value are mutually exclusive) and on
 `--run_test` filters. Add one only with an issue reference, and remove it in
-the commit that fixes the leak at source. The table is empty at the time of
-writing.
+the commit that fixes the leak at source. The table is empty, and empty is
+the goal: the mechanism is kept for the next leak that has to be tolerated
+while its fix is tracked, not because entries are expected.
 
 ### Writing a suite that mutates globals
 
@@ -83,7 +92,13 @@ the mempool on entry, which is what a suite needs before `LoadBlockIndex()`
 will create genesis. `MempoolStateGuard` clears only the mempool, on entry
 and exit. The registries are deliberately outside `StateGuard` because
 `Reset()` is destructive; use `RegistryResetFor<GRC::ContractType::...>` as a
-suite decorator, which resets on entry AND exit. `V15HeightGuard` pins
+suite decorator, which resets on entry AND exit. With `RegtestChainSetup`,
+declare `RegistryResetFor` before it. Decorator fixtures tear down in reverse
+order, so the chain rewinds first, reverting any contract it connected while
+the registry still holds the entries that revert needs, and only then is the
+registry reset. Declared the other way round, the revert runs against the
+freshly reset registry, and a pool revert can erase a builtin.
+`V15HeightGuard` pins
 `-blockv15height` for a scope and restores its presence exactly;
 `RequireV15Unscheduled()` is the precondition for tests that rely on V15
 rules being inert.

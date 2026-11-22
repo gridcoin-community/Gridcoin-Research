@@ -13,6 +13,7 @@
 #include <mp/proxy-types.h>
 #include <mp/util.h>
 
+#include <algorithm>
 #include <cstring>
 #include <stdexcept>
 #include <vector>
@@ -106,7 +107,12 @@ template <typename Input, typename ReadDest>
 decltype(auto) CustomReadField(TypeList<SecureString>, Priority<1>, InvokeContext& invoke_context, Input&& input, ReadDest&& read_dest)
 {
     auto data = input.get();
-    decltype(auto) result = read_dest.construct(CharCast(data.begin()), data.size());
+    // Reserved before the bytes are copied in, so even a short passphrase lives in the secure
+    // allocator's buffer and not in the string object's inline storage.
+    decltype(auto) result = read_dest.update([&](auto& value) {
+        value.reserve(std::max<size_t>(100, data.size()));
+        value.assign(CharCast(data.begin()), data.size());
+    });
     memory_cleanse(const_cast<char*>(CharCast(data.begin())), data.size());
     return result;
 }

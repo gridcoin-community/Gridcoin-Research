@@ -99,6 +99,10 @@ class TestNode():
             "-debug",
             "-debugexclude=libevent",
             "-debugexclude=leveldb",
+            # The BOINC data directory initialize_datadir made for this node. A
+            # test's own -boincdatadir comes later on the command line and is
+            # the one the node uses.
+            "-boincdatadir=" + os.path.join(self.datadir, "boinc"),
         ]
         # Gridcoin's daemon doesn't recognize -uacomment (Bitcoin Core only),
         # so it's omitted from the defaults above.

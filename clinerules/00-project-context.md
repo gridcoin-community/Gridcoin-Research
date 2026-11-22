@@ -103,10 +103,6 @@ This is the Gridcoin-Research cryptocurrency project - an open-source blockchain
   - Location: External via depends/ or system
   - Used for: HTTP server, RPC server, and network event handling
 
-- **libzip 1.11.1** - ZIP archive handling
-  - Location: External via depends/ or system
-  - Used for: Snapshot handling and compressed data
-
 - **miniupnpc 2.2.2** (minimum 1.9) - UPnP port mapping client (Optional)
   - Location: External via depends/ or system
   - Used for: Automatic port forwarding configuration
@@ -119,7 +115,7 @@ This is the Gridcoin-Research cryptocurrency project - an open-source blockchain
   - Components: qtbase, qttools, qttranslations, qtsvg, qt5compat
   - Required modules: Core, Concurrent, Gui, LinguistTools, Network, Widgets, Svg
   - Build flag: ENABLE_GUI, USE_QT6
-  - **Default**: Qt5 is used by default; Qt6 requires explicit `USE_QT6=ON` flag
+  - **Default**: Qt 6; Qt 5 requires `USE_QT6=OFF`
 
 - **QRencode 4.1.1** - QR code generation library (Optional)
   - Location: External via depends/ or system

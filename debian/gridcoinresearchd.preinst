@@ -1,0 +1,150 @@
+#!/bin/sh
+set -e
+
+# Before this release the system service gridcoinresearchd.service was a forking daemon,
+# and autounlock was done by the RPC helper unit gridcoinresearchd-autounlock.service
+# (and, on hosts with a test build, by gridcoinresearchd-autounlock@<user>.service for the
+# per-user gridcoinresearchd@<user>.service). On an upgrade from such a version, record
+# what was enabled, running or overridden, for the postinst to hand to
+# "gridcoin-service switch-over", and turn the old autounlock units off while their unit
+# files still exist. The cores keep running. The postrm turns the old units back on if
+# the upgrade is aborted.
+
+DAEMON=gridcoinresearchd
+OLD_AUTOUNLOCK=gridcoinresearchd-autounlock
+UNIT_DIR=/etc/systemd/system
+STATE_DIR=/var/lib/gridcoin-service
+STATE=$STATE_DIR/switchover-main.state
+# What this run recorded, and the state file as it was before, for an aborted upgrade.
+RECORDED=$STATE_DIR/switchover-main.recorded
+BEFORE=$STATE_DIR/switchover-main.before
+# The first version of this package with the notify units and gridcoin-service. Set it at
+# the release cut, together with the postinst's and the version in gridcoinresearchd.NEWS.
+FIRST_NEW_VERSION=5.5.2.1~
+
+# The user in a <prefix>@<user>.service unit name or path ($1, prefix $2), if any.
+instance_user() {
+    name=${1##*/}
+    case $name in
+        "$2"@?*.service)
+            user=${name#"$2"@}
+            printf '%s\n' "${user%.service}"
+            ;;
+    esac
+}
+
+record_state() {
+    mkdir -p "$STATE_DIR"
+    chown root:root "$STATE_DIR"
+    chmod 0700 "$STATE_DIR"
+    active=
+    if [ -d /run/systemd/system ]; then
+        active=$(systemctl list-units --state=active --plain --no-legend "$DAEMON@*.service")
+    fi
+    new=$STATE.new
+    rm -f "$new"
+    (
+        umask 077
+        {
+            for link in "$UNIT_DIR"/*.wants/"$OLD_AUTOUNLOCK"@*.service; do
+                if [ -L "$link" ]; then
+                    user=$(instance_user "$link" "$OLD_AUTOUNLOCK")
+                    if [ -n "$user" ]; then
+                        printf '%s\n' "autounlock $user"
+                    fi
+                fi
+            done
+            for link in "$UNIT_DIR"/*.wants/"$DAEMON"@*.service; do
+                if [ -L "$link" ]; then
+                    user=$(instance_user "$link" "$DAEMON")
+                    if [ -n "$user" ]; then
+                        printf '%s\n' "core $user"
+                    fi
+                fi
+            done
+            printf '%s\n' "$active" | while read -r unit _; do
+                user=$(instance_user "$unit" "$DAEMON")
+                if [ -n "$user" ]; then
+                    printf '%s\n' "core-active $user"
+                fi
+            done
+            # A copy of the system unit, or a drop-in for it: either may have been written
+            # for the forking daemon, and the switch-over decides.
+            overridden=
+            if [ -e "$UNIT_DIR/$DAEMON.service" ] || [ -L "$UNIT_DIR/$DAEMON.service" ]; then
+                overridden=1
+            fi
+            for dropin in "$UNIT_DIR/$DAEMON.service.d"/*.conf; do
+                if [ -e "$dropin" ] || [ -L "$dropin" ]; then
+                    overridden=1
+                fi
+            done
+            if [ -n "$overridden" ]; then
+                printf '%s\n' "system-core"
+            fi
+            for link in "$UNIT_DIR"/*.wants/"$OLD_AUTOUNLOCK".service; do
+                if [ -L "$link" ]; then
+                    printf '%s\n' "system-autounlock"
+                    break
+                fi
+            done
+        } > "$new"
+    )
+    if [ ! -s "$new" ]; then
+        rm -f "$new"
+        return 0
+    fi
+    # The pending state is copied first: if that fails, nothing is recorded yet, and an abort
+    # leaves the pending state as it is. The record then says whether there was one.
+    if [ -e "$STATE" ]; then
+        before=yes
+        if ! cp -p "$STATE" "$BEFORE"; then
+            rm -f "$new" "$BEFORE"
+            exit 1
+        fi
+    else
+        before=no
+        rm -f "$BEFORE"
+    fi
+    (
+        umask 077
+        {
+            printf '%s\n' "before $before"
+            cat "$new"
+        } > "$RECORDED.new"
+    )
+    mv "$RECORDED.new" "$RECORDED"
+    if [ "$before" = yes ]; then
+        # A switch-over that has not finished yet keeps its entries.
+        cat "$new" >> "$STATE"
+        rm -f "$new"
+    else
+        mv "$new" "$STATE"
+    fi
+}
+
+stop_old_autounlock() {
+    for link in "$UNIT_DIR"/*.wants/"$OLD_AUTOUNLOCK"@*.service "$UNIT_DIR"/*.wants/"$OLD_AUTOUNLOCK".service; do
+        if [ -L "$link" ]; then
+            # A link whose unit file is gone (the package was removed, not purged) is
+            # removed by hand.
+            systemctl disable "${link##*/}" >/dev/null 2>&1 || rm -f "$link"
+        fi
+    done
+    if [ -d /run/systemd/system ]; then
+        systemctl stop "$OLD_AUTOUNLOCK@*.service" "$OLD_AUTOUNLOCK.service" >/dev/null 2>&1 || true
+    fi
+}
+
+case "$1" in
+    install|upgrade)
+        if [ -n "$2" ] && dpkg --compare-versions "$2" lt "$FIRST_NEW_VERSION"; then
+            record_state
+            stop_old_autounlock
+        fi
+        ;;
+esac
+
+#DEBHELPER#
+
+exit 0

@@ -57,6 +57,7 @@
 #include <ctime>
 #include <limits>
 #include <math.h>
+#include <typeinfo>
 #include "wallet/wallet.h"
 #include "txmempool.h"
 
@@ -476,12 +477,23 @@ DeferredRelay::~DeferredRelay()
 //! 20 -- a buggy peer survives a couple of slips, a flooder is banned at
 //! five. Policy rejects honest nodes can disagree on (UTXO races around
 //! confirmation, fee bounds, pool-full, replacement races, completeness)
-//! score 0.
+//! score 0. Before v15 the message is dropped unread and scores nothing.
 static void ProcessPSGTMessage(CNode* pfrom, CDataStream& vRecv)
 {
+    // Held to the end: the validation below needs it, and taking it first
+    // keeps the cs_main -> cs_mapAlreadyAskedFor order the TX and BLOCK
+    // handlers use.
+    LOCK(cs_main);
+
+    // Not active: ignore silently, before reading anything, as a pre-v15 node
+    // would ignore the unknown message.
+    if (!IsV15Enabled(nBestHeight)) return;
+
+    // Bounded at the read: an oversize length throws here instead of being
+    // copied in full and refused later by ValidatePSGTForPool.
     std::vector<unsigned char> wire_bytes;
     try {
-        vRecv >> wire_bytes;
+        vRecv >> LIMITED_VECTOR(wire_bytes, MAX_PSGT_WIRE_SIZE);
     } catch (const std::exception&) {
         pfrom->Misbehaving(20);
         error("%s: undecodable psgt message from %s", __func__, pfrom->addr.ToString());
@@ -513,11 +525,10 @@ static void ProcessPSGTMessage(CNode* pfrom, CDataStream& vRecv)
         mapAlreadyAskedFor.erase(inv);
     }
 
-    LOCK(cs_main);
-
-    // Not active, or unable to validate against a current UTXO view yet:
-    // ignore silently, as a pre-v15 node would ignore the unknown message.
-    if (!IsV15Enabled(nBestHeight) || OutOfSyncByAge()) return;
+    // Unable to validate against a current UTXO view yet: ignore silently.
+    // This stays after the bookkeeping above so an out-of-sync node still
+    // stops re-asking for the revision.
+    if (OutOfSyncByAge()) return;
 
     PSGTPoolEntry entry;
     std::string reason;
@@ -600,7 +611,217 @@ static void ProcessPSGTMessage(CNode* pfrom, CDataStream& vRecv)
 }
 
 
+//! Serves the entries of the getdata held on the peer, oldest first, for as
+//! long as the peer's send queue is under SendBufferSize(), the limit
+//! ProcessMessages applies between messages. Each entry is taken off
+//! vRecvGetData as it is served. What is left when the send queue is at the
+//! limit stays there, and ProcessMessages calls this again on its later passes.
+//! The check comes before an entry is served and a reply is queued whole, so
+//! what this adds to a send queue already at the limit is nothing, and to one
+//! under it is the reply to one entry.
+static void ProcessGetData(CNode* pfrom) EXCLUSIVE_LOCKS_REQUIRED(pfrom->cs_vRecvMsg)
+{
+    const auto can_serve = [pfrom]() {
+        return !ShutdownInProgress()
+            && !pfrom->fDisconnect
+            && WITH_LOCK(pfrom->cs_vSend, return pfrom->nSendSize) < SendBufferSize();
+    };
+
+    // A peer whose send queue has no room is not worth a wait for cs_main.
+    if (!can_serve())
+        return;
+
+    LOCK(cs_main);
+
+    // Bound the PSGT bytes served per getdata. The pool holds at most
+    // PSGTPool::MAX_ENTRIES distinct revisions, so any request for more than
+    // that many is necessarily redundant. This caps a getdata amplification
+    // where a peer packs MAX_INV_SZ (50000) MSG_PSGT entries all naming the
+    // same pooled revision (each up to MAX_PSGT_WIRE_SIZE) to force gigabytes
+    // of repeated sends under cs_main.
+    constexpr size_t MAX_PSGT_PER_GETDATA = PSGTPool::MAX_ENTRIES;
+
+    while (!pfrom->vRecvGetData.empty())
+    {
+        if (!can_serve())
+            return;
+
+        const CInv inv = pfrom->vRecvGetData.front();
+        pfrom->vRecvGetData.pop_front();
+
+        if (inv.type == MSG_BLOCK)
+        {
+            // Send block from disk
+            BlockMap::iterator mi = mapBlockIndex.find(inv.hash);
+            if (mi != mapBlockIndex.end())
+            {
+                CBlock block;
+                ReadBlockFromDisk(block, mi->second, Params().GetConsensus());
+
+                pfrom->PushMessage(NetMsgType::ENCRYPT, block);
+
+                // Trigger them to send a getblocks request for the next batch of inventory
+                if (inv.hash == pfrom->hashContinue)
+                {
+                    // Bypass PushInventory, this must send even if redundant,
+                    // and we want it right after the last block so they don't
+                    // wait for other stuff first.
+                    vector<CInv> vInv;
+                    vInv.push_back(CInv(MSG_BLOCK, hashBestChain));
+                    pfrom->PushMessage(NetMsgType::INV, vInv);
+                    pfrom->hashContinue.SetNull();
+                }
+            }
+        }
+        else if (inv.IsKnownType())
+        {
+            // Send stream from relay memory. The stream is copied out and
+            // pushed after cs_mapRelay is released: PushMessage takes the
+            // peer's cs_vSend, which the message handler holds across
+            // SendMessages while its wallet lookup waits for cs_wallet, and
+            // RelayTransaction takes cs_mapRelay under cs_wallet. Pushing
+            // under cs_mapRelay made cs_mapRelay -> cs_vSend -> cs_wallet ->
+            // cs_mapRelay a cycle, which could not deadlock only because
+            // the message handler is the one thread taking both of its
+            // first two edges (net_processing.h, the rule for announcing
+            // under cs_wallet).
+            bool pushed = false;
+            CDataStream relay_stream(SER_NETWORK, PROTOCOL_VERSION);
+            {
+                LOCK(cs_mapRelay);
+                map<CInv, CDataStream>::iterator mi = mapRelay.find(inv);
+                if (mi != mapRelay.end()) {
+                    relay_stream = mi->second;
+                    pushed = true;
+                }
+            }
+            if (pushed) {
+                pfrom->PushMessage(inv.GetCommand(), std::move(relay_stream));
+            }
+            // A peer asking for one of our txs is evidence it is propagating,
+            // so stop tracking it for initial broadcast. Do this for the
+            // relay-memory hit above as well as the mempool-served path below
+            // -- freshly relayed txs live in mapRelay for ~15 min, so the
+            // common case is served from there, not from the mempool branch.
+            if (pushed && inv.type == MSG_TX) {
+                mempool.ClearUnbroadcastOnFetch(inv.hash);
+            }
+            if (!pushed && inv.type == MSG_TX) {
+                CTransaction tx;
+                if (mempool.lookup(inv.hash, tx)) {
+                    CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
+                    ss.reserve(1000);
+                    ss << tx;
+                    pfrom->PushMessage(NetMsgType::TX, ss);
+                    // A peer asked for this tx, so it is propagating: stop
+                    // tracking it for initial broadcast.
+                    mempool.ClearUnbroadcastOnFetch(inv.hash);
+                }
+            }
+            else if(!pushed && inv.type == MSG_PART) {
+                // As for the relay stream above, the part is copied out under cs_mapParts (CopyPart takes it)
+                // and pushed after it is released: PushMessage takes the peer's cs_vSend, which the message
+                // handler holds across SendMessages while its request loop takes cs_mapManifest and
+                // cs_mapParts. A part's data is written once and the part is named by the hash of that
+                // data, so the copy is the part whatever happens to the part store before the push.
+                CDataStream part_stream(SER_NETWORK, PROTOCOL_VERSION);
+
+                if (CSplitBlob::CopyPart(inv.hash, part_stream)) {
+                    pfrom->PushMessage(NetMsgType::PART, std::move(part_stream));
+                }
+            }
+            else if (!pushed && inv.type == MSG_PSGT) {
+                // Serve from the PSGT pool, not mapRelay: pooled PSGTs
+                // live up to 7 days, far beyond mapRelay's 15-minute
+                // expiry. Do not serve while out of sync (mirrors the
+                // scraper manifest guard below). Bounded by the per-getdata
+                // budget so a single getdata cannot force unbounded sends.
+                if (!OutOfSyncByAge() && pfrom->nGetDataPsgtServed < MAX_PSGT_PER_GETDATA)
+                {
+                    if (const auto serialized = g_psgt_pool.GetSerializedByRevision(inv.hash))
+                    {
+                        ++pfrom->nGetDataPsgtServed;
+                        CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
+                        ss.reserve(serialized->size() + 16);
+                        ss << *serialized;
+                        pfrom->PushMessage(NetMsgType::PSGT, ss);
+                    }
+                }
+            }
+            else if(!pushed &&  inv.type == MSG_SCRAPERINDEX)
+            {
+                // The manifest is looked up, checked and serialized in one scope of the scraper locks, and
+                // pushed after they are released, for the reason given for a part above. Nothing checked
+                // here is read again after the release. The scope must not be split: a manifest found in
+                // one scope need not be the one a second scope would serialize.
+                CDataStream manifest_stream(SER_NETWORK, PROTOCOL_VERSION);
+                bool send_manifest = false;
+
+                {
+                    LOCK2(CScraperManifest::cs_mapManifest, CSplitBlob::cs_mapParts);
+
+                    // Do not send manifests while out of sync.
+                    if (!OutOfSyncByAge())
+                    {
+                        // Do not send unauthorized manifests. This check needs to be done here, because in the
+                        // case of a scraper deauthorization, a request from another node to forward the manifest
+                        // may come before the housekeeping loop has a chance to do the periodic culling. This could
+                        // result in unnecessary node banscore. This will suppress "this" node from sending any
+                        // unauthorized manifests.
+
+                        auto iter = CScraperManifest::mapManifest.find(inv.hash);
+                        if (iter != CScraperManifest::mapManifest.end())
+                        {
+                            CScraperManifest_shared_ptr manifest = iter->second;
+
+                            // We are not going to do anything with the banscore here, because this is the sending node,
+                            // but it is an out parameter of IsManifestAuthorized.
+                            unsigned int banscore_out = 0;
+
+                            // We have to copy out the nTime and pubkey from the selected manifest, because the
+                            // IsManifestAuthorized call chain traverses the map and locks the cs_manifests in turn,
+                            // which creates a deadlock potential if the cs_manifest lock is already held on one of
+                            // the manifests.
+                            int64_t nTime = 0;
+                            CPubKey pubkey;
+                            {
+                                LOCK(manifest->cs_manifest);
+
+                                nTime = manifest->nTime;
+                                pubkey = manifest->pubkey;
+                            }
+
+                            // Also don't send a manifest that is not current, or one with parts still to arrive
+                            // here, because the peer would ask this node for those parts. These two are tested
+                            // before the authorization because they are the cheaper tests.
+                            if (WITH_LOCK(manifest->cs_manifest,
+                                          return manifest->IsManifestCurrent() && manifest->isComplete())
+                                    && CScraperManifest::IsManifestAuthorized(nTime, pubkey, banscore_out))
+                            {
+                                // SerializeForSend takes its own lock on the manifest. It takes the smart
+                                // shared pointer to the manifest identified above, so no second lookup in
+                                // mapManifest is needed.
+                                manifest_stream = CScraperManifest::SerializeForSend(manifest);
+                                send_manifest = true;
+                            }
+                        }
+                    }
+                }
+
+                if (send_manifest) {
+                    pfrom->PushMessage(NetMsgType::SCRAPERINDEX, std::move(manifest_stream));
+                }
+            }
+        }
+
+        // Track requests for our stuff
+        if (pwalletMain) pwalletMain->Inventory(inv.hash);
+    }
+}
+
+
 bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, int64_t nTimeReceived)
+    EXCLUSIVE_LOCKS_REQUIRED(pfrom->cs_vRecvMsg)
 {
     LogPrint(BCLog::LogFlags::NOISY, "received: %s from %s (%" PRIszu " bytes)", strCommand, pfrom->addrName, vRecv.size());
 
@@ -613,17 +834,25 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             return false;
         }
 
+        // The whole message is read into locals and validated before any of it
+        // is stored on the node: a negotiation that fails leaves the node as it
+        // was, and the fields reach the threads that read them (see the comment
+        // at CNode::nVersion) at one site below, nVersion last.
+        int nVersion;
+        uint64_t nServices;
         int64_t nTime;
         CAddress addrMe;
         CAddress addrFrom;
         uint64_t nNonce = 1;
+        std::string strSubVer;
+        int nStartingHeight = -1;
 
-        vRecv >> pfrom->nVersion;
+        vRecv >> nVersion;
 
         // In the version following 180324 (mandatory v5.0.0 - Fern), we can finally
         // drop the garbage legacy fields added to the version message:
         //
-        if (pfrom->nVersion <= 180324) {
+        if (nVersion <= 180324) {
             std::string legacy_dummy;
             vRecv >> legacy_dummy      // pfrom->boinchashnonce
                   >> legacy_dummy      // pfrom->boinchashpw
@@ -632,21 +861,29 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
                   >> legacy_dummy;     // acid
         }
 
-        vRecv >> pfrom->nServices >> nTime >> addrMe;
+        vRecv >> nServices >> nTime >> addrMe;
 
-        LogPrint(BCLog::LogFlags::NOISY, "received aries version %i ...", pfrom->nVersion);
+        LogPrint(BCLog::LogFlags::NOISY, "received aries version %i ...", nVersion);
+
+        // The peer's time is compared with our clock when its message was
+        // received, not when it is processed. The handler works through each
+        // peer's queue in turn, so a VERSION can wait behind another peer's
+        // messages, a block backlog while the node catches up for one, and the
+        // wait would count as a difference between the clocks. nTimeReceived
+        // is in microseconds.
+        const int64_t received_time = nTimeReceived / 1000000;
 
         // Never by signed subtraction: nTime is peer-supplied, and
-        // GetAdjustedTime() - nTime overflows (undefined behaviour) for extreme
-        // values. For nTime == GetAdjustedTime() + INT64_MIN it wraps to
+        // adjusted_received - nTime overflows (undefined behaviour) for extreme
+        // values. For nTime == adjusted_received + INT64_MIN it wraps to
         // INT64_MIN, whose std::abs() is negative, and GCC builds let the peer
         // through with an extreme time sample. WithinTimeDrift() is exact for
         // every pair of times, a mocked clock near either end included.
-        const int64_t adjusted_now = GetAdjustedTime();
+        const int64_t adjusted_received = received_time + GetTimeOffset();
 
-        if (!WithinTimeDrift(nTime, adjusted_now, 8 * 60))
+        if (!WithinTimeDrift(nTime, adjusted_received, 8 * 60))
         {
-            LogPrint(BCLog::LogFlags::NOISY, "Disconnecting unauthorized peer with Network Time %" PRId64 " so far off our adjusted time %" PRId64 "!", nTime, adjusted_now);
+            LogPrint(BCLog::LogFlags::NOISY, "Disconnecting unauthorized peer with Network Time %" PRId64 " so far off our adjusted time %" PRId64 "!", nTime, adjusted_received);
             pfrom->Misbehaving(100);
             pfrom->fDisconnect = true;
             return false;
@@ -669,14 +906,14 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         // near INT_MAX, where fork_height + grace would overflow signed int (UB).
         const bool past_fork_grace = fork_height != std::numeric_limits<int>::max()
             && nLocalBestHeight > (int64_t)fork_height + Params().GetConsensus().ProtocolVersionGracePeriod;
-        if (pfrom->nVersion < MIN_PEER_PROTO_VERSION
+        if (nVersion < MIN_PEER_PROTO_VERSION
             || (DISCONNECT_OLD_VERSION_AFTER_GRACE_PERIOD
-                && pfrom->nVersion < PROTOCOL_VERSION
+                && nVersion < PROTOCOL_VERSION
                 && past_fork_grace)
             ) {
             // disconnect from peers older than this proto version
             LogPrint(BCLog::LogFlags::NOISY, "partner %s using obsolete version %i; disconnecting",
-                     pfrom->addr.ToString(), pfrom->nVersion);
+                     pfrom->addr.ToString(), nVersion);
 
             pfrom->fDisconnect = true;
             return false;
@@ -686,22 +923,28 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             vRecv >> addrFrom >> nNonce;
 
         if (!vRecv.empty()) {
-            vRecv >> pfrom->strSubVer;
+            vRecv >> strSubVer;
 
-            if (pfrom->strSubVer.size() > 256) {
-                pfrom->strSubVer.resize(256);
+            if (strSubVer.size() > 256) {
+                strSubVer.resize(256);
             }
+
+            // Stored, logged and shown as sanitized: nothing outside
+            // SanitizeString()'s safe set reaches a log line, getpeerinfo or the
+            // peer table. The check below still matches, since digits and dots
+            // are in the set.
+            strSubVer = SanitizeString(strSubVer);
 
             // This handles the special disconnect for clients between the mandatory 5.4.0.0 and the 5.4.5.0 since
             // 5.4.6.0 effectively became a mandatory due to the contract version error in TxMessage. The protocol version
             // was not incremented since 5.4.6.0 was originally a leisure and so this is the only reasonable way to distinguish
             // in this situation.
-            if (pfrom->strSubVer.find("5.4.5") != std::string::npos
-                || pfrom->strSubVer.find("5.4.4") != std::string::npos
-                || pfrom->strSubVer.find("5.4.3") != std::string::npos
-                || pfrom->strSubVer.find("5.4.2") != std::string::npos
-                || pfrom->strSubVer.find("5.4.1") != std::string::npos
-                || pfrom->strSubVer.find("5.4.0") != std::string::npos
+            if (strSubVer.find("5.4.5") != std::string::npos
+                || strSubVer.find("5.4.4") != std::string::npos
+                || strSubVer.find("5.4.3") != std::string::npos
+                || strSubVer.find("5.4.2") != std::string::npos
+                || strSubVer.find("5.4.1") != std::string::npos
+                || strSubVer.find("5.4.0") != std::string::npos
                 ) {
 
                 pfrom->fDisconnect = true;
@@ -710,10 +953,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         }
 
         if (!vRecv.empty())
-            vRecv >> pfrom->nStartingHeight;
-
-        // 12-5-2015 - Append Trust fields
-        pfrom->nTrust = 0;
+            vRecv >> nStartingHeight;
 
         // Allow newbies to connect easily with 0 blocks
         if (gArgs.GetArg("-autoban", "true") == "true")
@@ -721,7 +961,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 
                 // Note: Hacking attempts start in this area
 
-                if (pfrom->nStartingHeight < 1 && pfrom->nServices == 0 )
+                if (nStartingHeight < 1 && nServices == 0)
                 {
                     pfrom->Misbehaving(100);
                     LogPrint(BCLog::LogFlags::NET, "Disconnecting possible hacker node with no services.  Banned for 24 hours.");
@@ -732,7 +972,6 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 
 
 
-        pfrom->SetAddrLocal(addrMe);
         if (pfrom->fInbound && addrMe.IsRoutable())
         {
             SeenLocal(addrMe);
@@ -752,15 +991,28 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             g_connman->SetAddrSeenByPeer(addrMe);
         }
 
+        // Negotiated. Publish the message's fields for the other threads that
+        // read them, nVersion last, so that a reader which finds it set finds
+        // the rest set too. nStartingHeight follows fClient: the block-request
+        // paths test both without testing nVersion.
+        pfrom->nServices = nServices;
+        pfrom->fClient = !(nServices & NODE_NETWORK);
+        pfrom->SetSubVer(strSubVer);
+        pfrom->nTrust = 0;
+        pfrom->SetAddrLocal(addrMe);
+        // Moved from AddTimeData to here to follow bitcoin's approach. Taken
+        // against the receive time, as the check above is: Bitcoin Core takes
+        // it when the message is processed, but its handler takes one message
+        // per peer in turn, so a VERSION never waits behind a backlog there.
+        const int64_t nOffsetSample = nTime - received_time;
+        pfrom->nTimeOffset = nOffsetSample;
+        pfrom->nStartingHeight = nStartingHeight;
+        pfrom->nVersion = nVersion;
+
         // Be shy and don't send version until we hear
         if (pfrom->fInbound)
             pfrom->PushVersion();
 
-        pfrom->fClient = !(pfrom->nServices & NODE_NETWORK);
-
-        // Moved the below from AddTimeData to here to follow bitcoin's approach.
-        int64_t nOffsetSample = nTime - GetTime();
-        pfrom->nTimeOffset = nOffsetSample;
         if (!pfrom->fInbound && gArgs.GetBoolArg("-synctime", true))
             AddTimeData(pfrom->GetId(), pfrom->addr, nOffsetSample);
 
@@ -768,7 +1020,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         pfrom->PushMessage(NetMsgType::VERACK);
         {
             LOCK(pfrom->cs_vSend);
-            pfrom->ssSend.SetVersion(min(pfrom->nVersion, PROTOCOL_VERSION));
+            pfrom->ssSend.SetVersion(min(nVersion, PROTOCOL_VERSION));
         }
 
 
@@ -831,8 +1083,8 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 
         pfrom->fSuccessfullyConnected = true;
 
-        LogPrint(BCLog::LogFlags::NOISY, "receive version message: version %d, blocks=%d, us=%s, them=%s, peer=%s", pfrom->nVersion,
-            pfrom->nStartingHeight, addrMe.ToString(), addrFrom.ToString(), pfrom->addr.ToString());
+        LogPrint(BCLog::LogFlags::NOISY, "receive version message: version %d, blocks=%d, us=%s, them=%s, peer=%s", nVersion,
+            nStartingHeight, addrMe.ToString(), addrFrom.ToString(), pfrom->addr.ToString());
     }
     else if (pfrom->nVersion == 0)
     {
@@ -844,8 +1096,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
     }
     else if (strCommand == NetMsgType::VERACK)
     {
-        LOCK(pfrom->cs_vRecvMsg);
-        pfrom->SetRecvVersion(min(pfrom->nVersion, PROTOCOL_VERSION));
+        pfrom->SetRecvVersion(min(pfrom->nVersion.load(), PROTOCOL_VERSION));
     }
     else if (strCommand == NetMsgType::GRIDADDR || strCommand == NetMsgType::ADDR)
     {
@@ -935,8 +1186,21 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             // this inventory object:
             if (fAlreadyHave)
             {
-                LOCK(CScraperManifest::cs_mapManifest);
-                fAlreadyHave = CScraperManifest::AlreadyHave(pfrom, inv);
+                if (inv.type == MSG_PART)
+                {
+                    // A node asks for the parts of the manifests it holds itself (CSplitBlob::UseAsSource), so a
+                    // peer's announcement of a part is answered from the part store: only a part that a manifest
+                    // here references and whose data has not arrived draws a request. The lookup takes
+                    // cs_mapParts alone, as the part handlers of this function do. CScraperManifest::AlreadyHave
+                    // gives the same answer for a part to SendMessages, which calls it with cs_main, the peer's
+                    // cs_vSend and cs_mapManifest held.
+                    fAlreadyHave = !CSplitBlob::PartNeeded(inv.hash);
+                }
+                else
+                {
+                    LOCK(CScraperManifest::cs_mapManifest);
+                    fAlreadyHave = CScraperManifest::AlreadyHave(pfrom, inv);
+                }
             }
 
             LogPrint(BCLog::LogFlags::NOISY, " got inventory: %s  %s", inv.ToString(), fAlreadyHave ? "have" : "new");
@@ -988,160 +1252,23 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         {
             LogPrint(BCLog::LogFlags::NET, "received getdata (%" PRIszu " invsz)", vInv.size());
         }
-
-        LOCK(cs_main);
-
-        // Bound the PSGT bytes served per getdata. The pool holds at most
-        // PSGTPool::MAX_ENTRIES distinct revisions, so any request for more than
-        // that many is necessarily redundant. This caps a getdata amplification
-        // where a peer packs MAX_INV_SZ (50000) MSG_PSGT entries all naming the
-        // same pooled revision (each up to MAX_PSGT_WIRE_SIZE) to force gigabytes
-        // of repeated sends under cs_main.
-        constexpr size_t MAX_PSGT_PER_GETDATA = PSGTPool::MAX_ENTRIES;
-        size_t psgt_served = 0;
-
-        for (auto const& inv : vInv)
+        else
         {
-            if (ShutdownInProgress())
-                return true;
-            if (vInv.size() == 1)
-            {
-              LogPrint(BCLog::LogFlags::NET, "received getdata for: %s", inv.ToString());
-            }
+            LogPrint(BCLog::LogFlags::NET, "received getdata for: %s", vInv.front().ToString());
+        }
 
-            if (inv.type == MSG_BLOCK)
-            {
-                // Send block from disk
-                BlockMap::iterator mi = mapBlockIndex.find(inv.hash);
-                if (mi != mapBlockIndex.end())
-                {
-                    CBlock block;
-                    ReadBlockFromDisk(block, mi->second, Params().GetConsensus());
+        // ProcessMessages handles no message from a peer while entries of an
+        // earlier getdata are held on it, so there are none here. The PSGT
+        // count is kept on the peer with the entries, as it is for one getdata.
+        pfrom->vRecvGetData.insert(pfrom->vRecvGetData.end(), vInv.begin(), vInv.end());
+        pfrom->nGetDataPsgtServed = 0;
 
-                    pfrom->PushMessage(NetMsgType::ENCRYPT, block);
+        ProcessGetData(pfrom);
 
-                    // Trigger them to send a getblocks request for the next batch of inventory
-                    if (inv.hash == pfrom->hashContinue)
-                    {
-                        // Bypass PushInventory, this must send even if redundant,
-                        // and we want it right after the last block so they don't
-                        // wait for other stuff first.
-                        vector<CInv> vInv;
-                        vInv.push_back(CInv(MSG_BLOCK, hashBestChain));
-                        pfrom->PushMessage(NetMsgType::INV, vInv);
-                        pfrom->hashContinue.SetNull();
-                    }
-                }
-            }
-            else if (inv.IsKnownType())
-            {
-                // Send stream from relay memory
-                bool pushed = false;
-                {
-                    LOCK(cs_mapRelay);
-                    map<CInv, CDataStream>::iterator mi = mapRelay.find(inv);
-                    if (mi != mapRelay.end()) {
-                        pfrom->PushMessage(inv.GetCommand(), mi->second);
-                        pushed = true;
-                    }
-                }
-                // A peer asking for one of our txs is evidence it is propagating,
-                // so stop tracking it for initial broadcast. Do this for the
-                // relay-memory hit above as well as the mempool-served path below
-                // -- freshly relayed txs live in mapRelay for ~15 min, so the
-                // common case is served from there, not from the mempool branch.
-                if (pushed && inv.type == MSG_TX) {
-                    mempool.RemoveUnbroadcast(inv.hash);
-                }
-                if (!pushed && inv.type == MSG_TX) {
-                    CTransaction tx;
-                    if (mempool.lookup(inv.hash, tx)) {
-                        CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
-                        ss.reserve(1000);
-                        ss << tx;
-                        pfrom->PushMessage(NetMsgType::TX, ss);
-                        // A peer asked for this tx, so it is propagating: stop
-                        // tracking it for initial broadcast.
-                        mempool.RemoveUnbroadcast(inv.hash);
-                    }
-                }
-                else if(!pushed && inv.type == MSG_PART) {
-                    LOCK(CSplitBlob::cs_mapParts);
-
-                    CSplitBlob::SendPartTo(pfrom, inv.hash);
-                }
-                else if (!pushed && inv.type == MSG_PSGT) {
-                    // Serve from the PSGT pool, not mapRelay: pooled PSGTs
-                    // live up to 7 days, far beyond mapRelay's 15-minute
-                    // expiry. Do not serve while out of sync (mirrors the
-                    // scraper manifest guard below). Bounded by the per-getdata
-                    // budget so a single getdata cannot force unbounded sends.
-                    if (!OutOfSyncByAge() && psgt_served < MAX_PSGT_PER_GETDATA)
-                    {
-                        if (const auto serialized = g_psgt_pool.GetSerializedByRevision(inv.hash))
-                        {
-                            ++psgt_served;
-                            CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
-                            ss.reserve(serialized->size() + 16);
-                            ss << *serialized;
-                            pfrom->PushMessage(NetMsgType::PSGT, ss);
-                        }
-                    }
-                }
-                else if(!pushed &&  inv.type == MSG_SCRAPERINDEX)
-                {
-                    LOCK2(CScraperManifest::cs_mapManifest, CSplitBlob::cs_mapParts);
-
-                    // Do not send manifests while out of sync.
-                    if (!OutOfSyncByAge())
-                    {
-                        // Do not send unauthorized manifests. This check needs to be done here, because in the
-                        // case of a scraper deauthorization, a request from another node to forward the manifest
-                        // may come before the housekeeping loop has a chance to do the periodic culling. This could
-                        // result in unnecessary node banscore. This will suppress "this" node from sending any
-                        // unauthorized manifests.
-
-                        auto iter = CScraperManifest::mapManifest.find(inv.hash);
-                        if (iter != CScraperManifest::mapManifest.end())
-                        {
-                            CScraperManifest_shared_ptr manifest = iter->second;
-
-                            // We are not going to do anything with the banscore here, because this is the sending node,
-                            // but it is an out parameter of IsManifestAuthorized.
-                            unsigned int banscore_out = 0;
-
-                            // We have to copy out the nTime and pubkey from the selected manifest, because the
-                            // IsManifestAuthorized call chain traverses the map and locks the cs_manifests in turn,
-                            // which creates a deadlock potential if the cs_manifest lock is already held on one of
-                            // the manifests.
-                            int64_t nTime = 0;
-                            CPubKey pubkey;
-                            {
-                                LOCK(manifest->cs_manifest);
-
-                                nTime = manifest->nTime;
-                                pubkey = manifest->pubkey;
-                            }
-
-                            // Also don't send a manifest that is not current.
-                            if (CScraperManifest::IsManifestAuthorized(nTime, pubkey, banscore_out)
-                                    && WITH_LOCK(manifest->cs_manifest, return manifest->IsManifestCurrent()))
-                            {
-                                // SendManifestTo takes its own lock on the manifest. Note that the original form of
-                                // SendManifestTo took the inv.hash and did another lookup to find the actual
-                                // manifest in the mapManifest. This is unnecessary since we already have the manifest
-                                // identified above. The new form, which takes a smart shared pointer to the manifest
-                                // as an argument, sends the manifest directly using PushMessage, and avoids another
-                                // map find.
-                                CScraperManifest::SendManifestTo(pfrom, manifest);
-                            }
-                        }
-                    }
-                }
-            }
-
-            // Track requests for our stuff
-            if (pwalletMain) pwalletMain->Inventory(inv.hash);
+        if (!pfrom->vRecvGetData.empty())
+        {
+            LogPrint(BCLog::LogFlags::NET, "getdata: %" PRIszu " of %" PRIszu " entries held for %s until its send queue has room",
+                     pfrom->vRecvGetData.size(), vInv.size(), pfrom->addrName);
         }
     }
 
@@ -1211,7 +1338,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 
         vector<CBlockHeader> vHeaders;
         int nLimit = 1000;
-        LogPrintf("getheaders %d to %s", (pindex ? pindex->nHeight : -1), hashStop.ToString().substr(0,20));
+        LogPrint(BCLog::LogFlags::NET, "getheaders %d to %s", (pindex ? pindex->nHeight : -1), hashStop.ToString().substr(0,20));
         for (; pindex; pindex = pindex->pnext)
         {
             vHeaders.push_back(pindex->GetBlockHeader());
@@ -1248,8 +1375,13 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             for (unsigned int i = 0; i < vWorkQueue.size(); i++)
             {
                 uint256 hashPrev = vWorkQueue[i];
-                for (set<uint256>::iterator mi = mapOrphanTransactionsByPrev[hashPrev].begin();
-                     mi != mapOrphanTransactionsByPrev[hashPrev].end();
+                // find(), not operator[]: a transaction with no orphan children
+                // must not leave an empty entry behind.
+                const auto by_prev = mapOrphanTransactionsByPrev.find(hashPrev);
+                if (by_prev == mapOrphanTransactionsByPrev.end()) continue;
+
+                for (set<uint256>::iterator mi = by_prev->second.begin();
+                     mi != by_prev->second.end();
                      ++mi)
                 {
                     const uint256& orphanTxHash = *mi;
@@ -1305,7 +1437,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 
         uint256 hashBlock = block.GetHash(true);
 
-        LogPrintf(" Received block %s; ", hashBlock.ToString());
+        LogPrint(BCLog::LogFlags::NET, " Received block %s; ", hashBlock.ToString());
         if (LogInstance().WillLogCategory(BCLog::LogFlags::NOISY)) block.print();
 
         CInv inv(MSG_BLOCK, hashBlock);
@@ -1353,19 +1485,8 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 
     else if (strCommand == NetMsgType::MEMPOOL)
     {
-        LOCK(cs_main);
-
-        std::vector<uint256> vtxid;
-        mempool.queryHashes(vtxid);
-        vector<CInv> vInv;
-        for (unsigned int i = 0; i < vtxid.size(); i++) {
-            CInv inv(MSG_TX, vtxid[i]);
-            vInv.push_back(inv);
-            if (i == (MAX_INV_SZ - 1))
-                    break;
-        }
-        if (vInv.size() > 0)
-            pfrom->PushMessage(NetMsgType::INV, vInv);
+        // Not answered. No Gridcoin node sends mempool.
+        LogPrint(BCLog::LogFlags::NET, "mempool request from %s not answered", pfrom->addr.ToString());
     }
     else if (strCommand == NetMsgType::PING)
     {
@@ -1431,9 +1552,9 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         }
 
         if (!(sProblem.empty())) {
-            LogPrintf("pong %s %s: %s, %" PRIx64 " expected, %" PRIx64 " received, %" PRIu64 " bytes"
+            LogPrint(BCLog::LogFlags::NET, "pong %s %s: %s, %" PRIx64 " expected, %" PRIx64 " received, %" PRIu64 " bytes"
                 , pfrom->addr.ToString()
-                , pfrom->strSubVer
+                , pfrom->GetSubVer()
                 , sProblem, pfrom->nPingNonceSent, nonce, nAvail);
         }
         if (bPingFinished) {
@@ -1524,8 +1645,32 @@ static bool ProcessMessages(CNode* pfrom) EXCLUSIVE_LOCKS_REQUIRED(pfrom->cs_vRe
     //
     bool fOk = true;
 
+    // Entries of a getdata that are still held on the peer are served before
+    // any further message from it is handled. An entry is off the peer before
+    // it is served, so one that throws is not met again on the next pass.
+    if (!pfrom->fDisconnect && !pfrom->vRecvGetData.empty()) {
+        try
+        {
+            ProcessGetData(pfrom);
+        }
+        catch (const std::exception& e) {
+            LogPrintf("%s(getdata entries held): Exception '%s' (%s) caught", __func__, e.what(), typeid(e).name());
+        } catch (...) {
+            LogPrintf("%s(getdata entries held): Unknown exception caught", __func__);
+        }
+    }
+
     std::deque<CNetMessage>::iterator it = pfrom->vRecvMsg.begin();
     while (!pfrom->fDisconnect && it != pfrom->vRecvMsg.end()) {
+        // No further message from a peer is handled while entries of its
+        // getdata are held, whether they were left by the call above or by the
+        // getdata handled in the last turn of this loop. That keeps the peer's
+        // replies in the order of its requests. The check below does not do
+        // it: the send queue can drain between the serving and that check.
+        // The messages still arrive and wait in vRecvMsg.
+        if (!pfrom->vRecvGetData.empty())
+            break;
+
         // Don't bother if send buffer is too full to respond anyway
         if (WITH_LOCK(pfrom->cs_vSend, return pfrom->nSendSize) >= SendBufferSize())
             break;
@@ -1555,7 +1700,7 @@ static bool ProcessMessages(CNode* pfrom) EXCLUSIVE_LOCKS_REQUIRED(pfrom->cs_vRe
         CMessageHeader& hdr = msg.hdr;
         if (!hdr.IsValid())
         {
-            LogPrintf("PROCESSMESSAGE: ERRORS IN HEADER %s", hdr.GetCommand());
+            LogPrint(BCLog::LogFlags::NET, "PROCESSMESSAGE: ERRORS IN HEADER %s", SanitizeString(hdr.GetCommand()));
             continue;
         }
         string strCommand = hdr.GetCommand();
@@ -1585,8 +1730,8 @@ static bool ProcessMessages(CNode* pfrom) EXCLUSIVE_LOCKS_REQUIRED(pfrom->cs_vRe
         memcpy(&nChecksum, &hash, sizeof(nChecksum));
         if (!std::equal(std::begin(nChecksum), std::end(nChecksum), std::begin(hdr.pchChecksum)))
         {
-            LogPrintf("ProcessMessages(%s, %u bytes) : CHECKSUM ERROR nChecksum=%08x hdr.nChecksum=%08x",
-               strCommand, nMessageSize, nChecksum, hdr.pchChecksum);
+            LogPrint(BCLog::LogFlags::NET, "ProcessMessages(%s, %u bytes) : CHECKSUM ERROR nChecksum=%08x hdr.nChecksum=%08x",
+               SanitizeString(strCommand), nMessageSize, nChecksum, hdr.pchChecksum);
             continue;
         }
 
@@ -1598,43 +1743,21 @@ static bool ProcessMessages(CNode* pfrom) EXCLUSIVE_LOCKS_REQUIRED(pfrom->cs_vRe
             if (ShutdownInProgress())
                 break;
         }
-        catch (std::ios_base::failure& e)
-        {
-            if (strstr(e.what(), "end of data"))
-            {
-                // Allow exceptions from under-length message on vRecv
-                LogPrintf("ProcessMessages(%s, %u bytes) : Exception '%s' caught, normally caused by a message being shorter than its stated length", strCommand, nMessageSize, e.what());
-            }
-            else if (strstr(e.what(), "size too large"))
-            {
-                // Allow exceptions from over-long size
-                LogPrintf("ProcessMessages(%s, %u bytes) : Exception '%s' caught", strCommand, nMessageSize, e.what());
-            }
-            else if (strstr(e.what(), "Vector length limit exceeded"))
-            {
-                // Allow exceptions from a vector whose element count exceeds the
-                // limit declared for it (LimitedVector in serialize.h, applied to
-                // the block locator at MAX_LOCATOR_SZ). This is an ordinary
-                // malformed-message rejection and belongs with the two above.
-                //
-                // Without this arm the message matches neither filter and falls
-                // through to PrintExceptionContinue(), which assigns
-                // strMiscWarning; GetWarnings() returns that at priority 1000, so
-                // it surfaces in getinfo, getstakinginfo, getnetworkinfo,
-                // getblockchaininfo and the GUI status bar. That let any peer set
-                // the node's user-visible warning string on demand, unthrottled
-                // and with no misbehavior score, by sending one oversized locator.
-                LogPrintf("ProcessMessages(%s, %u bytes) : Exception '%s' caught", strCommand, nMessageSize, e.what());
-            }
-            else
-            {
-                PrintExceptionContinue(&e, "ProcessMessages()");
-            }
-        }
-        catch (std::exception& e) {
-            PrintExceptionContinue(&e, "ProcessMessages()");
+        // Log whatever ProcessMessage() throws and go on to the next message.
+        // Most of it is a peer's malformed message, which deserialization
+        // rejects by throwing. PrintExceptionContinue() would write it to
+        // stderr and assign strMiscWarning, which GetWarnings() returns at
+        // priority 1000 in getinfo, getstakinginfo, getnetworkinfo,
+        // getblockchaininfo and the GUI status bar, so any peer could set the
+        // node's user-visible warning with one malformed message.
+        //
+        // bitcoin#17762 logs these to the net category. Here they are logged
+        // unconditionally: the same catch receives internal errors thrown while
+        // a message is processed, and those belong in the default debug.log.
+        catch (const std::exception& e) {
+            LogPrintf("%s(%s, %u bytes): Exception '%s' (%s) caught", __func__, SanitizeString(strCommand), nMessageSize, e.what(), typeid(e).name());
         } catch (...) {
-            PrintExceptionContinue(nullptr, "ProcessMessages()");
+            LogPrintf("%s(%s, %u bytes): Unknown exception caught", __func__, SanitizeString(strCommand), nMessageSize);
         }
 
         if (!fRet)
@@ -1880,7 +2003,7 @@ static bool SendMessages(CNode* pto, bool fSendTrickle)
         // cs_main is required for the AlreadyHave call (mapBlockIndex
         // lookup) and must be released before the cs_mapManifest scope
         // below to preserve the canonical cs_main -> subsystem order
-        // documented at the inv-handling site near main.cpp:2533.
+        // documented at the INV handler in ProcessMessage above.
         bool fAlreadyHave;
         {
             LOCK(cs_main);
@@ -2074,6 +2197,28 @@ public:
         return nZeroed;
     }
 
+    unsigned int SweepDecayedMisbehavior() override
+    {
+        unsigned int erased = 0;
+
+        LOCK(m_misbehavior_cs);
+
+        for (auto it = m_misbehavior.begin(); it != m_misbehavior.end();)
+        {
+            if (DecayedScore_(it->second) == 0)
+            {
+                it = m_misbehavior.erase(it);
+                ++erased;
+            }
+            else
+            {
+                ++it;
+            }
+        }
+
+        return erased;
+    }
+
     void AskFor(CNode* pnode, const CInv& inv) override
     {
         AskForInv(pnode, inv);
@@ -2099,6 +2244,23 @@ public:
     }
 
 private:
+    //! The score an entry holds now: its recorded score less the decay since
+    //! it was last raised.
+    int DecayedScore_(const std::pair<int, int64_t>& entry) const EXCLUSIVE_LOCKS_REQUIRED(m_misbehavior_cs)
+    {
+        // This expression results in the misbehavior decaying linearly over a 24 hour period at a rate equal to the default banscore.
+        // The default banscore is normally 100, but can be changed by specifying -banscore on the command line. At the default setting,
+        // This results in a decay of roughly 100/24 = 4 points per hour.
+        int time_based_decay_correction = std::round(
+                    (double) gArgs.GetArg("-banscore", 100)
+                    * (double) std::max((int64_t) 0, GetAdjustedTime() - entry.second)
+                    / (double) gArgs.GetArg("-bantime", DEFAULT_MISBEHAVING_BANTIME)
+                    );
+
+        // Never below zero.
+        return std::max(0, entry.first - time_based_decay_correction);
+    }
+
     //! Current (decayed) misbehavior score for addr; erases a zeroed entry.
     //! Caller holds m_misbehavior_cs (so Misbehaving/GetMisbehaviorScore share
     //! one lock acquisition instead of re-locking, as the PR 2c free functions
@@ -2111,17 +2273,7 @@ private:
 
         if (iMisbehavior != m_misbehavior.end())
         {
-            // This expression results in the misbehavior decaying linearly over a 24 hour period at a rate equal to the default banscore.
-            // The default banscore is normally 100, but can be changed by specifying -banscore on the command line. At the default setting,
-            // This results in a decay of roughly 100/24 = 4 points per hour.
-            int time_based_decay_correction = std::round(
-                        (double) gArgs.GetArg("-banscore", 100)
-                        * (double) std::max((int64_t) 0, GetAdjustedTime() - iMisbehavior->second.second)
-                        / (double) gArgs.GetArg("-bantime", DEFAULT_MISBEHAVING_BANTIME)
-                        );
-
-            // Make sure nMisbehavior doesn't go below zero.
-            nMisbehavior = std::max(0, iMisbehavior->second.first - time_based_decay_correction);
+            nMisbehavior = DecayedScore_(iMisbehavior->second);
 
             // Delete entry if nMisbehavior is zero.
             if (!nMisbehavior) m_misbehavior.erase(iMisbehavior);
@@ -2144,7 +2296,8 @@ private:
     // Lock order: cs_main -> cs_wallet -> BanMan::m_cs_banned -> m_misbehavior_cs
     // (-> cs_args).
     mutable CCriticalSection m_misbehavior_cs;
-    std::map<CAddress, std::pair<int, int64_t>> m_misbehavior GUARDED_BY(m_misbehavior_cs);
+    // Keyed by the address.
+    std::map<CNetAddr, std::pair<int, int64_t>> m_misbehavior GUARDED_BY(m_misbehavior_cs);
 };
 } // namespace
 

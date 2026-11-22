@@ -188,7 +188,9 @@ BOOST_AUTO_TEST_CASE(generate_and_parse_roundtrip)
 
         // 24 words.
         const std::string str(phrase.begin(), phrase.end());
-        BOOST_CHECK_EQUAL(std::count(str.begin(), str.end(), ' '), WORD_COUNT - 1);
+        // sign-compare checked: std::count returns a ptrdiff_t (int on 32-bit targets) that cannot be negative;
+        // WORD_COUNT - 1 is unsigned, so the count is cast to unsigned.
+        BOOST_CHECK_EQUAL(static_cast<unsigned>(std::count(str.begin(), str.end(), ' ')), WORD_COUNT - 1);
 
         CKey parsed;
         int64_t birthday = 0;

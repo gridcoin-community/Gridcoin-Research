@@ -7,10 +7,27 @@
 A vote holds each choice as one byte, so a choice id outside 0..255 is a
 parameter error. An id inside that range reaches the vote builder, which
 refuses one that names no choice of the poll, or one given twice.
+
+The same poll serves testpollnotification, whose reply shows the sensitive
+-pollnotify command as ****, and whose log lines do not name it, the one for
+a command that fails included.
 """
 
-from test_framework.test_framework import GridcoinTestFramework
-from test_framework.util import assert_raises_rpc_error
+from decimal import Decimal, ROUND_DOWN
+
+from test_framework.test_framework import GridcoinTestFramework, STAKE_TIMESTAMP_MASK
+from test_framework.util import assert_equal, assert_greater_than, assert_raises_rpc_error
+
+# A poll's eligibility claim is built from outputs at least this deep
+# (CWalletTx::IsConfirmed in the PollClaimBuilder), as in feature_vote_results.py.
+CLAIM_DEPTH = 10
+# Mock-clock advance per block, past the 90-second target spacing. Blocks mined
+# faster raise the difficulty with every block, and the kernel is evaluated at
+# one slot per attempt, so a run of them can leave generatetoaddress out of
+# attempts ("no stake found").
+BLOCK_SPACING = 96
+# Ordinary outputs the premine split below makes for the claim.
+SPLIT_COUNT = 96
 
 
 class VoteByIdTest(GridcoinTestFramework):
@@ -18,7 +35,10 @@ class VoteByIdTest(GridcoinTestFramework):
         self.num_nodes = 1
         self.chain = "regtest"
         self.setup_clean_chain = True
-        self.extra_args = [["-staking=0", "-connect=0", "-listen=0"]]
+        # The notify command carries a marker that must show in no reply and no log. It fails, so
+        # that the line logged for a failed command is checked too.
+        self.extra_args = [["-staking=0", "-connect=0", "-listen=0", "-debug=misc",
+                            "-pollnotify=false pollnotify-secret-%s1"]]
 
     def setup_network(self):
         self.add_nodes(self.num_nodes, self.extra_args)
@@ -26,10 +46,27 @@ class VoteByIdTest(GridcoinTestFramework):
 
     def run_test(self):
         node = self.nodes[0]
-        node.generatetoaddress(12, node.getnewaddress())
-        # The premine is a few large outputs and each mined block churns one;
-        # fan one out so the blocks below always find a mature stake kernel.
-        self.grow_utxo_universe(node)
+        # addpoll claims 100,000 GRC from outputs CLAIM_DEPTH blocks deep, and
+        # every block restakes one output. Before the first block, split two
+        # premine outputs into SPLIT_COUNT ordinary outputs of about 2,083 GRC,
+        # as feature_vote_results.py splits its premine. The CLAIM_DEPTH blocks
+        # after the one that confirms the split restake at most that many of
+        # them, which leaves more than 175,000 GRC claimable, and the split and
+        # the rest of the premine give every block a stake kernel.
+        premine = node.listunspent(0)
+        assert_equal(len(premine), 10)
+        spent = premine[:2]
+        per_out = ((sum(u["amount"] for u in spent) - Decimal("1")) / SPLIT_COUNT).quantize(
+            Decimal("0.00000001"), rounding=ROUND_DOWN)  # ~1 GRC fee
+        signed = node.signrawtransactionwithwallet(node.createrawtransaction(
+            [{"txid": u["txid"], "vout": u["vout"]} for u in spent],
+            {node.getnewaddress(): per_out for _ in range(SPLIT_COUNT)}))
+        assert_equal(signed["complete"], True)
+        split = node.sendrawtransaction(signed["hex"])
+        for _ in range(1 + CLAIM_DEPTH):
+            node.advance_mocktime_to((node.mock_now() + BLOCK_SPACING) & ~STAKE_TIMESTAMP_MASK)
+            node.generatetoaddress(1, node.getnewaddress())
+        assert_greater_than(sum(u["amount"] for u in node.listunspent(CLAIM_DEPTH) if u["txid"] == split), 175000)
 
         single = node.addpoll("survey", "single", 7, "Which?", "A;B;C", 1, 2, "https://gridcoin.us")
         multiple = node.addpoll("survey", "multiple", 7, "Which?", "A;B;C", 1, 3, "https://gridcoin.us")
@@ -50,6 +87,17 @@ class VoteByIdTest(GridcoinTestFramework):
                                 node.votebyid, single["id"], 3)
         assert_raises_rpc_error(-1, "\"255\" is not a valid poll choice",
                                 node.votebyid, single["id"], 255)
+
+        # The test notification runs the command, but neither the reply nor the log shows it.
+        assert_equal(node.testpollnotification(single["id"]), "Notification command: ****")
+
+        def log_text():
+            with open(node.debug_log_path, encoding="utf8", errors="replace") as f:
+                return f.read()
+
+        # The command runs on a thread of its own: wait for its failure to be logged.
+        self.wait_until(lambda: "runCommand error" in log_text(), timeout=30)
+        assert "pollnotify-secret" not in log_text()
 
 
 if __name__ == "__main__":

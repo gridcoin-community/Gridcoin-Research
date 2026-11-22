@@ -41,7 +41,9 @@
 #define SCRYPT_BUFFER_SIZE (131072 + 63)
 
 #if defined(USE_ASM_SCRYPT) && (defined(__x86_64__) || defined(__i386__))
-extern "C" void scrypt_core(unsigned int *X, unsigned int *V, int N);
+// N is unsigned here as in the generic version below. Either type reaches the
+// assembly as the same 32 bits, so the declaration changes nothing it reads.
+extern "C" void scrypt_core(unsigned int *X, unsigned int *V, unsigned int N);
 #else
 // Generic scrypt_core implementation
 
@@ -113,7 +115,11 @@ static inline void xor_salsa8(unsigned int B[16], const unsigned int Bx[16])
     B[15] += x15;
 }
 
-static inline void scrypt_core(unsigned int *X, unsigned int *V, int N)
+// N is an iteration count and cannot be negative, so it is unsigned like the loop
+// counters it bounds: both i < N comparisons are unsigned on both sides. Both callers
+// pass 1024, and the second loop's mask (& 1023) assumes exactly that value, so this
+// version is correct for N == 1024 only. Both assembly versions mask with N - 1.
+static inline void scrypt_core(unsigned int *X, unsigned int *V, unsigned int N)
 {
     unsigned int i, j, k;
 

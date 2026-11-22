@@ -21,6 +21,8 @@ class CWallet;
 
 namespace interfaces {
 
+class ConnectionScope;
+
 class Handler;
 
 //! The researcher's current beacon status (Phase 1d-iv). Moved here from the Qt
@@ -91,7 +93,7 @@ struct ResearcherSnapshot
     // Beacon status
     BeaconStatus beacon_status = BeaconStatus::UNKNOWN;
     bool beacon_present = false;         //!< A beacon record exists (may be expired); gates the age/address/expiry formatters.
-    bool pending_beacon_present = false; //!< A pending beacon record exists (may be pending-expired); gates the pending formatters.
+    bool pending_beacon_present = false; //!< A pending beacon is shown; gates the pending formatters. Matches has_pending_beacon.
     bool has_active_beacon = false;
     bool has_pending_beacon = false;
     bool has_renewable_beacon = false;
@@ -269,6 +271,14 @@ public:
     virtual std::unique_ptr<Handler> handleBeaconChanged(BeaconChangedFn fn) = 0;
     virtual std::unique_ptr<Handler> handleAccrualChanged(AccrualChangedFn fn) = 0;
     virtual std::unique_ptr<Handler> handleBlocksChanged(BlocksChangedFn fn) = 0;
+
+    //! LOCAL ONLY: not served over capnp (no ordinal), so no peer can call it,
+    //! and the GUI's proxy keeps this default, which does nothing. Binds this to
+    //! the IPC connection it is served on, so what it runs under the client's
+    //! capability reads the IPC capability for that connection: none once the
+    //! connection has closed (see Wallet::bindConnectionScope). The serving Init
+    //! calls it once, before handing it out.
+    virtual void bindConnectionScope(std::shared_ptr<ConnectionScope> /*scope*/) {}
 };
 
 //! Return an in-process ResearcherContext over the global researcher/beacon

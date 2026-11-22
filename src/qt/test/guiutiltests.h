@@ -15,6 +15,14 @@ class GUIUtilTests : public QObject
 private slots:
     void extractFirstSuffixFromFilter_data();
     void extractFirstSuffixFromFilter();
+    void secureStringFromQStringMatchesToStdString_data();
+    void secureStringFromQStringMatchesToStdString();
+    void secureStringFromQStringUsesSecureBuffer();
+    void persistedLaunchModeRoundTrips();
+    void coreFileOpenDecision();
+    void webLinkHtml_data();
+    void webLinkHtml();
+    void pollTitleLabelsShowPlainText();
 };
 
 #endif // BITCOIN_QT_TEST_GUIUTILTESTS_H

@@ -82,6 +82,11 @@ void WidgetsFrontEnd::requestQuit()
     BitcoinGUI::requestQuit();
 }
 
+void WidgetsFrontEnd::requestQuitForCoreStop()
+{
+    BitcoinGUI::requestQuitForCoreStop();
+}
+
 void WidgetsFrontEnd::hideMain()
 {
     if (m_window) m_window->hide();

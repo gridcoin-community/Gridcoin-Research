@@ -16,6 +16,11 @@ constexpr int DETACH_HOOK_COUNT = 7;
 
 GuiFrontEnd::~GuiFrontEnd() = default;
 
+void GuiFrontEnd::requestQuitForCoreStop()
+{
+    requestQuit();
+}
+
 void GuiFrontEnd::detachModels()
 {
     // The established teardown order. Each entry is a virtual hook, so the call

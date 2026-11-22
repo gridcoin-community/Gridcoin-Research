@@ -19,6 +19,8 @@
 
 namespace interfaces {
 
+class ConnectionScope;
+
 class Handler;
 
 //! GUI-facing mirror of GRC::PollFilterFlag (gridcoin/voting/filter.h). A plain
@@ -243,6 +245,14 @@ public:
 
     //! Subscribe to new-vote notifications (uiInterface.NewVoteReceived).
     virtual std::unique_ptr<Handler> handleNewVoteReceived(NewVoteReceivedFn fn) = 0;
+
+    //! LOCAL ONLY: not served over capnp (no ordinal), so no peer can call it,
+    //! and the GUI's proxy keeps this default, which does nothing. Binds this to
+    //! the IPC connection it is served on, so what it runs under the client's
+    //! capability reads the IPC capability for that connection: none once the
+    //! connection has closed (see Wallet::bindConnectionScope). The serving Init
+    //! calls it once, before handing it out.
+    virtual void bindConnectionScope(std::shared_ptr<ConnectionScope> /*scope*/) {}
 };
 
 //! Return an in-process VotingManager over the global poll registry, the poll

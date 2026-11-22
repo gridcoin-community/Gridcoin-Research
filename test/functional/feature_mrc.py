@@ -20,7 +20,6 @@ staker and foundation). Before the request the same node's block carried no
 such output, which is what the comparison is against.
 """
 
-import os
 from decimal import Decimal
 
 from test_framework.test_framework import GridcoinTestFramework
@@ -48,17 +47,10 @@ class MrcTest(GridcoinTestFramework):
         self.extra_args = [common[:], common + [f"-forcecpid={CPID}"]]
 
     def setup_network(self):
-        # Both nodes get the empty BOINC stub (see feature_beacon_activation.py):
-        # node1's CPID comes from -forcecpid, and node0 must not pick up a CPID
-        # from the host's BOINC installation, or it would stop being an investor.
-        boinc_dir = os.path.join(self.options.tmpdir, "boinc")
-        os.makedirs(boinc_dir, exist_ok=True)
-        client_state_path = os.path.join(boinc_dir, "client_state.xml")
-        with open(client_state_path, "w", encoding="utf-8") as client_state:
-            client_state.write("<client_state>\n</client_state>\n")
-        for args in self.extra_args:
-            args.append(f"-boincdatadir={boinc_dir}")
-
+        # The framework gives each node a BOINC data directory of its own whose
+        # client_state.xml names no project (initialize_datadir in
+        # test_framework/util.py). node1's CPID comes from -forcecpid, and
+        # node0 gets no CPID, so it stays an investor.
         self.add_nodes(self.num_nodes, self.extra_args)
         self.start_nodes()
         self.connect_nodes(0, 1)

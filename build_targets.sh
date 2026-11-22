@@ -45,6 +45,10 @@ print_help() {
     echo "                      Default: false. Native requires system capnproto (auto-installed"
     echo "                      by SKIP_DEPS=false) and libmultiprocess; depends builds also need"
     echo "                      the depends recipes built with MULTIPROCESS=1."
+    echo "  FAIL_ON_WARNINGS=<bool> Fail on any compiler or linker warning in the tree's own build"
+    echo "                      (contrib/devtools/check-build-warnings.sh). CI sets it. Options: true, false."
+    echo "                      Default: false. It sees only what the run compiles: rerun after a"
+    echo "                      failure with CLEAN_BUILD=main to see every warning again."
     echo "  EXTRA_CMAKE_ARGS    Pass additional arguments to CMake (e.g. '-DBoost_USE_STATIC_LIBS=ON')"
     echo "  CC=<path>           Override C compiler (also read from the CC environment variable)."
     echo "  CXX=<path>          Override C++ compiler (also read from the CXX environment variable)."
@@ -247,6 +251,17 @@ write_build_state() {
     echo "${CAPTURED_BUILD_STATE:-unknown}" > "$BUILD_DIR/.build_state"
 }
 
+# Run one of the tree's own build commands. With FAIL_ON_WARNINGS=true it fails
+# on any compiler or linker warning. Only the tree's build goes through here, not
+# depends, whose warnings come from third-party packages.
+run_tree_build() {
+    if [ "$FAIL_ON_WARNINGS" = "true" ]; then
+        ./contrib/devtools/check-build-warnings.sh -- "$@"
+    else
+        "$@"
+    fi
+}
+
 # ==============================================================================
 # ARGUMENT PARSING
 # ==============================================================================
@@ -267,6 +282,7 @@ CC_OVERRIDE="${CC:-}"
 CXX_OVERRIDE="${CXX:-}"
 MANUAL_QT_PATH=""
 DEBUG_LOCKORDER="false"
+FAIL_ON_WARNINGS="false"
 EXTRA_ARGS=""
 
 for arg in "$@"; do
@@ -317,6 +333,10 @@ for arg in "$@"; do
             ;;
         DEBUG_LOCKORDER=*)
             DEBUG_LOCKORDER="${arg#*=}"
+            shift
+            ;;
+        FAIL_ON_WARNINGS=*)
+            FAIL_ON_WARNINGS="${arg#*=}"
             shift
             ;;
         EXTRA_CMAKE_ARGS=*)
@@ -436,6 +456,7 @@ echo "With Docs:    $WITH_DOCS"
 echo "Lock Order:   $DEBUG_LOCKORDER"
 echo "Qt6:          $USE_QT6"
 echo "Multiprocess: $ENABLE_MULTIPROCESS"
+echo "Fail on Warn: $FAIL_ON_WARNINGS"
 if [ -n "$MANUAL_QT_PATH" ]; then echo "Manual Qt:    $MANUAL_QT_PATH"; fi
 if [ -n "$EXTRA_ARGS" ]; then     echo "Extra Args:   $EXTRA_ARGS"; fi
 if [ -n "$CC_OVERRIDE" ]; then    echo "C Compiler:   $CC_OVERRIDE"; fi
@@ -505,7 +526,7 @@ if [[ "$TARGET" == "all" || "$TARGET" == "native" ]] && [[ "$(uname -s)" == "Lin
             $EXTRA_ARGS
 
         # Build
-        cmake --build build -j $CORES
+        run_tree_build cmake --build build -j $CORES
 
         # Test
         print_pre_test_environment
@@ -599,7 +620,7 @@ if [[ "$TARGET" == "all" || "$TARGET" == "depends" ]] && [[ "$(uname -s)" == "Li
             $EXTRA_ARGS
 
         # Build
-        cmake --build build_linux_depends -j $CORES
+        run_tree_build cmake --build build_linux_depends -j $CORES
 
         # Test
         print_pre_test_environment
@@ -696,7 +717,7 @@ if [[ "$TARGET" == "all" || "$TARGET" == "win64" ]] && [[ "$(uname -s)" == "Linu
             $EXTRA_ARGS
 
         # Build
-        cmake --build build_win64 -j $CORES
+        run_tree_build cmake --build build_win64 -j $CORES
 
         # Test
         # The Windows test suite is executed under Wine (CMAKE_CROSSCOMPILING_EMULATOR).
@@ -827,7 +848,7 @@ if [[ "$TARGET" == "all" || "$TARGET" == "macos" ]] && [[ "$(uname -s)" == "Darw
             $EXTRA_ARGS
 
         # Build
-        cmake --build build_macos -j $CORES
+        run_tree_build cmake --build build_macos -j $CORES
 
         # Test
         print_pre_test_environment

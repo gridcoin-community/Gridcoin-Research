@@ -12,6 +12,7 @@
 #include "net_processing.h"
 #include "txdb.h"
 #include "node/blockstorage.h"
+#include "node/gui_cache.h"
 #include "node/orphan_blocks.h"
 #include "node/ui_interface.h"
 #include "validation.h"
@@ -34,6 +35,7 @@
 #include <boost/thread.hpp>
 
 #include <atomic>
+#include <cstdlib>
 #include <list>
 #include <set>
 #include <string>
@@ -119,11 +121,12 @@ static bool DisconnectBlocksBatch(CTxDB& txdb, list<CTransaction>& vResurrect, u
     // Count superblocks crossed during this disconnect. BeaconRegistry::Deactivate
     // is called per-SB below and is fidelity-correct for the SINGLE most recent SB
     // (it uses m_expired_pending which only carries the latest SB's expired set --
-    // see beacon.cpp:1265-1273). When the disconnect crosses 2+ SBs, expired-pending
-    // beacons from the prior SBs are lost; the recovery is an in-line beacon
-    // registry rebuild after the disconnect loop completes (call site below at the
-    // sb_cross_count >= 2 check). The full rationale for in-line vs deferred
-    // rebuild and why single-SB reorgs are NOT rebuilt lives at that call site.
+    // see the limitation note in BeaconRegistry::Deactivate in beacon.cpp). When the
+    // disconnect crosses 2+ SBs, expired-pending beacons from the prior SBs are lost;
+    // the recovery is an in-line beacon registry rebuild after the disconnect loop
+    // completes (call site below at the sb_cross_count >= 2 check). The full
+    // rationale for in-line vs deferred rebuild and why single-SB reorgs are NOT
+    // rebuilt lives at that call site.
     int sb_cross_count = 0;
 
     while(pindexBest != pcommon)
@@ -362,12 +365,12 @@ static bool DisconnectBlocksBatch(CTxDB& txdb, list<CTransaction>& vResurrect, u
         // If the reorg crossed two or more superblock boundaries, the per-SB Deactivate calls
         // above could not fully resurrect expired-pending beacons from the prior SBs
         // (m_expired_pending only carries the most recent SB's set -- the limitation
-        // acknowledged at beacon.cpp:1265-1273). Rebuild the beacon registry in-line
-        // BEFORE returning to the reconnect side of ReorganizeChain: the rebuild walks
-        // from V11_height to the current (common-ancestor) tip, leaving the registry
-        // correctly reflecting that ancestor's state, and the subsequent per-block
-        // Activate() calls on the reconnect side then bring the registry up to the
-        // new tip.
+        // acknowledged in BeaconRegistry::Deactivate in beacon.cpp). Rebuild the beacon
+        // registry in-line BEFORE returning to the reconnect side of ReorganizeChain:
+        // the rebuild walks from V11_height to the current (common-ancestor) tip,
+        // leaving the registry correctly reflecting that ancestor's state, and the
+        // subsequent per-block Activate() calls on the reconnect side then bring the
+        // registry up to the new tip.
         //
         // Doing this in-line (rather than deferring to a flag picked up on next
         // startup) trades a few seconds of frozen-wallet time for closing the fork
@@ -479,7 +482,19 @@ EXCLUSIVE_LOCKS_REQUIRED(cs_main)
         if (!DisconnectBlocksBatch(txdb, vResurrect, cnt_dis, pcommon)) {
             error("%s: DisconnectBlocksBatch() failed. This is a fatal error. The chain index may be corrupt. Aborting. "
                   "Please reindex the chain and restart.", __func__);
-            exit(1); //todo
+
+            // Stop at once rather than return false or request an orderly
+            // shutdown. The disconnect failed partway: its database batch is
+            // not committed, but the in-memory chain state is partly reverted.
+            // Returning would let SetBestChain() try to reorganize back to the
+            // previous tip on that state, and other threads would go on
+            // validating blocks and contracts against it until a shutdown took
+            // effect, which would then flush it. std::_Exit() skips the
+            // shutdown sequence, its flushes and the static destructors, which
+            // would otherwise run while other threads still use the globals.
+            // The reindex the message asks for rebuilds the chain state from
+            // the block files.
+            std::_Exit(EXIT_FAILURE);
         }
 
         int nMismatchSpent;
@@ -582,7 +597,18 @@ EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 
             // Make sure it's successfully written to disk before changing memory structure
             if (!txdb.TxnCommit()) {
-                return error("%s: TxnCommit failed", __func__);
+                error("%s: TxnCommit failed. This is a fatal error. The chain state may be inconsistent. Aborting. "
+                      "Please reindex the chain and restart.", __func__);
+
+                // Stop at once, as after a failed batch disconnect above. This
+                // commit is the only write of the connect that reaches the
+                // disk: the block index, transaction index and best chain
+                // writes before it only add to the transaction's batch in
+                // memory. Returning false would leave in-memory state that the
+                // disk does not record. The contract registries store their
+                // records outside this transaction, so the reindex that the
+                // message asks for is what brings them back in step.
+                std::_Exit(EXIT_FAILURE);
             }
 
             // Mempool retirement runs AFTER the commit, deliberately.
@@ -971,6 +997,26 @@ bool SetBestChain(CTxDB& txdb, CBlock &blockNew, CBlockIndex* pindexNew) EXCLUSI
         GetMainSignals().UpdatedBlockTip(pindexBest, pfork, fIsInitialDownload);
     }
 
+    // Keep the GUI state cache fresh here, under the cs_main this function
+    // already holds, after the block's effects are applied. The update is a
+    // no-op unless the cache's interval has passed, so during a sync it runs at
+    // most every four seconds, from the latest tip; and while no GUI is
+    // subscribed it is always one. It never delivers: the
+    // cache's timer does that, holding no lock. Unconditional, reorg-back
+    // included, as that path changes the wallet and mempool too. A failure is
+    // logged and never leaves SetBestChain.
+    if (auto* cache = node::GetGuiCache()) {
+        try {
+            cache->MarkDirty(node::GuiCache::CHAIN | node::GuiCache::BALANCES | node::GuiCache::MRC
+                             | node::GuiCache::ETTS | node::GuiCache::RESEARCHER);
+            cache->UpdateLocked(false);
+        } catch (const std::exception& e) {
+            LogPrintf("ERROR: %s: the GUI state update failed: %s", __func__, e.what());
+        } catch (...) {
+            LogPrintf("ERROR: %s: the GUI state update failed with an unknown exception", __func__);
+        }
+    }
+
     return GridcoinServices();
 }
 
@@ -1229,8 +1275,11 @@ bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool generated_by_me, CValidatio
         return true;
     }
 
+    // A block with no peer that this node did not stake comes from a block data file.
+    const bool imported = !pfrom && !generated_by_me;
+
     // Store to disk
-    if (!AcceptBlock(*pblock, state, generated_by_me))
+    if (!AcceptBlock(*pblock, state, generated_by_me, imported))
         return error("ProcessBlock() : AcceptBlock FAILED");
 
     // Recursively process any orphan blocks that depended on this one.
@@ -1241,7 +1290,8 @@ bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool generated_by_me, CValidatio
     // access AcceptBlock makes downstream.
     g_orphan_blocks.ProcessQueue(hash, [&](CBlock& orphan) NO_THREAD_SAFETY_ANALYSIS -> bool {
         CValidationState orphan_state;
-        return AcceptBlock(orphan, orphan_state, generated_by_me);
+        // Only a block from a peer is held as an orphan.
+        return AcceptBlock(orphan, orphan_state, generated_by_me, /*imported=*/false);
     });
 
     return true;

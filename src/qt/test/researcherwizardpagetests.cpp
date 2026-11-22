@@ -5,12 +5,16 @@
 #include "qt/test/researcherwizardpagetests.h"
 
 #include "qt/researcher/researchermodel.h"
+#include "qt/researcher/researcherwizardauthpage.h"
 #include "qt/researcher/researcherwizardmodedetailpage.h"
 #include "qt/researcher/researcherwizardmodepage.h"
 #include "qt/researcher/researcherwizardpoolpage.h"
+#include "qt/researcher/researcherwizardprojectspage.h"
 #include "qt/test/interfacefakes.h"
+#include "qt/test/researcherfixture.h"
 
 #include <QDesktopServices>
+#include <QLabel>
 #include <QRadioButton>
 #include <QSignalSpy>
 #include <QTableWidget>
@@ -29,10 +33,11 @@
 
 void ResearcherWizardPageTests::poolPageOpensALinkOncePerClickAfterReentry()
 {
-    qt_test::FakeResearcherContext context;
+    qt_test::ResearcherFixture f;
+    qt_test::FakeResearcherContext& context = f.m_context;
+    ResearcherModel& model = f.m_model;
     context.m_pools = {{"grcpool.com", "https://grcpool.com/"}};
 
-    ResearcherModel model(context);
     ResearcherWizardPoolPage page;
     page.setModel(&model, nullptr);
 
@@ -61,10 +66,15 @@ void ResearcherWizardPageTests::poolPageOpensALinkOncePerClickAfterReentry()
 
 void ResearcherWizardPageTests::modePageReportsOneCompleteChangePerToggleAfterReentry()
 {
-    qt_test::FakeResearcherContext context;
-    context.m_snapshot.has_eligible_projects = true;
+    qt_test::ResearcherFixture f;
+    ResearcherModel& model = f.m_model;
+    {
+        interfaces::ResearcherSnapshot researcher;
+        researcher.out_of_sync = false;
+        researcher.has_eligible_projects = true;
+        f.Push(qt_test::ResearcherFixture::Pushed(1, researcher));
+    }
 
-    ResearcherModel model(context);
     ResearcherWizardModePage page;
     page.setModel(&model);
 
@@ -89,10 +99,15 @@ void ResearcherWizardPageTests::modePageReportsOneCompleteChangePerToggleAfterRe
 
 void ResearcherWizardPageTests::modeDetailPageReportsOneCompleteChangePerClickAfterReentry()
 {
-    qt_test::FakeResearcherContext context;
-    context.m_snapshot.has_eligible_projects = true;
+    qt_test::ResearcherFixture f;
+    ResearcherModel& model = f.m_model;
+    {
+        interfaces::ResearcherSnapshot researcher;
+        researcher.out_of_sync = false;
+        researcher.has_eligible_projects = true;
+        f.Push(qt_test::ResearcherFixture::Pushed(1, researcher));
+    }
 
-    ResearcherModel model(context);
     ResearcherWizardModeDetailPage page;
     page.setModel(&model);
 
@@ -109,4 +124,62 @@ void ResearcherWizardPageTests::modeDetailPageReportsOneCompleteChangePerClickAf
     pool->click();
 
     QCOMPARE(complete_changed.count(), 1);
+}
+
+void ResearcherWizardPageTests::authPageFollowsTheVerificationCodeOnABeaconChange()
+{
+    // The pending beacon the snapshot reports comes from the chain and the
+    // pool, so the code this page shows can change without a send: the
+    // wallet's retired advertisement can confirm instead of its replacement.
+    // A block reports through beaconChanged alone while the sync state holds,
+    // so the page has to repaint on that signal too.
+    qt_test::ResearcherFixture f;
+    ResearcherModel& model = f.m_model;
+
+    interfaces::ResearcherSnapshot researcher;
+    researcher.out_of_sync = false;
+    researcher.pending_beacon_present = true;
+    researcher.beacon_verification_code = "replacement-code";
+    f.Push(qt_test::ResearcherFixture::Pushed(1, researcher));
+
+    ResearcherWizardAuthPage page;
+    page.setModel(&model);
+    page.initializePage();
+
+    auto* code = page.findChild<QLabel*>("verificationCodeLabel");
+    QVERIFY(code);
+    QCOMPARE(code->text(), QStringLiteral("replacement-code"));
+
+    // The retired advertisement confirms: the next block's push carries the
+    // original beacon's code, with the sync state unchanged.
+    researcher.beacon_verification_code = "original-code";
+    f.Push(qt_test::ResearcherFixture::Pushed(2, researcher));
+
+    QCOMPARE(code->text(), QStringLiteral("original-code"));
+}
+
+void ResearcherWizardPageTests::projectsPageRefreshesItsTableOnReloadNotOnAPush()
+{
+    // The table reads the core's projects, which takes cs_main, so a push must
+    // repaint the page's labels from the snapshot without calling the core.
+    qt_test::ResearcherFixture f;
+
+    ResearcherWizardProjectsPage page;
+    page.setModel(&f.m_model);
+
+    const int baseline = f.m_context.m_projects_calls;
+
+    interfaces::ResearcherSnapshot researcher;
+    researcher.out_of_sync = false;
+    researcher.email = "someone@example.com";
+    f.Push(qt_test::ResearcherFixture::Pushed(1, researcher));
+
+    auto* email = page.findChild<QLabel*>("emailLabel");
+    QVERIFY(email);
+    QCOMPARE(email->text(), QStringLiteral("someone@example.com"));
+    QCOMPARE(f.m_context.m_projects_calls, baseline);
+
+    f.m_model.reload();
+
+    QTRY_VERIFY(f.m_context.m_projects_calls > baseline);
 }

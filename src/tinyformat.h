@@ -511,6 +511,10 @@ class FormatArg
         void format(std::ostream& out, const char* fmtBegin,
                     const char* fmtEnd, int ntrunc) const
         {
+            // Invariant: FormatListN stores only FormatArgs built from a value, so
+            // neither pointer is null, and the formatter calls format() and toInt()
+            // only for indexes below the argument count. Guards against a change
+            // that formats a default-constructed FormatArg.
             assert(m_value);
             assert(m_formatImpl);
             m_formatImpl(out, fmtBegin, fmtEnd, ntrunc, m_value);
@@ -518,6 +522,7 @@ class FormatArg
 
         int toInt() const
         {
+            // Invariant: as for format().
             assert(m_value);
             assert(m_toIntImpl);
             return m_toIntImpl(m_value);

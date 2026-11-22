@@ -9,17 +9,25 @@
 #include "ipc/process.h"
 #include "ipc/protocol.h"
 #include "util.h"
+#include "util/syserror.h"
 
+#include <cerrno>
 #include <functional>
 #include <memory>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <system_error>
 #include <typeindex>
 #ifndef WIN32
+#include <fcntl.h> // F_DUPFD_CLOEXEC
 #include <unistd.h>
 #else
-#include <winsock2.h> // closesocket
+#include "ipc/win_attest.h"
+#include "ipc/win_endpoint.h"
+#include "util/win_acl.h"
+
+#include <winsock2.h> // closesocket, WSADuplicateSocketW, WSASocketW
 #endif
 #include <utility>
 
@@ -47,6 +55,35 @@ struct FdGuard
     void release() { fd = -1; }
 };
 
+//! A second handle on the connected socket \p fd, for ConnectInfo::shutdown_fd,
+//! that a child process does not inherit. Returns -1, and logs why, when none can
+//! be made.
+int DuplicateSocket(int fd)
+{
+#ifdef WIN32
+    WSAPROTOCOL_INFOW protocol_info;
+    if (::WSADuplicateSocketW(static_cast<SOCKET>(fd), ::GetCurrentProcessId(), &protocol_info) != 0) {
+        LogPrintf("WARN: IPC: could not duplicate the connection's socket (WSA error %d)", ::WSAGetLastError());
+        return -1;
+    }
+    // The flags of every socket this layer makes (MakeCloexecStreamSocket in
+    // process.cpp): overlapped, and not inherited by a child process.
+    const SOCKET duplicate = ::WSASocketW(FROM_PROTOCOL_INFO, FROM_PROTOCOL_INFO, FROM_PROTOCOL_INFO, &protocol_info, 0,
+                                          WSA_FLAG_OVERLAPPED | WSA_FLAG_NO_HANDLE_INHERIT);
+    if (duplicate == INVALID_SOCKET) {
+        LogPrintf("WARN: IPC: could not duplicate the connection's socket (WSA error %d)", ::WSAGetLastError());
+        return -1;
+    }
+    return static_cast<int>(duplicate);
+#else
+    const int duplicate = ::fcntl(fd, F_DUPFD_CLOEXEC, 0);
+    if (duplicate == -1) {
+        LogPrintf("WARN: IPC: could not duplicate the connection's socket: %s", SysErrorString(errno));
+    }
+    return duplicate;
+#endif
+}
+
 class IpcImpl : public interfaces::Ipc
 {
 public:
@@ -57,7 +94,8 @@ public:
     }
 
     std::unique_ptr<interfaces::Init> connectAddress(std::string& address,
-                                                     std::function<void()> on_disconnect) override
+                                                     std::function<void()> on_disconnect,
+                                                     interfaces::ConnectInfo* info) override
     {
         if (address.empty() || address == "0") return nullptr;
         int fd;
@@ -65,7 +103,7 @@ public:
             // "auto": connect if a node is listening, otherwise return null so
             // the caller can report "no daemon" cleanly (Gridcoin does not spawn).
             try {
-                fd = m_process->connect(GetDataDir(), address);
+                fd = m_process->connect(ipc::GetIpcDir(), address);
             } catch (const std::system_error& e) {
                 if (e.code() == std::errc::connection_refused ||
                     e.code() == std::errc::no_such_file_or_directory ||
@@ -77,39 +115,75 @@ public:
                 return nullptr;
             }
         } else {
-            fd = m_process->connect(GetDataDir(), address);
+            fd = m_process->connect(ipc::GetIpcDir(), address);
         }
         FdGuard guard{fd};
-        // Authenticate the NODE to US before we speak. The cookie is a bearer
-        // token: ClientHandshake's very first act is to hand it to whatever
-        // answered on node.sock. A same-uid process that won the race to bind the
-        // socket would otherwise receive it, and on a first connect the GUI would
-        // silently bind to the impostor's identity token. Checking the peer's uid
-        // here costs one getsockopt and refuses a foreign-uid listener outright.
-        // (Same-uid impostors are not excluded by this -- nothing at the OS level
-        // can distinguish them -- but a failed listenAddress() is now fatal in the
-        // daemon, so the window where node.sock is unowned has been closed too.)
+        // Check the NODE before we speak. The cookie is a bearer token:
+        // ClientHandshake's very first act is to hand it to whatever answered on
+        // node.sock, so the peer check has to refuse before that, and a peer
+        // whose identity cannot be read is refused too. ClientPeerPolicy admits
+        // a core running as this account, or the configured -ipcserviceuser
+        // account when the socket's directory belongs to that account or root
+        // and is not writable by group or others. Two processes of the same
+        // account are not told apart by this; the daemon refusing to start when
+        // it cannot bind keeps the socket from being left unowned.
         //
-        // ENFORCING. An earlier revision used Advisory here and justified it as
-        // defense-in-depth "backstopped by the cookie". That reasoning is circular:
-        // the cookie cannot backstop this check, because the cookie is the very
-        // thing the next call discloses. ClientHandshake hands it to whatever
-        // answered on node.sock, so "we could not determine the peer's uid" has to
-        // abort BEFORE the disclosure, not be logged and stepped over. An
-        // unverifiable listener is exactly the case where sending a bearer token is
-        // least defensible.
-        //
-        // The cost of Enforcing is bounded: CheckPeerCredentials returns true on
-        // WIN32 (no uid to compare), and Darwin was measured to answer on the
-        // connecting side, so this refuses only where the platform can answer and
-        // the answer is wrong or unobtainable.
-        if (!ipc::CheckPeerCredentials(fd, ipc::PeerCredPolicy::Enforcing)) {
-            throw std::runtime_error("The process listening on the multiprocess socket belongs to "
-                                     "a different OS user, or its owner could not be determined; "
-                                     "refusing to send the authentication cookie to it.");
+        // Process::connect rewrote address to its canonical "unix:<path>" form,
+        // so the socket's directory is the parent of that path.
+        const fs::path socket_dir = ipc::SocketDirOf(address);
+        if (socket_dir.empty()) {
+            throw std::logic_error("Process::connect did not return a unix: address");
         }
-        auto init = m_protocol->connect(fd, m_exe_name, std::move(on_disconnect));
-        guard.release(); // the protocol/stream now owns the fd
+#ifndef WIN32
+        const std::optional<ipc::PeerIdentity> server = ipc::ReadPeerIdentity(fd);
+        if (!server || ipc::ClientPeerPolicy(*server, socket_dir) == ipc::PeerVerdict::Refuse) {
+            throw interfaces::PeerRefusedError("The process listening on the multiprocess socket belongs to "
+                                               "a different OS user, or its owner could not be determined, "
+                                               "or it is not the configured service account; refusing to "
+                                               "send the authentication cookie to it.");
+        }
+        if (info) info->server_other_account = server->uid != ::geteuid();
+#else
+        // On Windows the socket tells nothing about the process at the other end.
+        // Process::connect has already checked that node.sock is owned by the
+        // expected node account, and its directories when another account can
+        // write the socket. After the connect, the identity check confirms that
+        // account through the pipe it opens, before the cookie is sent, in every
+        // mode: that is what finds a socket swapped in between.
+        util::winacl::Sid expected_server;
+        try {
+            expected_server = ipc::win::ExpectedServerSid();
+            if (info) info->server_other_account = expected_server != util::winacl::CurrentTokenUser();
+        } catch (const std::exception& e) {
+            throw interfaces::PeerRefusedError(
+                strprintf("Refusing to connect: the node account to expect cannot be determined (%s)", AsciiWhat(e)));
+        }
+#endif
+        // A second handle on the socket lets the caller shut the connection down
+        // from another thread (ConnectToNode's handshake watchdog). shutdown()
+        // acts on the socket, not on one handle, and the caller closes this one
+        // whatever the protocol does with its own. It is handed over before the
+        // protocol's bootstrap round trip below, which a peer that does not
+        // answer never completes.
+        if (info) {
+            info->shutdown_fd = DuplicateSocket(fd);
+            if (info->shutdown_fd != -1 && info->on_shutdown_fd) info->on_shutdown_fd(info->shutdown_fd);
+        }
+        // Protocol::connect owns fd from here, also when it throws.
+        guard.release();
+        std::unique_ptr<interfaces::Init> init = m_protocol->connect(fd, m_exe_name, std::move(on_disconnect));
+#ifdef WIN32
+        // The identity check comes before the caller's first call, which presents
+        // the cookie, and runs over this same connection, which it keeps to: the
+        // pipe stays open until finishAttest() has answered over it.
+        if (init) {
+            try {
+                ipc::win::RunClientAttestation(*init, expected_server);
+            } catch (const std::runtime_error& e) {
+                throw interfaces::PeerRefusedError(AsciiWhat(e));
+            }
+        }
+#endif
         return init;
     }
 
@@ -122,7 +196,7 @@ public:
             throw std::logic_error("Ipc::listenAddress() called without a serve-init factory "
                                    "(this process is connect-only)");
         }
-        int fd = m_process->bind(GetDataDir(), address);
+        int fd = m_process->bind(ipc::GetIpcDir(), address);
         FdGuard guard{fd};
         m_protocol->listen(fd, m_exe_name, m_make_init);
         guard.release(); // the protocol/listener now owns the fd

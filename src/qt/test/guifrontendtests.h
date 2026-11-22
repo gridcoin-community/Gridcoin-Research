@@ -18,6 +18,7 @@ private Q_SLOTS:
     void detachResumesAfterThrowingHook();
     void guardRunsEveryHookPastTwoThrows();
     void bridgeSlotSignatures();
+    void coreStopQuitDefaultsToRequestQuit();
 };
 
 #endif // BITCOIN_QT_TEST_GUIFRONTENDTESTS_H

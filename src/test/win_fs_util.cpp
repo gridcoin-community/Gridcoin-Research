@@ -1,0 +1,222 @@
+// Copyright (c) 2026 The Gridcoin developers
+// Distributed under the MIT software license, see the accompanying
+// file COPYING or https://opensource.org/licenses/mit-license.php.
+
+#include "test/win_fs_util.h"
+
+#include <boost/test/unit_test.hpp>
+
+#include <fstream>
+
+#ifdef WIN32
+#include "test/wine.h"
+#include "util/dir_permissions.h"
+
+#include <cstddef>
+#include <cstdint>
+#include <cstring>
+#include <string>
+#include <vector>
+
+#include <windows.h>
+#include <aclapi.h>
+#include <sddl.h>
+#include <winioctl.h>
+#endif
+
+namespace grc_test {
+
+using util::winacl::ObservedAce;
+using util::winacl::ObservedAcl;
+
+bool SameAcl(const ObservedAcl& a, const ObservedAcl& b)
+{
+    if (a.owner != b.owner || a.dacl_present != b.dacl_present || a.is_protected != b.is_protected ||
+        a.aces.size() != b.aces.size()) {
+        return false;
+    }
+    for (size_t i = 0; i < a.aces.size(); ++i) {
+        const ObservedAce& x = a.aces[i];
+        const ObservedAce& y = b.aces[i];
+        if (x.kind != y.kind || x.trustee != y.trustee || x.mask != y.mask || x.inherit_only != y.inherit_only ||
+            x.inherited != y.inherited || x.inherit != y.inherit) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+void WriteOwnFile(const fs::path& path, const std::string& text)
+{
+#ifdef WIN32
+    if (!RunningUnderWine()) {
+        CreateFileWithAcl(path, util::OwnerOnlyAclSpec(/*inheritable=*/false), text);
+        return;
+    }
+#endif
+    std::ofstream out(path.string(), std::ios::binary | std::ios::trunc);
+    out << text;
+    BOOST_REQUIRE(out.good());
+}
+
+#ifdef WIN32
+void CreateFileWithAcl(const fs::path& path, const util::winacl::AclSpec& spec, const std::string& text)
+{
+    const util::winacl::UniqueSecurityDescriptor sd(util::winacl::MakeSecurityDescriptor(spec));
+    SECURITY_ATTRIBUTES sa{};
+    sa.nLength = sizeof(sa);
+    sa.lpSecurityDescriptor = sd.get();
+    sa.bInheritHandle = FALSE;
+
+    const HANDLE handle = ::CreateFileW(path.wstring().c_str(), GENERIC_WRITE, 0, &sa, CREATE_NEW,
+                                        FILE_ATTRIBUTE_NORMAL, nullptr);
+    const DWORD error = ::GetLastError();
+    BOOST_REQUIRE_MESSAGE(handle != INVALID_HANDLE_VALUE, "CreateFileW failed with error " << error);
+    const util::winacl::UniqueHandle guard(handle);
+
+    DWORD written = 0;
+    BOOST_REQUIRE(::WriteFile(handle, text.data(), static_cast<DWORD>(text.size()), &written, nullptr));
+    BOOST_REQUIRE_EQUAL(written, static_cast<DWORD>(text.size()));
+}
+
+void MakeJunction(const fs::path& link, const fs::path& target)
+{
+    BOOST_REQUIRE(::CreateDirectoryW(link.wstring().c_str(), nullptr));
+    const HANDLE handle = ::CreateFileW(link.wstring().c_str(), GENERIC_WRITE, 0, nullptr, OPEN_EXISTING,
+                                        FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT, nullptr);
+    BOOST_REQUIRE(handle != INVALID_HANDLE_VALUE);
+
+    // REPARSE_DATA_BUFFER's mount-point form, which no user-mode header declares:
+    // the tag, the data length and a reserved word, then the offsets and lengths of
+    // the two names, then the names, each followed by a NUL.
+    const std::wstring substitute = L"\\??\\" + target.wstring();
+    const std::wstring print = target.wstring();
+    const size_t names = (substitute.size() + 1 + print.size() + 1) * sizeof(wchar_t);
+    std::vector<unsigned char> buffer(8 + 8 + names, 0);
+    const auto put16 = [&](size_t offset, size_t value) {
+        const auto v = static_cast<uint16_t>(value);
+        std::memcpy(buffer.data() + offset, &v, sizeof(v));
+    };
+    const uint32_t tag = IO_REPARSE_TAG_MOUNT_POINT;
+    std::memcpy(buffer.data(), &tag, sizeof(tag));
+    put16(4, 8 + names);
+    put16(8, 0);
+    put16(10, substitute.size() * sizeof(wchar_t));
+    put16(12, (substitute.size() + 1) * sizeof(wchar_t));
+    put16(14, print.size() * sizeof(wchar_t));
+    std::memcpy(buffer.data() + 16, substitute.c_str(), (substitute.size() + 1) * sizeof(wchar_t));
+    std::memcpy(buffer.data() + 16 + (substitute.size() + 1) * sizeof(wchar_t), print.c_str(),
+                (print.size() + 1) * sizeof(wchar_t));
+
+    DWORD returned = 0;
+    const BOOL set = ::DeviceIoControl(handle, FSCTL_SET_REPARSE_POINT, buffer.data(),
+                                       static_cast<DWORD>(buffer.size()), nullptr, 0, &returned, nullptr);
+    const DWORD error = ::GetLastError();
+    ::CloseHandle(handle);
+    BOOST_REQUIRE_MESSAGE(set, "FSCTL_SET_REPARSE_POINT failed with Windows error " << error);
+}
+
+void SetMandatoryLabel(const fs::path& path, const wchar_t* sddl)
+{
+    PSECURITY_DESCRIPTOR sd = nullptr;
+    BOOST_REQUIRE_MESSAGE(::ConvertStringSecurityDescriptorToSecurityDescriptorW(sddl, SDDL_REVISION_1, &sd, nullptr),
+                          "ConvertStringSecurityDescriptorToSecurityDescriptorW failed with Windows error "
+                              << ::GetLastError());
+    BOOL present = FALSE;
+    BOOL defaulted = FALSE;
+    PACL sacl = nullptr;
+    const BOOL got = ::GetSecurityDescriptorSacl(sd, &present, &sacl, &defaulted);
+    std::wstring name = path.wstring();
+    const DWORD rc = got ? ::SetNamedSecurityInfoW(name.data(), SE_FILE_OBJECT, LABEL_SECURITY_INFORMATION, nullptr,
+                                                   nullptr, nullptr, sacl)
+                         : ::GetLastError();
+    ::LocalFree(sd);
+    BOOST_REQUIRE_MESSAGE(rc == ERROR_SUCCESS, "setting the label of " << path.string() << " failed with Windows error "
+                                                                         << rc);
+}
+
+bool JunctionUntrustedOn(const fs::path& path)
+{
+    const HANDLE handle = ::CreateFileW(path.wstring().c_str(), FILE_READ_ATTRIBUTES,
+                                        FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING,
+                                        FILE_FLAG_BACKUP_SEMANTICS, nullptr);
+    if (handle != INVALID_HANDLE_VALUE) {
+        ::CloseHandle(handle);
+        return false;
+    }
+
+    return ::GetLastError() == util::winacl::WIN32_UNTRUSTED_MOUNT_POINT;
+}
+
+PrivilegeState TokenPrivilegeState(const wchar_t* name)
+{
+    LUID luid{};
+    BOOST_REQUIRE_MESSAGE(::LookupPrivilegeValueW(nullptr, name, &luid),
+                          "LookupPrivilegeValueW failed with Windows error " << ::GetLastError());
+
+    HANDLE token = nullptr;
+    BOOST_REQUIRE_MESSAGE(::OpenProcessToken(::GetCurrentProcess(), TOKEN_QUERY, &token),
+                          "OpenProcessToken failed with Windows error " << ::GetLastError());
+    const util::winacl::UniqueHandle guard(token);
+    const std::vector<unsigned char> buffer = util::winacl::QueryTokenInformation(token, TokenPrivileges,
+                                                                                  "TokenPrivileges");
+
+    // TOKEN_PRIVILEGES is a count followed by that many entries; each is copied out of
+    // the buffer, whose size was checked, rather than indexed past the declared array.
+    DWORD count = 0;
+    BOOST_REQUIRE(buffer.size() >= sizeof(count));
+    std::memcpy(&count, buffer.data(), sizeof(count));
+    const size_t first = offsetof(TOKEN_PRIVILEGES, Privileges);
+    BOOST_REQUIRE(buffer.size() >= first + size_t{count} * sizeof(LUID_AND_ATTRIBUTES));
+
+    for (DWORD i = 0; i < count; ++i) {
+        LUID_AND_ATTRIBUTES entry{};
+        std::memcpy(&entry, buffer.data() + first + i * sizeof(LUID_AND_ATTRIBUTES), sizeof(entry));
+        if (entry.Luid.LowPart == luid.LowPart && entry.Luid.HighPart == luid.HighPart) {
+            return (entry.Attributes & SE_PRIVILEGE_ENABLED) != 0 ? PrivilegeState::Enabled
+                                                                  : PrivilegeState::Disabled;
+        }
+    }
+
+    return PrivilegeState::NotHeld;
+}
+
+unsigned long OpenForReadAtLowIntegrity(const fs::path& path)
+{
+    HANDLE process_token = nullptr;
+    BOOST_REQUIRE_MESSAGE(::OpenProcessToken(::GetCurrentProcess(), TOKEN_DUPLICATE | TOKEN_QUERY, &process_token),
+                          "OpenProcessToken failed with Windows error " << ::GetLastError());
+    const util::winacl::UniqueHandle process_guard(process_token);
+
+    HANDLE low_token = nullptr;
+    BOOST_REQUIRE_MESSAGE(::DuplicateTokenEx(process_token, TOKEN_IMPERSONATE | TOKEN_QUERY | TOKEN_ADJUST_DEFAULT,
+                                             nullptr, SecurityImpersonation, TokenImpersonation, &low_token),
+                          "DuplicateTokenEx failed with Windows error " << ::GetLastError());
+    const util::winacl::UniqueHandle low_guard(low_token);
+
+    std::optional<util::winacl::Sid> low = util::winacl::ParseSidString("S-1-16-4096");
+    BOOST_REQUIRE(low.has_value());
+    TOKEN_MANDATORY_LABEL label{};
+    label.Label.Attributes = SE_GROUP_INTEGRITY;
+    label.Label.Sid = low->data();
+    BOOST_REQUIRE_MESSAGE(::SetTokenInformation(low_token, TokenIntegrityLevel, &label,
+                                                static_cast<DWORD>(sizeof(label) + low->size())),
+                          "SetTokenInformation failed with Windows error " << ::GetLastError());
+
+    BOOST_REQUIRE_MESSAGE(::SetThreadToken(nullptr, low_token),
+                          "SetThreadToken failed with Windows error " << ::GetLastError());
+    const HANDLE file = ::CreateFileW(path.wstring().c_str(), GENERIC_READ,
+                                      FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING,
+                                      FILE_ATTRIBUTE_NORMAL, nullptr);
+    const DWORD error = file == INVALID_HANDLE_VALUE ? ::GetLastError() : 0;
+    // Back to this process's own token before anything can stop the case.
+    const bool reverted = ::RevertToSelf();
+    if (file != INVALID_HANDLE_VALUE) ::CloseHandle(file);
+    BOOST_REQUIRE_MESSAGE(reverted, "RevertToSelf failed with Windows error " << ::GetLastError());
+
+    return error;
+}
+#endif // WIN32
+
+} // namespace grc_test

@@ -27,15 +27,9 @@ SyncOverlay::SyncOverlay(QWidget* parent)
 
     // --- Central panel ---
 
+    // Each theme's stylesheet styles #syncOverlayPanel.
     QWidget* panel = new QWidget(this);
     panel->setObjectName("syncOverlayPanel");
-    panel->setStyleSheet(
-        "#syncOverlayPanel {"
-        "  background-color: palette(window);"
-        "  border: 1px solid palette(mid);"
-        "  border-radius: 8px;"
-        "}"
-    );
     panel->setFixedWidth(480);
 
     // Icon

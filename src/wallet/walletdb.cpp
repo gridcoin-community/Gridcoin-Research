@@ -851,6 +851,13 @@ bool CWalletDB::Recover(CDBEnv& dbenv, std::string filename, bool fOnlyKeys)
     }
     ptxn->commit(0);
     pdbCopy->close(0);
+
+    // The recreated wallet file takes the permissions of the one renamed aside. A mock
+    // environment has no files.
+    if (!dbenv.IsMock()) {
+        (void)CDB::KeepRewrittenFilePermissions(GetDataDir() / newFilename, GetDataDir() / filename);
+    }
+
     return fSuccess;
 }
 

@@ -33,9 +33,10 @@ The following are developer notes on how to build Gridcoin on your native platfo
 
 Running
 -------
-To create a secure environment for running Gridcoin see:
+To run the core as a background service that keeps staking, with or without stake-only autounlock, see:
 
-- [Running Gridcoin](running.md)
+- [Running Gridcoin unattended](running-unattended.md)
+- [Multiprocess mode (split GUI / node)](multiprocess.md)
 - [Migrating from accounts to labels](account-to-label-migration.md)
 
 Development

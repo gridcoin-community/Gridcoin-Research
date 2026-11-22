@@ -18,6 +18,11 @@ class CWallet;
 class uint256;
 enum class scrapereventtypes;
 
+namespace interfaces {
+struct GuiStateSnapshot;
+struct MRCSnapshot;
+} // namespace interfaces
+
 namespace boost {
 namespace signals2 {
 class connection;
@@ -140,6 +145,18 @@ public:
 
     /** Read-write settings file updated **/
     ADD_SIGNALS_DECL_WRAPPER(RwSettingsUpdated, void);
+
+    /** The node's GUI state cache has a new snapshot (node/gui_cache.h). The
+     *  sequences delivered never decrease but may repeat, so a subscriber
+     *  keeps a snapshot only when its sequence is higher than the last one's.
+     *  @note emitted from the cache's timer thread with no lock held. */
+    ADD_SIGNALS_DECL_WRAPPER(GuiStateChanged, void, const interfaces::GuiStateSnapshot& snapshot);
+
+    /** The node's GUI state cache answers a GUI's MRC quote request
+     *  (interfaces::GuiState::requestMRCQuote) with the figures at the boost it
+     *  asked for, tagged with that request's id.
+     *  @note emitted from the cache's timer thread with no lock held. */
+    ADD_SIGNALS_DECL_WRAPPER(GuiStateMRCQuote, void, uint64_t request_id, const interfaces::MRCSnapshot& quote);
 
     /** A mandatory (contract) sidestake entry was added, deleted, or reverted.
      *  Payload-free refetch trigger for the GUI sidestake table (the mandatory

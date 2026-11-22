@@ -29,8 +29,8 @@ docker run -d \
   ghcr.io/gridcoin-community/gridcoinresearchd:latest
 ```
 
-For RPC access, see [Exchange Deployment](#exchange-deployment) -- always bind the RPC
-port to `127.0.0.1` to avoid exposing credentials to the network.
+The core's RPC port listens on loopback inside the container only. For RPC access from
+the host, see [Exchange Deployment](#exchange-deployment).
 
 ### GUI
 
@@ -90,24 +90,35 @@ regularly, especially before upgrading.
 
 ### Auto-Generated Config
 
-On first run, if no `gridcoinresearch.conf` exists, the entrypoint creates one with:
+On first run, if no `gridcoinresearch.conf` exists, the entrypoint creates one, mode
+`0600`, with:
 - `server=1` (RPC server enabled)
-- Random `rpcpassword` (generated via `openssl rand -hex 32`)
-- `rpcallowip` wildcard entries for localhost and private networks (`10.*.*.*`,
-  `172.*.*.*`, `192.168.*.*`). Gridcoin uses wildcard matching for `rpcallowip` (not
-  CIDR notation). Note: `172.*.*.*` is broader than RFC 1918's `172.16.0.0/12` because
-  the wildcard syntax cannot express subnet boundaries; this is acceptable since these
-  entries only affect traffic that reaches the container's network interfaces. The
-  presence of any `rpcallowip` entry causes the RPC server to listen on all interfaces
-  inside the container (not just loopback), which is required for Docker port forwarding
-  to work.
-- `printtoconsole=1` (forced for Docker log visibility)
+- `rpcuser=gridcoinrpc` and a random `rpcpassword` (generated via `openssl rand -hex 32`)
+- `rpcbind=127.0.0.1` and `rpcallowip=127.0.0.1`: the RPC port listens on the container's
+  loopback only, where nothing outside the container reaches it.
+- With `GRC_RPC_ALLOW_SUBNET` set to one IPv4 subnet in CIDR form, such as
+  `172.17.0.0/16`, instead `rpcbind=0.0.0.0`, `rpcallowip=127.0.0.1` and
+  `rpcallowip=<that subnet>`: the port listens on every interface of the container, and
+  only loopback and that subnet may connect. A value that is not such a subnet stops the
+  container before anything is written.
+
+On every start the entrypoint also sets `printtoconsole=1`, so the core's log goes to
+`docker logs`.
+
+The entrypoint writes the file only when there is none: `GRC_RPC_ALLOW_SUBNET` changes
+nothing in an existing file, and the RPC lines of an existing file stay as they are.
+`rpcbind=127.0.0.1` with `rpcallowip=127.0.0.1` keeps RPC on the container's loopback.
+
+RPC is plain HTTP: the password and every request cross the network unencrypted. Keep
+the port on loopback or a Docker network, and tunnel it (SSH, for example) where it must
+cross anything else.
 
 ### Environment Variables
 
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `GRIDCOIN_DATA_DIR` | `./.gridcoin` | Host path for persistent data |
+| `GRC_RPC_ALLOW_SUBNET` | (none) | One IPv4 subnet in CIDR form that may reach the RPC port, written into a new configuration file (see above) |
 | `P2P_PORT` | `32749` | Host P2P port mapping |
 | `RPC_PORT` | `15715` | Host RPC port mapping |
 | `DISPLAY` | (none) | X11 display for GUI |
@@ -126,22 +137,30 @@ docker run -d \
 
 ## Exchange Deployment
 
-For exchange integration, enable the RPC port and configure credentials:
+For exchange integration, publish the RPC port on the host's loopback, and let the
+Docker network's subnet reach the core when the configuration file is first created:
 
 ```bash
+# The subnet of the network the container joins (here the default bridge)
+docker network inspect bridge --format '{{(index .IPAM.Config 0).Subnet}}'
+
 docker run -d \
   --name gridcoin \
   -v /data/gridcoin:/home/gridcoin/.GridcoinResearch \
+  -e GRC_RPC_ALLOW_SUBNET=172.17.0.0/16 \
   -p 32749:32749 \
   -p 127.0.0.1:15715:15715 \
   ghcr.io/gridcoin-community/gridcoinresearchd:latest
 ```
 
-The auto-generated config enables `server=1` with a random password. Retrieve it:
+A connection to the published port arrives at the container's address on the Docker
+network, from that network (its gateway), not on the container's loopback: the core must
+listen on every interface and allow that subnet, which is what the variable sets up.
+Publishing on `127.0.0.1` keeps the port off the host's other interfaces.
 
-```bash
-docker exec gridcoin grep rpcpassword /home/gridcoin/.GridcoinResearch/gridcoinresearch.conf
-```
+The auto-generated config enables `server=1` with a random password. It is in
+`gridcoinresearch.conf` in the data directory you mounted (`/data/gridcoin` above); copy it
+into your RPC client's configuration from there.
 
 Key RPC methods for exchanges:
 - `getnewaddress` -- generate deposit addresses
@@ -153,7 +172,8 @@ Key RPC methods for exchanges:
 Transaction index is always enabled (no `-txindex` flag needed).
 
 **Note:** Gridcoin uses plaintext `rpcuser`/`rpcpassword` (hashed `rpcauth` is not
-supported). Docker network isolation (binding RPC to 127.0.0.1 only) mitigates this.
+supported), and RPC is plain HTTP. Keep the port on loopback and the Docker network as
+above, and tunnel it where it must cross another network.
 
 ## GUI Display Server Notes
 
@@ -184,9 +204,11 @@ mkdir -p bin/amd64
 cp ../../build/bin/gridcoinresearchd bin/amd64/
 cp ../../build/bin/gridcoinresearch bin/amd64/
 
-# 4. Build images
-docker build -f Dockerfile.headless -t gridcoin-headless .
-docker build -f Dockerfile.gui -t gridcoin-gui .
+# 4. Build images, with your own UID and GID for the gridcoin user
+docker build --build-arg UID=$(id -u) --build-arg GID=$(id -g) \
+  -f Dockerfile.headless -t gridcoin-headless .
+docker build --build-arg UID=$(id -u) --build-arg GID=$(id -g) \
+  -f Dockerfile.gui -t gridcoin-gui .
 ```
 
 ## Ports
@@ -211,6 +233,9 @@ The images follow defense-in-depth principles:
 - **Minimal base image:** `ubuntu:24.04` with only runtime dependencies installed
   (GUI adds Qt6 and X11 libraries)
 - **Config permissions:** `gridcoinresearch.conf` created with mode `0600`
+- **RPC on loopback:** a new configuration file has the RPC port listen on the
+  container's loopback only, unless `GRC_RPC_ALLOW_SUBNET` names one subnet that may
+  connect
 
 ## Troubleshooting
 
@@ -236,12 +261,10 @@ docker exec gridcoin gridcoinresearchd getblockchaininfo
 
 ### Permission denied on data directory
 
-The container runs as UID/GID 1000. Ensure your data directory is owned by the same:
-```bash
-sudo chown -R 1000:1000 ~/.GridcoinResearch
-```
-
-Or build with custom UID/GID:
+The published images run the daemon as UID/GID 1000, and at every start the entrypoint
+gives the data directory to that user. If your host account has another UID or GID, build
+the image with yours (see [Building Locally](#building-locally)), so that the files in
+the data directory stay yours:
 ```bash
 docker build --build-arg UID=$(id -u) --build-arg GID=$(id -g) \
   -f Dockerfile.headless -t gridcoin-headless .

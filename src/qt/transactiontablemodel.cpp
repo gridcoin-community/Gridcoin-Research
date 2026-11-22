@@ -446,7 +446,9 @@ QVariant TransactionTableModel::formatRole(const TransactionRecord *rec, int col
 {
     // Public helper (per-view consumers call it too): validate the column so an
     // out-of-range value cannot index column_alignments[] out of bounds or land in
-    // an undefined ColumnIndex (asserts are compiled out in release builds).
+    // an undefined ColumnIndex. A runtime check rather than an assert: a bad
+    // column from a caller yields an empty QVariant instead of aborting the
+    // process, and the guard still holds if asserts are disabled.
     if (!rec || columnInt < Status || columnInt > Amount) {
         return QVariant();
     }
@@ -463,6 +465,7 @@ QVariant TransactionTableModel::formatRole(const TransactionRecord *rec, int col
         case Amount: return {};
         } // no default case, so the compiler can warn about missing cases
         assert(false);
+        return {};
     case Qt::DisplayRole:
         switch (column) {
         case Status: return {};
@@ -476,6 +479,7 @@ QVariant TransactionTableModel::formatRole(const TransactionRecord *rec, int col
             return formatTxAmount(rec);
         } // no default case, so the compiler can warn about missing cases
         assert(false);
+        return {};
     case Qt::EditRole:
         // Edit role is used for sorting, so return the unformatted values
         switch (column) {
@@ -492,6 +496,7 @@ QVariant TransactionTableModel::formatRole(const TransactionRecord *rec, int col
             return qint64{rec->credit + rec->debit};
         } // no default case, so the compiler can warn about missing cases
         assert(false);
+        return {};
     case Qt::ToolTipRole:
         return formatTooltip(rec);
     case Qt::AccessibleTextRole:
@@ -519,6 +524,7 @@ QVariant TransactionTableModel::formatRole(const TransactionRecord *rec, int col
             return tr("Amount: %1").arg(formatTxAmount(rec));
         } // no default case, so the compiler can warn about missing cases
         assert(false);
+        return {};
     case Qt::TextAlignmentRole:
         return column_alignments[columnInt];
     case Qt::ForegroundRole:

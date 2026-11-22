@@ -2,6 +2,7 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
+#include "arith_uint256.h"
 #include "node/orphan_blocks.h"
 
 #include <boost/test/unit_test.hpp>
@@ -334,7 +335,8 @@ BOOST_AUTO_TEST_CASE(byte_accounting_survives_eviction)
     const size_t overshoot = OrphanBlockManager::MAX_ORPHAN_BLOCKS + 50;
 
     for (uint32_t i = 0; i < overshoot; i++) {
-        const CBlock block = MakeTestBlock(uint256(i + 1), i);
+        // uint256(uint8_t) would repeat the parent every 256 blocks.
+        const CBlock block = MakeTestBlock(ArithToUint256(arith_uint256{i + 1}), i);
         mgr.Add(block.GetHash(true), block, 1000);
     }
 

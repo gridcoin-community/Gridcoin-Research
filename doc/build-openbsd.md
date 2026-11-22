@@ -12,7 +12,7 @@ Run the following commands as root (or using `doas`) to install the necessary bu
 
 ```ksh
 # Basic build requirements and libraries
-pkg_add git cmake boost curl libzip miniupnpc
+pkg_add git cmake boost curl miniupnpc
 
 # Multiprocess (GUI/node separation, -multiprocess) only:
 # Cap'n Proto supplies the code generator and the runtime the IPC layer is built on.
@@ -43,7 +43,7 @@ OpenBSD uses `doas` by default. If you prefer `sudo`:
 ## 2\. Clone the Repository
 
 ```ksh
-git clone [https://github.com/gridcoin-community/Gridcoin-Research.git](https://github.com/gridcoin-community/Gridcoin-Research.git)
+git clone https://github.com/gridcoin-community/Gridcoin-Research.git
 cd Gridcoin-Research
 git checkout master
 ```
@@ -151,9 +151,9 @@ To run it, start the daemon first and then attach the GUI; the GUI does not spaw
 ```
 
 The daemon logs the peer-credential mechanism in force at startup; on OpenBSD it reads
-`getpeereid (connections from another OS user are refused)`. OpenBSD does define
-`SO_PEERCRED`, but with a different payload than Linux, so Gridcoin uses `getpeereid(3)`
-here.
+`getpeereid (this OS user; with -ipcattachgroup also a non-root peer whose primary group is that group)`.
+OpenBSD does define `SO_PEERCRED`, but with a different payload than Linux, so Gridcoin
+uses `getpeereid(3)` here.
 
 ## Notes on hardening flags
 

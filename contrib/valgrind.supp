@@ -27,6 +27,22 @@
    fun:__log_put_record
 }
 {
+   Suppress the same libdb warning in a statically linked Berkeley DB (the in-tree BerkeleyDB_Project build)
+   Memcheck:Cond
+   fun:__log_putr
+   fun:__log_put_next
+   fun:__log_put
+   ...
+   fun:__log_put_record
+}
+{
+   Suppress libdb writing the uninitialised padding of its log and page buffers to disk (all its I/O goes through __os_io)
+   Memcheck:Param
+   pwrite64(buf)
+   ...
+   fun:__os_io
+}
+{
    Suppress leveldb warning (leveldb::InitModule()) - https://github.com/google/leveldb/issues/113
    Memcheck:Leak
    match-leak-kinds: reachable

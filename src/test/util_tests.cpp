@@ -3,78 +3,49 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
-#include "random.h"
 #include <vector>
 #include <boost/test/unit_test.hpp>
 
 #include "test/state_guard.h"
+#include <chainparamsbase.h>
 #include "init.h"
 #include <node/ui_interface.h>
 #include <boost/signals2/connection.hpp>
 #include "univalue/include/univalue.h"
 
 #include <wallet/wallet.h>
+#include <wallet/capability.h>
+#include <policy/fees.h>
+#include "test/encrypted_wallet.h"
 #include <util.h>
 //#include <util/system.h>
 #include <util/rwsettings.h>
 #include <util/settings.h>
+#include <util/strencodings.h>
+#include <util/refused_setting_keys.h>
+#include <test/data/refused-setting-keys.txt.h>
+#include <test/wine.h>
+#include <logging.h>
 #include <util/string.h>
+#include <util/dir_permissions.h>
+#include <util/syserror.h>
+#include <util/win_acl.h>
 
+#include <cerrno>
 #include <cstdint>
+#include <stdexcept>
+#include <system_error>
 
-namespace {
-// This version, which is recommended by some resources on the web, is actually slower, and has several issues. See
-// the unit tests below.
-int msb(const int64_t& n)
-{
-    // Can't take the log of 0.
-    if (n == 0) {
-        return 0;
-    }
-
-    // Log2 is O(1) both time and space-wise.
-    return (static_cast<int>(floor(log2(std::abs(n)))) + 1);
-}
-
-int msb2(const int64_t& n_in)
-{
-    int64_t n = std::abs(n_in);
-
-    int index = 0;
-
-    if (n == 0) {
-        return 0;
-    }
-
-    for (int i = 0; i <= 63; ++i) {
-        if (n % 2 == 1) {
-            index = i;
-        }
-
-        n /= 2;
-    }
-
-    return index + 1;
-}
-
-// This is the one currently used in the Fraction class
-int msb3(const int64_t& n_in)
-{
-    int64_t n = std::abs(n_in);
-
-    int index = 0;
-
-    for (; index <= 63; ++index) {
-        if (n >> index == 0) {
-            break;
-        }
-    }
-
-    return index;
-}
-} //anonymous namespace
-
+#include <ios>
 #include <sstream>
+#include <streambuf>
+#include <fstream>
+#include <functional>
+#include <list>
+
+#ifndef WIN32
+#include <sys/stat.h>
+#endif
 
 // Suite-level guard: util_GetArg and util_ParseParameters leave their test
 // arguments in the global ArgsManager (ClearArgs() clears only the
@@ -350,6 +321,209 @@ BOOST_FIXTURE_TEST_CASE(util_NoIncludeConf, NoIncludeConfTest)
     BOOST_CHECK_EQUAL(Parse("-includeconf"), "-includeconf cannot be used from commandline; -includeconf=\"\"");
     BOOST_CHECK_EQUAL(Parse("-includeconf=file"), "-includeconf cannot be used from commandline; -includeconf=\"file\"");
 }
+
+BOOST_AUTO_TEST_CASE(config_file_arg_only_from_conf)
+{
+    const std::vector<std::pair<std::string, unsigned int>> args{{"-rpcserviceuser", ArgsManager::ALLOW_ANY}};
+    std::array argv{"x", "-rpcserviceuser=bob"};
+    std::string error;
+
+    TestArgsManager conf_only;
+    conf_only.SetupArgs(args);
+    conf_only.ReadConfigString("rpcserviceuser=gridcoin\n");
+    BOOST_CHECK(conf_only.GetConfigFileArg("-rpcserviceuser") == std::optional<std::string>{"gridcoin"});
+    // A forced value changes GetArg, not what the file says.
+    conf_only.ForceSetArg("-rpcserviceuser", "forced");
+    BOOST_CHECK_EQUAL(conf_only.GetArg("-rpcserviceuser", ""), "forced");
+    BOOST_CHECK(conf_only.GetConfigFileArg("-rpcserviceuser") == std::optional<std::string>{"gridcoin"});
+
+    TestArgsManager command_line_only;
+    command_line_only.SetupArgs(args);
+    BOOST_REQUIRE(command_line_only.ParseParameters(argv.size(), argv.data(), error));
+    BOOST_CHECK_EQUAL(command_line_only.GetArg("-rpcserviceuser", ""), "bob");
+    BOOST_CHECK(command_line_only.GetConfigFileArg("-rpcserviceuser") == std::nullopt);
+
+    TestArgsManager both;
+    both.SetupArgs(args);
+    BOOST_REQUIRE(both.ParseParameters(argv.size(), argv.data(), error));
+    both.ReadConfigString("rpcserviceuser=gridcoin\n");
+    BOOST_CHECK_EQUAL(both.GetArg("-rpcserviceuser", ""), "bob");
+    BOOST_CHECK(both.GetConfigFileArg("-rpcserviceuser") == std::optional<std::string>{"gridcoin"});
+
+    // The network section outranks the default section, as it does for GetArg.
+    TestArgsManager sections;
+    sections.SetupArgs(args);
+    sections.SelectConfigNetwork(CBaseChainParams::TESTNET);
+    sections.ReadConfigString("rpcserviceuser=default\n[test]\nrpcserviceuser=testnet\n");
+    BOOST_CHECK_EQUAL(sections.GetArg("-rpcserviceuser", ""), "testnet");
+    BOOST_CHECK(sections.GetConfigFileArg("-rpcserviceuser") == std::optional<std::string>{"testnet"});
+
+    // A negated setting sets no value.
+    TestArgsManager negated;
+    negated.SetupArgs(args);
+    negated.ReadConfigString("norpcserviceuser=1\n");
+    BOOST_CHECK(negated.GetConfigFileArg("-rpcserviceuser") == std::nullopt);
+}
+
+BOOST_AUTO_TEST_CASE(config_file_used_includes)
+{
+    const std::vector<std::pair<std::string, unsigned int>> args{
+        {"-includeconf", ArgsManager::ALLOW_ANY},
+        {"-rpcport", ArgsManager::ALLOW_ANY},
+    };
+
+    TestArgsManager with_include;
+    with_include.SetupArgs(args);
+    with_include.ReadConfigString("includeconf=other.conf\n");
+    BOOST_CHECK(with_include.ConfigFileUsedIncludes());
+
+    TestArgsManager in_section;
+    in_section.SetupArgs(args);
+    in_section.ReadConfigString("[test]\nincludeconf=other.conf\n");
+    BOOST_CHECK(in_section.ConfigFileUsedIncludes());
+
+    TestArgsManager without;
+    without.SetupArgs(args);
+    without.ReadConfigString("rpcport=1\n");
+    BOOST_CHECK(!without.ConfigFileUsedIncludes());
+
+    // -noincludeconf after the value reads no other file.
+    TestArgsManager negated;
+    negated.SetupArgs(args);
+    negated.ReadConfigString("includeconf=other.conf\nnoincludeconf=1\n");
+    BOOST_CHECK(!negated.ConfigFileUsedIncludes());
+}
+
+#ifndef WIN32
+BOOST_AUTO_TEST_CASE(config_file_facts_are_the_file_read)
+{
+    // base/link.conf -> base/held/real.conf, which sets datadir= to base/other, where another
+    // configuration file waits. Each file and directory has its own mode, so the recorded facts
+    // show which one they came from.
+    const fs::path base = GetDataDir(false) / "config_file_facts";
+    const fs::path held = base / "held";
+    const fs::path other = base / "other";
+    const fs::path real = held / "real.conf";
+    const fs::path link = base / "link.conf";
+    const fs::path other_conf = other / "gridcoinresearch.conf";
+    fs::remove_all(base);
+    fs::create_directories(held);
+    fs::create_directories(other);
+
+    const auto write = [](const fs::path& path, const std::string& text, mode_t mode) {
+        fsbridge::ofstream out(path);
+        out << text;
+        out.close();
+        BOOST_REQUIRE(::chmod(path.string().c_str(), mode) == 0);
+    };
+    write(real, "datadir=" + other.string() + "\nrpcport=1\n", 0640);
+    write(other_conf, "rpcport=2\n", 0600);
+    BOOST_REQUIRE(::chmod(held.string().c_str(), 0700) == 0);
+    BOOST_REQUIRE(::chmod(base.string().c_str(), 0755) == 0);
+    fs::create_symlink(real, link);
+
+    struct stat real_st;
+    struct stat held_st;
+    struct stat other_st;
+    BOOST_REQUIRE(::stat(real.string().c_str(), &real_st) == 0);
+    BOOST_REQUIRE(::stat(held.string().c_str(), &held_st) == 0);
+    BOOST_REQUIRE(::stat(other_conf.string().c_str(), &other_st) == 0);
+
+    TestArgsManager args;
+    args.SetupArgs({{"-conf", ArgsManager::ALLOW_ANY}, {"-datadir", ArgsManager::ALLOW_ANY}, {"-rpcport", ArgsManager::ALLOW_ANY}});
+    const std::string conf_arg = "-conf=" + link.string();
+    std::array argv{"x", conf_arg.c_str()};
+    std::string error;
+    BOOST_REQUIRE(args.ParseParameters(argv.size(), argv.data(), error));
+    BOOST_CHECK(!args.GetConfigFileFacts());
+    BOOST_REQUIRE_MESSAGE(args.ReadConfigFiles(error), error);
+    BOOST_CHECK_EQUAL(args.GetArg("-rpcport", ""), "1");
+    BOOST_CHECK_EQUAL(args.GetArg("-datadir", ""), other.string());
+
+    // The facts are those of the file read, through the link, and of the directory that holds it.
+    const std::optional<ConfigFileFacts> facts = args.GetConfigFileFacts();
+    BOOST_REQUIRE(facts);
+    BOOST_CHECK_EQUAL(facts->device, static_cast<uint64_t>(real_st.st_dev));
+    BOOST_CHECK_EQUAL(facts->inode, static_cast<uint64_t>(real_st.st_ino));
+    BOOST_CHECK_EQUAL(facts->file.owner, static_cast<uint64_t>(real_st.st_uid));
+    BOOST_CHECK_EQUAL(facts->file.mode, static_cast<uint32_t>(real_st.st_mode));
+    BOOST_CHECK(facts->inode != static_cast<uint64_t>(other_st.st_ino));
+    BOOST_REQUIRE(facts->dir);
+    BOOST_CHECK_EQUAL(facts->dir->owner, static_cast<uint64_t>(held_st.st_uid));
+    BOOST_CHECK_EQUAL(facts->dir->mode, static_cast<uint32_t>(held_st.st_mode));
+
+    // A file put at the same path afterwards changes nothing recorded.
+    const fs::path swap = held / "swap.conf";
+    write(swap, "rpcport=3\n", 0666);
+    fs::rename(swap, real);
+    const std::optional<ConfigFileFacts> after = args.GetConfigFileFacts();
+    BOOST_REQUIRE(after);
+    BOOST_CHECK_EQUAL(after->inode, static_cast<uint64_t>(real_st.st_ino));
+    BOOST_CHECK_EQUAL(after->file.mode, static_cast<uint32_t>(real_st.st_mode));
+
+    // A later read that finds no file leaves no facts from the earlier one.
+    fs::remove(link);
+    BOOST_CHECK(!args.ReadConfigFiles(error));
+    BOOST_CHECK(!args.GetConfigFileFacts());
+
+    fs::remove_all(base);
+}
+#else
+BOOST_AUTO_TEST_CASE(config_file_facts_are_the_file_read)
+{
+    if (grc_test::RunningUnderWine()) {
+        BOOST_TEST_MESSAGE("Wine keeps no protected DACL; skipping");
+        return;
+    }
+    // base/held/real.conf, which sets datadir= to base/other. The file, its directory and the other
+    // directory each have an access list of their own length, so the recorded lists show which one
+    // they came from.
+    const fs::path base = GetDataDir(false) / "config_file_facts";
+    const fs::path held = base / "held";
+    const fs::path other = base / "other";
+    const fs::path real = held / "real.conf";
+    fs::remove_all(base);
+    fs::create_directories(held);
+    fs::create_directories(other);
+    {
+        fsbridge::ofstream out(real);
+        out << "datadir=" << other.string() << "\nrpcport=1\n";
+    }
+
+    const util::winacl::Sid self = util::winacl::CurrentTokenUser();
+    const util::winacl::Sid system = util::winacl::wellknown::System();
+    const util::winacl::Sid admins = util::winacl::wellknown::Administrators();
+    util::winacl::ApplyAcl(real, {self, {{self, 0x001F01FF}}});
+    util::winacl::ApplyAcl(held, {self, {{self, 0x001F01FF}, {system, 0x001F01FF}}});
+    util::winacl::ApplyAcl(other, {self, {{self, 0x001F01FF}, {system, 0x001F01FF}, {admins, 0x001F01FF}}});
+
+    TestArgsManager args;
+    args.SetupArgs({{"-conf", ArgsManager::ALLOW_ANY}, {"-datadir", ArgsManager::ALLOW_ANY}, {"-rpcport", ArgsManager::ALLOW_ANY}});
+    const std::string conf_arg = "-conf=" + real.string();
+    std::array argv{"x", conf_arg.c_str()};
+    std::string error;
+    BOOST_REQUIRE(args.ParseParameters(argv.size(), argv.data(), error));
+    BOOST_CHECK(!args.GetConfigFileFacts());
+    BOOST_REQUIRE_MESSAGE(args.ReadConfigFiles(error), error);
+    BOOST_CHECK_EQUAL(args.GetArg("-rpcport", ""), "1");
+
+    const std::optional<ConfigFileFacts> facts = args.GetConfigFileFacts();
+    BOOST_REQUIRE(facts);
+    BOOST_REQUIRE(facts->file_acl);
+    BOOST_REQUIRE(facts->dir_acl);
+    BOOST_CHECK(facts->file_acl->owner == std::optional<util::winacl::Sid>{self});
+    BOOST_CHECK_EQUAL(facts->file_acl->aces.size(), 1U);
+    BOOST_CHECK(facts->dir_acl->owner == std::optional<util::winacl::Sid>{self});
+    BOOST_CHECK_EQUAL(facts->dir_acl->aces.size(), 2U);
+
+    // A later read that finds no file leaves no facts from the earlier one.
+    fs::remove(real);
+    BOOST_CHECK(!args.ReadConfigFiles(error));
+    BOOST_CHECK(!args.GetConfigFileFacts());
+
+    fs::remove_all(base);
+}
+#endif
 
 BOOST_AUTO_TEST_CASE(util_ParseParameters)
 {
@@ -986,6 +1160,27 @@ BOOST_AUTO_TEST_CASE(test_ToUpper)
     BOOST_CHECK_EQUAL(ToUpper("\x00\xfe\xff"), "\x00\xfe\xff");
 }
 
+// Every byte: only the ASCII letters change, whether char is signed or not. Keys and labels are
+// folded with these, so the result must not depend on the platform's char.
+BOOST_AUTO_TEST_CASE(test_ToLower_ToUpper_every_byte)
+{
+    std::string all;
+    std::string all_lower;
+    std::string all_upper;
+    for (int b = 0; b < 256; ++b) {
+        const char c = static_cast<char>(b);
+        const char lower = (b >= 'A' && b <= 'Z') ? static_cast<char>(b + ('a' - 'A')) : c;
+        const char upper = (b >= 'a' && b <= 'z') ? static_cast<char>(b - ('a' - 'A')) : c;
+        BOOST_CHECK_EQUAL(ToLower(c), lower);
+        BOOST_CHECK_EQUAL(ToUpper(c), upper);
+        all += c;
+        all_lower += lower;
+        all_upper += upper;
+    }
+    BOOST_CHECK(ToLower(all) == all_lower);
+    BOOST_CHECK(ToUpper(all) == all_upper);
+}
+
 BOOST_AUTO_TEST_CASE(test_Capitalize)
 {
     BOOST_CHECK_EQUAL(Capitalize(""), "");
@@ -1098,737 +1293,6 @@ BOOST_AUTO_TEST_CASE(util_TrimString)
     BOOST_CHECK_EQUAL(TrimString(std::string("\x05\x04\x03\x02\x01\x00", 6)), std::string("\x05\x04\x03\x02\x01\x00", 6));
     BOOST_CHECK_EQUAL(TrimString(std::string("\x05\x04\x03\x02\x01\x00", 6), std::string("\x05\x04\x03\x02\x01", 5)), std::string("\0", 1));
     BOOST_CHECK_EQUAL(TrimString(std::string("\x05\x04\x03\x02\x01\x00", 6), std::string("\x05\x04\x03\x02\x01\x00", 6)), "");
-}
-
-BOOST_AUTO_TEST_CASE(Fraction_msb_algorithm_equivalence)
-{
-    for (unsigned int i = 0; i <= 63; ++i) {
-        int64_t n = 0;
-
-        if (i > 0) {
-            n = (int64_t {1} << (i - 1));
-        }
-
-        BOOST_CHECK_EQUAL(msb(n), i);
-    }
-
-    int bias_for_msb_result_63 = 0;
-
-    // msb ugly, ugly, ugly. Log2 looses resolution near the top of the range...
-    for (int i = 0; i < 16; ++i) {
-        bias_for_msb_result_63 = (int64_t {1} << i);
-
-        int msb_result = msb(std::numeric_limits<int64_t>::max() - bias_for_msb_result_63);
-
-        if (msb_result == 63) {
-            LogPrintf("INFO: %s: bias_for_msb_result_63 = %i, msb_result = %i", __func__, bias_for_msb_result_63, msb_result);
-            break;
-        } else {
-        }
-    }
-
-    // bias_for_msb_result_63 is currently 32768! It should be zero! This disqualifies the log2 based approach based on
-    // a correctness check.
-    BOOST_CHECK_EQUAL(msb(std::numeric_limits<int64_t>::max() - bias_for_msb_result_63), 63);
-
-    BOOST_CHECK_EQUAL(msb2(std::numeric_limits<int64_t>::max()), 63);
-    BOOST_CHECK_EQUAL(msb3(std::numeric_limits<int64_t>::max()), 63);
-
-    std::vector<std::pair<int64_t, int>> msb_results, msb2_results, msb3_results;
-
-    unsigned int iterations = 1000;
-
-    FastRandomContext rand(uint256 {0});
-
-    for (unsigned int i = 0; i < iterations; ++i) {
-        int64_t n = rand.rand32();
-
-        msb_results.push_back(std::make_pair(n, msb(n)));
-    }
-
-    FastRandomContext rand2(uint256 {0});
-
-    for (unsigned int i = 0; i < iterations; ++i) {
-        int64_t n = rand2.rand32();
-
-        msb2_results.push_back(std::make_pair(n, msb2(n)));
-    }
-
-    FastRandomContext rand3(uint256 {0});
-
-    for (unsigned int i = 0; i < iterations; ++i) {
-        int64_t n = rand3.rand32();
-
-        msb3_results.push_back(std::make_pair(n, msb3(n)));
-    }
-
-    bool success = true;
-
-    for (unsigned int i = 0; i < iterations; ++i) {
-        if (msb_results[i] != msb2_results[i] || msb_results[i] != msb3_results[i]) {
-            success = false;
-            error("%s: iteration %u: mismatch: %" PRId64 ", msb = %i, %" PRId64 " msb2 = %i, %" PRId64 " msb3 = %i",
-                  __func__,
-                  i,
-                  msb_results[i].first,
-                  msb_results[i].second,
-                  msb2_results[i].first,
-                  msb2_results[i].second,
-                  msb3_results[i].first,
-                  msb3_results[i].second
-                  );
-        }
-    }
-
-    BOOST_CHECK(success);
-}
-
-BOOST_AUTO_TEST_CASE(Fraction_msb_performance_test)
-{
-    // This is a test to bracket the three different algorithms above in anonymous namespace for doing msb calcs. The first is O(1),
-    // the second and third are O(log n), but the O(1) straight from the C++ library is pretty heavyweight and highly dependent on CPU
-    // architecture.
-
-    FastRandomContext rand(uint256 {0});
-
-    unsigned int iterations = 10000000;
-
-    g_timer.InitTimer("msb_test", true);
-
-    for (unsigned int i = 0; i < iterations; ++i) {
-        msb((int64_t)rand.rand64());
-    }
-
-    int64_t msb_test_time = g_timer.GetTimes(strprintf("msb %u iterations", iterations), "msb_test").time_since_last_check;
-
-    FastRandomContext rand2(uint256 {0});
-
-    for (unsigned int i = 0; i < iterations; ++i) {
-        msb2((int64_t)rand2.rand64());
-    }
-
-    int64_t msb2_test_time = g_timer.GetTimes(strprintf("msb2 %u iterations", iterations), "msb_test").time_since_last_check;
-
-    FastRandomContext rand3(uint256 {0});
-
-    for (unsigned int i = 0; i < iterations; ++i) {
-        msb3((int64_t)rand3.rand64());
-    }
-
-    int64_t msb3_test_time = g_timer.GetTimes(strprintf("msb3 %u iterations", iterations), "msb_test").time_since_last_check;
-
-    // The execution time of the above on a 13900K is
-
-    // INFO: GetTimes: timer msb_test: msb 10000000 iterations: elapsed time: 86 ms, time since last check: 86 ms.
-    // INFO: GetTimes: timer msb_test: msb2 10000000 iterations: elapsed time: 166 ms, time since last check: 80 ms.
-    // INFO: GetTimes: timer msb_test: msb3 10000000 iterations: elapsed time: 246 ms, time since last check: 80 ms.
-
-    // Which is almost identical. msb appears to be much slower on 32 bit architectures.
-
-    // One can easily have T1 = k1 * O(1) and T2 = k2 * O(n) = k2 * n * O(1) where T1 > T2 for n < q if k1 > q * k2, so the O(1)
-    // algorithm is by no means the best choice.
-
-    // This test makes sure that the three algorithms are within 20x of the one with the minimum execution time. If not, it will
-    // fail to prompt us to look at this again.
-
-    double minimum_time = std::min<double>(std::min<double>(msb_test_time, msb2_test_time), msb3_test_time);
-
-    BOOST_CHECK((double) msb_test_time / minimum_time < 20.0);
-    BOOST_CHECK((double) msb2_test_time / minimum_time < 20.0);
-    BOOST_CHECK((double) msb3_test_time / minimum_time < 20.0);
-}
-
-BOOST_AUTO_TEST_CASE(util_Fraction_Initialization_trivial)
-{
-    Fraction fraction;
-
-    BOOST_CHECK_EQUAL(fraction.GetNumerator(), 0);
-    BOOST_CHECK_EQUAL(fraction.GetDenominator(), 1);
-    BOOST_CHECK_EQUAL(fraction.IsSimplified(), true);
-    BOOST_CHECK_EQUAL(fraction.IsZero(), true);
-    BOOST_CHECK_EQUAL(fraction.IsPositive(), false);
-    BOOST_CHECK_EQUAL(fraction.IsNonNegative(), true);
-}
-
-BOOST_AUTO_TEST_CASE(util_Fraction_Initialization_from_num_denom_already_simplified)
-{
-    Fraction fraction(2, 3);
-
-    BOOST_CHECK_EQUAL(fraction.GetNumerator(), 2);
-    BOOST_CHECK_EQUAL(fraction.GetDenominator(), 3);
-    BOOST_CHECK_EQUAL(fraction.IsSimplified(), true);
-    BOOST_CHECK_EQUAL(fraction.IsZero(), false);
-    BOOST_CHECK_EQUAL(fraction.IsPositive(), true);
-    BOOST_CHECK_EQUAL(fraction.IsNonNegative(), true);
-}
-
-
-BOOST_AUTO_TEST_CASE(util_Fraction_Initialization_from_num_denom_not_simplified)
-{
-    Fraction fraction(4, 6);
-
-    BOOST_CHECK_EQUAL(fraction.GetNumerator(), 4);
-    BOOST_CHECK_EQUAL(fraction.GetDenominator(), 6);
-    BOOST_CHECK_EQUAL(fraction.IsSimplified(), false);
-    BOOST_CHECK_EQUAL(fraction.IsZero(), false);
-    BOOST_CHECK_EQUAL(fraction.IsPositive(), true);
-    BOOST_CHECK_EQUAL(fraction.IsNonNegative(), true);
-}
-
-BOOST_AUTO_TEST_CASE(util_Fraction_Initialization_from_num_denom_with_simplification)
-{
-    Fraction fraction(4, 6, true);
-
-    BOOST_CHECK_EQUAL(fraction.GetNumerator(), 2);
-    BOOST_CHECK_EQUAL(fraction.GetDenominator(), 3);
-    BOOST_CHECK_EQUAL(fraction.IsSimplified(), true);
-    BOOST_CHECK_EQUAL(fraction.IsZero(), false);
-    BOOST_CHECK_EQUAL(fraction.IsPositive(), true);
-    BOOST_CHECK_EQUAL(fraction.IsNonNegative(), true);
-}
-
-BOOST_AUTO_TEST_CASE(util_Fraction_Initialization_from_num_denom_with_simplification_neg_pos)
-{
-    Fraction fraction(-4, 6, true);
-
-    BOOST_CHECK_EQUAL(fraction.GetNumerator(), -2);
-    BOOST_CHECK_EQUAL(fraction.GetDenominator(), 3);
-    BOOST_CHECK_EQUAL(fraction.IsSimplified(), true);
-    BOOST_CHECK_EQUAL(fraction.IsZero(), false);
-    BOOST_CHECK_EQUAL(fraction.IsPositive(), false);
-    BOOST_CHECK_EQUAL(fraction.IsNonNegative(), false);
-}
-
-BOOST_AUTO_TEST_CASE(util_Fraction_Initialization_from_num_denom_with_simplification_pos_neg)
-{
-    Fraction fraction(4, -6, true);
-
-    BOOST_CHECK_EQUAL(fraction.GetNumerator(), -2);
-    BOOST_CHECK_EQUAL(fraction.GetDenominator(), 3);
-    BOOST_CHECK_EQUAL(fraction.IsSimplified(), true);
-    BOOST_CHECK_EQUAL(fraction.IsZero(), false);
-    BOOST_CHECK_EQUAL(fraction.IsPositive(), false);
-    BOOST_CHECK_EQUAL(fraction.IsNonNegative(), false);
-}
-
-BOOST_AUTO_TEST_CASE(util_Fraction_Initialization_from_num_denom_with_simplification_neg_neg)
-{
-    Fraction fraction(-4, -6, true);
-
-    BOOST_CHECK_EQUAL(fraction.GetNumerator(), 2);
-    BOOST_CHECK_EQUAL(fraction.GetDenominator(), 3);
-    BOOST_CHECK_EQUAL(fraction.IsSimplified(), true);
-    BOOST_CHECK_EQUAL(fraction.IsZero(), false);
-    BOOST_CHECK_EQUAL(fraction.IsPositive(), true);
-    BOOST_CHECK_EQUAL(fraction.IsNonNegative(), true);
-}
-
-BOOST_AUTO_TEST_CASE(util_Fraction_Copy_Constructor)
-{
-    Fraction fraction(4, 6);
-
-    Fraction fraction2(fraction);
-
-    BOOST_CHECK_EQUAL(fraction2.GetNumerator(), 4);
-    BOOST_CHECK_EQUAL(fraction2.GetDenominator(), 6);
-    BOOST_CHECK_EQUAL(fraction2.IsSimplified(), false);
-    BOOST_CHECK_EQUAL(fraction.IsZero(), false);
-    BOOST_CHECK_EQUAL(fraction.IsPositive(), true);
-    BOOST_CHECK_EQUAL(fraction.IsNonNegative(), true);
-}
-
-BOOST_AUTO_TEST_CASE(util_Fraction_Initialization_from_int64_t)
-{
-    Fraction fraction((int64_t) -2);
-
-    BOOST_CHECK_EQUAL(fraction.GetNumerator(), -2);
-    BOOST_CHECK_EQUAL(fraction.GetDenominator(), 1);
-    BOOST_CHECK_EQUAL(fraction.IsSimplified(), true);
-    BOOST_CHECK_EQUAL(fraction.IsZero(), false);
-    BOOST_CHECK_EQUAL(fraction.IsPositive(), false);
-    BOOST_CHECK_EQUAL(fraction.IsNonNegative(), false);
-}
-
-BOOST_AUTO_TEST_CASE(util_Fraction_Initialization_from_string)
-{
-    Fraction fraction = Fraction::FromString("100/-567");
-
-    BOOST_CHECK_EQUAL(fraction.GetNumerator(), -100);
-    BOOST_CHECK_EQUAL(fraction.GetDenominator(), 567);
-    BOOST_CHECK_EQUAL(fraction.IsSimplified(), true);
-    BOOST_CHECK_EQUAL(fraction.IsZero(), false);
-    BOOST_CHECK_EQUAL(fraction.IsPositive(), false);
-    BOOST_CHECK_EQUAL(fraction.IsNonNegative(), false);
-}
-
-BOOST_AUTO_TEST_CASE(util_Fraction_Simplify)
-{
-    Fraction fraction(-4, -6);
-
-    BOOST_CHECK_EQUAL(fraction.IsSimplified(), false);
-
-    fraction.Simplify();
-
-    BOOST_CHECK_EQUAL(fraction.GetNumerator(), 2);
-    BOOST_CHECK_EQUAL(fraction.GetDenominator(), 3);
-    BOOST_CHECK_EQUAL(fraction.IsSimplified(), true);
-    BOOST_CHECK_EQUAL(fraction.IsZero(), false);
-    BOOST_CHECK_EQUAL(fraction.IsPositive(), true);
-    BOOST_CHECK_EQUAL(fraction.IsNonNegative(), true);
-}
-
-BOOST_AUTO_TEST_CASE(util_Fraction_ToDouble)
-{
-    Fraction fraction (1, 4);
-
-    BOOST_CHECK_EQUAL(fraction.ToDouble(), 0.25);
-}
-
-BOOST_AUTO_TEST_CASE(util_Fraction_addition)
-{
-    Fraction lhs(2, 3);
-    Fraction rhs(3, 4);
-
-    Fraction sum = lhs + rhs;
-
-    BOOST_CHECK_EQUAL(sum.GetNumerator(), 17);
-    BOOST_CHECK_EQUAL(sum.GetDenominator(), 12);
-    BOOST_CHECK_EQUAL(sum.IsSimplified(), true);
-}
-
-BOOST_AUTO_TEST_CASE(util_Fraction_addition_with_internal_simplification_common_denominator)
-{
-    Fraction lhs(3, 10);
-    Fraction rhs(2, 10);
-
-    Fraction sum = lhs + rhs;
-
-    BOOST_CHECK_EQUAL(sum.GetNumerator(), 1);
-    BOOST_CHECK_EQUAL(sum.GetDenominator(), 2);
-    BOOST_CHECK_EQUAL(sum.IsSimplified(), true);
-}
-
-BOOST_AUTO_TEST_CASE(util_Fraction_addition_with_internal_simplification)
-{
-    Fraction lhs(3, 10);
-    Fraction rhs(1, 5);
-
-    Fraction sum = lhs + rhs;
-
-    BOOST_CHECK_EQUAL(sum.GetNumerator(), 1);
-    BOOST_CHECK_EQUAL(sum.GetDenominator(), 2);
-    BOOST_CHECK_EQUAL(sum.IsSimplified(), true);
-}
-
-BOOST_AUTO_TEST_CASE(util_Fraction_addition_with_internal_gcd_simplification)
-{
-    Fraction lhs(1, 6);
-    Fraction rhs(2, 15);
-
-    // gcd(6, 15) = 3, so this really is
-    //
-    // 1 * (15/3) + 2 * (6/3)   1 * 5 + 2 * 2    3
-    // ---------------------- = ------------- = --
-    //   3 * (6/3) * (15/3)       3 * 2 * 5     10
-
-    Fraction sum = lhs + rhs;
-
-    BOOST_CHECK_EQUAL(sum.GetNumerator(), 3);
-    BOOST_CHECK_EQUAL(sum.GetDenominator(), 10);
-    BOOST_CHECK_EQUAL(sum.IsSimplified(), true);
-}
-
-BOOST_AUTO_TEST_CASE(util_Fraction_subtraction)
-{
-    Fraction lhs(2, 3);
-    Fraction rhs(3, 4);
-
-    Fraction difference = lhs - rhs;
-
-    BOOST_CHECK_EQUAL(difference.GetNumerator(), -1);
-    BOOST_CHECK_EQUAL(difference.GetDenominator(), 12);
-    BOOST_CHECK_EQUAL(difference.IsSimplified(), true);
-}
-
-BOOST_AUTO_TEST_CASE(util_Fraction_subtraction_with_internal_simplification)
-{
-    Fraction lhs(2, 10);
-    Fraction rhs(7, 10);
-
-    Fraction difference = lhs - rhs;
-
-    BOOST_CHECK_EQUAL(difference.GetNumerator(), -1);
-    BOOST_CHECK_EQUAL(difference.GetDenominator(), 2);
-    BOOST_CHECK_EQUAL(difference.IsSimplified(), true);
-}
-
-BOOST_AUTO_TEST_CASE(util_Fraction_multiplication_with_internal_simplification)
-{
-    Fraction lhs(-2, 3);
-    Fraction rhs(3, 4);
-
-    Fraction product = lhs * rhs;
-
-    BOOST_CHECK_EQUAL(product.GetNumerator(), -1);
-    BOOST_CHECK_EQUAL(product.GetDenominator(), 2);
-    BOOST_CHECK_EQUAL(product.IsSimplified(), true);
-}
-
-BOOST_AUTO_TEST_CASE(util_Fraction_multiplication_with_cross_simplification_overflow_resistance)
-{
-
-    Fraction lhs(std::numeric_limits<int64_t>::max() - 3, std::numeric_limits<int64_t>::max() - 1, false);
-    Fraction rhs((std::numeric_limits<int64_t>::max() - 1) / (int64_t) 2, (std::numeric_limits<int64_t>::max() - 3) / (int64_t) 2);
-
-    Fraction product;
-
-    // This should NOT overflow
-    bool overflow = false;
-    try {
-        product = lhs * rhs;
-    } catch (std::overflow_error& e) {
-        overflow = true;
-    }
-
-    BOOST_CHECK_EQUAL(overflow, false);
-
-    if (!overflow) {
-        BOOST_CHECK(product == Fraction(1));
-    }
-}
-
-BOOST_AUTO_TEST_CASE(util_Fraction_division_with_internal_simplification)
-{
-    Fraction lhs(-2, 3);
-    Fraction rhs(4, 3);
-
-    Fraction quotient = lhs / rhs;
-
-    BOOST_CHECK_EQUAL(quotient.GetNumerator(), -1);
-    BOOST_CHECK_EQUAL(quotient.GetDenominator(), 2);
-    BOOST_CHECK_EQUAL(quotient.IsSimplified(), true);
-}
-
-BOOST_AUTO_TEST_CASE(util_Fraction_self_addition_with_internal_simplification)
-{
-    Fraction fraction(3, 10);
-
-    fraction += Fraction(2, 10);
-
-    BOOST_CHECK_EQUAL(fraction.GetNumerator(), 1);
-    BOOST_CHECK_EQUAL(fraction.GetDenominator(), 2);
-    BOOST_CHECK_EQUAL(fraction.IsSimplified(), true);
-}
-
-BOOST_AUTO_TEST_CASE(util_Fraction_self_subtraction_with_internal_simplification)
-{
-    Fraction fraction(7, 10);
-
-    fraction -= Fraction(2, 10);
-
-    BOOST_CHECK_EQUAL(fraction.GetNumerator(), 1);
-    BOOST_CHECK_EQUAL(fraction.GetDenominator(), 2);
-    BOOST_CHECK_EQUAL(fraction.IsSimplified(), true);
-}
-
-BOOST_AUTO_TEST_CASE(util_Fraction_self_multiplication_with_internal_simplification)
-{
-    Fraction fraction(-2, 3);
-
-    fraction *= Fraction(3, 4);
-
-    BOOST_CHECK_EQUAL(fraction.GetNumerator(), -1);
-    BOOST_CHECK_EQUAL(fraction.GetDenominator(), 2);
-    BOOST_CHECK_EQUAL(fraction.IsSimplified(), true);
-}
-
-BOOST_AUTO_TEST_CASE(util_Fraction_self_division_with_internal_simplification)
-{
-    Fraction fraction(-2, 3);
-
-    fraction /= Fraction(4, 3);
-
-    BOOST_CHECK_EQUAL(fraction.GetNumerator(), -1);
-    BOOST_CHECK_EQUAL(fraction.GetDenominator(), 2);
-    BOOST_CHECK_EQUAL(fraction.IsSimplified(), true);
-}
-
-BOOST_AUTO_TEST_CASE(util_Fraction_multiplication_by_zero_Fraction)
-{
-    Fraction lhs(-2, 3);
-    Fraction rhs(0);
-
-    Fraction product = lhs * rhs;
-
-    BOOST_CHECK_EQUAL(product.GetNumerator(), 0);
-    BOOST_CHECK_EQUAL(product.GetDenominator(), 1);
-    BOOST_CHECK_EQUAL(product.IsSimplified(), true);
-}
-
-BOOST_AUTO_TEST_CASE(util_Fraction_division_by_zero_Fraction)
-{
-    Fraction lhs(-2, 3);
-    Fraction rhs(0);
-
-    std::string err;
-
-    try {
-    Fraction quotient = lhs / rhs;
-    } catch (std::out_of_range& e) {
-        err = e.what();
-    }
-
-    BOOST_CHECK_EQUAL(err, "denominator specified is zero");
-}
-
-BOOST_AUTO_TEST_CASE(util_Fraction_division_by_zero_int64_t)
-{
-    Fraction lhs(-2, 3);
-    int64_t rhs = 0;
-
-    std::string err;
-
-    try {
-        Fraction quotient = lhs / rhs;
-    } catch (std::out_of_range& e) {
-        err = e.what();
-    }
-
-    BOOST_CHECK_EQUAL(err, std::string{"denominator specified is zero"});
-}
-
-BOOST_AUTO_TEST_CASE(util_Fraction_multiplication_overflow_1)
-{
-    Fraction lhs((int64_t) 1 << 30, 1);
-    Fraction rhs((int64_t) 1 << 31, 1);
-
-    LogPrintf("INFO: %s: msb((int64_t) 1 << 30) = %i", __func__, msb3((int64_t) 1 << 30));
-    LogPrintf("INFO: %s: msb((int64_t) 1 << 31) = %i", __func__, msb3((int64_t) 1 << 31));
-
-    std::string err;
-
-    try {
-        Fraction product = lhs * rhs;
-    } catch (std::overflow_error& e) {
-        err = e.what();
-    }
-
-    BOOST_CHECK_EQUAL(err, std::string {});
-}
-
-BOOST_AUTO_TEST_CASE(util_Fraction_multiplication_overflow_2)
-{
-    Fraction lhs(((int64_t) 1 << 31) - 1, 1);
-    Fraction rhs(((int64_t) 1 << 31) - 1, 1);
-
-    std::string err;
-
-    try {
-        Fraction product = lhs * rhs;
-    } catch (std::overflow_error& e) {
-        err = e.what();
-    }
-
-    BOOST_CHECK_EQUAL(err, std::string {""});
-}
-
-BOOST_AUTO_TEST_CASE(util_Fraction_multiplication_overflow_3)
-{
-    Fraction lhs((int64_t) 1 << 31, 1);
-    Fraction rhs((int64_t) 1 << 31, 1);
-
-    std::string err;
-
-    try {
-        Fraction product = lhs * rhs;
-    } catch (std::overflow_error& e) {
-        err = e.what();
-    }
-
-    BOOST_CHECK_EQUAL(err, std::string {"fraction multiplication results in an overflow"});
-}
-
-
-BOOST_AUTO_TEST_CASE(util_Fraction_addition_overflow_1)
-{
-    Fraction lhs(std::numeric_limits<int64_t>::max() / 2, 1);
-    Fraction rhs(std::numeric_limits<int64_t>::max() / 2 + 1, 1);
-
-    std::string err;
-
-    try {
-        Fraction addition = lhs + rhs;
-    } catch (std::overflow_error& e) {
-        err = e.what();
-    }
-
-    BOOST_CHECK_EQUAL(err, std::string {});
-}
-
-BOOST_AUTO_TEST_CASE(util_Fraction_addition_overflow_2)
-{
-    Fraction lhs(std::numeric_limits<int64_t>::max() / 2 + 1, 1);
-    Fraction rhs(std::numeric_limits<int64_t>::max() / 2 + 1, 1);
-
-    std::string err;
-
-    try {
-        Fraction addition = lhs + rhs;
-    } catch (std::overflow_error& e) {
-        err = e.what();
-    }
-
-    BOOST_CHECK_EQUAL(err, std::string {"fraction addition of a + b where a > 0 and b > 0 results in an overflow"});
-}
-
-BOOST_AUTO_TEST_CASE(util_Fraction_addition_overflow_3)
-{
-    Fraction lhs(std::numeric_limits<int64_t>::min() / 2 + 1, 1);
-    Fraction rhs(std::numeric_limits<int64_t>::min() / 2, 1);
-
-    std::string err;
-
-    try {
-        Fraction addition = lhs + rhs;
-    } catch (std::overflow_error& e) {
-        err = e.what();
-    }
-
-    BOOST_CHECK_EQUAL(err, std::string {});
-}
-
-BOOST_AUTO_TEST_CASE(util_Fraction_addition_overflow_4)
-{
-    Fraction lhs(std::numeric_limits<int64_t>::min() / 2, 1);
-    Fraction rhs(std::numeric_limits<int64_t>::min() / 2, 1);
-
-    std::string err;
-
-    try {
-        Fraction addition = lhs + rhs;
-    } catch (std::overflow_error& e) {
-        err = e.what();
-    }
-
-    BOOST_CHECK_EQUAL(err, std::string {"fraction addition of a + b where a < 0 and b < 0 results in an overflow"});
-}
-
-BOOST_AUTO_TEST_CASE(util_Fraction_equal)
-{
-    BOOST_CHECK_EQUAL(Fraction(1, 2) == Fraction(2, 4), true);
-    BOOST_CHECK_EQUAL(Fraction(-1, 2) == Fraction(1, -2), true);
-    BOOST_CHECK_EQUAL(Fraction(-1, 2) == Fraction(1, 2), false);
-    // Same numerator, different denominator — must compare as not equal
-    BOOST_CHECK_EQUAL(Fraction(1, 2) == Fraction(1, 3), false);
-    BOOST_CHECK_EQUAL(Fraction(3, 5) == Fraction(3, 7), false);
-}
-
-BOOST_AUTO_TEST_CASE(util_Fraction_not_equal)
-{
-    BOOST_CHECK_EQUAL(Fraction(1, 2) != Fraction(2, 4), false);
-    BOOST_CHECK_EQUAL(Fraction(-1, 2) != Fraction(1, -2), false);
-    BOOST_CHECK_EQUAL(Fraction(-1, 2) != Fraction(1, 2), true);
-}
-
-BOOST_AUTO_TEST_CASE(util_Fraction_less_than_or_equal)
-{
-    BOOST_CHECK_EQUAL(Fraction(3, 4) <= Fraction(4, 5), true);
-    BOOST_CHECK_EQUAL(Fraction(3, 4) <= Fraction(6, 8), true);
-    BOOST_CHECK_EQUAL(Fraction(3, 4) <= Fraction(2, 3), false);
-}
-
-BOOST_AUTO_TEST_CASE(util_Fraction_greater_than_or_equal)
-{
-    BOOST_CHECK_EQUAL(Fraction(4, 5) >= Fraction(3, 4), true);
-    BOOST_CHECK_EQUAL(Fraction(6, 8) >= Fraction(3, 4), true);
-    BOOST_CHECK_EQUAL(Fraction(2, 3) >= Fraction(3, 4), false);
-}
-
-BOOST_AUTO_TEST_CASE(util_Fraction_less_than)
-{
-    BOOST_CHECK_EQUAL(Fraction(3, 4) < Fraction(4, 5), true);
-    BOOST_CHECK_EQUAL(Fraction(3, 4) < Fraction(6, 8), false);
-    BOOST_CHECK_EQUAL(Fraction(3, 4) < Fraction(2, 3), false);
-}
-
-BOOST_AUTO_TEST_CASE(util_Fraction_greater_than)
-{
-    BOOST_CHECK_EQUAL(Fraction(4, 5) > Fraction(3, 4), true);
-    BOOST_CHECK_EQUAL(Fraction(6, 8) > Fraction(3, 4), false);
-    BOOST_CHECK_EQUAL(Fraction(2, 3) > Fraction(3, 4), false);
-}
-
-BOOST_AUTO_TEST_CASE(util_Fraction_logic_negation)
-{
-    BOOST_CHECK_EQUAL(!Fraction(1, 2), false);
-    BOOST_CHECK_EQUAL(!Fraction(-1, 2), false);
-    BOOST_CHECK_EQUAL(!Fraction(), true);
-}
-
-BOOST_AUTO_TEST_CASE(util_Fraction_ToString)
-{
-    Fraction fraction(123, 10000);
-
-    BOOST_CHECK_EQUAL(fraction.IsSimplified(), true);
-    BOOST_CHECK_EQUAL(fraction.ToString(), "123/10000");
-}
-
-BOOST_AUTO_TEST_CASE(util_Fraction_FromString)
-{
-    Fraction fraction = Fraction::FromString("100/567");
-
-    BOOST_CHECK_EQUAL(fraction.IsSimplified(), true);
-    BOOST_CHECK(fraction == Fraction(100, 567, true));
-
-    fraction = Fraction::FromString("-100/567");
-
-    BOOST_CHECK_EQUAL(fraction.IsSimplified(), true);
-    BOOST_CHECK(fraction == Fraction(-100, 567, true));
-
-    fraction = Fraction::FromString("100/-567");
-
-    BOOST_CHECK_EQUAL(fraction.IsSimplified(), true);
-    BOOST_CHECK(fraction == Fraction(-100, 567, true));
-
-    fraction = Fraction::FromString("5");
-
-    BOOST_CHECK_EQUAL(fraction.IsSimplified(), true);
-    BOOST_CHECK(fraction == Fraction(5, 1, true));
-
-    std::string err;
-    std::string valid_err_message {"fraction input string cannot be parsed to fraction"};
-
-    try {
-        Fraction fraction = Fraction::FromString("100/567/300");
-    } catch (std::out_of_range& e) {
-        err = e.what();
-    }
-
-    BOOST_CHECK_EQUAL(err, valid_err_message);
-
-    try {
-        Fraction fraction = Fraction::FromString("100 / 567");
-    } catch (std::out_of_range& e) {
-        err = e.what();
-    }
-
-    BOOST_CHECK_EQUAL(err, valid_err_message);
-
-    try {
-        Fraction fraction = Fraction::FromString("100.1");
-    } catch (std::out_of_range& e) {
-        err = e.what();
-    }
-
-    BOOST_CHECK_EQUAL(err, valid_err_message);
-
-    try {
-        Fraction fraction = Fraction::FromString("");
-    } catch (std::out_of_range& e) {
-        err = e.what();
-    }
-
-    BOOST_CHECK_EQUAL(err, valid_err_message);
 }
 
 BOOST_AUTO_TEST_CASE(util_ReplaceAll)
@@ -2086,7 +1550,6 @@ BOOST_AUTO_TEST_CASE(updaterwsetting_throwing_write_leaves_memory_unchanged)
     BOOST_CHECK(getRwSetting(probe).isNull());
 }
 
-
 //!
 //! ReadLineBounded: the scraper's part parser reads every record through this,
 //! so its edge cases decide whether a project's statistics survive the trip.
@@ -2129,6 +1592,52 @@ BOOST_AUTO_TEST_CASE(readlinebounded_treats_a_blank_line_as_a_line)
 
     BOOST_CHECK(ReadLineBounded(in, line, 64, overlong));
     BOOST_CHECK_EQUAL(line, "third");
+}
+
+namespace {
+//! A stream buffer that serves its text and then fails the next read by
+//! throwing, as a filtering buffer does on input it cannot decode.
+class FailingReadBuffer : public std::streambuf
+{
+public:
+    explicit FailingReadBuffer(std::string text) : m_text(std::move(text))
+    {
+        setg(m_text.data(), m_text.data(), m_text.data() + m_text.size());
+    }
+
+protected:
+    int_type underflow() override
+    {
+        throw std::ios_base::failure("read failed");
+    }
+
+private:
+    std::string m_text;
+};
+} // anonymous namespace
+
+//! A buffer that throws on a read ends the caller's loop the way it does for
+//! the istream functions: badbit is set, the read reports failure, and nothing
+//! is thrown at the caller.
+BOOST_AUTO_TEST_CASE(readlinebounded_reports_a_read_the_buffer_fails)
+{
+    FailingReadBuffer buffer("whole line\npart of a li");
+    std::istream in(&buffer);
+    std::string line;
+    bool overlong = false;
+
+    BOOST_CHECK(ReadLineBounded(in, line, 64, overlong));
+    BOOST_CHECK_EQUAL(line, "whole line");
+    BOOST_CHECK(!in.bad());
+
+    bool read = true;
+    BOOST_CHECK_NO_THROW(read = ReadLineBounded(in, line, 64, overlong));
+    BOOST_CHECK(!read);
+    BOOST_CHECK(in.bad());
+    BOOST_CHECK(!overlong);
+
+    // The stream stays failed.
+    BOOST_CHECK(!ReadLineBounded(in, line, 64, overlong));
 }
 
 //! A final line with no trailing newline is still a line.
@@ -2211,9 +1720,10 @@ BOOST_AUTO_TEST_CASE(changesettings_listener_reads_the_value_being_stored)
         std::vector<std::string> immediate;
         std::vector<std::string> requires_restart_list;
         bool invalid_input = false;
+        bool elevation_required = false;
         std::string error;
         return ChangeSettings({{"changesettings_listener_probe", value}}, requires_restart, no_change, immediate,
-                              requires_restart_list, invalid_input, error);
+                              requires_restart_list, invalid_input, elevation_required, error);
     };
 
     BOOST_REQUIRE(change("first"));  // nothing is forced yet
@@ -2259,8 +1769,9 @@ BOOST_AUTO_TEST_CASE(changesettings_failed_store_changes_nothing)
         std::vector<std::string> immediate;
         std::vector<std::string> requires_restart_list;
         Outcome out;
+        bool elevation_required = false;
         out.ok = ChangeSettings({{"changesettings_failed_store_probe", value}}, requires_restart, no_change,
-                                immediate, requires_restart_list, out.invalid_input, out.error);
+                                immediate, requires_restart_list, out.invalid_input, elevation_required, out.error);
         return out;
     };
 
@@ -2295,6 +1806,958 @@ BOOST_AUTO_TEST_CASE(changesettings_failed_store_changes_nothing)
     BOOST_REQUIRE(change("").ok); // the cleanup
     BOOST_CHECK_EQUAL(gArgs.GetArg("-changesettings_failed_store_probe", "<unset>"), "<unset>");
     BOOST_CHECK(getRwSetting("changesettings_failed_store_probe").isNull());
+}
+
+#ifdef WIN32
+namespace {
+//! The UTF-16 code units of a wide string, in hex, so that a failure prints them.
+std::string Units(const std::wstring& wide)
+{
+    std::string out;
+    for (const wchar_t unit : wide) {
+        if (!out.empty()) out += ' ';
+        out += strprintf("%04X", static_cast<unsigned int>(unit));
+    }
+    return out;
+}
+} // namespace
+
+// Utf8ToWide() and WideToUtf8() replace
+// std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>, wchar_t>. Every valid
+// case below converts as wstring_convert did, with libstdc++ 13.2 and 16 alike.
+// Every malformed case throws std::range_error. wstring_convert threw for most of
+// them too, but returned an input that ends part-way through a character with that
+// character dropped, and libstdc++ 13.2 accepted encoded surrogates.
+
+BOOST_AUTO_TEST_CASE(util_Utf8ToWide_converts_valid_utf8)
+{
+    const std::vector<std::pair<std::string, std::string>> cases{
+        {"", ""},
+        {"abc", "0061 0062 0063"},
+        {std::string("a\0b", 3), "0061 0000 0062"},
+        {"\xC2\x80", "0080"},              // the lowest two-byte form
+        {"\xC3\xA9", "00E9"},
+        {"\xE0\xA0\x80", "0800"},          // the lowest three-byte form
+        {"\xE2\x82\xAC", "20AC"},
+        {"\xED\x9F\xBF", "D7FF"},          // just below the surrogates
+        {"\xEE\x80\x80", "E000"},          // just above them
+        {"\xEF\xBF\xBE", "FFFE"},          // noncharacters convert
+        {"\xEF\xBF\xBF", "FFFF"},
+        {"\xEF\xBB\xBF" "a", "FEFF 0061"}, // a byte order mark is kept
+        {"\xF0\x90\x80\x80", "D800 DC00"}, // the lowest four-byte form
+        {"\xF4\x8F\xBF\xBF", "DBFF DFFF"}, // U+10FFFF
+    };
+    for (const auto& [utf8, units] : cases) {
+        BOOST_TEST_CONTEXT("UTF-8 " << HexStr(utf8)) {
+            BOOST_CHECK_EQUAL(Units(Utf8ToWide(utf8)), units);
+        }
+    }
+}
+
+BOOST_AUTO_TEST_CASE(util_Utf8ToWide_throws_on_malformed_utf8)
+{
+    const std::vector<std::string> cases{
+        // Input that ends part-way through a character.
+        "\xC3", "\xE2\x82", "\xF0\x90\x80", "a\xC3", "\xC3\xA9\xE2\x82", "\xE0", "\xE0\xA0", "\xED",
+        "\xF4\x8F\xBF",
+        // Encoded surrogates: alone, as a CESU-8 pair, and cut off.
+        "\xED\xA0\x80", "\xED\xBF\xBF", "\xED\xA0\x80\xED\xB0\x80", "\xED\xA0",
+        // Overlong forms.
+        "\xC0\x80", "\xC1\xBF", "\xE0\x80\x80", "\xE0\x9F\xBF", "\xF0\x80\x80\x80", "\xF0\x8F\xBF\xBF",
+        // Above U+10FFFF, and bytes that cannot start a sequence.
+        "\xF4\x90\x80\x80", "\xF5\x80\x80\x80", "\xF8\x88\x80\x80\x80", "\xFC\x84\x80\x80\x80\x80", "\xFE",
+        "\xFF", "abc\xFF",
+        // Continuation bytes with no lead byte, or one too many.
+        "\x80", "\xBF", "a\x80", "\xC3\xA9\xA9", "\xE2\x82\xAC\x82",
+        // A lead byte followed by a byte that is not a continuation byte.
+        "\xC3" "a", "\xE2\x82" "a", "\xC3\xC3",
+    };
+    for (const std::string& utf8 : cases) {
+        BOOST_TEST_CONTEXT("UTF-8 " << HexStr(utf8)) {
+            BOOST_CHECK_THROW(Utf8ToWide(utf8), std::range_error);
+        }
+    }
+}
+
+BOOST_AUTO_TEST_CASE(util_WideToUtf8_converts_valid_utf16)
+{
+    const std::vector<std::pair<std::wstring, std::string>> cases{
+        {L"", ""},
+        {L"abc", "616263"},
+        {std::wstring(L"a\0b", 3), "610062"},
+        {std::wstring{wchar_t(0x00E9)}, "c3a9"},
+        {std::wstring{wchar_t(0x20AC)}, "e282ac"},
+        {std::wstring{wchar_t(0xFEFF)}, "efbbbf"},
+        {std::wstring{wchar_t(0xFFFF)}, "efbfbf"},
+        {std::wstring{wchar_t(0xD800), wchar_t(0xDC00)}, "f0908080"},
+        {std::wstring{wchar_t(0xDBFF), wchar_t(0xDFFF)}, "f48fbfbf"},
+    };
+    for (const auto& [wide, bytes] : cases) {
+        BOOST_TEST_CONTEXT("UTF-16 " << Units(wide)) {
+            BOOST_CHECK_EQUAL(HexStr(WideToUtf8(wide)), bytes);
+        }
+    }
+}
+
+BOOST_AUTO_TEST_CASE(util_WideToUtf8_throws_on_malformed_utf16)
+{
+    const std::vector<std::wstring> cases{
+        // A high surrogate with no low surrogate after it: at the end of the input,
+        // and before another unit.
+        std::wstring{wchar_t(0xD800)},
+        std::wstring{L'a', wchar_t(0xD800)},
+        std::wstring{wchar_t(0xDBFF)},
+        std::wstring{wchar_t(0xD800), wchar_t(0xDC00), wchar_t(0xDBFF)},
+        std::wstring{wchar_t(0xD800), L'A'},
+        std::wstring{wchar_t(0xD800), wchar_t(0xD800)},
+        // A low surrogate with no high surrogate before it.
+        std::wstring{wchar_t(0xDC00)},
+        std::wstring{wchar_t(0xDFFF)},
+        std::wstring{wchar_t(0xDC00), wchar_t(0xD800)},
+        std::wstring{L'a', wchar_t(0xDC00), L'b'},
+    };
+    for (const std::wstring& wide : cases) {
+        BOOST_TEST_CONTEXT("UTF-16 " << Units(wide)) {
+            BOOST_CHECK_THROW(WideToUtf8(wide), std::range_error);
+        }
+    }
+}
+
+BOOST_AUTO_TEST_CASE(util_Utf8ToWide_and_WideToUtf8_convert_every_scalar_value)
+{
+    // Every Unicode scalar value, U+0000 to U+10FFFF less the surrogates, encoded
+    // here from the definitions of UTF-8 and UTF-16.
+    std::string utf8;
+    std::wstring wide;
+    // sign-compare checked: cp is uint32_t; 0x10FFFFU is a non-negative literal, so both
+    // sides are unsigned.
+    for (uint32_t cp = 0; cp <= 0x10FFFFU; ++cp) {
+        // sign-compare checked: cp is uint32_t; 0xD800U and 0xDFFFU are non-negative
+        // literals, so both sides of each comparison are unsigned.
+        if (cp >= 0xD800U && cp <= 0xDFFFU) continue;
+
+        // sign-compare checked: cp is uint32_t; 0x80U, 0x800U and 0x10000U are
+        // non-negative literals, so both sides of each comparison are unsigned.
+        if (cp < 0x80U) {
+            utf8 += static_cast<char>(cp);
+        } else if (cp < 0x800U) {
+            utf8 += static_cast<char>(0xC0U | (cp >> 6));
+            utf8 += static_cast<char>(0x80U | (cp & 0x3FU));
+        } else if (cp < 0x10000U) {
+            utf8 += static_cast<char>(0xE0U | (cp >> 12));
+            utf8 += static_cast<char>(0x80U | ((cp >> 6) & 0x3FU));
+            utf8 += static_cast<char>(0x80U | (cp & 0x3FU));
+        } else {
+            utf8 += static_cast<char>(0xF0U | (cp >> 18));
+            utf8 += static_cast<char>(0x80U | ((cp >> 12) & 0x3FU));
+            utf8 += static_cast<char>(0x80U | ((cp >> 6) & 0x3FU));
+            utf8 += static_cast<char>(0x80U | (cp & 0x3FU));
+        }
+
+        // sign-compare checked: cp is uint32_t; 0x10000U is a non-negative literal, so
+        // both sides are unsigned.
+        if (cp < 0x10000U) {
+            wide += static_cast<wchar_t>(cp);
+        } else {
+            wide += static_cast<wchar_t>(0xD800U + ((cp - 0x10000U) >> 10));
+            wide += static_cast<wchar_t>(0xDC00U + ((cp - 0x10000U) & 0x3FFU));
+        }
+    }
+
+    // 1,112,064 scalar values: 128 take one byte, 1,920 two, 61,440 three and
+    // 1,048,576 four, and those four-byte ones take two UTF-16 units each.
+    // sign-compare checked: size() is size_t; each U literal is non-negative, so both
+    // sides are unsigned.
+    BOOST_REQUIRE_EQUAL(utf8.size(), 4382592U);
+    BOOST_REQUIRE_EQUAL(wide.size(), 2160640U);
+
+    BOOST_CHECK(Utf8ToWide(utf8) == wide);
+    BOOST_CHECK(WideToUtf8(wide) == utf8);
+}
+
+#if HAVE_SYSTEM
+BOOST_AUTO_TEST_CASE(util_runCommand_does_not_throw_on_malformed_utf8)
+{
+    // A command from a configuration file saved in a legacy code page: 0xE9 is U+00E9
+    // in Windows-1252 and not valid UTF-8 here. runCommand logs it and does not run
+    // it; the conversion's exception must not escape, because the callers run
+    // runCommand on threads of their own.
+    BOOST_CHECK_NO_THROW(runCommand("echo r\xE9sum\xE9"));
+}
+#endif // HAVE_SYSTEM
+#endif // WIN32
+
+// SysErrorString must return the platform's message for an errno value. On glibc it used to return
+// "Unknown error (N)" for every value because the strerror_r variant was detected wrongly at configure time.
+BOOST_AUTO_TEST_CASE(syserror_string_returns_platform_message)
+{
+    const std::string message = std::generic_category().message(ENOENT);
+    const std::string result = SysErrorString(ENOENT);
+
+    BOOST_CHECK(!message.empty());
+    BOOST_CHECK(result.find("Unknown error") == std::string::npos);
+    BOOST_CHECK(result.find(message) != std::string::npos);
+    BOOST_CHECK(result.find(strprintf("(%d)", ENOENT)) != std::string::npos);
+}
+
+BOOST_AUTO_TEST_CASE(setting_key_patterns_match_whole_names)
+{
+    // The same vectors are checked against fnmatch in test/lint/lint-refused-setting-keys.py.
+    BOOST_CHECK(MatchSettingKeyPattern("*notify", "blocknotify"));
+    BOOST_CHECK(MatchSettingKeyPattern("*notify", "notify"));
+    BOOST_CHECK(!MatchSettingKeyPattern("*notify", "notifyx"));
+    BOOST_CHECK(MatchSettingKeyPattern("rpc*", "rpc"));
+    BOOST_CHECK(MatchSettingKeyPattern("clear*history", "clearbeaconhistory"));
+    BOOST_CHECK(!MatchSettingKeyPattern("clear*history", "clearbeaconhistoryx"));
+    BOOST_CHECK(MatchSettingKeyPattern("min", "min"));
+    BOOST_CHECK(!MatchSettingKeyPattern("min", "mininput"));
+    BOOST_CHECK(!MatchSettingKeyPattern("rpc*", "RPCPORT"));
+    BOOST_CHECK(MatchSettingKeyPattern("*", ""));
+    BOOST_CHECK(!MatchSettingKeyPattern("a*b*c", "acb"));
+}
+
+BOOST_AUTO_TEST_CASE(refused_setting_keys_ignore_a_section_prefix_but_not_no)
+{
+    BOOST_CHECK(IsRefusedSettingKey("blocknotify"));
+    BOOST_CHECK(IsRefusedSettingKey("test.blocknotify"));
+    BOOST_CHECK(IsRefusedSettingKey("rpcpassword"));
+    BOOST_CHECK(!IsRefusedSettingKey("staking"));
+    BOOST_CHECK(!IsRefusedSettingKey("noncruncher"));
+    BOOST_CHECK(!IsRefusedSettingKey("printtoconsole"));
+}
+
+// The compiled list is exactly the data file's patterns, in order (drift guard for the generator).
+// The file is compiled into this binary (src/test/data/CMakeLists.txt), so the check does not
+// need the source tree where it runs.
+BOOST_AUTO_TEST_CASE(compiled_refused_patterns_follow_the_data_file)
+{
+    std::istringstream file(std::string(reinterpret_cast<const char*>(refused_setting_keys_txt),
+                                        refused_setting_keys_txt_len));
+
+    std::vector<std::string> from_file;
+    std::string line;
+
+    while (std::getline(file, line)) {
+        // The generator drops carriage returns, so a checkout with Windows line ends gives
+        // the same list.
+        if (!line.empty() && line.back() == '\r') line.pop_back();
+        if (line.empty() || line[0] == '#') continue;
+
+        from_file.push_back(line);
+    }
+
+    BOOST_REQUIRE(!from_file.empty());
+    BOOST_CHECK_EQUAL_COLLECTIONS(from_file.begin(), from_file.end(),
+        util::REFUSED_SETTING_KEY_PATTERNS.begin(), util::REFUSED_SETTING_KEY_PATTERNS.end());
+}
+
+BOOST_AUTO_TEST_CASE(setting_class_follows_patterns_and_flags)
+{
+    TestArgsManager args;
+    args.SetupArgs({{"-free", ArgsManager::ALLOW_ANY | ArgsManager::SETTING_FREE},
+                    {"-plain", ArgsManager::ALLOW_ANY},
+                    {"-clo", ArgsManager::ALLOW_ANY | ArgsManager::COMMAND_LINE_ONLY},
+                    {"-blocknotify", ArgsManager::ALLOW_ANY | ArgsManager::SETTING_FREE}});
+    BOOST_CHECK(args.GetSettingClass("free") == SettingClass::FREE);
+    BOOST_CHECK(args.GetSettingClass("test.free") == SettingClass::FREE);
+    BOOST_CHECK(args.GetSettingClass("plain") == SettingClass::ELEVATE);
+    BOOST_CHECK(args.GetSettingClass("clo") == SettingClass::REFUSE);
+    BOOST_CHECK(args.GetSettingClass("blocknotify") == SettingClass::REFUSE); // the pattern wins over the flag
+    BOOST_CHECK(args.GetSettingClass("unregistered") == SettingClass::ELEVATE);
+    BOOST_CHECK_EQUAL(args.GetRegisteredArgFlags().count("-clo"), 1u);
+}
+
+BOOST_AUTO_TEST_CASE(command_line_only_options_are_ignored_in_a_config_file)
+{
+    TestArgsManager args;
+    args.SetupArgs({{"-clo", ArgsManager::ALLOW_ANY | ArgsManager::COMMAND_LINE_ONLY},
+                    {"-regular", ArgsManager::ALLOW_ANY}});
+
+    std::vector<std::string> lines;
+    auto callback = LogInstance().PushBackCallback([&lines](const std::string& s) { lines.push_back(s); });
+
+    args.ReadConfigString("clo=1\nregular=1\n[test]\nclo=2\n");
+
+    LogInstance().DeleteCallback(callback);
+
+    BOOST_CHECK(!args.IsArgSet("-clo"));
+    BOOST_CHECK(args.IsArgSet("-regular"));
+
+    size_t ignored_lines = 0;
+    for (const std::string& l : lines) {
+        if (l.find("ignored clo from") != std::string::npos
+            && l.find("it is accepted only on the command line") != std::string::npos) {
+            ++ignored_lines;
+        }
+    }
+    // The same key is logged once, whatever section it appears under.
+    BOOST_CHECK_EQUAL(ignored_lines, 1u);
+
+    const char* argv[] = {"x", "-clo=3"};
+    std::string error;
+    BOOST_REQUIRE(args.ParseParameters(2, argv, error));
+    BOOST_CHECK_EQUAL(args.GetArg("-clo", ""), "3");
+}
+
+BOOST_AUTO_TEST_CASE(command_line_only_overrides)
+{
+    // The developer and client overrides, registered as in init.cpp.
+    TestArgsManager args;
+    args.SetupArgs({{"-debugallowtracer", ArgsManager::ALLOW_BOOL | ArgsManager::DEBUG_ONLY | ArgsManager::COMMAND_LINE_ONLY},
+                    {"-rpcskiplistenercheck", ArgsManager::ALLOW_BOOL | ArgsManager::COMMAND_LINE_ONLY},
+                    {"-stdinwalletpassphrase", ArgsManager::ALLOW_BOOL | ArgsManager::COMMAND_LINE_ONLY},
+                    {"-stdinelevate", ArgsManager::ALLOW_BOOL | ArgsManager::COMMAND_LINE_ONLY}});
+    const std::vector<std::string> names{"-debugallowtracer", "-rpcskiplistenercheck", "-stdinwalletpassphrase",
+                                         "-stdinelevate"};
+
+    args.ReadConfigString("debugallowtracer=1\nrpcskiplistenercheck=1\nstdinwalletpassphrase=1\nstdinelevate=1\n");
+    for (const std::string& name : names) BOOST_CHECK_MESSAGE(!args.GetBoolArg(name, false), name);
+
+    for (const std::string& name : names) {
+        TestArgsManager cli;
+        cli.SetupArgs({{name, ArgsManager::ALLOW_BOOL | ArgsManager::COMMAND_LINE_ONLY}});
+        const char* argv[] = {"x", name.c_str()};
+        std::string error;
+        BOOST_REQUIRE(cli.ParseParameters(2, argv, error));
+        BOOST_CHECK_MESSAGE(cli.GetBoolArg(name, false), name);
+    }
+}
+
+BOOST_AUTO_TEST_CASE(command_line_only_option_is_logged_once_per_key)
+{
+    // The daemon reads the configuration file twice at startup.
+    TestArgsManager args;
+    args.SetupArgs({{"-clo", ArgsManager::ALLOW_ANY | ArgsManager::COMMAND_LINE_ONLY},
+                    {"-clo2", ArgsManager::ALLOW_ANY | ArgsManager::COMMAND_LINE_ONLY}});
+
+    std::vector<std::string> lines;
+    auto callback = LogInstance().PushBackCallback([&lines](const std::string& s) { lines.push_back(s); });
+    args.ReadConfigString("clo=1\n");
+    args.ReadConfigString("clo=1\n");
+    args.ReadConfigString("clo=1\nclo2=1\n");
+    LogInstance().DeleteCallback(callback);
+
+    size_t clo = 0, clo2 = 0;
+    for (const std::string& l : lines) {
+        if (l.find("it is accepted only on the command line") == std::string::npos) continue;
+        if (l.find("ignored clo from") != std::string::npos) ++clo;
+        if (l.find("ignored clo2 from") != std::string::npos) ++clo2;
+    }
+    BOOST_CHECK_EQUAL(clo, 1u);
+    BOOST_CHECK_EQUAL(clo2, 1u);
+}
+
+
+namespace {
+//! Register the probe arguments the settings file load cases use. The
+//! registrations outlive the case, outside the suite's StateGuard snapshot.
+void RegisterSettingsProbes()
+{
+    const auto add = [](const std::string& name, unsigned int flags) {
+        if (!gArgs.GetArgFlags("-" + name)) {
+            gArgs.AddArg("-" + name, "unit-test probe", flags, OptionsCategory::HIDDEN);
+        }
+    };
+    add("free_probe", ArgsManager::ALLOW_ANY | ArgsManager::SETTING_FREE);
+    add("elevate_probe", ArgsManager::ALLOW_ANY);
+    add("command_line_only_probe", ArgsManager::ALLOW_ANY | ArgsManager::COMMAND_LINE_ONLY);
+    add("sensitive_probe", ArgsManager::ALLOW_ANY | ArgsManager::SENSITIVE | ArgsManager::SETTING_FREE);
+    // ChangeSettings() checks registration first; init registers the real ones,
+    // with these flags.
+    add("blocknotify", ArgsManager::ALLOW_ANY);
+    add("proxy", ArgsManager::ALLOW_ANY | ArgsManager::IMMEDIATE_EFFECT);
+}
+
+//! Create the data directory, and on exit remove the settings file and reload the
+//! (now empty) settings, so no case leaves a value behind.
+struct SettingsFileScope
+{
+    fs::path m_path;
+
+    SettingsFileScope()
+    {
+        const fs::path datadir = gArgs.GetArg("-datadir", "");
+        BOOST_REQUIRE(!datadir.empty());
+        fs::create_directories(datadir);
+        gArgs.ClearPathCache();
+        RegisterSettingsProbes();
+        BOOST_REQUIRE(gArgs.GetSettingsPath(&m_path));
+    }
+
+    ~SettingsFileScope()
+    {
+        boost::system::error_code ec;
+        fs::remove(m_path, ec);
+        (void)gArgs.ReadSettingsFile();
+    }
+
+    void Write(const std::map<std::string, util::SettingsValue>& values) const
+    {
+        std::vector<std::string> errors;
+        BOOST_REQUIRE(util::WriteSettings(m_path, values, errors));
+    }
+
+    std::map<std::string, util::SettingsValue> ReadRaw() const
+    {
+        std::map<std::string, util::SettingsValue> values;
+        std::vector<std::string> errors;
+        BOOST_REQUIRE(util::ReadSettings(m_path, values, errors));
+        return values;
+    }
+};
+
+size_t CountLines(const std::vector<std::string>& lines, const std::string& needle)
+{
+    size_t n = 0;
+    for (const std::string& l : lines) {
+        if (l.find(needle) != std::string::npos) ++n;
+    }
+    return n;
+}
+
+const std::string FILE_NAME_FOR_LOG{"gridcoinsettings.json"};
+} // namespace
+
+#ifndef WIN32
+// A settings file that is wider than owner-only is still that wide after the core rewrites it,
+// and one that is not there is created owner-only. Production change that would fail this: the
+// settings writer creating its temporary file owner-only and renaming it over the old file
+// without carrying the old mode.
+BOOST_AUTO_TEST_CASE(settings_rewrite_keeps_the_mode_of_the_file)
+{
+    SettingsFileScope scope;
+    scope.Write({{"free_probe", "a"}});
+    BOOST_REQUIRE_EQUAL(::chmod(scope.m_path.string().c_str(), 0640), 0);
+    BOOST_REQUIRE(gArgs.ReadSettingsFile());
+
+    BOOST_REQUIRE(gArgs.WriteSettingsFile());
+    struct stat st;
+    BOOST_REQUIRE_EQUAL(::stat(scope.m_path.string().c_str(), &st), 0);
+    // mode_t is 16 bits on macOS, where the masked mode is an int; compare it unsigned.
+    BOOST_CHECK_EQUAL(static_cast<unsigned>(st.st_mode & 07777), 0640U);
+
+    // Again, to show the kept mode is not a one-off.
+    BOOST_REQUIRE(gArgs.WriteSettingsFile());
+    BOOST_REQUIRE_EQUAL(::stat(scope.m_path.string().c_str(), &st), 0);
+    BOOST_CHECK_EQUAL(static_cast<unsigned>(st.st_mode & 07777), 0640U);
+
+    // A read-only settings file is rewritten and stays read-only. Production change that would
+    // fail this: giving the temporary file the old mode before WriteSettings reopens it to write.
+    BOOST_REQUIRE_EQUAL(::chmod(scope.m_path.string().c_str(), 0400), 0);
+    BOOST_REQUIRE(gArgs.WriteSettingsFile());
+    BOOST_REQUIRE_EQUAL(::stat(scope.m_path.string().c_str(), &st), 0);
+    BOOST_CHECK_EQUAL(static_cast<unsigned>(st.st_mode & 07777), 0400U);
+    BOOST_REQUIRE_EQUAL(::chmod(scope.m_path.string().c_str(), 0600), 0);
+
+    // Nothing there: owner-only from creation.
+    BOOST_REQUIRE(fs::remove(scope.m_path));
+    BOOST_REQUIRE(gArgs.WriteSettingsFile());
+    BOOST_REQUIRE_EQUAL(::stat(scope.m_path.string().c_str(), &st), 0);
+    BOOST_CHECK_EQUAL(static_cast<unsigned>(st.st_mode & 07777), 0600U);
+}
+#else
+// A Users read entry on the settings file is still there after the core rewrites it, a
+// protected list stays protected, and a file that is not there is created owner-only.
+BOOST_AUTO_TEST_CASE(settings_rewrite_keeps_the_access_list_of_the_file)
+{
+    if (grc_test::RunningUnderWine()) {
+        BOOST_TEST_MESSAGE("Wine keeps no protected DACL; skipping");
+        return;
+    }
+    SettingsFileScope scope;
+    scope.Write({{"free_probe", "a"}});
+
+    util::winacl::AclSpec spec = util::OwnerOnlyAclSpec(/*inheritable=*/false);
+    spec.aces.push_back({util::winacl::wellknown::Users(), FILE_GENERIC_READ, util::winacl::Inherit::None});
+    // The wider list is applied to the file in place, as an operator would with icacls.
+    util::winacl::ApplyAcl(scope.m_path, spec);
+    BOOST_REQUIRE(gArgs.ReadSettingsFile());
+
+    BOOST_REQUIRE(gArgs.WriteSettingsFile());
+    const util::winacl::ObservedAcl after = util::winacl::ReadAcl(scope.m_path);
+    BOOST_CHECK(after.is_protected);
+    BOOST_CHECK(std::any_of(after.aces.begin(), after.aces.end(), [](const util::winacl::ObservedAce& ace) {
+        return ace.trustee == util::winacl::wellknown::Users();
+    }));
+
+    BOOST_REQUIRE(fs::remove(scope.m_path));
+    BOOST_REQUIRE(gArgs.WriteSettingsFile());
+    BOOST_CHECK(!util::winacl::CheckMatchesSpec(util::winacl::ReadAcl(scope.m_path),
+                                                util::OwnerOnlyAclSpec(/*inheritable=*/false)));
+}
+#endif
+
+BOOST_AUTO_TEST_CASE(refused_settings_are_ignored_at_load_and_kept_in_the_file)
+{
+    SettingsFileScope scope;
+    scope.Write({{"free_probe", "a"}, {"blocknotify", "echo b"}, {"command_line_only_probe", "c"},
+                 {"unknown_key", "d"}});
+
+    std::vector<std::string> lines;
+    {
+        const auto callback = LogInstance().PushBackCallback([&lines](const std::string& s) { lines.push_back(s); });
+        BOOST_REQUIRE(gArgs.ReadSettingsFile());
+        LogInstance().DeleteCallback(callback);
+    }
+
+    BOOST_CHECK_EQUAL(gArgs.GetArg("-free_probe", ""), "a");
+    BOOST_CHECK(!gArgs.IsArgSet("-blocknotify"));
+    BOOST_CHECK(!gArgs.IsArgSet("-command_line_only_probe"));
+    BOOST_CHECK(getRwSetting("blocknotify").isNull());
+    // An unknown key is not refused.
+    BOOST_CHECK_EQUAL(getRwSetting("unknown_key").write(), UniValue("d").write());
+
+    BOOST_CHECK_EQUAL(CountLines(lines, "ignored blocknotify from " + FILE_NAME_FOR_LOG
+                                        + "; set it in gridcoinresearch.conf if you want it\n"), 1u);
+    BOOST_CHECK_EQUAL(CountLines(lines, "ignored command_line_only_probe from " + FILE_NAME_FOR_LOG
+                                        + "; it is accepted only on the command line\n"), 1u);
+
+    BOOST_REQUIRE(gArgs.WriteSettingsFile());
+    const auto raw = scope.ReadRaw();
+    BOOST_CHECK_EQUAL(raw.size(), 4u);
+    BOOST_CHECK_EQUAL(raw.at("free_probe").get_str(), "a");
+    BOOST_CHECK_EQUAL(raw.at("blocknotify").get_str(), "echo b");
+    BOOST_CHECK_EQUAL(raw.at("command_line_only_probe").get_str(), "c");
+    BOOST_CHECK_EQUAL(raw.at("unknown_key").get_str(), "d");
+}
+
+BOOST_AUTO_TEST_CASE(an_unregistered_refused_key_is_logged_once_at_load)
+{
+    SettingsFileScope scope;
+
+    // Matches the rpc* pattern and is no argument, so gridcoinresearch.conf
+    // would not take it either.
+    const std::string unregistered = "rpcunregistered_probe";
+    BOOST_REQUIRE(!gArgs.GetArgFlags("-" + unregistered));
+    BOOST_REQUIRE(IsRefusedSettingKey(unregistered));
+
+    scope.Write({{unregistered, "x"}, {"blocknotify", "echo b"}});
+
+    std::vector<std::string> lines;
+    {
+        const auto callback = LogInstance().PushBackCallback([&lines](const std::string& s) { lines.push_back(s); });
+        BOOST_REQUIRE(gArgs.ReadSettingsFile());
+        LogInstance().DeleteCallback(callback);
+    }
+
+    // The unknown-value line only, without advice to move it to the config file.
+    BOOST_CHECK_EQUAL(CountLines(lines, unregistered), 1u);
+    BOOST_CHECK_EQUAL(CountLines(lines, "Ignoring unknown rw_settings value " + unregistered + "\n"), 1u);
+
+    // A registered refused key still gets the advice, once.
+    BOOST_CHECK_EQUAL(CountLines(lines, "blocknotify"), 1u);
+    BOOST_CHECK_EQUAL(CountLines(lines, "ignored blocknotify from " + FILE_NAME_FOR_LOG
+                                        + "; set it in gridcoinresearch.conf if you want it\n"), 1u);
+
+    // Both are still refused, and kept in the file.
+    BOOST_CHECK(getRwSetting(unregistered).isNull());
+    BOOST_CHECK(getRwSetting("blocknotify").isNull());
+
+    BOOST_REQUIRE(gArgs.WriteSettingsFile());
+    const auto raw = scope.ReadRaw();
+    BOOST_CHECK_EQUAL(raw.at(unregistered).get_str(), "x");
+    BOOST_CHECK_EQUAL(raw.at("blocknotify").get_str(), "echo b");
+}
+
+BOOST_AUTO_TEST_CASE(erasing_a_refused_setting_removes_it_from_the_file)
+{
+    SettingsFileScope scope;
+    scope.Write({{"free_probe", "a"}, {"blocknotify", "echo b"}});
+    BOOST_REQUIRE(gArgs.ReadSettingsFile());
+
+    BOOST_REQUIRE(updateRwSetting("blocknotify", {}));
+
+    const auto raw = scope.ReadRaw();
+    BOOST_CHECK(raw.count("blocknotify") == 0);
+    BOOST_CHECK(raw.count("free_probe") == 1);
+}
+
+BOOST_AUTO_TEST_CASE(listsettings_masks_sensitive_values_and_lists_ignored_settings)
+{
+    SettingsFileScope scope;
+    BOOST_REQUIRE(updateRwSetting("sensitive_probe", "secret", true));
+    // The write above is the file the load below reads; add the other keys to it.
+    auto values = scope.ReadRaw();
+    values.emplace("rpcpassword", "pw");
+    values.emplace("unknown_key", "d");
+    scope.Write(values);
+    BOOST_REQUIRE(gArgs.ReadSettingsFile());
+
+    UniValue out;
+    BOOST_REQUIRE_NO_THROW(out = gArgs.OutputArgs());
+
+    bool found_sensitive = false;
+    bool unknown_not_changeable = false;
+    for (const UniValue& entry : out["setting_file_args"].getValues()) {
+        if (entry.exists("sensitive_probe")) {
+            found_sensitive = true;
+            BOOST_CHECK_EQUAL(entry["sensitive_probe"].get_str(), "****");
+        }
+        if (entry.exists("unknown_key")) {
+            unknown_not_changeable = !entry["changeable_without_restart"].get_bool();
+        }
+    }
+    BOOST_CHECK(found_sensitive);
+    BOOST_CHECK(unknown_not_changeable);
+
+    const UniValue& ignored = out["setting_file_args_ignored"];
+    BOOST_REQUIRE_EQUAL(ignored.size(), 1u);
+    BOOST_CHECK_EQUAL(ignored[0]["rpcpassword"].get_str(), "****");
+
+    // Clear the forced value the update above applied.
+    BOOST_REQUIRE(updateRwSetting("sensitive_probe", {}, true));
+}
+
+BOOST_AUTO_TEST_CASE(logargs_masks_sensitive_settings_file_values)
+{
+    SettingsFileScope scope;
+    scope.Write({{"sensitive_probe", "secret"}, {"free_probe", "a"}});
+    BOOST_REQUIRE(gArgs.ReadSettingsFile());
+
+    std::vector<std::string> lines;
+    {
+        const auto callback = LogInstance().PushBackCallback([&lines](const std::string& s) { lines.push_back(s); });
+        gArgs.LogArgs();
+        LogInstance().DeleteCallback(callback);
+    }
+
+    BOOST_CHECK_EQUAL(CountLines(lines, "Setting file arg: sensitive_probe = ****"), 1u);
+    BOOST_CHECK_EQUAL(CountLines(lines, "secret"), 0u);
+    BOOST_CHECK_EQUAL(CountLines(lines, "Setting file arg: free_probe = \"a\""), 1u);
+}
+
+
+namespace {
+//! The outcome of one ChangeSettings() call.
+struct ChangeOutcome
+{
+    bool ok{false};
+    bool requires_restart{false};
+    std::vector<std::string> no_change;
+    std::vector<std::string> immediate;
+    std::vector<std::string> requires_restart_list;
+    bool invalid_input{false};
+    bool elevation_required{false};
+    std::string error;
+};
+
+ChangeOutcome Change(const std::vector<std::pair<std::string, std::string>>& settings)
+{
+    ChangeOutcome out;
+    out.ok = ChangeSettings(settings, out.requires_restart, out.no_change, out.immediate,
+                            out.requires_restart_list, out.invalid_input, out.elevation_required, out.error);
+    return out;
+}
+
+//! Erases the named settings, stored and forced, on exit, so no case leaves one behind.
+struct ProbeEraser
+{
+    std::vector<std::string> m_names;
+
+    explicit ProbeEraser(std::vector<std::string> names) : m_names(std::move(names)) {}
+
+    ~ProbeEraser()
+    {
+        for (const std::string& name : m_names) {
+            (void)updateRwSetting(name, {}, true);
+        }
+    }
+};
+
+const std::string ELEVATE_PROBE_NEEDS_PASSPHRASE{
+    "Changing elevate_probe needs the wallet passphrase: unlock the wallet fully, "
+    "or send the passphrase with this request"};
+} // namespace
+
+BOOST_AUTO_TEST_CASE(changesettings_refuses_refused_and_command_line_only_keys)
+{
+    SettingsFileScope scope;
+    ProbeEraser eraser({"blocknotify", "command_line_only_probe"});
+
+    const ChangeOutcome refused = Change({{"blocknotify", "echo x"}});
+    BOOST_CHECK(!refused.ok);
+    BOOST_CHECK(refused.invalid_input);
+    BOOST_CHECK(!refused.elevation_required);
+    BOOST_CHECK_EQUAL(refused.error, "Refused setting: blocknotify can be set only in gridcoinresearch.conf or on the command line");
+    BOOST_CHECK(getRwSetting("blocknotify").isNull());
+    BOOST_CHECK(!gArgs.IsArgSet("-blocknotify"));
+
+    const ChangeOutcome cli_only = Change({{"command_line_only_probe", "1"}});
+    BOOST_CHECK(!cli_only.ok);
+    BOOST_CHECK(cli_only.invalid_input);
+    BOOST_CHECK_EQUAL(cli_only.error, "Refused setting: command_line_only_probe can be set only on the command line");
+    BOOST_CHECK(getRwSetting("command_line_only_probe").isNull());
+}
+
+BOOST_AUTO_TEST_CASE(changesettings_refusal_leaves_a_loaded_refused_entry_alone)
+{
+    SettingsFileScope scope;
+    scope.Write({{"blocknotify", "echo b"}});
+    BOOST_REQUIRE(gArgs.ReadSettingsFile());
+
+    const auto maps = [] {
+        std::string seen;
+        gArgs.LockSettings([&seen](util::Settings& s) {
+            const auto rw = s.rw_settings.find("blocknotify");
+            const auto refused = s.refused_rw_settings.find("blocknotify");
+            seen = std::string("rw=") + (rw == s.rw_settings.end() ? "<none>" : rw->second.write())
+                   + " refused=" + (refused == s.refused_rw_settings.end() ? "<none>" : refused->second.write());
+        });
+        return seen;
+    };
+    const std::string before = maps();
+    BOOST_CHECK_EQUAL(before, "rw=<none> refused=\"echo b\"");
+
+    BOOST_CHECK(!Change({{"blocknotify", "echo y"}}).ok);
+    BOOST_CHECK_EQUAL(maps(), before);
+    BOOST_CHECK_EQUAL(scope.ReadRaw().at("blocknotify").get_str(), "echo b");
+}
+
+BOOST_AUTO_TEST_CASE(changesettings_erases_a_refused_key)
+{
+    SettingsFileScope scope;
+    scope.Write({{"free_probe", "a"}, {"blocknotify", "echo b"}});
+    BOOST_REQUIRE(gArgs.ReadSettingsFile());
+
+    const ChangeOutcome erased = Change({{"blocknotify", ""}});
+    BOOST_CHECK(erased.ok);
+    BOOST_CHECK(erased.no_change == std::vector<std::string>{"blocknotify="});
+    BOOST_CHECK(erased.immediate.empty());
+    BOOST_CHECK(erased.requires_restart_list.empty());
+    BOOST_CHECK(!erased.requires_restart);
+
+    const auto raw = scope.ReadRaw();
+    BOOST_CHECK(raw.count("blocknotify") == 0);
+    BOOST_CHECK(raw.count("free_probe") == 1);
+}
+
+BOOST_AUTO_TEST_CASE(changesettings_needs_elevation_for_elevate_keys)
+{
+    SettingsFileScope scope;
+    ProbeEraser eraser({"elevate_probe", "free_probe"});
+    grc_test::EncryptedWalletSwap swap;
+    CWallet& w = swap.wallet();
+
+    // Locked.
+    ChangeOutcome out = Change({{"elevate_probe", "1"}});
+    BOOST_CHECK(!out.ok);
+    BOOST_CHECK(out.elevation_required);
+    BOOST_CHECK(!out.invalid_input);
+    BOOST_CHECK_EQUAL(out.error, ELEVATE_PROBE_NEEDS_PASSPHRASE);
+    BOOST_CHECK(getRwSetting("elevate_probe").isNull());
+
+    // A Free setting needs none.
+    BOOST_CHECK(Change({{"free_probe", "1"}}).ok);
+
+    // Unlocked for staking only.
+    BOOST_REQUIRE(w.Unlock(grc_test::EncryptedWalletSwap::Passphrase(), UnlockScope::StakingOnly));
+    out = Change({{"elevate_probe", "1"}});
+    BOOST_CHECK(!out.ok);
+    BOOST_CHECK(out.elevation_required);
+    BOOST_CHECK(getRwSetting("elevate_probe").isNull());
+
+    // A passphrase capability on this thread.
+    {
+        CapabilityScope s(w, w.BeginElevation(grc_test::EncryptedWalletSwap::Passphrase(), CapabilityKind::Settings),
+                          CapabilityKind::Settings);
+        BOOST_REQUIRE(s.Active());
+        out = Change({{"elevate_probe", "1"}});
+        BOOST_CHECK(out.ok);
+        BOOST_CHECK(!out.elevation_required);
+    }
+    BOOST_CHECK_EQUAL(getRwSetting("elevate_probe").get_str(), "1");
+
+    // A standing full unlock needs no scope.
+    w.Lock();
+    BOOST_REQUIRE(w.Unlock(grc_test::EncryptedWalletSwap::Passphrase()));
+    BOOST_CHECK(Change({{"elevate_probe", "2"}}).ok);
+    BOOST_CHECK_EQUAL(getRwSetting("elevate_probe").get_str(), "2");
+
+    // Locked again: restating the stored value changes nothing and needs nothing.
+    w.Lock();
+    out = Change({{"elevate_probe", "2"}});
+    BOOST_CHECK(out.ok);
+    BOOST_CHECK(out.no_change == std::vector<std::string>{"elevate_probe=2"});
+    BOOST_CHECK(Change({{"elevate_probe", "3"}}).elevation_required);
+}
+
+// Erasing an Elevate-class setting that is not set changes nothing, so it needs
+// no passphrase; erasing one that is set still does. An erase of a value forced
+// empty is no change either, and the forced value stays.
+BOOST_AUTO_TEST_CASE(changesettings_erasing_an_unset_elevate_key_needs_no_elevation)
+{
+    SettingsFileScope scope;
+    ProbeEraser eraser({"proxy", "free_probe"});
+    grc_test::EncryptedWalletSwap swap;
+    BOOST_REQUIRE(swap.wallet().Unlock(grc_test::EncryptedWalletSwap::Passphrase(), UnlockScope::StakingOnly));
+
+    BOOST_REQUIRE(!gArgs.IsArgSet("-proxy"));
+    ChangeOutcome out = Change({{"proxy", ""}});
+    BOOST_CHECK(out.ok);
+    BOOST_CHECK(!out.elevation_required);
+    BOOST_CHECK_EQUAL(out.error, "");
+    BOOST_CHECK(out.no_change == std::vector<std::string>{"proxy="});
+    BOOST_CHECK(out.immediate.empty());
+    BOOST_CHECK(out.requires_restart_list.empty());
+    BOOST_CHECK(getRwSetting("proxy").isNull());
+    BOOST_CHECK(!gArgs.IsArgSet("-proxy"));
+
+    // Set, the erase is a change.
+    scope.Write({{"proxy", "10.0.0.1:9050"}});
+    BOOST_REQUIRE(gArgs.ReadSettingsFile());
+    out = Change({{"proxy", ""}});
+    BOOST_CHECK(!out.ok);
+    BOOST_CHECK(out.elevation_required);
+    BOOST_CHECK_EQUAL(out.error, "Changing proxy needs the wallet passphrase: unlock the wallet fully, "
+                                 "or send the passphrase with this request");
+    BOOST_CHECK_EQUAL(getRwSetting("proxy").get_str(), "10.0.0.1:9050");
+    BOOST_CHECK_EQUAL(gArgs.GetArg("-proxy", "<unset>"), "10.0.0.1:9050");
+
+    // Forced empty, the value already reads empty.
+    gArgs.ForceSetArg("-free_probe", "");
+    out = Change({{"free_probe", ""}});
+    BOOST_CHECK(out.ok);
+    BOOST_CHECK(out.no_change == std::vector<std::string>{"free_probe="});
+    BOOST_CHECK(gArgs.IsArgSet("-free_probe"));
+    BOOST_CHECK_EQUAL(gArgs.GetArg("-free_probe", "<unset>"), "");
+}
+
+BOOST_AUTO_TEST_CASE(changesettings_batch_with_an_unelevated_elevate_key_applies_nothing)
+{
+    SettingsFileScope scope;
+    ProbeEraser eraser({"elevate_probe", "free_probe"});
+    grc_test::EncryptedWalletSwap swap;
+
+    const ChangeOutcome out = Change({{"free_probe", "9"}, {"elevate_probe", "9"}});
+    BOOST_CHECK(!out.ok);
+    BOOST_CHECK(out.elevation_required);
+    BOOST_CHECK(out.immediate.empty() && out.requires_restart_list.empty() && out.no_change.empty());
+    BOOST_CHECK_EQUAL(gArgs.GetArg("-free_probe", "<unset>"), "<unset>");
+    BOOST_CHECK(getRwSetting("free_probe").isNull());
+    BOOST_CHECK(getRwSetting("elevate_probe").isNull());
+}
+
+BOOST_AUTO_TEST_CASE(rpc_request_elevation_covers_one_request_only)
+{
+    SettingsFileScope scope;
+    ProbeEraser eraser({"elevate_probe"});
+    grc_test::EncryptedWalletSwap swap;
+    CWallet& w = swap.wallet();
+
+    BOOST_REQUIRE(w.Unlock(grc_test::EncryptedWalletSwap::Passphrase(), UnlockScope::StakingOnly));
+
+    {
+        CapabilityScope s(w, w.BeginElevation(grc_test::EncryptedWalletSwap::Passphrase(), CapabilityKind::RpcRequest),
+                          CapabilityKind::RpcRequest);
+        BOOST_REQUIRE(s.Active());
+        BOOST_CHECK(Change({{"elevate_probe", "5"}}).ok);
+    }
+
+    const ChangeOutcome after = Change({{"elevate_probe", "6"}});
+    BOOST_CHECK(!after.ok);
+    BOOST_CHECK(after.elevation_required);
+    BOOST_CHECK_EQUAL(getRwSetting("elevate_probe").get_str(), "5");
+}
+
+BOOST_AUTO_TEST_CASE(changesettings_caps_paytxfee)
+{
+    SettingsFileScope scope;
+    if (!gArgs.GetArgFlags("-paytxfee")) {
+        gArgs.AddArg("-paytxfee", "unit-test probe", ArgsManager::ALLOW_ANY, OptionsCategory::HIDDEN);
+    }
+    ProbeEraser eraser({"paytxfee"});
+
+    BOOST_CHECK(Change({{"paytxfee", "0.1"}}).ok);
+    BOOST_CHECK_EQUAL(getRwSetting("paytxfee").get_str(), "0.1");
+
+    const ChangeOutcome high = Change({{"paytxfee", "0.10000001"}});
+    BOOST_CHECK(!high.ok);
+    BOOST_CHECK(high.invalid_input);
+    BOOST_CHECK_EQUAL(high.error, "paytxfee 0.10000001 above maximum " + FormatMoney(MaxTxFeeRate()));
+    BOOST_CHECK_EQUAL(getRwSetting("paytxfee").get_str(), "0.1");
+
+    const ChangeOutcome bad = Change({{"paytxfee", "abc"}});
+    BOOST_CHECK(!bad.ok);
+    BOOST_CHECK(bad.invalid_input);
+    BOOST_CHECK_EQUAL(bad.error, "Invalid paytxfee amount: abc");
+
+    BOOST_CHECK(Change({{"paytxfee", ""}}).ok);
+    BOOST_CHECK(getRwSetting("paytxfee").isNull());
+}
+
+
+BOOST_AUTO_TEST_CASE(printable_ascii_keeps_only_plain_ascii_messages)
+{
+    // The line break and full stop Windows ends a message with are dropped.
+    BOOST_CHECK_EQUAL(PrintableAscii("Access is denied.\r\n"), "Access is denied");
+    BOOST_CHECK_EQUAL(PrintableAscii("Access is denied"), "Access is denied");
+    BOOST_CHECK_EQUAL(PrintableAscii("The system cannot find the file. \r\n"), "The system cannot find the file");
+
+    // A message in another language is not shown.
+    BOOST_CHECK_EQUAL(PrintableAscii("Acc\xc3\xa8s refus\xc3\xa9.\r\n"), "");
+
+    BOOST_CHECK_EQUAL(PrintableAscii(""), "");
+    BOOST_CHECK_EQUAL(PrintableAscii("\r\n"), "");
+
+    // A control character inside the message is not printable.
+    BOOST_CHECK_EQUAL(PrintableAscii("Access\tdenied."), "");
+    BOOST_CHECK_EQUAL(PrintableAscii("Access\ndenied."), "");
+    BOOST_CHECK_EQUAL(PrintableAscii("Access\x7f" "denied."), "");
+}
+
+BOOST_AUTO_TEST_CASE(without_system_message_removes_only_the_final_message_suffix)
+{
+    // What std::system_error(code, category, what_arg) makes: what_arg + ": " + message.
+    BOOST_CHECK_EQUAL(WithoutSystemMessage("open x: Access is denied.", "Access is denied.").value_or("none"), "open x");
+
+    // No what_arg: ": " + message, or the message alone (the constructor without a what_arg).
+    BOOST_CHECK_EQUAL(WithoutSystemMessage(": Access is denied.", "Access is denied.").value_or("none"), "");
+    BOOST_CHECK_EQUAL(WithoutSystemMessage("Access is denied.", "Access is denied.").value_or("none"), "");
+
+    // The message twice: only the final one is the message.
+    BOOST_CHECK_EQUAL(WithoutSystemMessage("odd: Access is denied.: Access is denied.", "Access is denied.")
+                          .value_or("none"),
+                      "odd: Access is denied.");
+
+    // The what does not end with the message: what_arg cannot be told from the message.
+    BOOST_CHECK(!WithoutSystemMessage("open x: Acces refuse.", "Access is denied.").has_value());
+    BOOST_CHECK(!WithoutSystemMessage("open xAccess is denied.", "Access is denied.").has_value());
+    BOOST_CHECK(!WithoutSystemMessage("", "Access is denied.").has_value());
+}
+
+BOOST_AUTO_TEST_CASE(ascii_what_leaves_other_exceptions_alone)
+{
+    BOOST_CHECK_EQUAL(AsciiWhat(std::runtime_error("plain reason")), "plain reason");
+    BOOST_CHECK_EQUAL(AsciiWhat(std::logic_error("Acc\xc3\xa8s")), "Acc\xc3\xa8s");
+
+#ifndef WIN32
+    // Off Windows what() is returned as it is.
+    const std::system_error e(EACCES, std::system_category(), "open x");
+    BOOST_CHECK_EQUAL(AsciiWhat(e), std::string(e.what()));
+#else
+    // 5 is ERROR_ACCESS_DENIED.
+    const std::system_error denied(5, std::system_category(), "open x");
+    const std::string text = AsciiWhat(denied);
+    BOOST_CHECK(text.rfind("open x: ", 0) == 0);
+    BOOST_CHECK_MESSAGE(text.size() >= 9 && text.compare(text.size() - 9, 9, "(error 5)") == 0, text);
+    for (const char c : text) BOOST_CHECK(c >= 0x20 && c < 0x7f);
+
+    // The what_arg is the caller's own text, a path with a non-ASCII name included: it is kept, and only
+    // Windows' message is replaced.
+    const std::string path_arg = "open C:\\Users\\J\xc3\xbcrgen\\x";
+    const std::string with_path = AsciiWhat(std::system_error(5, std::system_category(), path_arg));
+    BOOST_CHECK_MESSAGE(with_path.rfind(path_arg + ": ", 0) == 0, with_path);
+    BOOST_CHECK_MESSAGE(with_path.size() >= 9 && with_path.compare(with_path.size() - 9, 9, "(error 5)") == 0, with_path);
+
+    // Without a what_arg: the error text alone.
+    const std::string bare = AsciiWhat(std::system_error(5, std::system_category()));
+    BOOST_CHECK(bare.find("(error 5)") != std::string::npos || bare == "error 5");
+    for (const char c : bare) BOOST_CHECK(c >= 0x20 && c < 0x7f);
+
+    // Another category is not Windows' text.
+    const std::system_error other(std::make_error_code(std::errc::invalid_argument), "parse");
+    BOOST_CHECK_EQUAL(AsciiWhat(other), std::string(other.what()));
+#endif
 }
 
 BOOST_AUTO_TEST_SUITE_END()

@@ -35,6 +35,7 @@ add_library(gridcoinqt STATIC
     bitcoinunits.cpp
     clicklabel.cpp
     clientmodel.cpp
+    guistatecache.cpp
     coincontroldialog.cpp
     coinselectionmodel.cpp
     coinselectionview.cpp
@@ -50,8 +51,10 @@ add_library(gridcoinqt STATIC
     editaddressdialog.cpp
     editsidestakedialog.cpp
     favoritespage.cpp
+    filetransferdialog.cpp
     guifrontend.cpp
     guifrontend.h
+    guiipcworker.cpp
     guilog.cpp
     guiutil.cpp
     intro.cpp
@@ -123,14 +126,16 @@ add_library(gridcoinqt STATIC
     walletmodel.cpp
     widgetsfrontend.cpp
     widgetsfrontend.h
-    winshutdownmonitor.cpp
 
     bitcoin.qrc
     bitcoin_locale.qrc
 )
 
 if(WIN32)
-    target_sources(gridcoinqt PRIVATE res/gridcoinresearch.rc)
+    target_sources(gridcoinqt PRIVATE
+        res/gridcoinresearch.rc
+        winshutdownmonitor.cpp
+    )
     set_source_files_properties(res/gridcoinresearch.rc PROPERTIES
         COMPILE_DEFINITIONS WINDRES_PREPROC
     )
@@ -138,6 +143,7 @@ elseif(APPLE)
     target_sources(gridcoinqt PRIVATE
         macdockiconhandler.mm
         macnotificationhandler.mm
+        macos_appearance.mm
         macos_appnap.mm
     )
 endif()
@@ -357,8 +363,14 @@ if(UNIX AND NOT APPLE)
     )
     install(DIRECTORY "${CMAKE_SOURCE_DIR}/share/icons" COMPONENT gui
         DESTINATION "${CMAKE_INSTALL_DATADIR}"
+        # The testnet icons are for the Debian testnet package, which installs
+        # them from the source tree (debian-testnet/gridcointestnet-qt.install).
+        PATTERN "gridcointestnet.*" EXCLUDE
     )
-    install(FILES "${CMAKE_SOURCE_DIR}/contrib/gridcoinresearch.desktop" COMPONENT gui
+    # The desktop file, with the launcher actions this build can run.
+    set(GRC_DESKTOP_FILE "${CMAKE_CURRENT_BINARY_DIR}/gridcoinresearch.desktop")
+    include("${CMAKE_SOURCE_DIR}/cmake/desktop_file.cmake")
+    install(FILES "${GRC_DESKTOP_FILE}" COMPONENT gui
         DESTINATION "${CMAKE_INSTALL_DATADIR}/applications"
     )
     install(FILES "${CMAKE_SOURCE_DIR}/doc/gridcoinresearch.1" COMPONENT gui
@@ -478,7 +490,7 @@ if(APPLE)
     # contains parentheses that /bin/sh cannot handle.  When the env var
     # is not set, macdeployqtplus falls back to ad-hoc signing on macOS.
     if(DEFINED ENV{APPLE_SIGNING_IDENTITY})
-        set(_entitlements "${CMAKE_SOURCE_DIR}/contrib/macdeploy/entitlements.plist")
+        set(_entitlements "${CMAKE_SOURCE_DIR}/contrib/macdeploy/entitlements-gui.plist")
         if(EXISTS "${_entitlements}")
             list(APPEND _deploy_cmd -entitlements "${_entitlements}")
         endif()

@@ -169,3 +169,18 @@ void GUIFrontEndTests::bridgeSlotSignatures()
     QVERIFY2(splash.indexOfSlot(QMetaObject::normalizedSignature("showMessage(QString,int)")) >= 0,
              "showMessage(QString,int)");
 }
+
+// A front end that holds no quit need not override requestQuitForCoreStop():
+// the base class's quits at once, through requestQuit().
+void GUIFrontEndTests::coreStopQuitDefaultsToRequestQuit()
+{
+    struct CountingFrontEnd : FakeGuiFrontEnd
+    {
+        int quits{0};
+        void requestQuit() override { ++quits; }
+    } fake;
+
+    fake.requestQuitForCoreStop();
+
+    QCOMPARE(fake.quits, 1);
+}

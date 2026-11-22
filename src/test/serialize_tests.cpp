@@ -8,7 +8,9 @@
 #include <hash.h>
 #include <util.h>
 
+#include <limits>
 #include <stdint.h>
+#include <type_traits>
 
 #include "primitives/block.h"
 
@@ -401,6 +403,63 @@ BOOST_AUTO_TEST_CASE(block_locator_refuses_one_over_the_cap)
 
     CBlockLocator out;
     BOOST_CHECK_THROW(ss >> out, std::ios_base::failure);
+}
+
+// The signed integers and char go on the wire as their two's complement bytes,
+// little endian, and read back to the value written. The overloads convert to
+// and from the unsigned wire type with an explicit cast; these are the bytes
+// the implicit conversion produced.
+BOOST_AUTO_TEST_CASE(signed_integers_serialize_as_twos_complement)
+{
+    const auto bytes = [](const auto value) {
+        CDataStream ss(SER_DISK, 0);
+        ss << value;
+        return HexStr(ss);
+    };
+    BOOST_CHECK_EQUAL(bytes(char(-1)), "ff");
+    BOOST_CHECK_EQUAL(bytes(int8_t{-1}), "ff");
+    BOOST_CHECK_EQUAL(bytes(std::numeric_limits<int8_t>::min()), "80");
+    BOOST_CHECK_EQUAL(bytes(int16_t{-2}), "feff");
+    BOOST_CHECK_EQUAL(bytes(std::numeric_limits<int16_t>::min()), "0080");
+    BOOST_CHECK_EQUAL(bytes(int32_t{-1}), "ffffffff");
+    BOOST_CHECK_EQUAL(bytes(std::numeric_limits<int32_t>::min()), "00000080");
+    BOOST_CHECK_EQUAL(bytes(int64_t{-2}), "feffffffffffffff");
+    BOOST_CHECK_EQUAL(bytes(std::numeric_limits<int64_t>::min()), "0000000000000080");
+
+    const auto round_trips = [](const auto value) {
+        CDataStream ss(SER_DISK, 0);
+        ss << value;
+        std::remove_const_t<decltype(value)> read{};
+        ss >> read;
+        return read == value && ss.empty();
+    };
+    for (const int8_t v : {std::numeric_limits<int8_t>::min(), int8_t{-1}, int8_t{0}, std::numeric_limits<int8_t>::max()}) {
+        BOOST_CHECK(round_trips(v));
+    }
+    for (const int16_t v : {std::numeric_limits<int16_t>::min(), int16_t{-1}, int16_t{0}, std::numeric_limits<int16_t>::max()}) {
+        BOOST_CHECK(round_trips(v));
+    }
+    for (const int32_t v : {std::numeric_limits<int32_t>::min(), int32_t{-1}, int32_t{0}, std::numeric_limits<int32_t>::max()}) {
+        BOOST_CHECK(round_trips(v));
+    }
+    for (const int64_t v : {std::numeric_limits<int64_t>::min(), int64_t{-1}, int64_t{0}, std::numeric_limits<int64_t>::max()}) {
+        BOOST_CHECK(round_trips(v));
+    }
+    for (const char v : {char(-1), char(0), char(0x7f)}) {
+        BOOST_CHECK(round_trips(v));
+    }
+
+    // A bool is written as one byte, 0 or 1, and reads any non-zero byte as
+    // true, 0x80 and above included.
+    BOOST_CHECK_EQUAL(bytes(false), "00");
+    BOOST_CHECK_EQUAL(bytes(true), "01");
+    for (const uint8_t byte : {uint8_t{0x00}, uint8_t{0x01}, uint8_t{0x7f}, uint8_t{0x80}, uint8_t{0xff}}) {
+        CDataStream ss(SER_DISK, 0);
+        ss << byte;
+        bool read = byte == 0;
+        ss >> read;
+        BOOST_CHECK_EQUAL(read, byte != 0);
+    }
 }
 
 BOOST_AUTO_TEST_SUITE_END()

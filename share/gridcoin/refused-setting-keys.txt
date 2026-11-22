@@ -1,0 +1,108 @@
+# Setting names that are honoured only in gridcoinresearch.conf or on the
+# command line. The settings file (gridcoinsettings.json) ignores them and
+# changesettings refuses to store them.
+#
+# Grammar: blank lines and lines starting with '#' are ignored. Every other
+# line is one pattern matching ^[a-z0-9_*-]+$. '*' matches any run of
+# characters, including none; every other character matches itself. Matching
+# is case-sensitive and against the whole name, written without the leading
+# '-' and without a "<section>." prefix. The "no" negation prefix is not
+# removed, so "noncruncher" is a name in its own right.
+#
+# This file is the one source for the core (compiled in by
+# build-aux/cmake/refusedkeys2header.cmake) and for tools that read the
+# installed copy.
+
+# commands
+*notify
+rpc*
+ipc*
+server
+multiprocess
+daemon
+daemonwait
+nonewprivs
+
+# files, directories and URLs
+conf
+includeconf
+datadir
+blocksdir
+pid
+settings
+debuglogfile
+loadblock
+boincdatadir
+backupdir
+maintainbackupretention
+wallet*
+updatecheckurl
+
+# network selection
+chain
+testnet
+regtest
+
+# startup actions
+reindex
+resetblockchaindata
+rescan
+rescanmrcrequests
+salvagewallet
+zapwallettxes
+upgradewallet
+
+# command-line-only options
+autounlock*
+stdin*
+debugallowtracer
+rpcskiplistenercheck
+service
+allowunsafeimagedir
+reportpermissions
+launchdagent
+devallownosecureenclave
+
+# help and version
+h
+help
+help-debug
+version
+
+# GUI options
+autotrustidentity
+choosedatadir
+devsyntheticcoins
+guilogfile
+lang
+min
+nobuildwarn
+resetguisettings
+splash
+style
+suppressnetworkgraph
+
+# developer, test and removed options
+dbcrashratio
+forcecompactdb
+fastindex
+devbuild
+scrapersleep
+activebeforesb
+*height
+pendingpoolretention
+clear*history
+boinckey
+printstakemodifier
+printpriority
+printkeypool
+printcoinage
+printblock
+printblockindex
+printblocktree
+limitfreerelay
+autoban
+loadblockindextest
+privdb
+flushwallet
+socks

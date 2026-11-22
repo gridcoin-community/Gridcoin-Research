@@ -125,11 +125,18 @@ void AddrManImpl::SwapRandom(unsigned int nRndPos1, unsigned int nRndPos2)
     if (nRndPos1 == nRndPos2)
         return;
 
+    // Invariant: callers pass positions inside vRandom. GetAddr_() draws them
+    // below vRandom.size(), and Delete() passes an entry's nRandomPos (A1, see
+    // the table invariants in addrman_impl.h) and the last index. Guards against
+    // a new caller that passes an unchecked position.
     assert(nRndPos1 < vRandom.size() && nRndPos2 < vRandom.size());
 
     int nId1 = vRandom[nRndPos1];
     int nId2 = vRandom[nRndPos2];
 
+    // Invariant A1: every id in vRandom has an entry. Guards against a change
+    // that erases an entry without removing its id from vRandom, as Delete()
+    // does both.
     assert(mapInfo.count(nId1) == 1);
     assert(mapInfo.count(nId2) == 1);
 
@@ -142,6 +149,13 @@ void AddrManImpl::SwapRandom(unsigned int nRndPos1, unsigned int nRndPos2)
 
 void AddrManImpl::Delete(int nId)
 {
+    // Invariant: callers delete a new entry that no vvNew slot holds. ClearNew()
+    // and Add_() pass an id they hold (from a slot, or from Find() or Create())
+    // and test nRefCount == 0 just before; the prune in Unserialize() iterates
+    // mapInfo and tests fInTried and nRefCount. Tried entries are never deleted:
+    // Add_() returns early for them and ClearNew() reaches only new entries (A2).
+    // Guards against a caller that deletes a stale id, a tried entry (its id
+    // would stay in vvTried) or an entry slots still hold.
     assert(mapInfo.count(nId) != 0);
     AddrInfo& info = mapInfo[nId];
     assert(!info.fInTried);
@@ -160,6 +174,9 @@ void AddrManImpl::ClearNew(int nUBucket, int nUBucketPos)
     if (vvNew[nUBucket][nUBucketPos] != -1) {
         int nIdDelete = vvNew[nUBucket][nUBucketPos];
         AddrInfo& infoDelete = mapInfo[nIdDelete];
+        // Invariant A2: a vvNew slot holds the id of a new entry it counts.
+        // Guards against a change that writes a slot without counting it, or
+        // deletes an entry that slots still hold.
         assert(infoDelete.nRefCount > 0);
         infoDelete.nRefCount--;
         vvNew[nUBucket][nUBucketPos] = -1;
@@ -181,6 +198,9 @@ void AddrManImpl::MakeTried(AddrInfo& info, int nId)
     }
     nNew--;
 
+    // Invariants A2 and A3: the loop above cleared every vvNew slot that held
+    // this id, so its count is back to zero. Guards against a change that puts
+    // an id in a vvNew slot other than its own bucket position.
     assert(info.nRefCount == 0);
 
     // which tried bucket to move the entry to
@@ -191,6 +211,9 @@ void AddrManImpl::MakeTried(AddrInfo& info, int nId)
     if (vvTried[nKBucket][nKBucketPos] != -1) {
         // find an item to evict
         int nIdEvict = vvTried[nKBucket][nKBucketPos];
+        // Invariant: a vvTried slot holds the id of a live tried entry, because
+        // tried entries are never deleted (see Delete()). Guards against a change
+        // that deletes a tried entry or leaves its id in a slot.
         assert(mapInfo.count(nIdEvict) == 1);
         AddrInfo& infoOld = mapInfo[nIdEvict];
 
@@ -374,6 +397,7 @@ AddrInfo AddrManImpl::Select_(bool newOnly)
                 nKBucketPos = (nKBucketPos + insecure_rand()) % ADDRMAN_BUCKET_SIZE;
             }
             int nId = vvTried[nKBucket][nKBucketPos];
+            // Invariant: a vvTried slot holds a live tried entry, as in MakeTried().
             assert(mapInfo.count(nId) == 1);
             AddrInfo& info = mapInfo[nId];
             if (RandomInt(1 << 30) < fChanceFactor * info.GetChance() * (1 << 30))
@@ -391,6 +415,7 @@ AddrInfo AddrManImpl::Select_(bool newOnly)
                 nUBucketPos = (nUBucketPos + insecure_rand()) % ADDRMAN_BUCKET_SIZE;
             }
             int nId = vvNew[nUBucket][nUBucketPos];
+            // Invariant A2: a vvNew slot holds a live new entry, as in ClearNew().
             assert(mapInfo.count(nId) == 1);
             AddrInfo& info = mapInfo[nId];
             if (RandomInt(1 << 30) < fChanceFactor * info.GetChance() * (1 << 30))
@@ -492,6 +517,7 @@ void AddrManImpl::GetAddr_(std::vector<CAddress> &vAddr)
 
         int nRndPos = GetRand<int>(vRandom.size() - n) + n;
         SwapRandom(n, nRndPos);
+        // Invariant A1: every id in vRandom has an entry, as in SwapRandom().
         assert(mapInfo.count(vRandom[n]) == 1);
 
         const AddrInfo& ai = mapInfo[vRandom[n]];
@@ -552,6 +578,8 @@ int AddrManImpl::RandomInt(int nMax)
 void AddrManImpl::Clear()
 {
     std::vector<int>().swap(vRandom);
+    mapInfo.clear();
+    mapAddr.clear();
     nKey = GetRandHash();
     for (size_t bucket = 0; bucket < ADDRMAN_NEW_BUCKET_COUNT; bucket++) {
         for (size_t entry = 0; entry < ADDRMAN_BUCKET_SIZE; entry++) {

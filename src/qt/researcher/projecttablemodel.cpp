@@ -73,10 +73,7 @@ private:
 class ProjectTableData
 {
 public:
-    ProjectTableData()
-        : m_sort_column(static_cast<int>(ProjectTableModel::ColumnIndex::Name))
-    {
-    }
+    ProjectTableData() = default;
 
     size_t size() const
     {
@@ -85,7 +82,7 @@ public:
 
     ProjectRow* index(const int row)
     {
-        if (row > static_cast<int>(m_rows.size())) {
+        if (row < 0 || row >= static_cast<int>(m_rows.size())) {
             return nullptr;
         }
 
@@ -108,8 +105,8 @@ public:
     }
 
 private:
-    int m_sort_column;
-    Qt::SortOrder m_sort_order;
+    int m_sort_column = static_cast<int>(ProjectTableModel::ColumnIndex::Name);
+    Qt::SortOrder m_sort_order = Qt::AscendingOrder;
     std::vector<ProjectRow> m_rows;
 
     void DoSort()
@@ -251,7 +248,10 @@ QVariant ProjectTableModel::headerData(int section, Qt::Orientation orientation,
 
 QModelIndex ProjectTableModel::index(int row, int column, const QModelIndex &parent) const
 {
-    Q_UNUSED(parent);
+    if (!hasIndex(row, column, parent)) {
+        return QModelIndex();
+    }
+
     ProjectRow* data = m_data->index(row);
 
     if (data) {

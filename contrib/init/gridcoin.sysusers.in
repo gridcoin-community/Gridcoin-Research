@@ -1,0 +1,6 @@
+# The dedicated account and the attach group of the system service, and the account
+# of the wallet passphrase helper (no home, no shell, no groups; commented out when the
+# build leaves out the autounlock units).
+u @GRC_ACCOUNT@ - "Gridcoin daemon" /var/lib/@GRC_STATE_NAME@
+g @GRC_ATTACH_GROUP@ -
+@GRC_AUTOUNLOCK_SYSUSERS_OFF@u @GRC_AUTOUNLOCK@ - "Gridcoin wallet passphrase helper" - -

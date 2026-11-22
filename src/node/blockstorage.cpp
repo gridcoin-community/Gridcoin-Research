@@ -305,6 +305,10 @@ bool LoadExternalBlockFile(FILE* fileIn, size_t file_size, unsigned int percent_
 {
     int64_t nStart = GetTimeMillis();
     int nLoaded = 0;
+    int nAlreadyIndexed = 0;
+    int nNoParent = 0;
+    int nRefused = 0;
+    bool read_whole_file = false;
 
     bool display_progress = (file_size > 0 && (percent_end - percent_start) > 0) ? true : false;
     unsigned int cached_percent_progress = 0;
@@ -344,6 +348,9 @@ bool LoadExternalBlockFile(FILE* fileIn, size_t file_size, unsigned int percent_
                 } while(!ShutdownRequested());
 
                 if (nPos == (unsigned int)-1) {
+                    // The scan stops at the end of the file, and also where a read failed.
+                    read_whole_file = !ferror(blkdat.Get());
+
                     if (display_progress) {
                         uiInterface.InitMessage(_("Block file load progress ") + ToString(percent_end) + "%");
                     }
@@ -352,15 +359,53 @@ bool LoadExternalBlockFile(FILE* fileIn, size_t file_size, unsigned int percent_
                 }
 
                 fseek(blkdat.Get(), nPos, SEEK_SET);
-                unsigned int nSize;
-                blkdat >> nSize;
+                unsigned int nSize = 0;
+                CBlock block;
+                try {
+                    blkdat >> nSize;
+                    if (nSize > 0 && nSize <= MAX_BLOCK_SIZE) blkdat >> block;
+                } catch (const std::bad_alloc&) {
+                    // Running out of memory says nothing about the record, so it ends the load like a read error.
+                    throw;
+                } catch (const std::exception& e) {
+                    // A read error ends the load. A record that does not deserialize, such as a block cut off at the
+                    // end of the file by a crash while it was being written, is skipped, and the scan for the next
+                    // block continues after its message start, so the rest of the file is still read.
+                    if (ferror(blkdat.Get())) throw;
+
+                    LogPrintf("WARN: %s: Skipping the block record at offset %u: %s", __func__, nPos, e.what());
+                    continue;
+                }
                 if (nSize > 0 && nSize <= MAX_BLOCK_SIZE)
                 {
-                    CBlock block;
-                    blkdat >> block;
+                    // The scan for the next block starts at the earlier of two ends: where the size in the block's
+                    // record says the block ends, and where reading the block ended. Bitcoin Core does not read a block
+                    // past the end its record gives. If one of the two is damaged, the earlier end is still not past
+                    // the next record, and the scan finds that record's message start from there.
+                    const long read_end = ftell(blkdat.Get());
+                    if (read_end < 0) throw std::ios_base::failure("ftell failed after reading a block");
+                    const uint64_t block_end = std::min<uint64_t>((uint64_t) nPos + 4 + nSize, (uint64_t) read_end);
+
+                    // A block already in the index is skipped rather than passed to ProcessBlock, which would refuse it
+                    // and log an error. A reindex meets genesis this way, and a reindex that resumes an interrupted one
+                    // meets every block the interrupted one had imported.
+                    if (mapBlockIndex.count(block.GetHash(true))) {
+                        ++nAlreadyIndexed;
+                        nPos = (unsigned int) block_end;
+                        continue;
+                    }
+
+                    // ProcessBlock reports success for a block whose previous block is not in the index, and drops
+                    // it, because an import has no peer to ask for the missing block.
+                    const bool parent_known = block.hashPrevBlock.IsNull() || mapBlockIndex.count(block.hashPrevBlock);
+
                     CValidationState load_state;
                     if (ProcessBlock(nullptr, &block, false, load_state)) {
-                        ++nLoaded;
+                        if (parent_known) {
+                            ++nLoaded;
+                        } else {
+                            ++nNoParent;
+                        }
 
                         if (display_progress) {
                             unsigned int percent_progress = percent_start + (uint64_t) nPos
@@ -373,11 +418,19 @@ bool LoadExternalBlockFile(FILE* fileIn, size_t file_size, unsigned int percent_
 
                                 cached_percent_progress = percent_progress;
                             }
-                        } else if (nLoaded % 10000 == 0) {
+                        } else if (parent_known && nLoaded % 10000 == 0) {
                             LogPrintf("Blocks/s: %f", nLoaded / ((GetTimeMillis() - nStart) / 1000.0));
                         }
 
-                        nPos += 4 + nSize;
+                        nPos = (unsigned int) block_end;
+                    } else if (load_state.IsError()) {
+                        // A block that could not be stored ends the load, so that the file is not counted as loaded.
+                        LogPrintf("WARN: %s: The block at offset %u could not be stored. The load stops here.",
+                                  __func__, nPos);
+                        break;
+                    } else {
+                        // The scan goes on from the block's message start, as it did before this count.
+                        ++nRefused;
                     }
                 }
             }
@@ -387,8 +440,49 @@ bool LoadExternalBlockFile(FILE* fileIn, size_t file_size, unsigned int percent_
                    __PRETTY_FUNCTION__);
         }
     }
-    LogPrintf("Loaded %i blocks from external file in %" PRId64 "ms", nLoaded, GetTimeMillis() - nStart);
-    return nLoaded > 0;
+    LogPrintf("Loaded %i blocks from external file in %" PRId64 "ms, skipped %i already in the block index", nLoaded,
+              GetTimeMillis() - nStart, nAlreadyIndexed);
+
+    if (nNoParent > 0 || nRefused > 0) {
+        LogPrintf("WARN: %s: %i block(s) in the file were not loaded because their previous block is not in the block "
+                  "index, and %i were refused. The chain may end below the last block in the file.",
+                  __func__, nNoParent, nRefused);
+    }
+
+    // A file stopped part way by a shutdown request, a read error or a block that could not be stored is not counted
+    // as loaded, whatever it yielded: a reindex deletes its source files only after every one of them was loaded.
+    return read_whole_file;
+}
+
+bool ReadFirstExternalBlock(const fs::path& path, CBlock& block)
+{
+    CAutoFile blkdat(fsbridge::fopen(path, "rb"), SER_DISK, CLIENT_VERSION);
+    if (blkdat.IsNull()) return false;
+
+    try {
+        // A block record is the message start, the block size and the block. Only the start of the file is searched,
+        // a byte at a time: an import file starts with a block record, and a file with none there, such as one for
+        // another network, is left to the import.
+        static constexpr size_t MAX_SEARCH_BYTES = 65536;
+        unsigned char window[CMessageHeader::MESSAGE_START_SIZE] = {};
+        size_t bytes_read = 0;
+        while (bytes_read < sizeof(window) || memcmp(window, Params().MessageStart(), sizeof(window)) != 0) {
+            if (bytes_read == MAX_SEARCH_BYTES) return false;
+
+            memmove(window, window + 1, sizeof(window) - 1);
+            blkdat >> window[sizeof(window) - 1];
+            ++bytes_read;
+        }
+
+        unsigned int nSize = 0;
+        blkdat >> nSize;
+        if (nSize == 0 || nSize > MAX_BLOCK_SIZE) return false;
+        blkdat >> block;
+    } catch (const std::exception&) {
+        return false;
+    }
+
+    return true;
 }
 
 
@@ -402,9 +496,9 @@ bool LoadBlockIndex(bool fAllowNew)
 
     if (Params().IsMockableChain())
     {
-        // GLOBAL REGTEST SETTINGS — staking and maturity gated to 0 so the kernel
-        // checks at gridcoin/staking/kernel.cpp:617,654 pass trivially. nGrandfather
-        // is irrelevant at regtest heights.
+        // GLOBAL REGTEST SETTINGS: nStakeMinAge = 0, so the min-age checks in
+        // CWallet::AvailableCoinsForStaking and GRC::CheckProofOfStakeV8 pass
+        // trivially. nGrandfather is irrelevant at regtest heights.
         nStakeMinAge = 0;
         nCoinbaseMaturity = 10;
         nGrandfather = 0;
@@ -439,7 +533,11 @@ bool LoadBlockIndex(bool fAllowNew)
 
         CBlock block = CreateGenesisBlock();
         const bool fRegTest = Params().IsMockableChain();
-        { CValidationState genesis_state; assert(CheckBlock(block, genesis_state, 1)); }
+        {
+            CValidationState genesis_state;
+            if (!CheckBlock(block, genesis_state, 1))
+                return error("LoadBlockIndex() : genesis block failed CheckBlock");
+        }
 
         // Start new block file
         unsigned int nFile;

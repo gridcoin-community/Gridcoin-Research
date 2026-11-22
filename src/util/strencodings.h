@@ -19,6 +19,7 @@
 #include <iterator>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <vector>
 
 /** Used by SanitizeString() */
@@ -293,5 +294,39 @@ std::string ToUpper(const std::string& str);
  * @returns         string with the first letter capitalized.
  */
 std::string Capitalize(std::string str);
+
+#ifdef WIN32
+/**
+ * Convert UTF-8 to the UTF-16 that the Windows wide-character API takes.
+ *
+ * Together with WideToUtf8() this replaces
+ * std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>, wchar_t>, which C++17
+ * deprecates and C++26 removes. Valid input converts exactly as it did there.
+ * Malformed input always throws std::range_error, the exception wstring_convert
+ * threw for most of it: an overlong form, an encoded surrogate, a value above
+ * U+10FFFF, a byte that cannot start a sequence, a stray continuation byte, and
+ * an input that ends part-way through a character. wstring_convert dropped that
+ * last case silently, and libstdc++ 13.2's also accepted encoded surrogates.
+ *
+ * @param[in] utf8  the UTF-8 to convert.
+ * @returns         the same text as UTF-16.
+ * @throws std::range_error if utf8 is not valid UTF-8, or is longer than INT_MAX.
+ */
+std::wstring Utf8ToWide(std::string_view utf8);
+
+/**
+ * Convert UTF-16 from the Windows wide-character API to UTF-8.
+ *
+ * The counterpart of Utf8ToWide(). Malformed input always throws
+ * std::range_error: a low surrogate without a high surrogate before it, and a
+ * high surrogate without a low surrogate after it, including one at the end of
+ * the input, which wstring_convert dropped silently.
+ *
+ * @param[in] wide  the UTF-16 to convert.
+ * @returns         the same text as UTF-8.
+ * @throws std::range_error if wide is not valid UTF-16, or is longer than INT_MAX.
+ */
+std::string WideToUtf8(std::wstring_view wide);
+#endif // WIN32
 
 #endif // BITCOIN_UTIL_STRENCODINGS_H

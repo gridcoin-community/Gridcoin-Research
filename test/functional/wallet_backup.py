@@ -7,6 +7,7 @@
 Investor-mode only. Exercises Gridcoin's private-key export surface:
 
   - dumpprivkey(addr): exports a wallet key as WIF;
+  - dumpprivkey(addr, true): the same key as WIF plus private and public hex;
   - dumpprivkey error path on an invalid address.
 
 NOTE: backupwallet is intentionally not exercised here. On regtest the wallet is
@@ -19,7 +20,7 @@ wallet. A full backup -> wipe -> restore cycle additionally needs multiwallet
 """
 
 from test_framework.test_framework import GridcoinTestFramework
-from test_framework.util import assert_raises_rpc_error
+from test_framework.util import assert_equal, assert_raises_rpc_error
 
 
 class WalletBackupTest(GridcoinTestFramework):
@@ -41,6 +42,13 @@ class WalletBackupTest(GridcoinTestFramework):
         wif = node.dumpprivkey(addr)
         assert isinstance(wif, str) and len(wif) > 0, "dumpprivkey returned no WIF"
         self.log.info("dumpprivkey returned a WIF for %s", addr)
+
+        # --- dump_hex: the same key, as WIF and as hex ---
+        dumped = node.dumpprivkey(addr, True)
+        assert_equal(dumped["private_key"], wif)
+        assert len(dumped["private_key_hex"]) > 0, "dumpprivkey returned no private key hex"
+        assert_equal(dumped["public_key_hex"], node.validateaddress(addr)["pubkey"])
+        self.log.info("dumpprivkey dump_hex returned the key as WIF and hex")
 
         # --- error path: dumpprivkey on a bogus address raises (any code) ---
         assert_raises_rpc_error(None, None, node.dumpprivkey, "not_a_real_address")

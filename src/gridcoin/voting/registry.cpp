@@ -23,8 +23,6 @@
 using namespace GRC;
 using LogFlags = BCLog::LogFlags;
 
-extern bool fQtActive;
-
 namespace {
 //!
 //! \brief Extract a poll title from a legacy vote contract.
@@ -850,7 +848,9 @@ std::string PollReference::Notify(const PollNotificationType& notify_type) const
             ReplaceAll(strCmd, "%s2", NotifyTypeToString(notify_type));
             boost::thread t(runCommand, strCmd); // thread runs free
 
-            LogPrint(BCLog::LogFlags::MISC, "INFO: %s: poll notify command: %s", __func__, strCmd);
+            // -pollnotify is a sensitive setting, so the log names the poll, not the command.
+            LogPrint(BCLog::LogFlags::MISC, "INFO: %s: poll notify command run for %s (%s)", __func__,
+                     m_txid.ToString(), NotifyTypeToString(notify_type));
 
             if (notify_type == POLL_EXPIRE_WARNING) {
                 m_expiration_warn_notified = true;
@@ -1239,7 +1239,7 @@ void PollRegistry::AddPoll(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIRED(
 
         poll_ref.Notify(PollReference::PollNotificationType::POLL_ADD);
 
-        if (fQtActive && !poll_ref.Expired(GetAdjustedTime())) {
+        if (!poll_ref.Expired(GetAdjustedTime())) {
             uiInterface.NewPollReceived(poll_ref.Time());
         }
 
@@ -1279,7 +1279,7 @@ void PollRegistry::AddVote(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIRED(
                          *poll_ref->m_ptitle,
                          poll_ref->Votes().size());
 
-                if (fQtActive && !poll_ref->Expired(GetAdjustedTime())) {
+                if (!poll_ref->Expired(GetAdjustedTime())) {
                     uiInterface.NewVoteReceived(poll_ref->Txid());
                 }
             }
@@ -1305,7 +1305,7 @@ void PollRegistry::AddVote(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIRED(
         }
         poll_ref->LinkVote(ctx.m_tx.GetHash());
 
-        if (fQtActive && !poll_ref->Expired(GetAdjustedTime())) {
+        if (!poll_ref->Expired(GetAdjustedTime())) {
             uiInterface.NewVoteReceived(poll_ref->Txid());
         }
     }
@@ -1354,9 +1354,7 @@ void PollRegistry::DeletePoll(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIR
              payload->m_poll.m_title,
              m_polls.size());
 
-    if (fQtActive) {
-        uiInterface.NewPollReceived(poll_time);;
-    }
+    uiInterface.NewPollReceived(poll_time);
 }
 
 void PollRegistry::DeleteVote(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIRED(cs_main, PollRegistry::cs_poll_registry)
@@ -1373,7 +1371,7 @@ void PollRegistry::DeleteVote(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIR
                      *poll_ref->m_ptitle,
                      poll_ref->Votes().size());
 
-            if (fQtActive && !poll_ref->Expired(GetAdjustedTime())) {
+            if (!poll_ref->Expired(GetAdjustedTime())) {
                 uiInterface.NewVoteReceived(poll_ref->Txid());
             }
         }
@@ -1391,7 +1389,7 @@ void PollRegistry::DeleteVote(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIR
     if (PollReference* poll_ref = TryBy(title)) {
         poll_ref->UnlinkVote(ctx.m_tx.GetHash());
 
-        if (fQtActive && !poll_ref->Expired(GetAdjustedTime())) {
+        if (!poll_ref->Expired(GetAdjustedTime())) {
             uiInterface.NewVoteReceived(poll_ref->Txid());
         }
     }

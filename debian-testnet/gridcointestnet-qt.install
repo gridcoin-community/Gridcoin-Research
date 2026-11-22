@@ -1,3 +1,15 @@
 #!/usr/bin/dh-exec
 usr/bin/gridcoinresearch => usr/bin/gridcointestnet
 usr/share/man/man1/gridcoinresearch.1 => usr/share/man/man1/gridcointestnet.1
+debian/gridcointestnet.desktop usr/share/applications/
+# The testnet icons come from the source tree: the general install excludes them
+# (src/qt/CMakeLists.txt), so they ship only in this package.
+share/icons/hicolor/16x16/apps/gridcointestnet.png usr/share/icons/hicolor/16x16/apps/
+share/icons/hicolor/22x22/apps/gridcointestnet.png usr/share/icons/hicolor/22x22/apps/
+share/icons/hicolor/24x24/apps/gridcointestnet.png usr/share/icons/hicolor/24x24/apps/
+share/icons/hicolor/32x32/apps/gridcointestnet.png usr/share/icons/hicolor/32x32/apps/
+share/icons/hicolor/48x48/apps/gridcointestnet.png usr/share/icons/hicolor/48x48/apps/
+share/icons/hicolor/64x64/apps/gridcointestnet.png usr/share/icons/hicolor/64x64/apps/
+share/icons/hicolor/128x128/apps/gridcointestnet.png usr/share/icons/hicolor/128x128/apps/
+share/icons/hicolor/256x256/apps/gridcointestnet.png usr/share/icons/hicolor/256x256/apps/
+share/icons/hicolor/scalable/apps/gridcointestnet.svg usr/share/icons/hicolor/scalable/apps/

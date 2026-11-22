@@ -8,6 +8,7 @@
 #include "gridcoin/beacon.h"
 #include "node/blockstorage.h"
 #include "tinyformat.h"
+#include "util/fsmodes.h"
 #include "util/strencodings.h"
 #include "util/system.h"
 
@@ -45,6 +46,32 @@ CAmount SnapshotAccrualComputer::MaxReward() const
     // ...rounded-up to 16384.
     //
     // For V13+, the magnitude unit can be set by protocol entry.
+    //
+    // Overflow analysis for the Fraction arithmetic below, which is int64_t.
+    //
+    // GetMagnitudeUnit() parses the "magnitudeunit" protocol entry as a fraction
+    // string, reduces it and clamps its value to at most 5. Only the value is
+    // clamped, so the representation reaches this chain. From block version 15
+    // the protocol registry refuses an entry whose reduced numerator or
+    // denominator exceeds MAX_MAGNITUDE_ENTRY_TERM (10^6), and every entry made
+    // through 2026-10-20 is inside that bound ("103050/100000", 2061/2000
+    // reduced, was in force then).
+    //
+    // Each multiplication cancels its integer against the denominator before
+    // multiplying. When nothing cancels (a denominator coprime to 10), the last
+    // step multiplies p * 2^16 by COIN, which has 27 bits, so the 63-bit guard
+    // holds while p < 2^20 = 1,048,576, whatever the denominator. Cancellation
+    // only makes the operands smaller. A decimal denominator 10^k is absorbed
+    // by 32768 * 2 * COIN = 2^24 * 5^8 up to k = 8, and the chain then forms at
+    // most about 5 * 6.5536e12, under 2^45.
+    //
+    // The static_asserts below hold that bound to the analysis, and
+    // util_fraction_tests.cpp runs this chain at the bound and at the guard's
+    // edge. See the full analysis at MAX_MAGNITUDE_ENTRY_TERM in protocol.h.
+    static_assert(MAX_MAGNITUDE_ENTRY_TERM < (int64_t {1} << 20),
+                  "MaxReward's chain needs a reduced unit numerator below 2^20 when nothing cancels");
+    static_assert(COIN < (int64_t {1} << 27), "the analysis above takes COIN as 27 bits");
+
     return (GetMagnitudeUnit() * 32768 * 2 * COIN).ToCAmount();
 }
 
@@ -341,6 +368,8 @@ bool AccrualSnapshotRegistry::Initialize()
         return false;
     }
 
+    m_upgrade_pending = false;
+
     CAutoFile registry_file(
         fsbridge::fopen(RegistryPath(), "rb"),
         SER_DISK,
@@ -360,6 +389,16 @@ bool AccrualSnapshotRegistry::Initialize()
         m_entries.clear();
     }
 
+    // Release the read handle before Rewrite() moves a new file over this
+    // one: Windows refuses to replace a file that is still open.
+    registry_file.fclose();
+
+    if (m_upgrade_pending) {
+        LogPrintf("Accrual snapshot registry version %u loaded; the upgrade to version %u is pending.",
+                  UPGRADABLE_VERSION,
+                  CURRENT_VERSION);
+    }
+
     LogPrintf("Accrual snapshot registry loaded. Compacting...");
 
     return Rewrite();
@@ -367,11 +406,19 @@ bool AccrualSnapshotRegistry::Initialize()
 
 bool AccrualSnapshotRegistry::Close()
 {
-    if (m_file && fclose(m_file) != 0) {
-        return error("%s: failed to close snapshot registry", __func__);
+    if (!m_file) {
+        return true;
     }
 
+    // fclose() releases the stream even when it reports an error, so forget
+    // the handle first. Another Close() must not release it a second time:
+    //
+    FILE* const file = m_file;
     m_file = nullptr;
+
+    if (fclose(file) != 0) {
+        return error("%s: failed to close snapshot registry", __func__);
+    }
 
     return true;
 }
@@ -428,6 +475,13 @@ void AccrualSnapshotRegistry::AssertHashMatches(const uint64_t height, const uin
 
 bool AccrualSnapshotRegistry::Register(const uint64_t height, const uint256 snapshot_hash)
 {
+    // The entries stay in ascending order: Unserialize() refuses a file that
+    // is out of order, StoreBaseline() registers right after ResetBaseline()
+    // cleared the entries, and the tally's ApplySuperblock() refuses a
+    // superblock at or below the latest snapshot before it stores one. The
+    // assert holds the order that the binary search in TryHeight() depends on
+    // against a new caller that registers a height without that check:
+    //
     assert(m_entries.empty() || height > m_entries.back().m_height); // LINT-OK-ASSERT: relocated unchanged
 
     const Entry entry(height, snapshot_hash);
@@ -446,6 +500,14 @@ bool AccrualSnapshotRegistry::Register(const uint64_t height, const uint256 snap
 
 bool AccrualSnapshotRegistry::Deregister(const uint64_t height)
 {
+    // Both callers pass the latest height: the tally's RevertSuperblock()
+    // drops the snapshot of the current superblock, which its ApplySuperblock()
+    // stored last, and DropAboveHeight() drops LatestHeight(). (On regtest,
+    // where snapshot accrual never activates, this does not hold after a
+    // restart.) The assert protects against a new caller that removes another
+    // height, which would record that height as removed on disk while it pops
+    // the latest entry:
+    //
     assert(!m_entries.empty() && height == m_entries.back().m_height); // LINT-OK-ASSERT: relocated unchanged
 
     const Entry* entry = TryHeight(height);
@@ -484,13 +546,18 @@ fs::path AccrualSnapshotRegistry::RegistryPath()
     return SnapshotDirectory() / "registry.dat";
 }
 
-bool AccrualSnapshotRegistry::ReopenForWrite()
+fs::path AccrualSnapshotRegistry::TempRegistryPath()
+{
+    return SnapshotDirectory() / "registry.dat.tmp";
+}
+
+bool AccrualSnapshotRegistry::ReopenForAppend()
 {
     if (!Close()) {
         return false;
     }
 
-    m_file = fsbridge::fopen(RegistryPath(), "wb");
+    m_file = fsbridge::fopen(RegistryPath(), "ab");
 
     return m_file || error(
         "%s: failed to open snapshot registry for writing: %s",
@@ -500,31 +567,74 @@ bool AccrualSnapshotRegistry::ReopenForWrite()
 
 bool AccrualSnapshotRegistry::Rewrite()
 {
-    if (!ReopenForWrite()) {
+    if (!Close()) {
         return false;
     }
+
+    const fs::path temp_path = TempRegistryPath();
+
+    // The temporary file is owner-only and has the permissions of the registry it will replace, if
+    // there is one.
+    std::string create_error;
+    std::optional<std::string> create_warning;
+    m_file = fsmodes::CreateReplacementFile(RegistryPath(), temp_path, create_error, create_warning, /*binary=*/true);
+
+    if (!m_file) {
+        return error("%s: failed to open %s for writing: %s", __func__, temp_path.string(), create_error);
+    }
+
+    if (create_warning) {
+        LogPrintf("WARNING: %s: %s", __func__, *create_warning);
+    }
+
+    // Write the version last in effect: the new file replaces the registry
+    // only once it is complete and committed, so the version on disk always
+    // describes a whole registry.
+    bool written = true;
 
     try {
-        ::Serialize(*this, CURRENT_VERSION);
+        ::Serialize(*this, m_upgrade_pending ? UPGRADABLE_VERSION : CURRENT_VERSION);
     } catch (const std::exception& e) {
-        return error("%s: %s", __func__, e.what());
+        written = error("%s: %s", __func__, e.what());
     }
 
-    if (m_entries.empty()) {
-        return true;
-    }
+    if (written && !m_entries.empty()) {
+        written = WriteEntry(Action::BASELINE, m_entries.front());
 
-    if (!WriteEntry(Action::BASELINE, m_entries.front())) {
-        return false;
-    }
-
-    for (const auto& entry : m_entries) {
-        if (!WriteEntry(Action::REGISTER, entry)) {
-            return false;
+        for (auto iter = m_entries.begin(); written && iter != m_entries.end(); ++iter) {
+            written = WriteEntry(Action::REGISTER, *iter);
         }
     }
 
-    return true;
+    written = written && FileCommit(m_file);
+
+    if (fclose(m_file) != 0) {
+        written = false;
+    }
+
+    m_file = nullptr;
+
+    if (!written) {
+        return error("%s: failed to write %s", __func__, temp_path.string());
+    }
+
+    if (!RenameOver(temp_path, RegistryPath())) {
+        return error("%s: failed to replace %s", __func__, RegistryPath().string());
+    }
+
+    return ReopenForAppend();
+}
+
+bool AccrualSnapshotRegistry::UpgradePending() const
+{
+    return m_upgrade_pending;
+}
+
+bool AccrualSnapshotRegistry::CompleteUpgrade()
+{
+    m_upgrade_pending = false;
+
+    return Rewrite();
 }
 
 bool AccrualSnapshotRegistry::WriteEntry(const Action action, const Entry entry)
@@ -545,7 +655,11 @@ void AccrualSnapshotRegistry::Unserialize(CAutoFile& file)
     uint32_t version;
     file >> version;
 
-    if (version != CURRENT_VERSION) {
+    if (version == UPGRADABLE_VERSION) {
+        // Same disk format. The registry keeps writing this version until the
+        // tally completes the upgrade (see UpgradePending()):
+        m_upgrade_pending = true;
+    } else if (version != CURRENT_VERSION) {
         // When this is executed by the tally's initialization routine, the
         // exception will cause the application to rebuild the snapshots:
         throw SnapshotRegistryVersionMismatchError(version, CURRENT_VERSION);
@@ -568,6 +682,21 @@ void AccrualSnapshotRegistry::Unserialize(CAutoFile& file)
                         entry.m_height,
                         entry.m_snapshot_hash.ToString());
 
+                    // Register() adds heights in ascending order and
+                    // Deregister() removes only the latest one, so a file that
+                    // does otherwise is damaged. Refuse it here: entries out of
+                    // order break the binary search in TryHeight() and the next
+                    // Register(), and a removal from an empty registry is
+                    // undefined. The tally's initialization then rebuilds the
+                    // snapshots:
+                    //
+                    if (!m_entries.empty() && entry.m_height <= m_entries.back().m_height) {
+                        throw SnapshotStateError(strprintf(
+                            "registry adds snapshot %" PRIu64 " after snapshot %" PRIu64 ".",
+                            entry.m_height,
+                            m_entries.back().m_height));
+                    }
+
                     m_entries.emplace_back(entry);
                     break;
                 case Action::DEREGISTER:
@@ -575,6 +704,12 @@ void AccrualSnapshotRegistry::Unserialize(CAutoFile& file)
                         "  Removed: %" PRIu64 " (%s)",
                         entry.m_height,
                         entry.m_snapshot_hash.ToString());
+
+                    if (m_entries.empty() || entry.m_height != m_entries.back().m_height) {
+                        throw SnapshotStateError(strprintf(
+                            "registry removes snapshot %" PRIu64 ", which is not the latest one.",
+                            entry.m_height));
+                    }
 
                     m_entries.pop_back();
             }
@@ -658,6 +793,21 @@ void AccrualSnapshotRepository::PruneSnapshotFiles() const
 bool AccrualSnapshotRepository::HasBaseline() const
 {
     return m_registry.BaselineHeight() > 0;
+}
+
+uint64_t AccrualSnapshotRepository::LatestHeight() const
+{
+    return m_registry.LatestHeight();
+}
+
+bool AccrualSnapshotRepository::UpgradePending() const
+{
+    return m_registry.UpgradePending();
+}
+
+bool AccrualSnapshotRepository::CompleteUpgrade()
+{
+    return m_registry.CompleteUpgrade();
 }
 
 bool AccrualSnapshotRepository::StoreBaseline(const uint64_t height, const ResearchAccountMap& accounts)
@@ -879,6 +1029,10 @@ bool SnapshotBaselineBuilder::LoadSuperblock(
     const CBlockIndex* const pindex,
     const CBlockIndex* const pindex_bind)
 {
+    // Both calls in Run() follow a check that skips blocks that are not
+    // superblocks. The assert protects against a new caller that passes
+    // another block:
+    //
     assert(pindex->IsSuperblock()); // LINT-OK-ASSERT: relocated unchanged
 
     LogPrint(LogFlags::TALLY, "  Superblock: %" PRId64, pindex->nHeight);

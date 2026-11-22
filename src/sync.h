@@ -9,6 +9,7 @@
 #include "threadsafety.h"
 
 #include <condition_variable>
+#include <cstdint>
 #include <mutex>
 #include <string>
 #include <thread>
@@ -82,6 +83,11 @@ void SetLockOrderDebugThrowException(bool enable);
 //! fires must clear the table first, then drive both legs itself. Detection
 //! for subsequently-run code re-registers pairs as they occur.
 void ResetLockOrderTracking();
+
+//! Count of acquisitions of cs_main (blocking or try) on a thread that carries
+//! the GUI mark, since the process started. Diagnostic: lets a test assert that
+//! a path never takes cs_main on the GUI thread.
+uint64_t GuiThreadCsMainReports();
 #else
 inline void EnterCritical(const char* pszName, const char* pszFile, int nLine, void* cs, bool fTry = false, bool fOrderExempt = false) {}
 inline void LeaveCritical() {}
@@ -93,6 +99,22 @@ void AssertLockNotHeldInternal(const char* pszName, const char* pszFile, int nLi
 inline void DeleteLock(void* cs) {}
 inline bool LockStackEmpty() { return true; }
 #endif
+
+/**
+ * Mark the calling thread as the Qt GUI thread of a monolithic build. In a
+ * DEBUG_LOCKORDER build, taking cs_main on a marked thread is reported (logged
+ * with file:line and counted, never aborted): the GUI gets core state pushed to
+ * it and does not take cs_main itself (doc/developer-notes.md, GUI). Without
+ * DEBUG_LOCKORDER these do nothing.
+ */
+#ifdef DEBUG_LOCKORDER
+void MarkGuiThread();
+bool IsGuiThread();
+#else
+inline void MarkGuiThread() {}
+inline bool IsGuiThread() { return false; }
+#endif
+
 #define AssertLockHeld(cs) AssertLockHeldInternal(#cs, __FILE__, __LINE__, &cs)
 #define AssertLockNotHeld(cs) AssertLockNotHeldInternal(#cs, __FILE__, __LINE__, &cs)
 

@@ -25,6 +25,13 @@ effect without a restart.
   - node0, a GUI option (lang, suppressnetworkgraph): refused as not a node
     setting and not stored, while an empty value (an erase) is accepted and a
     node setting the GUI reads (showorphans) is still stored.
+  - node0, a Refuse-class setting (blocknotify, rpcallowip, rpcconnect, datadir,
+    backupdir, walletnotify, server, ipclogtrace; see
+    share/gridcoin/refused-setting-keys.txt): refused with RPC_INVALID_PARAMETER
+    and not stored. An empty value erases, and succeeds.
+  - node0, paytxfee: a rate above the maximum is refused, a rate at the maximum
+    is stored, and an empty value erases it. The wallet is unencrypted here, so no
+    passphrase is needed for these Elevate-class settings.
 """
 
 from test_framework.test_framework import GridcoinTestFramework
@@ -106,6 +113,22 @@ class ChangeSettingsEraseTest(GridcoinTestFramework):
         node0.changesettings("showorphans=1")
         assert "showorphans" in stored_settings(node0)
         node0.changesettings("showorphans=")
+
+        self.log.info("A Refuse-class setting is refused")
+        for setting in ("blocknotify=x", "rpcallowip=127.0.0.1", "rpcconnect=127.0.0.1", "datadir=/tmp",
+                        "backupdir=/tmp", "walletnotify=x", "server=1", "ipclogtrace=1"):
+            assert_raises_rpc_error(-8, "can be set only in gridcoinresearch.conf", node0.changesettings, setting)
+            assert setting.split("=")[0] not in stored_settings(node0)
+        # An erase is let through.
+        node0.changesettings("blocknotify=")
+
+        self.log.info("paytxfee is capped, and an empty value erases it")
+        assert_raises_rpc_error(-8, "above maximum", node0.changesettings, "paytxfee=0.2")
+        assert "paytxfee" not in stored_settings(node0)
+        node0.changesettings("paytxfee=0.1")
+        assert "paytxfee" in stored_settings(node0)
+        node0.changesettings("paytxfee=")
+        assert "paytxfee" not in stored_settings(node0)
 
 
 if __name__ == "__main__":

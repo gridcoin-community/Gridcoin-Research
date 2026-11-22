@@ -1,0 +1,25 @@
+[Desktop Entry]
+Version=1.0
+Name=Gridcoin Testnet
+GenericName=Cryptocurrency rewarding BOINC computation
+GenericName[de]=Kryptowährung, die BOINC-Berechnung belohnt
+GenericName[sv]=Kryptovaluta som belönar beräkningar genom BOINC
+Comment=Earn Gridcoins by participating in the BOINC distributed computing network
+Comment[de]=Gridcoins für Teilnahme am verteilten Rechnennetzwerk BOINC verdienen
+Categories=Office;Finance;P2P;Network;Qt;
+Keywords=crypto;cryptocurrency;cryptocoin;bitcoin;altcoin;boinc;
+Exec=gridcointestnet -testnet
+Terminal=false
+Type=Application
+Icon=gridcointestnet
+StartupWMClass=gridcointestnet
+Actions=Multiprocess;SystemService;
+
+# Both actions attach to a core that is already running and do not start one.
+[Desktop Action Multiprocess]
+Name=Connect to your own core
+Exec=gridcointestnet -testnet -multiprocess
+
+[Desktop Action SystemService]
+Name=Connect to the system service
+Exec=gridcointestnet -testnet -multiprocess -ipcdir=/run/gridcointestnetd -ipcserviceuser=gridcointestnet

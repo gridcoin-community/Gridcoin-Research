@@ -23,7 +23,6 @@ Without the reward path the second block would look like the first, so the
 comparison is what discriminates.
 """
 
-import os
 from decimal import Decimal
 
 from test_framework.test_framework import GridcoinTestFramework
@@ -54,15 +53,8 @@ class ResearchRewardTest(GridcoinTestFramework):
         ]]
 
     def setup_network(self):
-        # Same BOINC stub as feature_beacon_activation.py: the CPID comes from
-        # -forcecpid, and an empty client_state.xml keeps the host's BOINC out.
-        boinc_dir = os.path.join(self.options.tmpdir, "boinc")
-        os.makedirs(boinc_dir, exist_ok=True)
-        client_state_path = os.path.join(boinc_dir, "client_state.xml")
-        with open(client_state_path, "w", encoding="utf-8") as client_state:
-            client_state.write("<client_state>\n</client_state>\n")
-        self.extra_args[0].append(f"-boincdatadir={boinc_dir}")
-
+        # As in feature_beacon_activation.py, the CPID comes from -forcecpid:
+        # the BOINC data directory the framework gives the node names no project.
         self.add_nodes(self.num_nodes, self.extra_args)
         self.start_nodes()
 

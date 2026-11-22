@@ -81,6 +81,12 @@ public:
     //! Begin an explicit application quit. It must not be vetoed by
     //! minimize-on-close (#2995).
     virtual void requestQuit() = 0;
+    //! The quit the core's going asks for: the core stopped (QueueShutdown), or
+    //! the connection to it was lost. A front end that shows a message the user
+    //! must be able to read to its end although the core may stop meanwhile
+    //! holds this quit until the message is closed (the Widgets front end:
+    //! BitcoinGUI::QuitHold). The default quits at once, as requestQuit().
+    virtual void requestQuitForCoreStop();
 
     //! Detach every model from the front end, in the order StartGridcoinQt's
     //! teardown has always used: hide the main window, then client, wallet, MRC,
@@ -146,6 +152,10 @@ int GuiMain(int argc, char* argv[], GuiFrontEndFactory make_frontend);
 
 //! Routes an explicit quit to the live front end's requestQuit().
 void RequestGuiQuit();
+
+//! Routes the quit the core's going asks for to the live front end's
+//! requestQuitForCoreStop().
+void RequestGuiQuitForCoreStop();
 
 //! True when an exception's text is libmultiprocess's "this connection is gone"
 //! raise.

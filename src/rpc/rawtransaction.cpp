@@ -860,6 +860,11 @@ UniValue consolidateunspent(const UniValue& params)
         throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, string("Invalid Gridcoin address: ") + sAddress);
     }
 
+    // Refused as the other spends are, locked or unlocked for staking only,
+    // unless this thread may use the keys, and before the wallet is searched
+    // for inputs.
+    EnsureWalletIsUnlocked();
+
     // Set the consolidation transaction address to the specified output address.
     CScript scriptDestPubKey;
     scriptDestPubKey.SetDestination(OptimizeAddress);
@@ -868,7 +873,7 @@ UniValue consolidateunspent(const UniValue& params)
 
     // A convenient way to do a sort without the bother of writing a comparison operator.
     // The map does it for us! It must be a multimap, because it is highly likely one or
-    // more UTXO's will have the same nValue.
+    // more UTXOs will have the same nValue.
     std::multimap<int64_t, COutput> mInputs;
 
     // Announced after this scope unlocks: the relay path reached from
@@ -880,7 +885,7 @@ UniValue consolidateunspent(const UniValue& params)
     // Have to lock both main and wallet.
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
-    // Get the current UTXO's.
+    // Get the current UTXOs.
     pwalletMain->AvailableCoins(vecInputs, false, nullptr, false);
 
     // Filter outputs in the wallet that are the candidate inputs by matching address and insert into sorted multimap.
@@ -981,7 +986,7 @@ UniValue consolidateunspent(const UniValue& params)
 
     // Construct the inputs to the consolidation transaction. Either all of the inputs from above, or 200,
     // or when the total reaches/exceeds nConsolidateLimit, whichever is more limiting. The map allows us
-    // to elegantly select the UTXO's from the smallest upwards.
+    // to elegantly select the UTXOs from the smallest upwards.
     for (auto const& out : mInputs)
     {
         int64_t nUTXOValue = out.second.tx->vout[out.second.i].nValue;
@@ -989,7 +994,7 @@ UniValue consolidateunspent(const UniValue& params)
         if (iInputCount == nInputNumberLimit || ((nAmount + nUTXOValue) > nConsolidateLimit && nConsolidateLimit != 0)) break;
 
         // This has been moved after the break to change the behavior so that the
-        // consolidation is limited to the set of UTXO's SMALLER than the nConsolidateLimit
+        // consolidation is limited to the set of UTXOs SMALLER than the nConsolidateLimit
         // in the case that the next UTXO would go OVER the limit. The prior behavior
         // would include that next UTXO and produce a UTXO larger than desired.
         // Both methods have undesirable corner cases:
@@ -999,7 +1004,7 @@ UniValue consolidateunspent(const UniValue& params)
         // New behavior corner case... UTXO 1 to n are all very small and total value
         // adds up to a small fraction of nConsolidateLimit. Next UTXO is similar to
         // nConsolidateLimit, but is not included, which means the output UTXO is limited
-        // to the consolidation of the smaller UTXO's and produces a UTXO that is much
+        // to the consolidation of the smaller UTXOs and produces a UTXO that is much
         // smaller than desired. To consolidate the next UTXO would require changing the
         // input parameters to the function.
         // Feedback from users indicate the latter is preferable to the former. The only way
@@ -1064,21 +1069,6 @@ UniValue consolidateunspent(const UniValue& params)
     int64_t nFee = nTransactionFee * (1 + (int64_t) nBytes / 1000);
 
     int64_t nFeeRequired = std::max(nMinFee, nFee);
-
-
-    if (pwalletMain->IsLocked())
-    {
-        string strError = _("Error: Wallet locked, unable to create transaction.");
-        LogPrintf("consolidateunspent: %s", strError);
-        return strError;
-    }
-
-    if (pwalletMain->IsUnlockedForStakingOnly())
-    {
-        string strError = _("Error: Wallet unlocked for staking only, unable to create transaction.");
-        LogPrintf("consolidateunspent: %s", strError);
-        return strError;
-    }
 
     vector<pair<CScript, int64_t> > vecSend;
 
@@ -1264,7 +1254,7 @@ UniValue splitunspent(const UniValue& params)
                                      FormatMoney(nOptimalPieceSize)));
     }
 
-    // Get the current UTXO's. Only fOnlyConfirmed departs from the defaults, and it gates on
+    // Get the current UTXOs. Only fOnlyConfirmed departs from the defaults, and it gates on
     // CWalletTx::IsTrusted() rather than on confirmation count alone: IsTrusted demands three
     // confirmations for anything not from this wallet, so passing false admits shallow incoming
     // payments as well as unconfirmed ones. This matches consolidateunspent. Immature
@@ -1334,7 +1324,8 @@ UniValue splitunspent(const UniValue& params)
         throw JSONRPCError(RPC_WALLET_UNLOCK_NEEDED, "Error: Wallet locked, unable to create transaction.");
     }
 
-    if (pwalletMain->IsUnlockedForStakingOnly())
+    // A capability scope open on this thread lets a staking-only wallet through.
+    if (!pwalletMain->CanUseKeys())
     {
         throw JSONRPCError(RPC_WALLET_UNLOCK_NEEDED,
                            "Error: Wallet unlocked for staking only, unable to create transaction.");
@@ -2272,7 +2263,7 @@ static const RPCHelpMan fundrawtransaction_help{
     "Note: The transaction must have no existing inputs. Unlike Bitcoin Core's fundrawtransaction,\n"
     "this command does not yet support adding funds to a transaction that already has inputs.\n"
     "\n"
-    "Requires wallet passphrase to be set with walletpassphrase first if wallet is encrypted.",
+    "If the wallet is encrypted, it must be unlocked with walletpassphrase first (not for staking only), or the request must carry the passphrase (the client's -stdinelevate option).",
     {
         {"hexstring", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "Hex string of the raw transaction."},
         {"options", RPCArg::Type::OBJ, RPCArg::Optional::OMITTED, "",
@@ -2705,7 +2696,7 @@ static const RPCHelpMan signrawtransactionwithwallet_help{
     "signrawtransactionwithwallet",
     "Sign inputs for a raw (serialized, hex-encoded) transaction using wallet keys.\n"
     "\n"
-    "Requires wallet passphrase to be set with walletpassphrase first if wallet is encrypted.",
+    "If the wallet is encrypted, it must be unlocked with walletpassphrase first (not for staking only), or the request must carry the passphrase (the client's -stdinelevate option).",
     {
         {"hexstring", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "The transaction hex string."},
         {"prevtxs", RPCArg::Type::ARR, RPCArg::Optional::OMITTED,
@@ -2754,7 +2745,7 @@ static const RPCHelpMan signrawtransaction_help{
     "If the optional private-keys array is provided, those are the only keys used to sign;\n"
     "otherwise the wallet's keys are used.\n"
     "\n"
-    "Requires wallet passphrase to be set with walletpassphrase first if wallet is encrypted.",
+    "If the wallet is encrypted, it must be unlocked with walletpassphrase first (not for staking only), or the request must carry the passphrase (the client's -stdinelevate option).",
     {
         {"hexstring", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "The transaction hex string."},
         {"prevtxs", RPCArg::Type::ARR, RPCArg::Optional::OMITTED,

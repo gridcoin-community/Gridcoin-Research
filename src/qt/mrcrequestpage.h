@@ -8,8 +8,11 @@
 #include <QAbstractButton>
 #include <QDialog>
 
+#include <memory>
+
 #include "bitcoinamountfield.h"
 #include "mrcmodel.h"
+#include "walletmodel.h"
 
 class WalletModel;
 
@@ -33,8 +36,6 @@ private:
     MRCModel *m_mrc_model;
     WalletModel *m_wallet_model;
 
-    void updateMRCModel();
-
     //!
     //! \brief showMRCStatus shows or hides the MRC status and submission widgets.
     //! \param status
@@ -50,6 +51,8 @@ private slots:
     void setMRCFeeBoost();
     void setMRCFeeBoostToSubmitMinimum();
     void submitMRC();
+    void submitFinished(bool success);
+    void updateFromCore();
 };
 
 #endif // GRIDCOIN_QT_MRCREQUESTPAGE_H

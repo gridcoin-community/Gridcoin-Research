@@ -115,7 +115,7 @@ void SignVerifyMessageDialog::on_signMessageButton_SM_clicked()
         return;
     }
 
-    WalletModel::UnlockContext ctx(model->requestUnlock());
+    WalletModel::UnlockContext ctx(model->requestUnlock(CapabilityKind::SignMessage));
     if (!ctx.isValid())
     {
         ui->statusLabel_SM->setStyleSheet("QLabel { color: red; }");
@@ -123,9 +123,9 @@ void SignVerifyMessageDialog::on_signMessageButton_SM_clicked()
         return;
     }
 
-    // The wallet is unlocked (UnlockContext above); signing -- including the
-    // private-key access -- happens node-side, the key never crosses the
-    // boundary. The signature comes back base64-encoded.
+    // Signed under the capability the UnlockContext above holds; signing --
+    // including the private-key access -- happens node-side, the key never
+    // crosses the boundary. The signature comes back base64-encoded.
     std::string signature;
     const interfaces::MessageSignStatus status = model->wallet().signMessage(
         ui->addressInEdit_SM->text().toStdString(),
@@ -140,6 +140,11 @@ void SignVerifyMessageDialog::on_signMessageButton_SM_clicked()
     case interfaces::MessageSignStatus::SigningFailed:
         ui->statusLabel_SM->setStyleSheet("QLabel { color: red; }");
         ui->statusLabel_SM->setText(QString("<nobr>") + tr("Message signing failed.") + QString("</nobr>"));
+        return;
+    case interfaces::MessageSignStatus::Refused:
+        ui->statusLabel_SM->setStyleSheet("QLabel { color: red; }");
+        ui->statusLabel_SM->setText(tr("The wallet did not allow the signature: it is locked or unlocked for "
+                                       "staking only. Sign again and enter the wallet passphrase."));
         return;
     case interfaces::MessageSignStatus::OK:
         break;

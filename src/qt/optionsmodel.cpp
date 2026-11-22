@@ -1,15 +1,18 @@
 #include "optionsmodel.h"
 
 #include <QDebug>
+#include <QMetaObject>
 #include <QSettings>
 
 #include "bitcoinunits.h"
 #include "guiutil.h"
 #include "interfaces/node.h"
+#include "qt/guilog.h"
 #include "util/strencodings.h" // For SplitHostPort (IPv6-aware host:port parsing).
 
 #include "amount.h" // For MIN_STAKE_SPLIT_VALUE_GRC.
 
+#include <algorithm>
 #include <optional>
 #include <utility>
 
@@ -29,20 +32,18 @@ std::string FormatReserveBalanceSetting(qint64 sat)
     return s.toStdString();
 }
 
-//! Push the effective proxy to the core -proxy setting: the GUI keeps its three
+//! The effective proxy for the core -proxy setting: the GUI keeps its three
 //! proxy fields (enable + address) as local editing state in QSettings, and the
 //! effective value (the address when enabled, empty when disabled) is mirrored to
 //! gridcoinsettings.json through the node. Empty erases -proxy, so a -proxy on the
 //! command line or in the config file still applies; netbase cannot clear a live
 //! proxy, so disabling is effective on restart (unchanged from the previous
 //! behavior).
-bool PushEffectiveProxy(interfaces::Node& node, QSettings& settings)
+std::string EffectiveProxy(QSettings& settings)
 {
     const bool use_proxy = settings.value(GUIUtil::nodeSettingsKey("fUseProxy"), false).toBool();
-    const std::string addr =
-        use_proxy ? settings.value(GUIUtil::nodeSettingsKey("addrProxy"), "127.0.0.1:9050").toString().toStdString()
-                  : std::string();
-    return node.changeSettings({{"proxy", addr}}).ok;
+    return use_proxy ? settings.value(GUIUtil::nodeSettingsKey("addrProxy"), "127.0.0.1:9050").toString().toStdString()
+                     : std::string();
 }
 
 //! Put a proxy field back as it was before a push that failed: its previous
@@ -175,17 +176,31 @@ void OptionsModel::readNodeSettings()
 
 void OptionsModel::migrateCoreSettings()
 {
-    // proxy / UPnP / reservebalance / update-check are now core read-write
-    // settings (gridcoinsettings.json), reached through interfaces::Node. On the
-    // first run after upgrade, move any values the user had in Gridcoin-Qt.conf
-    // into the core so they are not silently dropped, then stop touching them
-    // from QSettings. This runs from the composition root AFTER the config file
-    // and the read-write settings file are loaded and the network is selected --
+    // reservebalance / update-check are now core read-write settings
+    // (gridcoinsettings.json), reached through interfaces::Node. On the first
+    // run after upgrade, move any values the user had in Gridcoin-Qt.conf into
+    // the core so they are not silently dropped, then stop touching them from
+    // QSettings. This runs from the composition root AFTER the config file and
+    // the read-write settings file are loaded and the network is selected --
     // OptionsModel itself is constructed earlier (before those), so it must not
-    // write settings from its constructor.
+    // write settings from its constructor. Proxy and UPnP move separately, in
+    // migrateElevatedCoreSettings(), because changing them needs the wallet
+    // passphrase.
     QSettings settings;
     if (settings.value("coreSettingsMigrated", false).toBool()) {
+        // An earlier build moved every setting in one batch, proxy and UPnP
+        // included, and set only this flag.
+        if (!settings.contains("coreElevatedSettingsMigrated")) {
+            settings.setValue("coreElevatedSettingsMigrated", true);
+        }
         return;
+    }
+
+    // Record that proxy and UPnP are still to move. A start that ends before
+    // they do leaves this flag false rather than absent, so the next start does
+    // not take it for an earlier build's complete move above.
+    if (!settings.contains("coreElevatedSettingsMigrated")) {
+        settings.setValue("coreElevatedSettingsMigrated", false);
     }
 
     // Only migrate a setting the user has NOT already set in gridcoinresearch.conf
@@ -193,13 +208,6 @@ void OptionsModel::migrateCoreSettings()
     // always won over the remembered GUI value; skipping already-set settings
     // preserves that precedence instead of force-overriding the config file.
     std::vector<std::pair<std::string, std::string>> migrate;
-    if (!m_node.isSettingSet("proxy")
-            && settings.value("fUseProxy", false).toBool() && settings.contains("addrProxy")) {
-        migrate.emplace_back("proxy", settings.value("addrProxy").toString().toStdString());
-    }
-    if (!m_node.isSettingSet("upnp") && settings.contains("fUseUPnP")) {
-        migrate.emplace_back("upnp", settings.value("fUseUPnP").toBool() ? "1" : "0");
-    }
     if (!m_node.isSettingSet("reservebalance")
             && settings.contains("nReserveBalance") && settings.value("nReserveBalance").toLongLong() > 0) {
         migrate.emplace_back("reservebalance",
@@ -214,6 +222,221 @@ void OptionsModel::migrateCoreSettings()
     if (migrate.empty() || m_node.changeSettings(migrate).ok) {
         settings.setValue("coreSettingsMigrated", true);
     }
+}
+
+void OptionsModel::migrateElevatedCoreSettings(const WithElevation& with_elevation)
+{
+    QSettings settings;
+    if (settings.value("coreElevatedSettingsMigrated", false).toBool()) {
+        return;
+    }
+
+    // The values the monolith applied for this run (legacyNetworkSettingsForThisRun)
+    // were chosen by the rules below before the core started; the node reports
+    // them as set now, so they are taken as they are.
+    std::vector<std::pair<std::string, std::string>> migrate = m_legacy_network_settings;
+    const auto taken = [&](const std::string& name) {
+        return std::any_of(migrate.begin(), migrate.end(), [&](const auto& setting) { return setting.first == name; });
+    };
+
+    // As in migrateCoreSettings(), a setting already set in the config file or
+    // on the command line keeps that value. An old value the node already uses
+    // would change nothing, so it is not moved and does not ask for the
+    // passphrase; its old keys are removed.
+    if (!taken("proxy") && !m_node.isSettingSet("proxy")
+            && settings.value("fUseProxy", false).toBool() && settings.contains("addrProxy")) {
+        const std::string proxy = settings.value("addrProxy").toString().toStdString();
+        if (proxy == m_node.getSettingStr("proxy", "")) {
+            settings.remove("fUseProxy");
+            settings.remove("addrProxy");
+        } else {
+            migrate.emplace_back("proxy", proxy);
+        }
+    }
+    if (!taken("upnp") && !m_node.isSettingSet("upnp") && settings.contains("fUseUPnP")) {
+        const bool upnp = settings.value("fUseUPnP").toBool();
+        // What the Options dialog shows, which is the node's own default here.
+        if (upnp == data(index(MapPortUPnP), Qt::EditRole).toBool()) {
+            settings.remove("fUseUPnP");
+        } else {
+            migrate.emplace_back("upnp", upnp ? "1" : "0");
+        }
+    }
+
+    if (migrate.empty()) {
+        settings.setValue("coreElevatedSettingsMigrated", true);
+        return;
+    }
+
+    bool stored = false;
+    const bool elevated = with_elevation([&] { stored = m_node.changeSettings(migrate).ok; });
+
+    if (!elevated && !m_legacy_network_settings.empty()) {
+        // The monolith applied them for this run. Discarding them would make
+        // every later start connect without the proxy, so they are kept, and
+        // the next start applies them again and asks again.
+        std::string kept;
+        for (const auto& [name, value] : migrate) {
+            if (!kept.empty()) kept += ", ";
+            kept += name + "=" + value;
+        }
+        GUILogPrintf("Kept the proxy and UPnP settings an earlier version set (%s) for this session only: "
+                     "the wallet passphrase was not given; it is asked for again at the next start", kept);
+        return;
+    }
+
+    if (!elevated) {
+        // Without the passphrase the core cannot take them, and keeping them
+        // here would show the proxy as set in the Options dialog while the node
+        // uses none. Discarded once, and logged so the values can be set again.
+        std::string discarded;
+        for (const auto& [name, value] : migrate) {
+            if (!discarded.empty()) discarded += ", ";
+            discarded += name + "=" + value;
+        }
+        GUILogPrintf("Discarded the proxy and UPnP settings kept by an earlier version (%s): "
+                     "the wallet passphrase was not given", discarded);
+
+        settings.remove("fUseProxy");
+        settings.remove("addrProxy");
+        settings.remove("fUseUPnP");
+        settings.setValue("coreElevatedSettingsMigrated", true);
+        return;
+    }
+
+    // Only mark the migration done once the node has stored the values. A write
+    // that failed leaves the flag false, and the next start tries again.
+    if (stored) {
+        settings.setValue("coreElevatedSettingsMigrated", true);
+    }
+}
+
+std::vector<std::pair<std::string, std::string>> OptionsModel::legacyNetworkSettingsForThisRun()
+{
+    m_legacy_network_settings.clear();
+    QSettings settings;
+    if (settings.value("coreElevatedSettingsMigrated", false).toBool()) return {};
+
+    // The values migrateElevatedCoreSettings() would move: an old value the node
+    // already uses changes nothing, there as here.
+    if (!m_node.isSettingSet("proxy")
+            && settings.value("fUseProxy", false).toBool() && settings.contains("addrProxy")) {
+        const std::string proxy = settings.value("addrProxy").toString().toStdString();
+        if (proxy != m_node.getSettingStr("proxy", "")) m_legacy_network_settings.emplace_back("proxy", proxy);
+    }
+    if (!m_node.isSettingSet("upnp") && settings.contains("fUseUPnP")) {
+        const bool upnp = settings.value("fUseUPnP").toBool();
+        if (upnp != data(index(MapPortUPnP), Qt::EditRole).toBool()) {
+            m_legacy_network_settings.emplace_back("upnp", upnp ? "1" : "0");
+        }
+    }
+    return m_legacy_network_settings;
+}
+
+bool OptionsModel::needsSettingsElevation(const QMap<OptionID, QVariant>& submitted) const
+{
+    // A field changes when setData() would write it: see the guard in each case
+    // below.
+    const auto changed = [&](OptionID id) {
+        const auto it = submitted.constFind(id);
+        return it != submitted.constEnd()
+            && !SubmittedValueUnchanged(it.value(), data(index(id), Qt::EditRole));
+    };
+
+    if (changed(MapPortUPnP) || changed(EnableSideStaking)) {
+        return true;
+    }
+
+    // The proxy fields are GUI state in QSettings, compared and rebuilt as
+    // setData() does. Turning the proxy on or off changes the node's proxy. The
+    // address counts only while the proxy is on: with it off, setData() sends
+    // the same empty proxy whatever the address. That erase needs the
+    // passphrase only when the node has a proxy of its own, which the dialog
+    // does not show, and changeCoreSettings() then asks after the refusal.
+    QSettings settings;
+    const bool use_proxy = settings.value(GUIUtil::nodeSettingsKey("fUseProxy"), false).toBool();
+    const auto submitted_use = submitted.constFind(ProxyUse);
+    const bool new_use_proxy = submitted_use != submitted.constEnd() ? submitted_use.value().toBool() : use_proxy;
+
+    if (new_use_proxy != use_proxy) {
+        return true;
+    }
+
+    if (!new_use_proxy) {
+        return false;
+    }
+
+    const QString stored = settings.value(GUIUtil::nodeSettingsKey("addrProxy"), "127.0.0.1:9050").toString();
+    auto [host, port] = SplitProxy(stored);
+
+    if (const auto it = submitted.constFind(ProxyIP); it != submitted.constEnd()) {
+        host = it.value().toString();
+    }
+    if (const auto it = submitted.constFind(ProxyPort); it != submitted.constEnd()) {
+        port = it.value().toInt();
+    }
+
+    return FormatProxy(host, port) != stored;
+}
+
+void OptionsModel::setSettingsElevationRequest(SettingsElevationRequest request)
+{
+    m_settings_elevation_request = std::move(request);
+
+    // A capability still held was begun through the request being replaced.
+    m_settings_elevation.reset();
+}
+
+bool OptionsModel::elevateSettingsAfterRefusal()
+{
+    return askForSettingsElevation();
+}
+
+bool OptionsModel::elevateSettingsBeforeChange()
+{
+    // The answer given earlier in this pass stands: a second submit within it
+    // neither asks again nor goes ahead after a cancel.
+    if (m_settings_elevation_asked) {
+        return m_settings_elevation != nullptr;
+    }
+
+    return askForSettingsElevation();
+}
+
+bool OptionsModel::askForSettingsElevation()
+{
+    if (!m_settings_elevation_request || m_settings_elevation_asked) {
+        return false;
+    }
+
+    // The Options dialog submits every field in one pass, and the proxy fields
+    // each write the proxy setting. Asking once for the pass, and holding what
+    // the user gave until control returns to the event loop, lets the rest of
+    // the submit through on that one answer, or refuses it on that one refusal.
+    // An ask made before the submit is that one ask as well, so a refusal
+    // during the submit does not ask again.
+    m_settings_elevation_asked = true;
+    m_settings_elevation = m_settings_elevation_request();
+
+    QMetaObject::invokeMethod(this, [this] {
+        m_settings_elevation.reset();
+        m_settings_elevation_asked = false;
+    }, Qt::QueuedConnection);
+
+    return m_settings_elevation != nullptr;
+}
+
+bool OptionsModel::changeCoreSettings(const std::vector<std::pair<std::string, std::string>>& settings)
+{
+    const interfaces::SettingChangeResult result = m_node.changeSettings(settings);
+
+    if (result.ok || !result.elevation_required || !elevateSettingsAfterRefusal()) {
+        return result.ok;
+    }
+
+    // Refused for want of the wallet passphrase, which the user has now given:
+    // send the same change once more, under the capability it began.
+    return m_node.changeSettings(settings).ok;
 }
 
 int OptionsModel::rowCount(const QModelIndex & parent) const
@@ -365,7 +588,7 @@ bool OptionsModel::setData(const QModelIndex & index, const QVariant & value, in
             if (SubmittedValueUnchanged(value, data(index, Qt::EditRole))) break;
             // Core setting: the node applies it (SetUseUPnP + MapPort start/stop
             // the port-map thread) via the immediate-effect hook.
-            successful = m_node.changeSettings({{"upnp", value.toBool() ? "1" : "0"}}).ok;
+            successful = changeCoreSettings({{"upnp", value.toBool() ? "1" : "0"}});
             break;
         case MinimizeOnClose:
             fMinimizeOnClose = value.toBool();
@@ -391,7 +614,7 @@ bool OptionsModel::setData(const QModelIndex & index, const QVariant & value, in
             const std::optional<QVariant> previous =
                 settings.contains(key) ? std::optional<QVariant>(settings.value(key)) : std::nullopt;
             settings.setValue(key, value.toBool());
-            successful = PushEffectiveProxy(m_node, settings);
+            successful = changeCoreSettings({{"proxy", EffectiveProxy(settings)}});
             if (!successful) RestoreProxyField(settings, key, previous);
         }
         break;
@@ -405,7 +628,7 @@ bool OptionsModel::setData(const QModelIndex & index, const QVariant & value, in
             const std::optional<QVariant> previous =
                 settings.contains(key) ? std::optional<QVariant>(settings.value(key)) : std::nullopt;
             settings.setValue(key, updated);
-            successful = PushEffectiveProxy(m_node, settings);
+            successful = changeCoreSettings({{"proxy", EffectiveProxy(settings)}});
             if (!successful) RestoreProxyField(settings, key, previous);
         }
         break;
@@ -418,7 +641,7 @@ bool OptionsModel::setData(const QModelIndex & index, const QVariant & value, in
             const std::optional<QVariant> previous =
                 settings.contains(key) ? std::optional<QVariant>(settings.value(key)) : std::nullopt;
             settings.setValue(key, updated);
-            successful = PushEffectiveProxy(m_node, settings);
+            successful = changeCoreSettings({{"proxy", EffectiveProxy(settings)}});
             if (!successful) RestoreProxyField(settings, key, previous);
         }
         break;
@@ -438,8 +661,7 @@ bool OptionsModel::setData(const QModelIndex & index, const QVariant & value, in
             // Store as a plain money string, zero included. An empty value would
             // erase the setting instead, and a -reservebalance in the config file
             // would then apply again rather than the zero chosen here.
-            successful = m_node.changeSettings(
-                {{"reservebalance", FormatReserveBalanceSetting(sat)}}).ok;
+            successful = changeCoreSettings({{"reservebalance", FormatReserveBalanceSetting(sat)}});
             if (successful) {
                 emit reserveBalanceChanged(sat);
             }
@@ -509,7 +731,7 @@ bool OptionsModel::setData(const QModelIndex & index, const QVariant & value, in
             // Core read-write setting (the core scheduler and the GUI both read
             // it); route through the node so it persists to gridcoinsettings.json.
             if (SubmittedValueUnchanged(value, data(index, Qt::EditRole))) break;
-            successful = m_node.changeSettings({{"disableupdatecheck", value.toBool() ? "1" : "0"}}).ok;
+            successful = changeCoreSettings({{"disableupdatecheck", value.toBool() ? "1" : "0"}});
             break;
         case DataDir:
             // There is no SetArgument here, because the core data directory cannot
@@ -524,27 +746,27 @@ bool OptionsModel::setData(const QModelIndex & index, const QVariant & value, in
         // changed; see MapPortUPnP.
         case EnableStaking:
             if (SubmittedValueUnchanged(value, data(index, Qt::EditRole))) break;
-            successful = m_node.changeSettings({{"staking", value.toBool() ? "1" : "0"}}).ok;
+            successful = changeCoreSettings({{"staking", value.toBool() ? "1" : "0"}});
             break;
         case EnableStakeSplit:
             if (SubmittedValueUnchanged(value, data(index, Qt::EditRole))) break;
-            successful = m_node.changeSettings({{"enablestakesplit", value.toBool() ? "1" : "0"}}).ok;
+            successful = changeCoreSettings({{"enablestakesplit", value.toBool() ? "1" : "0"}});
             break;
         case EnableSideStaking:
             if (SubmittedValueUnchanged(value, data(index, Qt::EditRole))) break;
-            successful = m_node.changeSettings({{"enablesidestaking", value.toBool() ? "1" : "0"}}).ok;
+            successful = changeCoreSettings({{"enablesidestaking", value.toBool() ? "1" : "0"}});
             break;
         case StakingEfficiency:
             if (SubmittedValueUnchanged(value, data(index, Qt::EditRole))) break;
-            successful = m_node.changeSettings({{"stakingefficiency", value.toString().toStdString()}}).ok;
+            successful = changeCoreSettings({{"stakingefficiency", value.toString().toStdString()}});
             break;
         case MinStakeSplitValue:
             if (SubmittedValueUnchanged(value, data(index, Qt::EditRole))) break;
-            successful = m_node.changeSettings({{"minstakesplitvalue", value.toString().toStdString()}}).ok;
+            successful = changeCoreSettings({{"minstakesplitvalue", value.toString().toStdString()}});
             break;
         case ContractChangeToInput:
             if (SubmittedValueUnchanged(value, data(index, Qt::EditRole))) break;
-            successful = m_node.changeSettings({{"contractchangetoinputaddress", value.toBool() ? "1" : "0"}}).ok;
+            successful = changeCoreSettings({{"contractchangetoinputaddress", value.toBool() ? "1" : "0"}});
             break;
         default:
             break;
