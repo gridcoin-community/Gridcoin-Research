@@ -217,10 +217,12 @@ struct Setup {
     }
 
     //! As JudgeBlockPayingMRC(), for a block that pays each of \p mrcs, which name different CPIDs.
+    //! With \p with_superblock the block's claim carries a superblock as well.
     std::string JudgeBlockPayingMRCs(
         const std::vector<GRC::MRC>& mrcs,
         const int block_version,
-        const std::vector<CTxOut>& mrc_outputs) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+        const std::vector<CTxOut>& mrc_outputs,
+        const bool with_superblock = false) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     {
         const CAmount stake = 100 * COIN;
 
@@ -238,6 +240,15 @@ struct Setup {
 
             mrc_txs.emplace_back(mrc_tx);
             claim.m_mrc_tx_map[*mrc.m_mining_id.TryCpid()] = mrc_txs.back().GetHash();
+        }
+
+        if (with_superblock) {
+            GRC::Superblock superblock;
+            superblock.m_cpids.Add(cpid, GRC::Magnitude::RoundFrom(1));
+            superblock.m_projects.Add("project", GRC::Superblock::ProjectStats(1, 1, 1));
+            BOOST_REQUIRE(superblock.WellFormed());
+
+            claim.m_superblock.Replace(std::move(superblock));
         }
 
         CMutableTransaction coinbase;
@@ -498,7 +509,7 @@ BOOST_AUTO_TEST_CASE(it_creates_valid_mrc_claims)
 
     LOCK2(cs_main, wallet->cs_wallet);
 
-    BOOST_CHECK(CreateRestOfTheBlock(block, mtxCoinbase, mtxCoinstake, pindex->pprev, mrc_map));
+    BOOST_CHECK(CreateRestOfTheBlock(block, mtxCoinbase, mtxCoinstake, pindex->pprev, mrc_map, false));
 
     GRC::MRC mrc;
     CAmount reward{0}, fee{0};
@@ -946,6 +957,25 @@ BOOST_AUTO_TEST_CASE(a_block_that_pays_two_mrcs_at_one_address_is_refused_from_v
     // The MRCs are judged in the order of the block's transactions, so the second is the one refused.
     BOOST_CHECK_EQUAL(error, strprintf("MRC for CPID %s is paid at an address another MRC of the block is paid at",
                                        other_cpid.ToString()));
+}
+
+// From block version 15 a block that carries a superblock pays no MRC, the rule the miner builds by.
+BOOST_AUTO_TEST_CASE(a_block_that_carries_a_superblock_and_pays_an_mrc_is_refused_from_v15)
+{
+    LOCK(cs_main);
+
+    account.m_accrual = 72;
+
+    const GRC::MRC mrc = SignedMRC(72, 28);
+    BOOST_REQUIRE(ValidateMRC(pindex, mrc));
+
+    const std::vector<CTxOut> outputs = {FoundationOutput(22), BeaconOutput(44)};
+
+    BOOST_CHECK_EQUAL(JudgeBlockPayingMRCs({mrc}, 15, outputs, /* with_superblock */ true),
+                      "A block that carries a superblock lists MRCs in its claim: 1");
+
+    // A block version 15 block that carries no superblock pays the same MRC.
+    BOOST_CHECK_EQUAL(JudgeBlockPayingMRCs({mrc}, 15, outputs), "");
 }
 
 BOOST_AUTO_TEST_SUITE_END()

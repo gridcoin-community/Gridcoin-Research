@@ -58,9 +58,9 @@ namespace GRC { class Superblock; }
 //! \brief Stage an explicit superblock for the next block the miner assembles.
 //!
 //! Regtest only. Scrapers are disabled under -regtest, so Quorum::CreateSuperblock()
-//! has nothing to build from and AddSuperblockContractOrVote suppresses auto-attach.
+//! has nothing to build from and SuperblockForNewBlock suppresses auto-attach.
 //! The generatesuperblock RPC stages a caller-specified superblock here; the next
-//! call to AddSuperblockContractOrVote consumes it exactly once. If the block
+//! block built carries it, and AttachSuperblock consumes it exactly once. If the block
 //! attempt that consumed it fails to sign or be accepted, TryMineRegtestBlock
 //! restores the staged value so the retry attempt carries it. Staging again
 //! before consumption replaces the pending value (last writer wins).
@@ -112,9 +112,12 @@ bool CreateMRCRewards(CMutableTransaction& mtxCoinbase, CMutableTransaction& mtx
                       uint32_t& claim_contract_version,
                       GRC::Claim& claim,
                       CWallet* pwallet) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+//! \param carries_superblock Whether the block being built carries a superblock (SuperblockForNewBlock). A block
+//! that carries one pays no MRC (GRC::BlockMayPayMRCs), so none is bound.
 bool CreateRestOfTheBlock(CBlock &block, CMutableTransaction& mtxCoinbase,
                           const CMutableTransaction& mtxCoinstake, CBlockIndex* pindexPrev,
-                          std::map<GRC::Cpid, std::pair<uint256, GRC::MRC>>& mrc_map);
+                          std::map<GRC::Cpid, std::pair<uint256, GRC::MRC>>& mrc_map,
+                          bool carries_superblock);
 bool CreateGridcoinReward(CMutableTransaction& mtxCoinbase, CMutableTransaction& mtxCoinstake,
                           CBlock &blocknew, CBlockIndex* pindexPrev, int64_t &nReward,
                           GRC::Claim& claim) EXCLUSIVE_LOCKS_REQUIRED(cs_main);

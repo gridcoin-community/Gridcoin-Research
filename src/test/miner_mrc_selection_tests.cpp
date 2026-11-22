@@ -195,8 +195,8 @@ struct Assembled
     }
 };
 
-//! Run block assembly over the pool.
-Assembled Assemble()
+//! Run block assembly over the pool, for a block that carries a superblock or one that does not.
+Assembled Assemble(const bool carries_superblock = false)
 {
     CBlock block;
     CMutableTransaction coinbase;
@@ -208,7 +208,8 @@ Assembled Assemble()
     {
         LOCK(cs_main);
         BOOST_REQUIRE(pindexBest != nullptr);
-        BOOST_REQUIRE(CreateRestOfTheBlock(block, coinbase, coinstake, pindexBest, assembled.m_mrc_map));
+        BOOST_REQUIRE(CreateRestOfTheBlock(block, coinbase, coinstake, pindexBest, assembled.m_mrc_map,
+                                           carries_superblock));
     }
 
     BOOST_REQUIRE(block.vtx.size() >= 2);
@@ -289,6 +290,32 @@ BOOST_AUTO_TEST_CASE(a_second_mrc_paid_at_an_address_already_bound_is_not_bound)
     BOOST_CHECK(assembled.Binds(cpid, tx));
     BOOST_CHECK(assembled.Holds(tx));
     BOOST_CHECK(!assembled.Holds(other_tx));
+}
+
+
+// A block that carries a superblock pays no MRC, so the miner binds none to it and leaves them in the pool for the
+// block after.
+BOOST_AUTO_TEST_CASE(no_mrc_is_bound_to_a_block_that_carries_a_superblock)
+{
+    Researchers researchers;
+
+    CKey key;
+    key.MakeNewKey(false);
+
+    const GRC::Cpid cpid = researchers.Add(key);
+    const CTransaction tx = researchers.SendMRC(cpid, key, 0, COIN);
+
+    const Assembled with_superblock = Assemble(/* carries_superblock */ true);
+
+    BOOST_CHECK(with_superblock.m_mrc_map.empty());
+    BOOST_CHECK(!with_superblock.Holds(tx));
+    BOOST_CHECK(mempool.exists(tx.GetHash()));
+
+    // The same pool, for a block that carries none.
+    const Assembled without_superblock = Assemble();
+
+    BOOST_CHECK(without_superblock.Binds(cpid, tx));
+    BOOST_CHECK(without_superblock.Holds(tx));
 }
 
 BOOST_AUTO_TEST_SUITE_END()

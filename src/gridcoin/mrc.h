@@ -405,6 +405,19 @@ bool MRCEligibleForClaim(const CpidOption& claim_cpid, const MRC& mrc);
 bool MRCPaidAtNewAddress(std::set<CTxDestination>& paid_addresses, const CTxDestination& address);
 
 //!
+//! \brief Determine whether a block may pay MRCs.
+//!
+//! A block that carries a superblock pays no MRC. The rule lives here alone: the miner, which decides whether its
+//! block carries a superblock before it chooses the block's transactions, binds no MRC to one that does, and from
+//! block version 15 block validation (BlockRewardRules::CheckMRCRewards) refuses a block that breaks it.
+//!
+//! \param carries_superblock Whether the block carries a superblock.
+//!
+//! \return \c true if the block may pay MRCs.
+//!
+bool BlockMayPayMRCs(bool carries_superblock);
+
+//!
 //! \brief
 //!
 //! The nTime of the pindex (head of the chain) is used as the time for the accrual calculations.

@@ -308,6 +308,11 @@ bool GRC::MRCPaidAtNewAddress(std::set<CTxDestination>& paid_addresses, const CT
     return paid_addresses.insert(address).second;
 }
 
+bool GRC::BlockMayPayMRCs(const bool carries_superblock)
+{
+    return !carries_superblock;
+}
+
 namespace {
 //!
 //! \brief Sign the mrc.

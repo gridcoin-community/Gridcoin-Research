@@ -572,6 +572,13 @@ bool BlockRewardRules::CheckMRCRewards(
         return false;
     }
 
+    // From block version 15 a block that carries a superblock pays no MRC, the rule the miner builds by
+    // (BlockMayPayMRCs).
+    if (m_block_version >= 15 && mrc_claimed_outputs > 0 && !BlockMayPayMRCs(claim.ContainsSuperblock())) {
+        error_out = strprintf("A block that carries a superblock lists MRCs in its claim: %u", mrc_claimed_outputs);
+        return false;
+    }
+
     if (mrc_output_limit > 0) {
         Fraction foundation_fee_fraction = FoundationSideStakeAllocation();
 

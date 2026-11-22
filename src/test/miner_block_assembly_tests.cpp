@@ -195,7 +195,7 @@ std::vector<CTransaction> AssembleBlock(CAmount& fees_out)
     {
         LOCK(cs_main);
         BOOST_REQUIRE(pindexBest != nullptr);
-        BOOST_REQUIRE(CreateRestOfTheBlock(block, coinbase, coinstake, pindexBest, mrc_map));
+        BOOST_REQUIRE(CreateRestOfTheBlock(block, coinbase, coinstake, pindexBest, mrc_map, false));
     }
 
     // The epilogue parks the accumulated fees on the coinbase's only output.
@@ -820,7 +820,7 @@ BOOST_AUTO_TEST_CASE(a_transaction_final_only_at_adjusted_time_is_skipped)
     {
         LOCK(cs_main);
         BOOST_REQUIRE(pindexBest != nullptr);
-        BOOST_REQUIRE(CreateRestOfTheBlock(block, coinbase, coinstake, pindexBest, mrc_map));
+        BOOST_REQUIRE(CreateRestOfTheBlock(block, coinbase, coinstake, pindexBest, mrc_map, false));
     }
 
     BOOST_REQUIRE(block.vtx.size() >= 2);
