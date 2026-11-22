@@ -3624,6 +3624,59 @@ BOOST_AUTO_TEST_CASE(a_tally_whose_bound_left_the_main_chain_throws)
 }
 
 //!
+//! A tally whose pinned tip has left the main chain since its snapshot throws InvalidDuetoReorgFork: the pinned tip
+//! is checked again before the result is returned. The poll here has no vote, and the reorg replaces the pinned tip
+//! alone.
+//!
+void CheckThatATallyThrowsOnceItsPinnedTipLeftTheMainChain(const bool v15) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+{
+    const unsigned int bits = pindexGenesisBlock->nBits;
+    const int64_t t0 = GetAdjustedTime() - DAY;
+    const PollTx poll = MakePollTx("Title", t0);
+    const LinkedTip polled = LinkBlock(pindexGenesisBlock, t0, GRC::Claim(), {poll.tx}, bits);
+    const LinkedTip above = LinkBlock(polled.m_pindex, t0 + 60, GRC::Claim(), {}, bits);
+    const TxIndexScope poll_indexed(poll.tx, polled.m_tx_positions[0]);
+    std::optional<grc_test::V15HeightGuard> v15_guard;
+
+    if (v15) {
+        v15_guard.emplace(0);
+    }
+
+    GRC::GetPollRegistry().Add({poll.contract, poll.tx, polled.m_pindex});
+
+    const GRC::PollSnapshot snapshot = TakeSnapshot(poll.tx.GetHash(), above.m_pindex);
+    BOOST_REQUIRE(snapshot.m_pindex_tip == above.m_pindex);
+    BOOST_REQUIRE(snapshot.m_votes.empty());
+
+    // While the pinned tip is on the main chain the poll is tallied.
+    BOOST_CHECK(GRC::PollResult::BuildFor(snapshot));
+
+    // A reorg replaces the pinned tip.
+    LinkBlock(polled.m_pindex, t0 + 120, GRC::Claim(), {}, bits);
+    BOOST_REQUIRE(!above.m_pindex->IsInMainChain());
+
+    BOOST_CHECK_THROW(GRC::PollResult::BuildFor(snapshot), GRC::InvalidDuetoReorgFork);
+}
+
+BOOST_AUTO_TEST_CASE(a_tally_whose_pinned_tip_left_the_main_chain_throws)
+{
+    grc_test::StateGuard guard;
+    RegistryReset reset;
+    LOCK(cs_main);
+
+    CheckThatATallyThrowsOnceItsPinnedTipLeftTheMainChain(/* v15 */ false);
+}
+
+BOOST_AUTO_TEST_CASE(a_v15_tally_whose_pinned_tip_left_the_main_chain_throws)
+{
+    grc_test::StateGuard guard;
+    RegistryReset reset;
+    LOCK(cs_main);
+
+    CheckThatATallyThrowsOnceItsPinnedTipLeftTheMainChain(/* v15 */ true);
+}
+
+//!
 //! A legacy poll is computed once and read back from the store after a restart, with its votes in chain order: the
 //! reopened store serves it though the poll's transaction can no longer be found.
 //!

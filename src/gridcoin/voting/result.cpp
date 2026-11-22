@@ -2321,6 +2321,17 @@ PollResultOption PollResult::BuildFor(const PollSnapshot& snapshot)
 
     result.m_finished = snapshot.m_finished;
 
+    // The tally ran without cs_main, on the chain that ended at the pinned tip when the snapshot was taken. The
+    // pinned tip is checked again before the result is returned, and the callers retry on the throw as they do on
+    // the snapshot's own check.
+    {
+        LOCK(cs_main);
+
+        if (snapshot.m_pindex_tip && !snapshot.m_pindex_tip->IsInMainChain()) {
+            throw InvalidDuetoReorgFork();
+        }
+    }
+
     g_timer.GetTimes(std::string{"End "} + std::string{__func__}, "buildPollTable");
 
     return result;
