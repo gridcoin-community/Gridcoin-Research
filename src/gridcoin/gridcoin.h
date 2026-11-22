@@ -60,12 +60,12 @@ void NotifyPoll();
 enum class BeaconRebuildReason
 {
     SUPERBLOCK_DISCONNECT, //!< A superblock disconnect in a runtime reorg calls for the rebuild.
-    V15_ACTIVATION,        //!< The first block version 15 block connected.
+    V15_ACTIVATION,        //!< The last block below block version 15 connected.
 };
 
 //!
-//! \brief Rebuild the beacon registry in-line during a runtime multi-SB reorg, or as the first block version 15
-//! block connects.
+//! \brief Rebuild the beacon registry in-line during a runtime multi-SB reorg, or as the last block below block
+//! version 15 connects.
 //!
 //! Called by DisconnectBlocksBatch when a runtime reorg crosses two or more
 //! superblock boundaries, or from block version 15 one superblock for which
@@ -95,9 +95,9 @@ enum class BeaconRebuildReason
 //! completes in a few seconds; the wallet is briefly unresponsive but
 //! consistent. Issue #2865 / PR #2941.
 //!
-//! ReorganizeChain also calls it as the first block version 15 block connects, so the beacon registry is rebuilt
-//! from the chain's beacon contracts as that block connects. That rebuild shows no message: it is expected on
-//! every node at that block.
+//! ReorganizeChain also calls it as the last block below block version 15 connects, so that the first block
+//! version 15 block is validated on the rebuilt registry. That rebuild shows no message: it is expected on every
+//! node at that block.
 //!
 //! \param reason Why the registry is rebuilt; it chooses the log line and whether the message is shown.
 //!

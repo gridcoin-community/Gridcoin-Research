@@ -2,12 +2,14 @@
 # Copyright (c) 2014-2026 The Gridcoin developers
 # Distributed under the MIT software license, see the accompanying
 # file COPYING or https://opensource.org/licenses/mit-license.php.
-"""The beacon registry is rebuilt as the first block version 15 block connects.
+"""The beacon registry is rebuilt as the last block below block version 15 connects.
 
-Connecting that block replays the beacon contracts from block version 11. The
-rebuild runs once for that block: not for the blocks around it, again only
-when that block is disconnected and a block at its height connects, and on a
-node that syncs through the height. A restart keeps the rebuilt history.
+Connecting that block replays the beacon contracts from block version 11, so
+the first block version 15 block is validated on the rebuilt registry. The
+rebuild runs once for that block: not for the blocks around it, the first
+block version 15 block among them, again only when that block is disconnected
+and a block at its height connects, and on a node that syncs through the
+height. A restart keeps the rebuilt history.
 """
 
 import os
@@ -18,7 +20,7 @@ from test_framework.util import assert_equal
 CPID = "00010203040506070809101112131415"
 STAKE_TIMESTAMP_MASK = 15
 V15_HEIGHT = 20
-REBUILD = "beacon registry rebuild at the first block version 15 block"
+REBUILD = "beacon registry rebuild at the last block below block version 15"
 
 
 class BeaconV15RebuildTest(GridcoinTestFramework):
@@ -73,31 +75,40 @@ class BeaconV15RebuildTest(GridcoinTestFramework):
         assert_equal([beacon["public_key"] for beacon in node.beaconstatus(CPID)["active"]],
                      [advertised["public_key"]])
 
-        self.log.info("no rebuild below the version 15 height")
+        self.log.info("no rebuild before the last block below the version 15 height")
         with node.assert_debug_log([], unexpected_msgs=[REBUILD]):
-            self.mine(node, V15_HEIGHT - 1 - node.getblockcount())
-        assert_equal(node.getblockcount(), V15_HEIGHT - 1)
+            self.mine(node, V15_HEIGHT - 2 - node.getblockcount())
+        assert_equal(node.getblockcount(), V15_HEIGHT - 2)
         before = self.registry(node)
         status_before = node.beaconstatus(CPID)
 
-        self.log.info("the first version 15 block rebuilds the registry, which holds the same beacons")
+        self.log.info("the last block below the height rebuilds the registry, which holds the same beacons")
         with node.assert_debug_log([REBUILD]):
             self.mine(node)
-        assert_equal(node.getblockcount(), V15_HEIGHT)
+        assert_equal(node.getblockcount(), V15_HEIGHT - 1)
+        assert_equal(node.getblock(node.getbestblockhash())["version"], 14)
         assert_equal(self.registry(node), before)
         assert_equal(node.beaconstatus(CPID), status_before)
 
-        self.log.info("the blocks after it do not")
+        self.log.info("the first version 15 block and the blocks after it do not")
         with node.assert_debug_log([], unexpected_msgs=[REBUILD]):
-            self.mine(node, 3)
+            self.mine(node, 4)
+        assert_equal(node.getblock(node.getblockhash(V15_HEIGHT))["version"], 15)
 
-        self.log.info("a block connecting again at the version 15 height rebuilds again")
+        self.log.info("a first version 15 block that connects again does not either")
         assert_equal(node.reorganize(node.getblockhash(V15_HEIGHT - 1))["RollbackChain"], True)
         assert_equal(node.getblockcount(), V15_HEIGHT - 1)
+        with node.assert_debug_log([], unexpected_msgs=[REBUILD]):
+            self.mine(node)
+        assert_equal(self.registry(node), before)
+
+        self.log.info("a block connecting again at the last height below it rebuilds again")
+        assert_equal(node.reorganize(node.getblockhash(V15_HEIGHT - 2))["RollbackChain"], True)
+        assert_equal(node.getblockcount(), V15_HEIGHT - 2)
         with node.assert_debug_log([REBUILD]):
             self.mine(node)
         assert_equal(self.registry(node), before)
-        self.mine(node, 3)
+        self.mine(node, 4)
 
         self.log.info("a node that syncs through the version 15 height rebuilds, and holds what the first node holds")
         # node1 takes node0's clock, which runs at the chain's block times: a peer whose time is far off is refused.

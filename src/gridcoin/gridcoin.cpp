@@ -731,7 +731,8 @@ void GRC::RebuildBeaconRegistry(const BeaconRebuildReason reason) EXCLUSIVE_LOCK
     AssertLockHeld(cs_main);
 
     if (reason == BeaconRebuildReason::V15_ACTIVATION) {
-        LogPrintf("INFO: %s: starting in-line beacon registry rebuild at the first block version 15 block, height %d.",
+        LogPrintf("INFO: %s: starting in-line beacon registry rebuild at the last block below block version 15, "
+                  "height %d.",
                   __func__, pindexBest->nHeight);
     } else {
         LogPrintf("INFO: %s: starting in-line beacon registry rebuild after a runtime reorg that disconnected "
@@ -764,8 +765,8 @@ void GRC::RebuildBeaconRegistry(const BeaconRebuildReason reason) EXCLUSIVE_LOCK
     const int64_t start_ms = GetTimeMillis();
 
     // Only the beacon registry is rebuilt. Every other registry is already at the tip: a disconnect that called for
-    // the rebuild reverted them block by block and moved their db heights down to the new tip, and the first block
-    // version 15 block applied its contracts to them as it connected. So they are left as they are: the
+    // the rebuild reverted them block by block and moved their db heights down to the new tip, and the last block
+    // below block version 15 applied its contracts to them as it connected. So they are left as they are: the
     // startup routine (InitializeContracts) is not run, so no other registry is reloaded or replayed and no
     // -clear<type>history flag acts. Wipe the beacon registry (in memory and its LevelDB beacon db), open the empty
     // db, and replay the beacon contracts and the superblock activations from V11 to the tip.

@@ -1014,10 +1014,14 @@ EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 
         UpdateSyncTime(pindexBest);
 
-        // The beacon registry is rebuilt from the chain's beacon contracts as the first block version 15 block
-        // connects, here on its way into the chain and again if a block at that height connects after a
-        // disconnect.
-        if (pindexBest->pprev && IsV15Enabled(nBestHeight) && !IsV15Enabled(nBestHeight - 1)) {
+        // The beacon registry is rebuilt from the chain's beacon contracts as the last block below the height
+        // connects, here on its way into the chain and again if a block at that height connects after a disconnect,
+        // so the first block version 15 block is validated on the rebuilt registry. The first block version
+        // 15 block's beacon contracts are judged against records of the registry (BeaconRegistry::ValidateAt,
+        // BlockValidate), and wallets sign theirs at this tip, so the rebuild comes before that block, not
+        // with it. Not at the genesis block, which a chain whose height is 1 has as its last block below it: there
+        // is no history to rebuild.
+        if (pindexBest->pprev && IsV15Enabled(nBestHeight + 1) && !IsV15Enabled(nBestHeight)) {
             GRC::RebuildBeaconRegistry(GRC::BeaconRebuildReason::V15_ACTIVATION);
         }
 
