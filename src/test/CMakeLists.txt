@@ -28,6 +28,8 @@ add_executable(test_gridcoin
     miner_block_assembly_tests.cpp
     # Which MRCs in the pool the miner binds, on the fixture chain.
     miner_mrc_selection_tests.cpp
+    # The misbehaviour score of the pool's refusals that depend on a rule's height.
+    mempool_refusal_score_tests.cpp
     # SetBestChain's trust-regression revert leg, driven on the fixture chain.
     chainman_reorg_tests.cpp
     # Which block a side-branch block's staked input comes from, on the fixture chain.

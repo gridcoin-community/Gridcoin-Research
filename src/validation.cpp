@@ -2295,25 +2295,50 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, CValidationState& st
     // RELAYING these and stops ACCEPTING blocks containing them at the same
     // height. Judged at the height the transaction would be mined at, which is
     // the next one, for the same reason the script flags are.
+    //
+    // The three refusals here depend on this node's height, and carry no
+    // misbehaviour score.
     if (IsV15Enabled(nBestHeight + 1)) {
         for (const auto& contract : tx.GetContracts()) {
             if (contract.m_type == GRC::ContractType::CLAIM) {
-                return state.DoS(100, error("%s: claim contract in a non-coinbase transaction", __func__),
-                                 "claim-outside-coinbase");
+                return state.Invalid(error("%s: claim contract in a non-coinbase transaction", __func__),
+                                     "claim-outside-coinbase");
             }
 
             // PollRegistry::BlockValidate requires this from the same height.
             if (contract.m_type == GRC::ContractType::POLL && contract.m_version >= 2
                 && !contract.SharePayloadAs<GRC::PollPayload>()->m_claim.EntriesDistinct()) {
-                return state.DoS(25, error("%s: poll claim keys or outputs are not distinct", __func__),
-                                 "bad-poll-claim");
+                return state.Invalid(error("%s: poll claim keys or outputs are not distinct", __func__),
+                                     "bad-poll-claim");
             }
 
             // BeaconRegistry::BlockValidate requires this from the same height.
             if (contract.m_type == GRC::ContractType::BEACON
                 && !GRC::GetBeaconRegistry().RemoveCarriesCurrentKey(contract)) {
-                return state.DoS(25, error("%s: beacon removal without the current beacon's key", __func__),
-                                 "bad-beacon-remove");
+                return state.Invalid(error("%s: beacon removal without the current beacon's key", __func__),
+                                     "bad-beacon-remove");
+            }
+        }
+    }
+
+    // Refuse a second MRC for a CPID that already has one in the mempool. This
+    // is an O(log n) lookup against the m_mrc_by_cpid index (it replaced a full
+    // mempool scan + bloom filter). It comes before the contracts are
+    // validated. The refusal depends on what this node's pool holds, and
+    // carries no misbehaviour score. The transaction the pool already holds is
+    // not a second one; it is dealt with below as any transaction offered again.
+    for (const auto& contract : tx.GetContracts()) {
+        if (contract.m_type == GRC::ContractType::MRC) {
+            const GRC::CpidOption cpid = contract.SharePayloadAs<GRC::MRC>()->m_mining_id.TryCpid();
+
+            uint256 existing;
+            if (cpid && pool.HasMRCForCpid(*cpid, &existing) && existing != tx.GetHash()) {
+                return state.Invalid(error("%s: MRC contract in tx %s has the same CPID as an existing transaction "
+                                           "in the memory pool, %s.",
+                                           __func__,
+                                           tx.GetHash().ToString(),
+                                           existing.ToString()),
+                                     "mrc-duplicate-cpid");
             }
         }
     }
@@ -2334,27 +2359,12 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, CValidationState& st
     if (pool.exists(hash))
         return false;
 
-    // Reject a second MRC for a CPID that already has one in the mempool. This
-    // is an O(log n) lookup against the m_mrc_by_cpid index (it replaced a full
-    // mempool scan + bloom filter). MRC DoS protection: a duplicate earns a
-    // stiff penalty.
+    // A second MRC for a CPID that already has one in the mempool was refused
+    // above, before the contracts were validated.
     bool tx_contains_valid_mrc = false;
 
     for (const auto& contract : tx.GetContracts()) {
         if (contract.m_type == GRC::ContractType::MRC) {
-            GRC::MRC mrc = contract.CopyPayloadAs<GRC::MRC>();
-            GRC::Cpid cpid = *(mrc.m_mining_id.TryCpid());
-
-            uint256 existing;
-            if (pool.HasMRCForCpid(cpid, &existing)) {
-                return state.DoS(25, error("%s: MRC contract in tx %s has the same CPID as an existing transaction "
-                                           "in the memory pool, %s.",
-                                           __func__,
-                                           tx.GetHash().ToString(),
-                                           existing.ToString()),
-                                 "mrc-duplicate-cpid");
-            }
-
             tx_contains_valid_mrc = true;
         }
     }

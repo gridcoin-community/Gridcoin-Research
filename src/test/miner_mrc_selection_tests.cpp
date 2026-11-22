@@ -3,14 +3,16 @@
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
 //! Which MRCs in the memory pool the miner binds to the block it assembles
-//! (CreateRestOfTheBlock), on the fixture's regtest chain.
+//! (CreateRestOfTheBlock), and what the pool does with a second MRC for a CPID,
+//! on the fixture's regtest chain.
 //!
 //! gridcoin/mrc_tests.cpp checks the rules an MRC is selected by on a mock
-//! chain with an empty pool. The cases here put signed, funded MRC transactions
-//! in the pool and read what the miner did with them.
+//! chain with an empty pool. The cases here work with signed, funded MRC
+//! transactions.
 
 #include "amount.h"
 #include "chain.h"
+#include "consensus/validation.h"
 #include "gridcoin/account.h"
 #include "gridcoin/beacon.h"
 #include "gridcoin/contract/contract.h"
@@ -33,6 +35,7 @@
 #include <boost/test/unit_test.hpp>
 
 #include <map>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -133,6 +136,29 @@ public:
         const CAmount research_subsidy = ACCRUAL,
         const CAmount fee = FEE)
     {
+        const CTransaction tx = MakeMRC(cpid, key, coin, tx_fee, research_subsidy, fee);
+
+        LOCK(cs_main);
+
+        AddToMempool(tx, tx_fee);
+        BOOST_REQUIRE(mempool.exists(tx.GetHash()));
+
+        return tx;
+    }
+
+    //!
+    //! \brief As SendMRC(), but the transaction is only made. With \p valid false the MRC is signed with \p key
+    //! although that is not the key of the CPID's beacon.
+    //!
+    CTransaction MakeMRC(
+        const GRC::Cpid& cpid,
+        CKey& key,
+        const size_t coin,
+        const CAmount tx_fee,
+        const CAmount research_subsidy = ACCRUAL,
+        const CAmount fee = FEE,
+        const bool valid = true)
+    {
         LOCK(cs_main);
 
         GRC::MRC mrc;
@@ -144,24 +170,19 @@ public:
 
         BOOST_REQUIRE(mrc.Sign(key));
 
-        // The MRC is valid at the tip, so whether the miner binds it rests on the rule a case is about alone.
-        BOOST_REQUIRE(ValidateMRC(pindexBest, mrc));
+        // A valid MRC is valid at the tip, so what becomes of it rests on the rule a case is about alone.
+        BOOST_REQUIRE_EQUAL(ValidateMRC(pindexBest, mrc), valid);
 
         const std::vector<COutPoint> coins = SpendablePremineOutputs();
         BOOST_REQUIRE(coin < coins.size());
 
-        const CTransaction tx = CreateSpendWithContract(
+        return CreateSpendWithContract(
             PremineCoinbase(),
             coins[coin].n,
             tx_fee,
             GRC::MakeContract<GRC::MRC>(GRC::ContractAction::ADD, mrc),
             0,
             mrc.RequiredBurnAmount());
-
-        AddToMempool(tx, tx_fee);
-        BOOST_REQUIRE(mempool.exists(tx.GetHash()));
-
-        return tx;
     }
 
 private:
@@ -217,6 +238,30 @@ Assembled Assemble(const bool carries_superblock = false)
 
     return assembled;
 }
+//! What the memory pool made of a transaction offered to it, as one from a peer is.
+struct Offered
+{
+    bool m_accepted = false;
+    int m_score = -1;       //!< The misbehaviour score of the refusal, or -1 if the transaction was not found invalid.
+    std::string m_reason;
+
+    explicit Offered(const CTransaction& tx)
+    {
+        LOCK(cs_main);
+
+        CTransaction offered = tx;
+        CValidationState state;
+        m_accepted = AcceptToMemoryPool(mempool, offered, state, nullptr);
+
+        int score = 0;
+
+        if (state.IsInvalid(score)) {
+            m_score = score;
+        }
+
+        m_reason = state.GetRejectReason();
+    }
+};
 } // anonymous namespace
 
 BOOST_AUTO_TEST_SUITE(miner_mrc_selection_tests, *boost::unit_test::fixture<grc_test::RegtestChainSetup>())
@@ -316,6 +361,86 @@ BOOST_AUTO_TEST_CASE(no_mrc_is_bound_to_a_block_that_carries_a_superblock)
 
     BOOST_CHECK(without_superblock.Binds(cpid, tx));
     BOOST_CHECK(without_superblock.Holds(tx));
+}
+
+BOOST_AUTO_TEST_SUITE_END()
+
+// The pool holds one MRC for a CPID. A node that holds one refuses another. The refusal depends on what the node's
+// own pool holds, and carries no misbehaviour score.
+BOOST_AUTO_TEST_SUITE(mempool_mrc_tests, *boost::unit_test::fixture<grc_test::RegtestChainSetup>())
+
+BOOST_AUTO_TEST_CASE(a_second_mrc_for_a_cpid_in_the_pool_is_refused_without_a_score)
+{
+    Researchers researchers;
+
+    CKey key;
+    key.MakeNewKey(false);
+
+    const GRC::Cpid cpid = researchers.Add(key);
+
+    const CTransaction first = researchers.MakeMRC(cpid, key, 0, COIN);
+    const CTransaction second = researchers.MakeMRC(cpid, key, 1, COIN, ACCRUAL, FEE + 1);
+
+    const Offered first_offered(first);
+    BOOST_REQUIRE_MESSAGE(first_offered.m_accepted, "the first MRC was refused: " << first_offered.m_reason);
+
+    const Offered second_offered(second);
+
+    BOOST_CHECK(!second_offered.m_accepted);
+    BOOST_CHECK_EQUAL(second_offered.m_reason, "mrc-duplicate-cpid");
+    BOOST_CHECK_EQUAL(second_offered.m_score, 0);
+
+    // The MRC the pool holds, offered again, is not a second one: it is not taken again and not found invalid.
+    const Offered first_again(first);
+
+    BOOST_CHECK(!first_again.m_accepted);
+    BOOST_CHECK_EQUAL(first_again.m_score, -1);
+}
+
+// The second MRC is refused for being the second before its contract is judged.
+BOOST_AUTO_TEST_CASE(a_second_mrc_for_a_cpid_in_the_pool_is_refused_before_its_contract_is_judged)
+{
+    Researchers researchers;
+
+    CKey key;
+    key.MakeNewKey(false);
+
+    CKey other_key;
+    other_key.MakeNewKey(false);
+
+    const GRC::Cpid cpid = researchers.Add(key);
+
+    const CTransaction first = researchers.MakeMRC(cpid, key, 0, COIN);
+    const CTransaction second = researchers.MakeMRC(cpid, other_key, 1, COIN, ACCRUAL, FEE, /* valid */ false);
+
+    const Offered first_offered(first);
+    BOOST_REQUIRE_MESSAGE(first_offered.m_accepted, "the first MRC was refused: " << first_offered.m_reason);
+
+    const Offered second_offered(second);
+
+    BOOST_CHECK(!second_offered.m_accepted);
+    BOOST_CHECK_EQUAL(second_offered.m_reason, "mrc-duplicate-cpid");
+    BOOST_CHECK_EQUAL(second_offered.m_score, 0);
+}
+
+// With no MRC for the CPID in the pool, an MRC that is not validly signed is refused for that, with its score.
+BOOST_AUTO_TEST_CASE(an_mrc_with_a_bad_signature_is_refused_with_a_score)
+{
+    Researchers researchers;
+
+    CKey key;
+    key.MakeNewKey(false);
+
+    CKey other_key;
+    other_key.MakeNewKey(false);
+
+    const GRC::Cpid cpid = researchers.Add(key);
+
+    const Offered offered(researchers.MakeMRC(cpid, other_key, 0, COIN, ACCRUAL, FEE, /* valid */ false));
+
+    BOOST_CHECK(!offered.m_accepted);
+    BOOST_CHECK_EQUAL(offered.m_reason, "invalid-contract");
+    BOOST_CHECK_EQUAL(offered.m_score, 25);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
