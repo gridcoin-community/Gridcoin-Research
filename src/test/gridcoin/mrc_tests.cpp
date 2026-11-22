@@ -392,6 +392,44 @@ BOOST_AUTO_TEST_CASE(it_properly_records_blocks)
     account.m_last_block_ptr = account.m_first_block_ptr;
 }
 
+// The reward blocks are recorded and forgotten through the tally, as block connection and disconnection do.
+// Forgetting a reward puts the account's last reward block back to where recording had it before.
+BOOST_AUTO_TEST_CASE(forgetting_a_reward_looks_for_a_block_s_mrcs_before_its_stake)
+{
+    CBlockIndex* const later = pindex;
+    CBlockIndex* const both = pindex->pprev->pprev;
+
+    // The CPID is recorded on the stake of two blocks, and on an MRC of the first of them.
+    both->SetResearcherContext(cpid, 72, 0.0);
+    both->AddMRCResearcherContext(cpid, 72, 0.0);
+    later->SetResearcherContext(cpid, 72, 0.0);
+
+    #if defined(__clang__)
+    #pragma clang diagnostic push
+    #pragma clang diagnostic ignored "-Wthread-safety-analysis"
+    #endif
+    for (CBlockIndex* index = pindexGenesisBlock; index != later; index = index->pnext) {
+        GRC::Tally::RecordRewardBlock(index);
+    }
+    #if defined(__clang__)
+    #pragma clang diagnostic pop
+    #endif
+
+    // A block's stake is recorded first and its MRCs second, and an MRC is recorded at the block before.
+    BOOST_REQUIRE(account.m_last_block_ptr == both->pprev);
+
+    GRC::Tally::RecordRewardBlock(later);
+    BOOST_REQUIRE(account.m_last_block_ptr == later);
+
+    GRC::Tally::ForgetRewardBlock(later);
+    BOOST_CHECK(account.m_last_block_ptr == both->pprev);
+
+    GRC::Tally::ForgetRewardBlock(both);
+    BOOST_CHECK(account.m_last_block_ptr == nullptr);
+
+    account.m_last_block_ptr = account.m_first_block_ptr;
+}
+
 BOOST_AUTO_TEST_CASE(it_has_proper_fees_for_newbies)
 {
     GRC::MRC mrc;

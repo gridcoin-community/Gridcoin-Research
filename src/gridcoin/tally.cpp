@@ -453,12 +453,10 @@ public:
 
         while (pindex)
         {
-            // If it is a stake with this cpid, then stop
-            if (pindex->ResearchSubsidy() > 0 && pindex->GetMiningId() == cpid) break;
-
             // If it is an MRC with this cpid and non-zero reward, then stop at pprev, because the MRC reward is recorded
             // on pindex, but for accrual purposes, the reward is based on pprev, and the tally must be based on the
-            // accrual point.
+            // accrual point. A block's MRCs are looked at before its stake: the tally records the stake first and the
+            // MRCs second (Tally::RecordRewardBlock()), and this walk takes them in the inverse order.
             bool mrc_last_block_found = false;
 
             for (const auto& mrc_researcher : pindex->m_mrc_researchers) {
@@ -472,6 +470,9 @@ public:
             }
 
             if (mrc_last_block_found) break;
+
+            // If it is a stake with this cpid, then stop
+            if (pindex->ResearchSubsidy() > 0 && pindex->GetMiningId() == cpid) break;
 
             // A prior reward hasn't been found yet... keeep going...
             pindex = pindex->pprev;
