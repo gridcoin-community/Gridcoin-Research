@@ -163,6 +163,27 @@ bool Poll::WellFormed() const
         && m_choices.WellFormed(m_response_type.Value());
 }
 
+bool Poll::TextIsValidUTF8() const
+{
+    if (!IsValidUTF8(m_title) || !IsValidUTF8(m_url) || !IsValidUTF8(m_question)) {
+        return false;
+    }
+
+    for (const Choice& choice : m_choices) {
+        if (!IsValidUTF8(choice.m_label)) {
+            return false;
+        }
+    }
+
+    for (const AdditionalField& field : m_additional_fields) {
+        if (!IsValidUTF8(field.m_name) || !IsValidUTF8(field.m_value)) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
 bool Poll::WellFormed(const uint32_t version) const
 {
     if (!WellFormed()) {

@@ -1279,6 +1279,41 @@ BOOST_AUTO_TEST_CASE(gettime)
     BOOST_CHECK((GetTime() & ~0xFFFFFFFFLL) == 0);
 }
 
+BOOST_AUTO_TEST_CASE(util_IsValidUTF8)
+{
+    // ASCII, and the empty string.
+    BOOST_CHECK(IsValidUTF8(""));
+    BOOST_CHECK(IsValidUTF8("Renaming the Halford"));
+    BOOST_CHECK(IsValidUTF8(std::string("a\0b", 3)));
+
+    // Sequences of two, three and four bytes, and the last code point.
+    BOOST_CHECK(IsValidUTF8("Renaming the Half\xc3\xb6rd"));
+    BOOST_CHECK(IsValidUTF8("\xe2\x82\xac"));
+    BOOST_CHECK(IsValidUTF8("\xf0\x9f\x98\x80"));
+    BOOST_CHECK(IsValidUTF8("\xf4\x8f\xbf\xbf"));
+
+    // A byte that begins no sequence, and a continuation byte with nothing to continue.
+    BOOST_CHECK(!IsValidUTF8("Title \xff"));
+    BOOST_CHECK(!IsValidUTF8("\xf8\x88\x80\x80\x80"));
+    BOOST_CHECK(!IsValidUTF8("\x80"));
+
+    // A sequence cut short, by the end of the string or by another character.
+    BOOST_CHECK(!IsValidUTF8("\xc3"));
+    BOOST_CHECK(!IsValidUTF8("\xe2\x82"));
+    BOOST_CHECK(!IsValidUTF8("\xc3rd"));
+
+    // A code point written with more bytes than it needs.
+    BOOST_CHECK(!IsValidUTF8("\xc0\x80"));
+    BOOST_CHECK(!IsValidUTF8("\xc1\xbf"));
+    BOOST_CHECK(!IsValidUTF8("\xe0\x80\x80"));
+    BOOST_CHECK(!IsValidUTF8("\xf0\x80\x80\x80"));
+
+    // The surrogate range, and a code point past the last.
+    BOOST_CHECK(!IsValidUTF8("\xed\xa0\x80"));
+    BOOST_CHECK(IsValidUTF8("\xed\x9f\xbf"));
+    BOOST_CHECK(!IsValidUTF8("\xf4\x90\x80\x80"));
+}
+
 BOOST_AUTO_TEST_CASE(util_TrimString)
 {
     BOOST_CHECK_EQUAL(TrimString(" foo bar "), "foo bar");

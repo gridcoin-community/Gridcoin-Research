@@ -1259,6 +1259,67 @@ BOOST_AUTO_TEST_CASE(the_mempool_refuses_a_poll_the_next_block_would_refuse)
     BOOST_CHECK(!refused_by_height(v2_payload));
 }
 
+//!
+//! From block version 15 a poll's text is valid UTF-8. The rule depends on the height of the block that carries the
+//! poll, so the memory pool applies it at the next block's height and with no penalty.
+//!
+BOOST_AUTO_TEST_CASE(a_poll_whose_text_is_not_valid_utf8_is_refused_from_v15)
+{
+    RegistryReset reset;
+    grc_test::StateGuard guard; // nBestHeight
+    LOCK(cs_main);
+
+    GRC::PollRegistry& registry = GRC::GetPollRegistry();
+    const PollTx invalid = MakePollTx("Title \xff", 1700000000, GRC::ContractAction::ADD,
+                                      GRC::PollWeightType::BALANCE, 3, 2);
+    const PollTx non_ascii = MakePollTx("Renaming the Half\xc3\xb6rd", 1700000000, GRC::ContractAction::ADD,
+                                        GRC::PollWeightType::BALANCE, 3, 2);
+
+    const auto refused_by_height = [&](const PollTx& poll) {
+        int DoS = 99;
+        return !registry.Validate(poll.contract, poll.tx, DoS) && DoS == 0;
+    };
+
+    // The claims and polls here are empty, so a poll the height rules pass is refused later, with a penalty.
+    nBestHeight = Params().GetConsensus().PollV3Height + 10;
+    grc_test::ForcedArgGuard multi_address("pollmultiaddressheight", ToString(nBestHeight + 1));
+
+    {
+        grc_test::V15HeightGuard v15(nBestHeight + 1);
+
+        BOOST_CHECK(refused_by_height(invalid));
+        BOOST_CHECK(!refused_by_height(non_ascii));
+    }
+}
+
+BOOST_AUTO_TEST_CASE(a_poll_s_text_is_valid_utf8_only_if_every_part_is)
+{
+    const auto poll = [](const std::string& title, const std::string& url, const std::string& question,
+                         const std::string& choice) {
+        GRC::Poll::ChoiceList choices;
+        choices.Add(choice);
+
+        return GRC::Poll(
+            GRC::PollType::SURVEY,
+            GRC::PollWeightType::BALANCE,
+            GRC::PollResponseType::SINGLE_CHOICE,
+            7,
+            title,
+            url,
+            question,
+            std::move(choices),
+            0,
+            Fraction());
+    };
+
+    BOOST_CHECK(poll("Title", "https://gridcoin.us", "Question?", "Choice").TextIsValidUTF8());
+    BOOST_CHECK(poll("Half\xc3\xb6rd", "https://gridcoin.us", "Half\xc3\xb6rd?", "Half\xc3\xb6rd").TextIsValidUTF8());
+    BOOST_CHECK(!poll("Title \xff", "https://gridcoin.us", "Question?", "Choice").TextIsValidUTF8());
+    BOOST_CHECK(!poll("Title", "https://gridcoin.us/\xff", "Question?", "Choice").TextIsValidUTF8());
+    BOOST_CHECK(!poll("Title", "https://gridcoin.us", "Question \xff", "Choice").TextIsValidUTF8());
+    BOOST_CHECK(!poll("Title", "https://gridcoin.us", "Question?", "Choice \xff").TextIsValidUTF8());
+}
+
 BOOST_AUTO_TEST_CASE(reverting_two_votes_of_one_block_newest_first_keeps_the_chain)
 {
     CBlockIndex poll_index = MakeBlockIndex(V13Height() + 10, 1700000000);

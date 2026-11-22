@@ -462,6 +462,14 @@ public:
     bool WellFormed(const uint32_t version) const;
 
     //!
+    //! \brief Determine whether the poll's text is valid UTF-8: its title, URL and question, the label of each
+    //! choice, and the name and value of each additional field.
+    //!
+    //! \return \c true if every part is valid UTF-8.
+    //!
+    bool TextIsValidUTF8() const;
+
+    //!
     //! \brief Determine whether a poll factors in magnitude for voting weight.
     //!
     //! \return \c true if the poll weight type includes magnitude.

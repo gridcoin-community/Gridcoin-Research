@@ -1665,8 +1665,9 @@ namespace {
 //!
 //! \brief Whether a poll contract meets the poll rules that depend on the height of the block that carries it: the
 //! payload version 3 floor, the REMOVE rule, the claim version against multi-address activation, and from v15
-//! distinct claim entries. BlockValidate judges them at the block's height. Validate, for the memory pool and the
-//! wallet, judges them at the next block's height, so neither admits a poll that block would refuse.
+//! distinct claim entries and text that is valid UTF-8. BlockValidate judges them at the block's height. Validate,
+//! for the memory pool and the wallet, judges them at the next block's height, so neither admits a poll that block
+//! would refuse.
 //!
 //! \param DoS Set as the block rules set it; Validate replaces it.
 //!
@@ -1722,6 +1723,13 @@ bool PollFitsHeight(const Contract& contract, const PollPayload& payload, const 
             "%s: rejected poll claim whose address keys or outputs are not distinct at height %d",
             __func__,
             height);
+        return false;
+    }
+
+    // From block version 15, a poll's text is valid UTF-8.
+    if (IsV15Enabled(height) && !payload.m_poll.TextIsValidUTF8()) {
+        DoS = 25;
+        LogPrint(LogFlags::CONTRACT, "%s: rejected poll whose text is not valid UTF-8 at height %d", __func__, height);
         return false;
     }
 
