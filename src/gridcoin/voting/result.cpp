@@ -192,11 +192,15 @@ public:
     //! which selects how a spent claimed output is resolved (ResolveAmount).
     //! \param pindex_bound  The block that bounds the tally by blocks (PollSnapshot::m_pindex_bound), or nullptr
     //! when the poll keeps the time rules of #3470.
+    //! \param poll_start_height The height of the poll's block. Under the v15 rules the walk follows a vote
+    //! transaction only from that height (ResolveAmount).
     //!
-    VoteResolver(CTxDB& txdb, const Poll& poll, const bool v15_rules, const CBlockIndex* pindex_bound)
+    VoteResolver(CTxDB& txdb, const Poll& poll, const bool v15_rules, const CBlockIndex* pindex_bound,
+                 const int poll_start_height)
         : m_txdb(txdb)
         , m_poll(poll)
         , m_v15_rules(v15_rules)
+        , m_poll_start_height(poll_start_height)
         , m_pindex_bound(pindex_bound)
         , m_superblock(SuperblockPtr::Empty())
     {
@@ -277,6 +281,7 @@ private:
     CTxDB& m_txdb;              //!< Used to resolve unspent amount claims.
     const Poll& m_poll;         //!< The poll to resolve voting weight for.
     const bool m_v15_rules;     //!< The poll started at or after the v15 height.
+    const int m_poll_start_height; //!< The height of the poll's block.
     //! The block that bounds the tally by blocks, or nullptr when the poll keeps the time rules of #3470. Its height
     //! never changes, so it is read without cs_main.
     const CBlockIndex* const m_pindex_bound;
@@ -323,6 +328,7 @@ private:
     struct Spender
     {
         bool m_after_end = false;  //!< Its block is after the poll's end (AfterEnd).
+        bool m_before_start = false; //!< Under the v15 rules, its block is below the poll's block.
         bool m_coinstake = false;  //!< Whether it is a coinstake.
         bool m_carries_vote = false; //!< Whether it carries a vote contract.
         uint256 m_hash;            //!< Its hash.
@@ -378,6 +384,13 @@ private:
 
         if (spender.m_after_end) {
             return spender;
+        }
+
+        if (m_v15_rules) {
+            // The height was looked up for AfterEnd() and kept, so this takes no lock again.
+            const std::optional<int> height = MainChainHeight(header);
+
+            spender.m_before_start = height && *height < m_poll_start_height;
         }
 
         CTransaction tx;
@@ -1305,11 +1318,13 @@ private:
             // on one poll does not take the coin's weight from another. One
             // vote's walk passes through at most MAX_WALKED_VOTE_TXS vote
             // transactions; past that, a vote transaction spends the output
-            // like any other.
+            // like any other. So does a vote transaction whose block is below
+            // the poll's block.
             //
             amount -= frame.m_amount;
 
-            const bool vote_tx = !spender.m_coinstake && m_v15_rules && spender.m_carries_vote;
+            const bool vote_tx = !spender.m_coinstake && m_v15_rules && spender.m_carries_vote
+                && !spender.m_before_start;
 
             if (!spender.m_coinstake && !vote_tx) {
                 continue; // This tx spends the txo but did not stake it
@@ -1592,7 +1607,7 @@ public:
         , m_poll(poll)
         , m_poll_start_height(poll_start_height)
         , m_v15_rules(v15_rules)
-        , m_resolver(txdb, poll, v15_rules, pindex_bound)
+        , m_resolver(txdb, poll, v15_rules, pindex_bound, poll_start_height)
         , m_legacy(poll, legacy_money_supply, std::move(legacy_superblock))
     {
         // Snapshot the pool CPID set at the poll's start height into an
