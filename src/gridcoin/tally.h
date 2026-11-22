@@ -373,11 +373,12 @@ public:
     //! If that check does not pass, research reward claims stay paused until
     //! the process restarts: a request is honored once per run.
     //!
+    //! A rebuild that fails, by its result or by an exception, stops the node
+    //! at once.
+    //!
     //! \param cpid The wallet's CPID, if any, to check after the rebuild.
     //!
-    //! \return \c false if the rebuild failed.
-    //!
-    static bool RunRequestedAccrualRebuild(const CpidOption& cpid) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+    static void RunRequestedAccrualRebuild(const CpidOption& cpid) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 };
 }
 

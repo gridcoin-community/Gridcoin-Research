@@ -687,7 +687,8 @@ void SchedulePollNotifications(CScheduler& scheduler)
 void ScheduleAccrualRebuild(CScheduler& scheduler)
 {
     // Every minute, run the accrual snapshot rebuild that the miner or MRC creation asked for. A very thin call while
-    // none is pending. Please see Tally::VerifyRewardBlocks().
+    // none is pending. A rebuild that fails stops the node. Please see Tally::VerifyRewardBlocks() and
+    // Tally::RunRequestedAccrualRebuild().
 
     scheduler.scheduleEvery([]{
         if (!Tally::AccrualRebuildRequested()) {

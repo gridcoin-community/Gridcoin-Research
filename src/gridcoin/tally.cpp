@@ -23,6 +23,7 @@
 
 #include <algorithm>
 #include <atomic>
+#include <cstdlib>
 #include <optional>
 #include <unordered_map>
 
@@ -2019,22 +2020,34 @@ bool Tally::AccrualRebuildRequested()
     return g_accrual_rebuild_requested;
 }
 
-bool Tally::RunRequestedAccrualRebuild(const CpidOption& cpid)
+void Tally::RunRequestedAccrualRebuild(const CpidOption& cpid)
 {
     if (!g_accrual_rebuild_requested.exchange(false)) {
-        return true;
+        return;
     }
 
     LogPrintf("INFO: %s: rebuilding the accrual snapshots (accrual check: %s).", __func__, g_accrual_rebuild_details);
 
-    if (!g_researcher_tally.RebuildAccrualSnapshots()) {
-        g_accrual_rebuild_armed = false;
+    bool rebuilt = false;
 
-        return error("%s: the accrual snapshot rebuild failed.", __func__);
+    try {
+        rebuilt = g_researcher_tally.RebuildAccrualSnapshots();
+    } catch (const std::exception& e) {
+        error("%s: %s", __func__, e.what());
+    }
+
+    if (!rebuilt) {
+        error("%s: the accrual snapshot rebuild failed. This is a fatal error. Aborting. See debug.log for the "
+              "operation that failed, correct the cause, and restart.", __func__);
+
+        // Stop at once, as after a failed batch disconnect in
+        // ReorganizeChain(): the process ends here, with no orderly shutdown
+        // and no stack unwinding. The exit writes nothing more.
+        std::_Exit(EXIT_FAILURE);
     }
 
     if (!cpid) {
-        return true;
+        return;
     }
 
     if (const std::optional<RewardBlocks> found = VerifyRewardBlocks(*cpid, pindexBest)) {
@@ -2044,10 +2057,8 @@ bool Tally::RunRequestedAccrualRebuild(const CpidOption& cpid)
         LogPrintf("INFO: %s: accrual check: cpid=%s %s. Research reward claims are paused for this run.",
                   __func__, cpid->ToString(), found->ToString());
 
-        return true;
+        return;
     }
 
     LogPrintf("INFO: %s: accrual check passes: cpid=%s.", __func__, cpid->ToString());
-
-    return true;
 }
