@@ -35,6 +35,31 @@ uint256 HashBeaconPayload(const BeaconPayload& payload)
 
     return hasher.GetHash();
 }
+
+//!
+//! \brief Compute the hash that the signature of a beacon payload covers, for a contract of an action that acts on
+//! a record.
+//!
+//! For a version 4 payload the hash covers the payload, the action and the record's hash. For a lower version it is
+//! HashBeaconPayload(payload).
+//!
+//! \param payload     The beacon payload object to hash.
+//! \param action      The action of the contract that carries the payload.
+//! \param record_hash The hash of the record the contract acts on.
+//!
+uint256 HashBeaconPayload(const BeaconPayload& payload, const ContractAction action, const uint256& record_hash)
+{
+    if (payload.m_version < 4) {
+        return HashBeaconPayload(payload);
+    }
+
+    CHashWriter hasher(SER_GETHASH, PROTOCOL_VERSION);
+
+    payload.Serialize(hasher, GRC::ContractAction::UNKNOWN);
+    hasher << static_cast<uint8_t>(action) << record_hash;
+
+    return hasher.GetHash();
+}
 } // Anonymous namespace
 
 // -----------------------------------------------------------------------------
@@ -290,6 +315,21 @@ bool BeaconPayload::Sign(CKey& private_key)
 bool BeaconPayload::VerifySignature() const
 {
     return m_beacon.m_public_key.Verify(HashBeaconPayload(*this), m_signature);
+}
+
+bool BeaconPayload::Sign(CKey& private_key, const ContractAction action, const uint256& record_hash)
+{
+    if (!private_key.Sign(HashBeaconPayload(*this, action, record_hash), m_signature)) {
+        m_signature.clear();
+        return false;
+    }
+
+    return true;
+}
+
+bool BeaconPayload::VerifySignature(const ContractAction action, const uint256& record_hash) const
+{
+    return m_beacon.m_public_key.Verify(HashBeaconPayload(*this, action, record_hash), m_signature);
 }
 
 // -----------------------------------------------------------------------------
@@ -1232,7 +1272,9 @@ bool BeaconRegistry::ValidateAt(const Contract& contract, const CTransaction& tx
         return false;
     }
 
-    if (!payload->VerifySignature()) {
+    // The signature of a version 4 payload covers the contract's action and the record the contract acts on, so
+    // it is checked against the CPID's record as the registry holds it.
+    if (!payload->VerifySignature(contract.m_action.Value(), CurrentRecordHash(payload->m_cpid))) {
         DoS = 25;
         LogPrint(LogFlags::CONTRACT, "%s: Invalid beacon signature", __func__);
         return false;
@@ -1294,6 +1336,16 @@ bool BeaconRegistry::BlockValidate(const ContractContext& ctx, int& DoS) const
             LogPrint(LogFlags::CONTRACT, "%s: v3 beacon payload before v14 activation", __func__);
             return false;
         }
+    }
+
+    // A block carries beacon payloads of version 4 from v15, and of the lower versions below it.
+    if (!PayloadVersionFitsHeight(ctx.m_contract, ctx.m_pindex->nHeight)) {
+        DoS = 25;
+        LogPrint(LogFlags::CONTRACT,
+            "%s: rejected beacon payload of a version that a block at height %d does not carry",
+            __func__,
+            ctx.m_pindex->nHeight);
+        return false;
     }
 
     // From v15, removing a beacon takes the key of the CPID's current beacon.
@@ -1358,6 +1410,30 @@ bool BeaconRegistry::AdvertisedKeyIsFree(const Contract& contract, const int64_t
     const auto payload = contract.SharePayloadAs<BeaconPayload>();
 
     return !KeyHeldByAnotherCpid(payload->m_cpid, payload->m_beacon.m_public_key, time);
+}
+
+uint256 BeaconRegistry::CurrentRecordHash(const Cpid& cpid) const
+{
+    if (const auto beacon = m_beacons.find(cpid); beacon != m_beacons.end()) {
+        return beacon->second->m_hash;
+    }
+
+    // The removals of a CPID are kept in chain order, by the hash of each removal's record.
+    if (const auto removals = m_deleted_by_cpid.find(cpid);
+            removals != m_deleted_by_cpid.end() && !removals->second.empty()) {
+        return removals->second.back();
+    }
+
+    return uint256();
+}
+
+bool BeaconRegistry::PayloadVersionFitsHeight(const Contract& contract, const int height)
+{
+    if (contract.m_type != ContractType::BEACON || contract.m_version < 2) {
+        return true;
+    }
+
+    return (contract.SharePayloadAs<BeaconPayload>()->m_version >= 4) == IsV15Enabled(height);
 }
 
 bool BeaconRegistry::RemoveCarriesCurrentKey(const Contract& contract) const

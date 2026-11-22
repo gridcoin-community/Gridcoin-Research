@@ -339,7 +339,7 @@ public:
     //! ensure that the serialization/deserialization routines also handle all
     //! of the previous versions.
     //!
-    static constexpr uint32_t CURRENT_VERSION = 3;
+    static constexpr uint32_t CURRENT_VERSION = 4;
 
     //!
     //! \brief Version number of the serialized beacon format.
@@ -353,6 +353,16 @@ public:
     //!
     //! Version 2: Beacon data serializable in binary format. Stored in a
     //! contract's value field as bytes.
+    //!
+    //! Version 3: As version 2, with a BOINC proof of account ownership, which
+    //! an advertisement must carry.
+    //!
+    //! Version 4: As version 3, but the proof is optional: an advertisement
+    //! with none is verified as a version 2 advertisement is. The signature
+    //! covers the contract's action and the hash of the record the
+    //! contract acts on (BeaconRegistry::CurrentRecordHash). A block carries
+    //! version 4 from block version 15 and the lower versions below it
+    //! (BeaconRegistry::PayloadVersionFitsHeight).
     //!
     uint32_t m_version = CURRENT_VERSION;
 
@@ -449,9 +459,16 @@ public:
             return false;
         }
 
+        // A version 4 ADD payload may carry no ownership proof: the beacon is
+        // then verified as a version 2 beacon is.
+        if (m_version >= 4 && action == ContractAction::ADD && m_ownership_proof.Empty()) {
+            return true;
+        }
+
         if (m_version >= 3 && action == ContractAction::ADD) {
             // v3 ADD payloads must contain a non-empty ownership proof with
-            // plausible field values:
+            // plausible field values, and so must a v4 ADD payload that
+            // carries one:
             if (m_ownership_proof.Empty()) return false;
             if (m_ownership_proof.m_master_url.empty()) return false;
             if (m_ownership_proof.m_account_id == 0) return false;
@@ -501,12 +518,37 @@ public:
     bool Sign(CKey& private_key);
 
     //!
+    //! \brief Sign the beacon with its private key, for a contract of an action that acts on a record.
+    //!
+    //! The signature of a version 4 payload covers the action and the record's hash. For a lower version this is
+    //! Sign(private_key).
+    //!
+    //! \param private_key Corresponds to the beacon's public key.
+    //! \param action      The action of the contract that carries the payload.
+    //! \param record_hash The hash of the record the contract acts on (BeaconRegistry::CurrentRecordHash).
+    //!
+    //! \return \c false if signing fails.
+    //!
+    bool Sign(CKey& private_key, const ContractAction action, const uint256& record_hash);
+
+    //!
     //! \brief Validate the authenticity of a beacon by verifying the digital
     //! signature.
     //!
     //! \return \c true if the beacon's signature matches the its public key.
     //!
     bool VerifySignature() const;
+
+    //!
+    //! \brief Validate the authenticity of a beacon contract by verifying the digital signature, which for a
+    //! version 4 payload covers the contract's action and the hash of the record it acts on.
+    //!
+    //! \param action      The action of the contract that carries the payload.
+    //! \param record_hash The hash of the record the contract acts on (BeaconRegistry::CurrentRecordHash).
+    //!
+    //! \return \c true if the signature matches the beacon's public key.
+    //!
+    bool VerifySignature(const ContractAction action, const uint256& record_hash) const;
 
     ADD_CONTRACT_PAYLOAD_SERIALIZE_METHODS;
 
@@ -789,6 +831,26 @@ public:
     //! \param time     The time at which another CPID's beacon must be unexpired to hold the key.
     //!
     bool AdvertisedKeyIsFree(const Contract& contract, const int64_t time) const EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+
+    //!
+    //! \brief Get the hash of the record that a version 4 beacon contract for a CPID acts on, which its signature
+    //! covers: the CPID's beacon, expired or not; for a CPID with none, its latest removal; and zero for a CPID
+    //! with neither.
+    //!
+    //! A version 4 contract is valid only against the record it was signed over.
+    //!
+    //! \param cpid The CPID the contract is for.
+    //!
+    uint256 CurrentRecordHash(const Cpid& cpid) const EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+
+    //!
+    //! \brief Determine whether a beacon contract's payload is of a version that a block at a height carries:
+    //! version 4 from block version 15, and a lower version below it.
+    //!
+    //! \param contract The contract to check. A contract that is not a version 2+ beacon contract passes.
+    //! \param height   The height of the block.
+    //!
+    static bool PayloadVersionFitsHeight(const Contract& contract, const int height);
 
     //!
     //! \brief Determine whether a beacon is active for the specified CPID at

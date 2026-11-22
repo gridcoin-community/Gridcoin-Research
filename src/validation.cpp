@@ -2293,6 +2293,16 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, CValidationState& st
         }
     }
 
+    // A beacon payload is of the version that the block it would be mined in carries: version 4 from block version
+    // 15, a lower version below it. BeaconRegistry::BlockValidate requires this of a block. The refusal depends on
+    // this node's height and carries no misbehaviour score.
+    for (const auto& contract : tx.GetContracts()) {
+        if (!GRC::BeaconRegistry::PayloadVersionFitsHeight(contract, nBestHeight + 1)) {
+            return state.Invalid(error("%s: beacon payload of a version the next block does not carry", __func__),
+                                 "bad-beacon-version");
+        }
+    }
+
     // A claim belongs in a coinbase, so it can never belong in a loose one.
     //
     // Contract dispatch will not catch this: CLAIM has no handler and falls to

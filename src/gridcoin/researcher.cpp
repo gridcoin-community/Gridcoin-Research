@@ -720,16 +720,38 @@ AdvertiseBeaconResult GRC::GenerateBeaconKey(const Cpid& cpid) EXCLUSIVE_LOCKS_R
 namespace {
 
 //!
+//! \brief Get the version of the payload of a beacon contract that the wallet sends now: the version the next
+//! block carries.
+//!
+//! \param with_proof Whether the payload carries an ownership proof.
+//!
+//! \return 4 if the next block is of block version 15. Below it, 3 with an ownership proof and 2 with none.
+//!
+uint32_t BeaconPayloadVersionToSend(const bool with_proof) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+{
+    if (IsV15Enabled(nBestHeight + 1)) {
+        return 4;
+    }
+
+    return with_proof ? 3 : 2;
+}
+
+//!
 //! \brief Sign a new beacon payload with the beacon's private key.
 //!
+//! The signature of a version 4 payload covers the contract's action and the record the contract acts on, which
+//! is the CPID's record as the beacon registry holds it now.
+//!
 //! \param payload The beacon payload to sign.
+//! \param action  The action of the contract that will carry the payload.
 //! \param access  A staking path's access, with which the key is reached while
 //! the wallet is unlocked for staking only. nullptr for any other caller, which
 //! then needs a full unlock of an encrypted wallet.
 //!
 //! \return \c false if the key doesn't exist or fails to sign the payload.
 //!
-bool SignBeaconPayload(BeaconPayload& payload, const StakingKeyAccess* access)
+bool SignBeaconPayload(BeaconPayload& payload, const ContractAction action, const StakingKeyAccess* access)
+    EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     CKey out_key;
 
@@ -741,7 +763,7 @@ bool SignBeaconPayload(BeaconPayload& payload, const StakingKeyAccess* access)
         return error("%s: Key not found", __func__);
     }
 
-    if (!payload.Sign(out_key)) {
+    if (!payload.Sign(out_key, action, GetBeaconRegistry().CurrentRecordHash(payload.m_cpid))) {
         return error("%s: Failed to sign payload", __func__);
     }
 
@@ -850,8 +872,9 @@ AdvertiseBeaconResult SendBeaconContract(
     }
 
     BeaconPayload payload(cpid, beacon);
+    payload.m_version = BeaconPayloadVersionToSend(/* with_proof */ false);
 
-    if (!SignBeaconPayload(payload, renewal_access)) {
+    if (!SignBeaconPayload(payload, action, renewal_access)) {
         return BeaconError::MISSING_KEY;
     }
 
@@ -1089,8 +1112,9 @@ AdvertiseBeaconResult GRC::SendBeaconContractV3(
     }
 
     BeaconPayload payload(cpid, beacon, std::move(proof));
+    payload.m_version = BeaconPayloadVersionToSend(/* with_proof */ true);
 
-    if (!SignBeaconPayload(payload, nullptr)) {
+    if (!SignBeaconPayload(payload, ContractAction::ADD, nullptr)) {
         return BeaconError::MISSING_KEY;
     }
 

@@ -87,11 +87,12 @@ BOOST_AUTO_TEST_CASE(a_beacon_removal_without_the_current_key_is_refused_without
     CKey key;
     key.MakeNewKey(false);
 
-    // A removal for a CPID that has no current beacon.
-    const Offered offered(TransactionWith(GRC::MakeContract<GRC::BeaconPayload>(
-        GRC::ContractAction::REMOVE,
-        GRC::Cpid(InsecureRandBytes(16)),
-        key.GetPubKey())));
+    // A removal for a CPID that has no current beacon. The payload is of version 4, as a block of block version 15
+    // carries.
+    GRC::BeaconPayload payload {4, GRC::Cpid(InsecureRandBytes(16)), GRC::Beacon(key.GetPubKey())};
+    BOOST_REQUIRE(payload.Sign(key, GRC::ContractAction::REMOVE, uint256()));
+
+    const Offered offered(TransactionWith(GRC::MakeContract<GRC::BeaconPayload>(GRC::ContractAction::REMOVE, payload)));
 
     BOOST_CHECK(!offered.m_accepted);
     BOOST_CHECK_EQUAL(offered.m_reason, "bad-beacon-remove");
@@ -110,9 +111,10 @@ BOOST_AUTO_TEST_CASE(an_advertisement_of_a_key_held_by_another_cpid_is_refused_w
     const GRC::Cpid holder(InsecureRandBytes(16));
     const GRC::Cpid other(InsecureRandBytes(16));
 
+    // Neither CPID has a record in the registry, so each advertisement is signed over none.
     const auto advertisement = [&key](const GRC::Cpid& cpid) {
-        GRC::BeaconPayload payload {2, cpid, GRC::Beacon(key.GetPubKey())};
-        BOOST_REQUIRE(payload.Sign(key));
+        GRC::BeaconPayload payload {4, cpid, GRC::Beacon(key.GetPubKey())};
+        BOOST_REQUIRE(payload.Sign(key, GRC::ContractAction::ADD, uint256()));
         return GRC::MakeContract<GRC::BeaconPayload>(GRC::ContractAction::ADD, payload);
     };
 
@@ -145,6 +147,39 @@ BOOST_AUTO_TEST_CASE(an_advertisement_of_a_key_held_by_another_cpid_is_refused_w
     BOOST_CHECK(!offered.m_accepted);
     BOOST_CHECK_EQUAL(offered.m_reason, "bad-beacon-key");
     BOOST_CHECK_EQUAL(offered.m_score, 0);
+}
+
+// A beacon payload is of the version that the block it would be mined in carries: version 4 from block version 15,
+// a lower version below it. The refusal depends on the node's height and carries no score.
+BOOST_AUTO_TEST_CASE(a_beacon_payload_of_the_other_side_s_version_is_refused_without_a_score)
+{
+    CKey key;
+    key.MakeNewKey(false);
+
+    const auto advertisement = [&key](const uint32_t payload_version) {
+        GRC::BeaconPayload payload {payload_version, GRC::Cpid(InsecureRandBytes(16)), GRC::Beacon(key.GetPubKey())};
+        BOOST_REQUIRE(payload.Sign(key, GRC::ContractAction::ADD, uint256()));
+        return GRC::MakeContract<GRC::BeaconPayload>(GRC::ContractAction::ADD, payload);
+    };
+
+    {
+        // Below block version 15, which the fixture chain is by default, a version 4 payload is refused.
+        const Offered offered(TransactionWith(advertisement(4)));
+
+        BOOST_CHECK(!offered.m_accepted);
+        BOOST_CHECK_EQUAL(offered.m_reason, "bad-beacon-version");
+        BOOST_CHECK_EQUAL(offered.m_score, 0);
+    }
+
+    {
+        const grc_test::V15HeightGuard v15(0);
+
+        const Offered offered(TransactionWith(advertisement(2)));
+
+        BOOST_CHECK(!offered.m_accepted);
+        BOOST_CHECK_EQUAL(offered.m_reason, "bad-beacon-version");
+        BOOST_CHECK_EQUAL(offered.m_score, 0);
+    }
 }
 
 BOOST_AUTO_TEST_SUITE_END()

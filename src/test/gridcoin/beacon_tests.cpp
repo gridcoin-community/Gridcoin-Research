@@ -2639,17 +2639,40 @@ BOOST_AUTO_TEST_CASE(beacon_registry_remove_carries_current_key)
     registry.Reset();
 }
 
-//! A transaction that carries an advertisement of \p key for \p cpid, signed with the key.
-static CTransaction SignedAdvertisementTx(const GRC::Cpid& cpid, CKey& key, const int64_t time)
+//! A height \p blocks above the height of block version 14. A block takes a beacon payload of version 3 or higher
+//! only from that height, so the cases that put block version 15 in force use heights above it, as a chain does.
+static int AboveV14(const int blocks)
+{
+    return Params().GetConsensus().BlockV14Height + blocks;
+}
+
+//! A transaction that carries a beacon contract of \p action for \p cpid with \p key, signed with the key. A
+//! version 4 payload is signed over \p record_hash.
+static CTransaction SignedBeaconTx(
+    const GRC::ContractAction action,
+    const GRC::Cpid& cpid,
+    CKey& key,
+    const int64_t time,
+    const uint32_t payload_version,
+    const uint256& record_hash)
 {
     CMutableTransaction mtx;
     mtx.nTime = time;
 
-    GRC::BeaconPayload payload {2, cpid, GRC::Beacon(key.GetPubKey())};
-    BOOST_REQUIRE(payload.Sign(key));
-    mtx.vContracts.push_back(GRC::MakeContract<GRC::BeaconPayload>(3, GRC::ContractAction::ADD, payload));
+    GRC::BeaconPayload payload {payload_version, cpid, GRC::Beacon(key.GetPubKey())};
+    BOOST_REQUIRE(payload.Sign(key, action, record_hash));
+    mtx.vContracts.push_back(GRC::MakeContract<GRC::BeaconPayload>(3, action, payload));
 
     return CTransaction(mtx);
+}
+
+//! A transaction that carries an advertisement of \p key for \p cpid, signed with the key: of payload version 4,
+//! signed over the CPID's current record, or of version 2.
+static CTransaction SignedAdvertisementTx(const GRC::Cpid& cpid, CKey& key, const int64_t time,
+                                          const uint32_t payload_version = 2) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+{
+    return SignedBeaconTx(GRC::ContractAction::ADD, cpid, key, time, payload_version,
+                          GRC::GetBeaconRegistry().CurrentRecordHash(cpid));
 }
 
 // From block version 15 an advertisement may not take a key that is pending for another CPID.
@@ -2670,17 +2693,17 @@ BOOST_AUTO_TEST_CASE(beacon_registry_refuses_an_advertisement_of_a_key_pending_f
     BOOST_CHECK(registry.KeyHeldByAnotherCpid(other, key.GetPubKey(), START_TIME + 60));
     BOOST_CHECK(!registry.KeyHeldByAnotherCpid(holder, key.GetPubKey(), START_TIME + 60));
 
-    const CTransaction by_other = SignedAdvertisementTx(other, key, START_TIME + 60);
-    const CTransaction by_holder = SignedAdvertisementTx(holder, key, START_TIME + 60);
-
     CBlockIndex index_2;
     index_2.nVersion = 13;
-    index_2.nHeight = 2;
+    index_2.nHeight = AboveV14(2);
     index_2.nTime = START_TIME + 60;
 
     {
-        grc_test::V15HeightGuard v15(1);
+        grc_test::V15HeightGuard v15(AboveV14(1));
         int DoS = 0;
+
+        const CTransaction by_other = SignedAdvertisementTx(other, key, START_TIME + 60, 4);
+        const CTransaction by_holder = SignedAdvertisementTx(holder, key, START_TIME + 60, 4);
 
         BOOST_CHECK(!registry.BlockValidate({by_other.GetContracts().front(), by_other, &index_2}, DoS));
         BOOST_CHECK_EQUAL(DoS, 25);
@@ -2722,20 +2745,20 @@ BOOST_AUTO_TEST_CASE(beacon_registry_refuses_an_advertisement_of_a_key_active_fo
     // With no time given an expired beacon counts as well, which is what a wallet asks before it uses a key.
     BOOST_CHECK(registry.KeyHeldByAnotherCpid(other, key.GetPubKey(), std::nullopt));
 
-    grc_test::V15HeightGuard v15(1);
+    grc_test::V15HeightGuard v15(AboveV14(1));
 
     CBlockIndex index_3;
     index_3.nVersion = 13;
-    index_3.nHeight = 3;
+    index_3.nHeight = AboveV14(3);
     int DoS = 0;
 
-    const CTransaction active_tx = SignedAdvertisementTx(other, key, while_active);
+    const CTransaction active_tx = SignedAdvertisementTx(other, key, while_active, 4);
     index_3.nTime = while_active;
     BOOST_CHECK(!registry.BlockValidate({active_tx.GetContracts().front(), active_tx, &index_3}, DoS));
     BOOST_CHECK_EQUAL(DoS, 25);
 
     DoS = 0;
-    const CTransaction expired_tx = SignedAdvertisementTx(other, key, once_expired);
+    const CTransaction expired_tx = SignedAdvertisementTx(other, key, once_expired, 4);
     index_3.nTime = once_expired;
     BOOST_CHECK(registry.BlockValidate({expired_tx.GetContracts().front(), expired_tx, &index_3}, DoS));
 
@@ -2816,12 +2839,12 @@ BOOST_AUTO_TEST_CASE(beacon_registry_judges_a_renewal_at_its_block_s_time_from_v
         BOOST_REQUIRE(registry.Try(cpid)->Renewable(in_the_renewal_window));
         BOOST_REQUIRE(registry.Try(cpid)->Expired(after_the_expiry));
 
-        const CTransaction tx = SignedAdvertisementTx(cpid, key, in_the_renewal_window);
-
         CBlockIndex index_3;
         index_3.nVersion = 13;
-        index_3.nHeight = 3;
+        index_3.nHeight = AboveV14(3);
         index_3.nTime = after_the_expiry;
+
+        const CTransaction tx = SignedAdvertisementTx(cpid, key, in_the_renewal_window, 4);
 
         int DoS = 0;
         BOOST_REQUIRE(registry.BlockValidate({tx.GetContracts().front(), tx, &index_3}, DoS));
@@ -2831,10 +2854,238 @@ BOOST_AUTO_TEST_CASE(beacon_registry_judges_a_renewal_at_its_block_s_time_from_v
         return std::make_pair(registry.Try(cpid)->m_status.Value(), registry.PendingBeacons().size());
     };
 
-    // Block version 15 from height 3: the block's time is used, and the advertisement is a pending beacon.
-    const auto from = status_after_an_advertisement_at(3);
+    // Block version 15 from the block's height: the block's time is used, and the advertisement is a pending beacon.
+    const auto from = status_after_an_advertisement_at(AboveV14(3));
     BOOST_CHECK(from.first == GRC::BeaconStatusForStorage::ACTIVE);
     BOOST_CHECK_EQUAL(from.second, 1U);
+
+    registry.Reset();
+}
+
+// A version 4 payload is signed over the action of its contract and the hash of the record the contract acts on.
+// Its ownership proof may be empty.
+BOOST_AUTO_TEST_CASE(beacon_payload_version_4_signs_its_action_and_the_record_it_acts_on)
+{
+    CKey key;
+    key.MakeNewKey(true);
+    const GRC::Cpid cpid = GRC::Cpid::Parse("00010203040506070809101112131415");
+    const uint256 record = uint256S("0101010101010101010101010101010101010101010101010101010101010101");
+    const uint256 other_record = uint256S("0202020202020202020202020202020202020202020202020202020202020202");
+
+    GRC::BeaconPayload payload {4, cpid, GRC::Beacon(key.GetPubKey())};
+    BOOST_REQUIRE(payload.Sign(key, GRC::ContractAction::ADD, record));
+
+    BOOST_CHECK(payload.VerifySignature(GRC::ContractAction::ADD, record));
+    BOOST_CHECK(!payload.VerifySignature(GRC::ContractAction::REMOVE, record));
+    BOOST_CHECK(!payload.VerifySignature(GRC::ContractAction::ADD, other_record));
+    BOOST_CHECK(!payload.VerifySignature(GRC::ContractAction::ADD, uint256()));
+
+    // With no ownership proof, and with one.
+    BOOST_CHECK(payload.WellFormed(GRC::ContractAction::ADD));
+    BOOST_CHECK(payload.WellFormed(GRC::ContractAction::REMOVE));
+
+    GRC::OwnershipProof proof;
+    proof.m_master_url = "https://project.example/";
+    proof.m_account_id = 1;
+    proof.m_rsa_signature = std::vector<uint8_t>(64, 0x01);
+
+    GRC::BeaconPayload with_proof(cpid, GRC::Beacon(key.GetPubKey()), proof);
+    with_proof.m_version = 4;
+    BOOST_REQUIRE(with_proof.Sign(key, GRC::ContractAction::ADD, record));
+    BOOST_CHECK(with_proof.WellFormed(GRC::ContractAction::ADD));
+    BOOST_CHECK(with_proof.VerifySignature(GRC::ContractAction::ADD, record));
+
+    // A proof that is there has to be a plausible one.
+    GRC::OwnershipProof no_account = proof;
+    no_account.m_account_id = 0;
+
+    GRC::BeaconPayload with_bad_proof(cpid, GRC::Beacon(key.GetPubKey()), no_account);
+    with_bad_proof.m_version = 4;
+    BOOST_REQUIRE(with_bad_proof.Sign(key, GRC::ContractAction::ADD, record));
+    BOOST_CHECK(!with_bad_proof.WellFormed(GRC::ContractAction::ADD));
+
+    // A version 3 advertisement carries a proof.
+    GRC::BeaconPayload v3 {3, cpid, GRC::Beacon(key.GetPubKey())};
+    BOOST_REQUIRE(v3.Sign(key, GRC::ContractAction::ADD, record));
+    BOOST_CHECK(!v3.WellFormed(GRC::ContractAction::ADD));
+}
+
+// The record a version 4 contract for a CPID is signed over: the CPID's beacon, or for a CPID with none its latest
+// removal, or zero.
+BOOST_AUTO_TEST_CASE(beacon_registry_names_the_record_a_contract_acts_on)
+{
+    LOCK(cs_main);
+
+    GRC::BeaconRegistry& registry = GRC::GetBeaconRegistry();
+    registry.Reset();
+
+    CKey key;
+    key.MakeNewKey(true);
+    const GRC::Cpid cpid = GRC::Cpid::Parse("00010203040506070809101112131415");
+
+    BOOST_CHECK(registry.CurrentRecordHash(cpid).IsNull());
+
+    // A pending beacon is not the CPID's record yet.
+    AddPendingBeacon(registry, cpid, key.GetPubKey(), START_TIME, 1);
+    BOOST_CHECK(registry.CurrentRecordHash(cpid).IsNull());
+
+    registry.ActivatePending({key.GetPubKey().GetID()}, START_TIME + DAY,
+                             uint256S("0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c"), 2);
+    BOOST_REQUIRE(registry.Try(cpid));
+    const uint256 active = registry.Try(cpid)->m_hash;
+    BOOST_CHECK(!active.IsNull());
+    BOOST_CHECK(registry.CurrentRecordHash(cpid) == active);
+
+    // An expired beacon is still the CPID's record.
+    BOOST_REQUIRE(registry.Try(cpid)->Expired(START_TIME + GRC::Beacon::MAX_AGE + 2 * DAY));
+    BOOST_CHECK(registry.CurrentRecordHash(cpid) == active);
+
+    // After a removal the record is the removal, also once the registry is loaded again and its records have left
+    // memory.
+    const uint256 removal = DeleteBeacon(registry, cpid, key.GetPubKey(), START_TIME + 2 * DAY, 3);
+    BOOST_REQUIRE(!registry.Try(cpid));
+    BOOST_CHECK(registry.CurrentRecordHash(cpid) == removal);
+    BOOST_CHECK(removal != active);
+
+    ReloadRegistry(registry);
+    registry.PassivateDB();
+    BOOST_CHECK(registry.CurrentRecordHash(cpid) == removal);
+
+    // A removal that is reverted gives the beacon back as the record.
+    RevertDeletion(registry, cpid, key.GetPubKey(), START_TIME + 2 * DAY, 3);
+    BOOST_REQUIRE(registry.Try(cpid));
+    BOOST_CHECK(registry.CurrentRecordHash(cpid) == active);
+
+    // The latest of two removals.
+    DeleteBeacon(registry, cpid, key.GetPubKey(), START_TIME + 2 * DAY, 3);
+    AddPendingBeacon(registry, cpid, key.GetPubKey(), START_TIME + 3 * DAY, 4);
+    registry.ActivatePending({key.GetPubKey().GetID()}, START_TIME + 4 * DAY,
+                             uint256S("0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d"), 5);
+    BOOST_CHECK(registry.CurrentRecordHash(cpid) == registry.Try(cpid)->m_hash);
+    const uint256 second_removal = DeleteBeacon(registry, cpid, key.GetPubKey(), START_TIME + 5 * DAY, 6);
+    BOOST_CHECK(registry.CurrentRecordHash(cpid) == second_removal);
+    BOOST_CHECK(second_removal != removal);
+
+    registry.Reset();
+}
+
+// A block carries beacon payloads of version 4 from block version 15, and of the lower versions below it.
+BOOST_AUTO_TEST_CASE(beacon_registry_takes_payload_version_4_from_v15_and_not_below)
+{
+    LOCK(cs_main);
+
+    GRC::BeaconRegistry& registry = GRC::GetBeaconRegistry();
+    registry.Reset();
+
+    CKey key;
+    key.MakeNewKey(true);
+    const GRC::Cpid cpid = GRC::Cpid::Parse("00010203040506070809101112131415");
+
+    CBlockIndex index_2;
+    index_2.nVersion = 13;
+    index_2.nHeight = AboveV14(2);
+    index_2.nTime = START_TIME + 60;
+
+    const CTransaction v2 = SignedAdvertisementTx(cpid, key, START_TIME + 60, 2);
+    const CTransaction v4 = SignedAdvertisementTx(cpid, key, START_TIME + 60, 4);
+
+    const auto taken = [&](const CTransaction& tx, int& DoS) {
+        DoS = 0;
+        return registry.BlockValidate({tx.GetContracts().front(), tx, &index_2}, DoS);
+    };
+
+    int DoS = 0;
+
+    {
+        grc_test::V15HeightGuard v15(AboveV14(2));
+
+        BOOST_CHECK(taken(v4, DoS));
+        BOOST_CHECK(!taken(v2, DoS));
+        BOOST_CHECK_EQUAL(DoS, 25);
+        BOOST_CHECK(GRC::BeaconRegistry::PayloadVersionFitsHeight(v4.GetContracts().front(), AboveV14(2)));
+        BOOST_CHECK(!GRC::BeaconRegistry::PayloadVersionFitsHeight(v2.GetContracts().front(), AboveV14(2)));
+    }
+
+    {
+        grc_test::V15HeightGuard v15(AboveV14(3));
+
+        BOOST_CHECK(taken(v2, DoS));
+        BOOST_CHECK(!taken(v4, DoS));
+        BOOST_CHECK_EQUAL(DoS, 25);
+        BOOST_CHECK(GRC::BeaconRegistry::PayloadVersionFitsHeight(v2.GetContracts().front(), AboveV14(2)));
+        BOOST_CHECK(!GRC::BeaconRegistry::PayloadVersionFitsHeight(v4.GetContracts().front(), AboveV14(2)));
+    }
+
+    registry.Reset();
+}
+
+// From block version 15 a beacon contract's signature is verified against the contract's action and the CPID's record
+// as the registry holds it.
+BOOST_AUTO_TEST_CASE(beacon_registry_checks_a_contract_s_signature_against_its_action_and_record_from_v15)
+{
+    LOCK(cs_main);
+
+    GRC::BeaconRegistry& registry = GRC::GetBeaconRegistry();
+    registry.Reset();
+
+    grc_test::V15HeightGuard v15(AboveV14(1));
+
+    CKey key;
+    key.MakeNewKey(true);
+    const GRC::Cpid cpid = GRC::Cpid::Parse("00010203040506070809101112131415");
+
+    // After the block version 11 time, before which a beacon is not renewable.
+    const int64_t advertised = 1700000000;
+    const int64_t renewable_at = advertised + GRC::Beacon::RENEWAL_AGE + DAY;
+
+    const auto taken_at = [&](const CTransaction& tx, const int height, const int64_t time) {
+        CBlockIndex index;
+        index.nVersion = 13;
+        index.nHeight = AboveV14(height);
+        index.nTime = time;
+
+        int DoS = 0;
+        return registry.BlockValidate({tx.GetContracts().front(), tx, &index}, DoS);
+    };
+
+    // The CPID's first advertisement, signed over no record, is taken while the CPID has none.
+    const CTransaction first = SignedAdvertisementTx(cpid, key, advertised, 4);
+    BOOST_CHECK(taken_at(first, 2, advertised));
+
+    AddPendingBeacon(registry, cpid, key.GetPubKey(), advertised, 2);
+    registry.ActivatePending({key.GetPubKey().GetID()}, advertised + DAY,
+                             uint256S("0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c"), 3);
+    const uint256 active = registry.CurrentRecordHash(cpid);
+    BOOST_REQUIRE(!active.IsNull());
+
+    // Once the CPID has a beacon, the record is the beacon: a contract signed over no record is not taken.
+    BOOST_CHECK(!taken_at(first, 4, renewable_at));
+
+    // A renewal signed over the beacon is taken.
+    const CTransaction renewal = SignedAdvertisementTx(cpid, key, renewable_at, 4);
+    BOOST_CHECK(taken_at(renewal, 4, renewable_at));
+
+    // A version 4 signature that does not cover the removal action is not taken.
+    CMutableTransaction as_removal;
+    as_removal.nTime = renewable_at;
+    as_removal.vContracts.push_back(GRC::MakeContract<GRC::BeaconPayload>(
+        3, GRC::ContractAction::REMOVE, renewal.GetContracts().front().CopyPayloadAs<GRC::BeaconPayload>()));
+    const CTransaction removal_signed_for_another_action(as_removal);
+    BOOST_REQUIRE(registry.RemoveCarriesCurrentKey(removal_signed_for_another_action.GetContracts().front()));
+    BOOST_CHECK(!taken_at(removal_signed_for_another_action, 4, renewable_at));
+
+    // A removal signed as one, over the beacon, is taken.
+    const CTransaction removal = SignedBeaconTx(GRC::ContractAction::REMOVE, cpid, key, renewable_at, 4, active);
+    BOOST_CHECK(taken_at(removal, 4, renewable_at));
+
+    // Once the beacon is removed, the record is the removal: a contract signed over no record is not taken.
+    const uint256 removed_by = DeleteBeacon(registry, cpid, key.GetPubKey(), renewable_at, 4);
+    BOOST_REQUIRE(registry.CurrentRecordHash(cpid) == removed_by);
+    BOOST_CHECK(!taken_at(first, 5, renewable_at + DAY));
+
+    // An advertisement signed over the removal is.
+    const CTransaction after_removal = SignedAdvertisementTx(cpid, key, renewable_at + DAY, 4);
+    BOOST_CHECK(taken_at(after_removal, 5, renewable_at + DAY));
 
     registry.Reset();
 }
