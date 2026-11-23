@@ -954,10 +954,6 @@ int main(int argc, char *argv[])
     // thread: the timeout applies only to threads started after it is set.
     QThreadPool::globalInstance()->setExpiryTimeout(-1);
 
-#if defined(WIN32) && defined(QT_GUI)
-    SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX);
-#endif
-
     // We notify the user here and exit the application from the command line parse failure above. This is the earliest
     // a dialog can be raised, and is the latest that is safe if the command line is not parseable.
     if (command_line_parse_failure) {
