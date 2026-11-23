@@ -1876,7 +1876,7 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
                 // Place this here as guiref has to be defined if we don't want to lose URIs
                 ipcInit(argc, argv, ThreadSafeHandleURI);
 
-#if defined(WIN32) && defined(QT_GUI)
+#if defined(WIN32)
                 WinShutdownMonitor::registerShutdownBlockReason(QObject::tr("%1 didn't yet exit safely...").arg(QObject::tr(PACKAGE_NAME)), (HWND)window.winId());
 #endif
 
