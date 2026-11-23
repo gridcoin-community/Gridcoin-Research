@@ -232,8 +232,13 @@ const ProjectEntry* ResolveWhitelistProject(
 //! shadow-test oracle for pool_tests.cpp::builtin_pools_match_g_mining_pools_pre_v15,
 //! which asserts the grandfathered builtin seeds match the legacy list
 //! bit-for-bit. It is the ONLY guard against the two builtin lists silently
-//! diverging (a typo there would fork the chain on the next pre-V15 poll's
-//! AVW), so do NOT delete it as dead code.
+//! diverging (a typo in a seed's CPID would change which CPIDs this function
+//! and the displayed active vote weight of balance-and-magnitude polls treat
+//! as pools and, once V15 is active, which CPIDs POOL_REGISTER validation
+//! treats as builtin; a typo in a seed's name would change which BOINC
+//! usernames IsPoolUsername treats as pools), so do NOT delete it as dead
+//! code. The V15 rule is inert while V15 has no activation height and
+//! consensus-relevant from the height it is given.
 //!
 bool IsPoolCpid(const Cpid cpid)
 {
@@ -247,12 +252,12 @@ bool IsPoolCpid(const Cpid cpid)
 //!
 //! \brief Determine whether the provided username belongs to a Gridcoin pool.
 //!
-//! \param cpid The BOINC account username for a project loaded from BOINC.
+//! \param username The BOINC account username for a project loaded from BOINC.
 //!
 //! \return \c true if the username matches a known Gridcoin pool's username.
 //!
-//! See IsPoolCpid() above for the rationale on routing only the local wallet
-//! check (not voting consensus) through the on-chain registry.
+//! See IsPoolCpid() above for why pool detection reads the on-chain registry;
+//! only the local wallet's project check asks by username.
 //!
 bool IsPoolUsername(const std::string& username)
 {
