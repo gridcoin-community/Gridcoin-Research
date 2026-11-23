@@ -15,6 +15,10 @@
 
 // If we don't want a message to be processed by Qt, return true and set result to
 // the value that the window procedure should return. Otherwise return false.
+// A message Windows sends, as it sends the session-end ones, arrives through
+// Qt's window procedure, which passes a result to fill. A message taken from
+// the thread's queue, one another program posted, arrives from Qt's event
+// dispatcher, which passes none.
 #if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
 bool WinShutdownMonitor::nativeEventFilter(const QByteArray &eventType, void *pMessage, qintptr *pnResult)
 #else
@@ -33,13 +37,13 @@ bool WinShutdownMonitor::nativeEventFilter(const QByteArray &eventType, void *pM
                // Windows session end until we have finished client shutdown. The split
                // GUI quits without waiting for a message that holds the core's stop.
                BitcoinGUI::requestQuitForSessionEnd(m_node, m_multiprocess);
-               *pnResult = FALSE;
+               if (pnResult) *pnResult = FALSE;
                return true;
            }
 
            case WM_ENDSESSION:
            {
-               *pnResult = FALSE;
+               if (pnResult) *pnResult = FALSE;
                return true;
            }
        }

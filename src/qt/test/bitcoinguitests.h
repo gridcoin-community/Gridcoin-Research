@@ -18,6 +18,8 @@ private slots:
     void notStakingToolTipMaskedHidesFrequency();
     void unableToStakeToolTipIgnoresMask();
     void autoUnlockActionShownOnlyInMultiprocessWithAStore();
+    void sentSessionEndMessagesAnswerFalse();
+    void queuedSessionEndMessagesHaveNoResultToFill();
 };
 
 #endif // BITCOIN_QT_TEST_BITCOINGUITESTS_H
