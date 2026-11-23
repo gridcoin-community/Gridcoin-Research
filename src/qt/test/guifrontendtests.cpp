@@ -649,4 +649,53 @@ void GUIFrontEndTests::detachGuardReapsJobStartedByHook()
     QVERIFY2(done_after_throw, "the guard returned before a job its detach started had finished");
 }
 
+// The guard waits for the global pool's jobs and leaves its threads: a job
+// started after the guard runs on the thread the earlier job used, which still
+// holds that job's thread-local mark.
+void GUIFrontEndTests::detachGuardKeepsPoolThreads()
+{
+    // With no thread left in the pool, job A gets a new one.
+    QVERIFY2(QThreadPool::globalInstance()->waitForDone(5000), "global pool busy before the test");
+
+    static thread_local bool marked = false;
+    std::atomic<bool> release{false};
+    std::atomic<bool> a_done{false};
+    std::atomic<QThread*> a_thread{nullptr};
+    // Spins until released, so the pool is busy while the guard runs.
+    QThreadPool::globalInstance()->start([&release, &a_done, &a_thread] {
+        a_thread = QThread::currentThread();
+        marked = true;
+        for (int i = 0; i < 30000 && !release; ++i) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+        a_done = true;
+    });
+    // Not a pool job, which would take a second pool thread, and not a timer:
+    // the guard's wait runs no events.
+    std::thread helper([&release] {
+        std::this_thread::sleep_for(std::chrono::milliseconds(300));
+        release = true;
+    });
+    {
+        FakeGuiFrontEnd fake;
+        FrontEndDetachGuard guard{fake};
+    }
+    const bool a_done_after_guard = a_done.load();
+    helper.join();
+
+    std::atomic<bool> b_done{false};
+    std::atomic<bool> b_marked{false};
+    QThreadPool::globalInstance()->start([&b_done, &b_marked] {
+        b_marked = marked;
+        b_done = true;
+    });
+    QThreadPool::globalInstance()->waitForDone();
+
+    QVERIFY2(a_done_after_guard, "the guard returned with a global-pool job still running");
+    QVERIFY2(a_thread.load() != nullptr && a_thread.load() != QThread::currentThread(),
+             "job A did not run on a pool thread");
+    QVERIFY2(b_done.load(), "job B did not run");
+    QVERIFY2(b_marked.load(), "the detach guard ended the global pool's threads");
+}
+
 #include "guifrontendtests.moc"

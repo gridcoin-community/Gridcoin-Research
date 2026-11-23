@@ -27,6 +27,7 @@ private Q_SLOTS:
     void widgetsFrontEndKeepsTheOldRouting();
     void detachGuardReapsGlobalPool();
     void detachGuardReapsJobStartedByHook();
+    void detachGuardKeepsPoolThreads();
 };
 
 #endif // BITCOIN_QT_TEST_GUIFRONTENDTESTS_H

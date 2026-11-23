@@ -4,12 +4,12 @@
 
 #include <qt/guifrontend.h>
 
+#include <qt/guieventloop.h>
 #include <qt/guilog.h>
 #include <qt/guiutil.h>
 
 #include <QMetaObject>
 #include <QString>
-#include <QThreadPool>
 
 #include <exception>
 #include <iostream>
@@ -116,6 +116,9 @@ FrontEndDetachGuard::~FrontEndDetachGuard()
 
     // Then wait for every job on the global pool, including one a detach hook
     // started, while the models and sources declared before this guard are
-    // still alive.
-    QThreadPool::globalInstance()->waitForDone();
+    // still alive. Not waitForDone(): it also ends the pool's threads, and a
+    // pool thread that has made IPC calls must not end while the connection
+    // to the core is open or is being destroyed. The pool's threads end in
+    // ~QCoreApplication, after the connection is gone.
+    WaitForGlobalPoolTasks();
 }

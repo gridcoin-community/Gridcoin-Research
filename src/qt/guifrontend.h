@@ -188,8 +188,9 @@ private:
 //! nothing to run.
 //! After the detach it waits for every job on QThreadPool::globalInstance(),
 //! including one a detach hook started, so a pooled job finishes while the
-//! models and sources declared before the guard are alive. Destroy it while
-//! the QCoreApplication is alive, as GlobalPoolReapGuard requires.
+//! models and sources declared before the guard are alive. It waits as
+//! WaitForGlobalPoolTasks() does, leaving the pool's threads alive. Destroy it
+//! while the QCoreApplication is alive, as GlobalPoolReapGuard requires.
 struct FrontEndDetachGuard
 {
     GuiFrontEnd& frontend;
