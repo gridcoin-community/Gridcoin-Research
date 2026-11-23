@@ -8,6 +8,7 @@
 #include "dbwrapper.h"
 #include "gridcoin/claim.h"
 #include "gridcoin/contract/contract.h"
+#include "gridcoin/pool.h"
 #include "gridcoin/protocol.h"
 #include "gridcoin/superblock.h"
 #include "gridcoin/voting/payloads.h"
@@ -24,6 +25,7 @@
 #include "test/state_guard.h"
 #include "util.h"
 
+#include <algorithm>
 #include <boost/test/unit_test.hpp>
 
 // Tests are single-threaded and drive the PollRegistry contract handler
@@ -471,6 +473,44 @@ GRC::Claim SuperblockClaim(const double magnitude = 100)
     return claim;
 }
 
+//! The CPID of the first builtin pool. Every pool registry seeds the builtin
+//! pools as active from height zero.
+GRC::Cpid BuiltinPoolCpid()
+{
+    return GRC::Cpid::Parse(GRC::PoolRegistry::BuiltinPoolSeeds().front().cpid_hex);
+}
+
+//! Whether the pool registry holds \p cpid as an active pool at \p height.
+bool IsActivePoolAt(const GRC::Cpid& cpid, const int height)
+{
+    const std::vector<GRC::Pool> pools = GRC::GetPoolRegistry().ActivePoolsAtHeight(height);
+
+    return std::any_of(pools.begin(), pools.end(), [&](const GRC::Pool& pool) { return pool.m_cpid == cpid; });
+}
+
+//! A superblock claim with the CPID SuperblockClaim uses, of \p magnitude, and
+//! the first builtin pool's CPID, of \p pool_magnitude. The CPID index looks a
+//! CPID up in a sorted list and Add does not sort, so the CPIDs go in
+//! ascending order.
+GRC::Claim PoolSuperblockClaim(const double magnitude, const double pool_magnitude)
+{
+    const GRC::Cpid cpid = GRC::Cpid::Parse("00010203040506070809101112131415");
+    const GRC::Cpid pool_cpid = BuiltinPoolCpid();
+    BOOST_REQUIRE(cpid < pool_cpid);
+
+    GRC::Superblock superblock(GRC::Superblock::CURRENT_VERSION);
+    superblock.m_cpids.Add(cpid, GRC::Magnitude::RoundFrom(magnitude));
+    superblock.m_cpids.Add(pool_cpid, GRC::Magnitude::RoundFrom(pool_magnitude));
+    superblock.m_projects.Add("regtest", GRC::Superblock::ProjectStats(1, 1, 1));
+    BOOST_REQUIRE(superblock.WellFormed());
+
+    GRC::Claim claim;
+    claim.m_quorum_hash = superblock.GetHash();
+    claim.m_superblock.Replace(std::move(superblock));
+
+    return claim;
+}
+
 //! Index a transaction in the transaction index for the scope, so ReadDiskTx
 //! finds it in the block LinkTip wrote.
 class TxIndexScope
@@ -684,6 +724,176 @@ BOOST_AUTO_TEST_CASE(a_legacy_poll_weighs_magnitude_as_of_its_end)
         factor * GRC::Magnitude::RoundFrom(50).Scaled() / GRC::Magnitude::SCALE_FACTOR + 100 * COIN;
 
     BOOST_CHECK_EQUAL(result->m_total_weight, expected);
+}
+
+//!
+//! A poll weighed by balance has, as its active vote weight, the mean network
+//! weight of its blocks: from the block the poll is in to the end block, the
+//! sum of each block's network weight divided by the number of blocks.
+//!
+BOOST_AUTO_TEST_CASE(active_vote_weight_by_balance_is_the_mean_over_the_poll_blocks)
+{
+    grc_test::StateGuard guard;
+    RegistryReset reset;
+    LOCK2(cs_main, GRC::PollRegistry::cs_poll_registry);
+
+    // Each block's target is a power of two: 2^224, 2^225 and 2^226. For a
+    // target of 2^k the network weight is (2^256 - 1) / 450 / 2^k * COIN in
+    // integers, which is floor(2^(256 - k) / 450) * COIN: 954437100000000,
+    // 477218500000000 and 238609200000000.
+    const int64_t start = GetAdjustedTime() - 3600;
+    const LinkedTip first = LinkBlock(pindexGenesisBlock, start, GRC::Claim(), {}, 0x1d010000);
+    const LinkedTip second = LinkBlock(first.m_pindex, start + 60, GRC::Claim(), {}, 0x1d020000);
+    const LinkedTip third = LinkBlock(second.m_pindex, start + 120, GRC::Claim(), {}, 0x1d040000);
+
+    // A poll weighed by balance does not read the money supply. Each block
+    // still gets its own, so a walk that read it would not see one value.
+    first.m_pindex->nMoneySupply = 400000 * COIN;
+    second.m_pindex->nMoneySupply = 410000 * COIN;
+    third.m_pindex->nMoneySupply = 420000 * COIN;
+
+    // The poll starts in the first block, an hour ago, and is still open, so
+    // the block passed in ends the walk.
+    GRC::PollRegistry& registry = GRC::GetPollRegistry();
+    const PollTx poll = MakePollTx("Title", start);
+
+    registry.Add({poll.contract, poll.tx, first.m_pindex});
+
+    const GRC::PollReference* ref = registry.TryByTxid(poll.tx.GetHash());
+    BOOST_REQUIRE(ref != nullptr);
+
+    const auto active_vote_weight = [&](const CBlockIndex* end) {
+        GRC::Poll weighed = poll.contract.CopyPayloadAs<GRC::PollPayload>().m_poll;
+        weighed.m_magnitude_weight_factor = Fraction(100, 567);
+
+        return ref->GetActiveVoteWeight(GRC::PollResult(std::move(weighed)), end);
+    };
+
+    const std::optional<CAmount> one = active_vote_weight(first.m_pindex);
+    const std::optional<CAmount> two = active_vote_weight(second.m_pindex);
+    const std::optional<CAmount> three = active_vote_weight(third.m_pindex);
+    BOOST_REQUIRE(one && two && three);
+
+    // 954437100000000 / 1; (954437100000000 + 477218500000000) / 2; and
+    // (954437100000000 + 477218500000000 + 238609200000000) / 3, rounded down.
+    BOOST_CHECK_EQUAL(*one, CAmount {954437100000000});
+    BOOST_CHECK_EQUAL(*two, CAmount {715827800000000});
+    BOOST_CHECK_EQUAL(*three, CAmount {556754933333333});
+}
+
+//!
+//! A poll weighed by balance and magnitude takes, out of the superblock's
+//! network magnitude, the magnitude of each pool that did not vote, and only
+//! of those.
+//!
+BOOST_AUTO_TEST_CASE(active_vote_weight_subtracts_the_magnitude_of_pools_that_did_not_vote)
+{
+    grc_test::StateGuard guard;
+    RegistryReset reset;
+    LOCK2(cs_main, GRC::PollRegistry::cs_poll_registry);
+
+    // One block is the superblock, the poll's block and the end block at once.
+    // It holds a CPID no pool holds at magnitude 200 and the first builtin
+    // pool at 100, so the network's scaled magnitude M is 30000 and the pool's
+    // 10000. The money supply is one Halford over 400000 GRC, so that dividing
+    // by M before applying the factor would round differently.
+    const LinkedTip tip = LinkTip(PoolSuperblockClaim(200, 100), {}, 0x1d010000);
+    tip.m_pindex->nMoneySupply = 400000 * COIN + 1;
+    BOOST_REQUIRE(tip.m_pindex->IsSuperblock());
+    BOOST_REQUIRE(IsActivePoolAt(BuiltinPoolCpid(), tip.m_pindex->nHeight));
+    BOOST_REQUIRE(!IsActivePoolAt(GRC::Cpid::Parse("00010203040506070809101112131415"), tip.m_pindex->nHeight));
+
+    GRC::PollRegistry& registry = GRC::GetPollRegistry();
+    const PollTx poll = MakePollTx("Title", tip.m_pindex->nTime, GRC::ContractAction::ADD,
+                                   GRC::PollWeightType::BALANCE_AND_MAGNITUDE);
+
+    registry.Add({poll.contract, poll.tx, tip.m_pindex});
+
+    const GRC::PollReference* ref = registry.TryByTxid(poll.tx.GetHash());
+    BOOST_REQUIRE(ref != nullptr);
+
+    const auto active_vote_weight = [&](const std::vector<GRC::Cpid>& pools_voted) {
+        GRC::Poll weighed = poll.contract.CopyPayloadAs<GRC::PollPayload>().m_poll;
+        weighed.m_magnitude_weight_factor = Fraction(100, 567);
+
+        GRC::PollResult result(std::move(weighed));
+        result.m_pools_voted = pools_voted;
+
+        return ref->GetActiveVoteWeight(result, tip.m_pindex);
+    };
+
+    const std::optional<CAmount> not_voted = active_vote_weight({});
+    const std::optional<CAmount> voted = active_vote_weight({BuiltinPoolCpid()});
+    BOOST_REQUIRE(not_voted && voted);
+
+    // For one block the active vote weight is the network weight,
+    // 954437100000000, plus S * (M - P) * 100 / 567 / M, each step rounded
+    // down, where S is the money supply, 40000000000001, and P the scaled
+    // magnitude of the pools that did not vote. The other builtin pools did
+    // not vote either, but hold no magnitude in this superblock.
+    // Not voted, P = 10000: S * 20000 * 100 / 567 / 30000 = 4703115814227.
+    // Voted, P = 0: S * 30000 * 100 / 567 / 30000 = 7054673721340.
+    BOOST_CHECK_EQUAL(*not_voted, CAmount {959140215814227});
+    BOOST_CHECK_EQUAL(*voted, CAmount {961491773721340});
+}
+
+//!
+//! A superblock inside a poll weighed by balance and magnitude gives the
+//! network and pool magnitudes from its own block on. Before it, the poll's
+//! blocks take them from the last superblock at or before the poll's block.
+//!
+BOOST_AUTO_TEST_CASE(active_vote_weight_takes_a_superblock_inside_the_poll_from_its_block_on)
+{
+    grc_test::StateGuard guard;
+    RegistryReset reset;
+    LOCK2(cs_main, GRC::PollRegistry::cs_poll_registry);
+
+    // A superblock before the poll (magnitude 200, and the pool at 100), the
+    // poll's block, a superblock inside the poll (700, and the pool at 100) and
+    // a last block, at the targets 2^224, 2^224, 2^225 and 2^226.
+    const int64_t start = GetAdjustedTime() - 3600;
+    const LinkedTip before = LinkBlock(pindexGenesisBlock, start - 60, PoolSuperblockClaim(200, 100), {}, 0x1d010000);
+    const LinkedTip first = LinkBlock(before.m_pindex, start, GRC::Claim(), {}, 0x1d010000);
+    const LinkedTip within = LinkBlock(first.m_pindex, start + 60, PoolSuperblockClaim(700, 100), {}, 0x1d020000);
+    const LinkedTip last = LinkBlock(within.m_pindex, start + 120, GRC::Claim(), {}, 0x1d040000);
+    first.m_pindex->nMoneySupply = 400000 * COIN;
+    within.m_pindex->nMoneySupply = 410000 * COIN;
+    last.m_pindex->nMoneySupply = 420000 * COIN;
+    BOOST_REQUIRE(within.m_pindex->IsSuperblock());
+    BOOST_REQUIRE(IsActivePoolAt(BuiltinPoolCpid(), first.m_pindex->nHeight));
+    BOOST_REQUIRE(!IsActivePoolAt(GRC::Cpid::Parse("00010203040506070809101112131415"), first.m_pindex->nHeight));
+
+    // The poll starts in its block, an hour ago, and is still open, so the
+    // block passed in ends the walk. No pool voted.
+    GRC::PollRegistry& registry = GRC::GetPollRegistry();
+    const PollTx poll = MakePollTx("Title", start, GRC::ContractAction::ADD,
+                                   GRC::PollWeightType::BALANCE_AND_MAGNITUDE);
+
+    registry.Add({poll.contract, poll.tx, first.m_pindex});
+
+    const GRC::PollReference* ref = registry.TryByTxid(poll.tx.GetHash());
+    BOOST_REQUIRE(ref != nullptr);
+
+    const auto active_vote_weight = [&](const CBlockIndex* end) {
+        GRC::Poll weighed = poll.contract.CopyPayloadAs<GRC::PollPayload>().m_poll;
+        weighed.m_magnitude_weight_factor = Fraction(100, 567);
+
+        return ref->GetActiveVoteWeight(GRC::PollResult(std::move(weighed)), end);
+    };
+
+    const std::optional<CAmount> two = active_vote_weight(within.m_pindex);
+    const std::optional<CAmount> three = active_vote_weight(last.m_pindex);
+    BOOST_REQUIRE(two && three);
+
+    // Each block adds its network weight and S * (M - P) * 100 / 567 / M, each
+    // step rounded down, with S the block's money supply. The poll's block
+    // takes M = 30000 and P = 10000 from the superblock before it:
+    // 954437100000000 + 4703115814226. From the superblock inside the poll on,
+    // M = 80000 and P = 10000: 477218500000000 + 6327160493827, then
+    // 238609200000000 + 6481481481481. The weight is the sum over the blocks
+    // walked divided by their number, rounded down.
+    BOOST_CHECK_EQUAL(*two, CAmount {721342938154026});
+    BOOST_CHECK_EQUAL(*three, CAmount {562592185929844});
 }
 
 BOOST_AUTO_TEST_SUITE_END()
