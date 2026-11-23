@@ -23,7 +23,8 @@ public:
     //! holding a reference is safe.
     WinShutdownMonitor(interfaces::Node& node, bool multiprocess) : m_node(node), m_multiprocess(multiprocess) {}
 
-    /** Implements QAbstractNativeEventFilter interface for processing Windows messages */
+    /** Implements QAbstractNativeEventFilter interface for processing Windows messages.
+     *  \p pnResult is null for a message from the thread's queue. */
 #if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
     bool nativeEventFilter(const QByteArray &eventType, void *pMessage, qintptr *pnResult);
 #else

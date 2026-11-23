@@ -8,6 +8,15 @@
 
 #include <QString>
 
+#ifdef WIN32
+#include "qt/test/interfacefakes.h"
+#include "qt/winshutdownmonitor.h"
+
+#include <QByteArray>
+
+#include <windows.h>
+#endif
+
 namespace {
 // Neither digit string occurs inside the other, so a check for one cannot be
 // satisfied by the other.
@@ -20,6 +29,24 @@ const QString FREQUENCY = QStringLiteral("4.35 times per month");
 
 const QString MASK = QStringLiteral("#.##");
 const QString WARNINGS = QStringLiteral("No mature coins");
+
+#ifdef WIN32
+// The type of the result a native event filter fills.
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+using NativeResult = qintptr;
+#else
+using NativeResult = long;
+#endif
+
+const QByteArray GENERIC_MSG = QByteArrayLiteral("windows_generic_MSG");
+
+MSG Message(UINT message)
+{
+    MSG msg{};
+    msg.message = message;
+    return msg;
+}
+#endif
 } // anonymous namespace
 
 void BitcoinGUITests::stakingToolTipUnmaskedShowsWeightAndFrequency()
@@ -105,5 +132,52 @@ void BitcoinGUITests::autoUnlockActionShownOnlyInMultiprocessWithAStore()
     // platform has no store, so the action stays hidden even in the split build.
     QVERIFY(!GetAutoUnlockStatus().supported);
     QVERIFY(!BitcoinGUI::AutoUnlockActionVisible(/*multiprocess=*/true, [] { return GetAutoUnlockStatus(); }));
+#endif
+}
+
+// Windows sends the session-end messages to the window procedure, and Qt's
+// window procedure gives the filter a result to fill. FALSE for
+// WM_QUERYENDSESSION asks Windows to hold the session's end while the client
+// shuts down.
+void BitcoinGUITests::sentSessionEndMessagesAnswerFalse()
+{
+#ifdef WIN32
+    qt_test::FakeNode node;
+    WinShutdownMonitor monitor(node, /*multiprocess=*/false);
+
+    MSG query = Message(WM_QUERYENDSESSION);
+    NativeResult result = 1;
+    QVERIFY(monitor.nativeEventFilter(GENERIC_MSG, &query, &result));
+    QCOMPARE(result, NativeResult{0});
+    QCOMPARE(node.m_start_shutdown_calls, 1);
+
+    MSG end = Message(WM_ENDSESSION);
+    result = 1;
+    QVERIFY(monitor.nativeEventFilter(GENERIC_MSG, &end, &result));
+    QCOMPARE(result, NativeResult{0});
+    QCOMPARE(node.m_start_shutdown_calls, 1);
+#else
+    QSKIP("WinShutdownMonitor is built on Windows only.");
+#endif
+}
+
+// A message taken from the thread's queue (one another program posted) reaches
+// the filter from Qt's event dispatcher, which passes no result. It is handled
+// as a sent one is, with nothing to fill.
+void BitcoinGUITests::queuedSessionEndMessagesHaveNoResultToFill()
+{
+#ifdef WIN32
+    qt_test::FakeNode node;
+    WinShutdownMonitor monitor(node, /*multiprocess=*/false);
+
+    MSG query = Message(WM_QUERYENDSESSION);
+    QVERIFY(monitor.nativeEventFilter(GENERIC_MSG, &query, nullptr));
+    QCOMPARE(node.m_start_shutdown_calls, 1);
+
+    MSG end = Message(WM_ENDSESSION);
+    QVERIFY(monitor.nativeEventFilter(GENERIC_MSG, &end, nullptr));
+    QCOMPARE(node.m_start_shutdown_calls, 1);
+#else
+    QSKIP("WinShutdownMonitor is built on Windows only.");
 #endif
 }
