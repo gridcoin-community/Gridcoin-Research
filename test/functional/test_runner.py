@@ -76,9 +76,10 @@ TEST_EXIT_SKIPPED = 77
 CI_TIMEOUT_FACTOR = 4
 
 TEST_FRAMEWORK_MODULES = [
-    # Phase 1 only has util.py. Phase 3 will add address / blocktools / key /
-    # script / messages once messages.py and p2p.py land.
+    # Phase 1 has util.py and test_node.py. Phase 3 will add address /
+    # blocktools / key / script / messages once messages.py and p2p.py land.
     "util",
+    "test_node",
 ]
 
 EXTENDED_SCRIPTS = [
