@@ -20,6 +20,9 @@ The images of a release may be rebuilt after it, when the image recipe itself ne
 release built; only the image around them changes. A version tag such as `5.5.3.0` then
 points to the rebuilt image, and a reference by digest keeps the older one.
 
+The `latest` tag points to the most recent mainnet release. A testnet release is published
+under its version tag alone, for example `5.5.2.3-testnet`.
+
 ## Quick Start
 
 ### Headless (Daemon)

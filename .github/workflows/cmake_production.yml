@@ -1803,6 +1803,34 @@ jobs:
           VERSION="${TAG#v}"
           echo "version=${VERSION}" >> $GITHUB_OUTPUT
 
+      # Only a mainnet release, a tag that is a bare version such as 5.5.3.0,
+      # moves latest. A testnet tag (5.5.2.3-testnet) or any other tag with a
+      # suffix is pushed under its version tag alone, so latest never points to
+      # a testnet build. docker_republish.yml can move latest by hand.
+      - name: Choose the Image Tags
+        id: tags
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          IMAGE_PREFIX: ghcr.io/${{ github.repository_owner }}
+        run: |
+          if [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            move_latest=true
+          else
+            move_latest=false
+          fi
+          echo "Version $VERSION, latest moves: $move_latest"
+
+          for name in gridcoinresearchd gridcoinresearch; do
+            {
+              echo "$name<<END_OF_TAGS"
+              echo "$IMAGE_PREFIX/$name:$VERSION"
+              if [ "$move_latest" = "true" ]; then
+                echo "$IMAGE_PREFIX/$name:latest"
+              fi
+              echo "END_OF_TAGS"
+            } >> "$GITHUB_OUTPUT"
+          done
+
       - name: Build and Push Headless Image
         uses: docker/build-push-action@v6
         with:
@@ -1810,9 +1838,7 @@ jobs:
           file: contrib/docker/Dockerfile.headless
           platforms: linux/amd64,linux/arm64
           push: true
-          tags: |
-            ghcr.io/${{ github.repository_owner }}/gridcoinresearchd:${{ steps.version.outputs.version }}
-            ghcr.io/${{ github.repository_owner }}/gridcoinresearchd:latest
+          tags: ${{ steps.tags.outputs.gridcoinresearchd }}
 
       - name: Build and Push GUI Image
         uses: docker/build-push-action@v6
@@ -1821,9 +1847,7 @@ jobs:
           file: contrib/docker/Dockerfile.gui
           platforms: linux/amd64,linux/arm64
           push: true
-          tags: |
-            ghcr.io/${{ github.repository_owner }}/gridcoinresearch:${{ steps.version.outputs.version }}
-            ghcr.io/${{ github.repository_owner }}/gridcoinresearch:latest
+          tags: ${{ steps.tags.outputs.gridcoinresearch }}
 
   # ----------------------------------------------------------------------
   # There is no separate notarization job. Each macOS build notarizes and
