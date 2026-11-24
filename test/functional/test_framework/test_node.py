@@ -10,6 +10,7 @@ import decimal
 import errno
 from enum import Enum
 import http.client
+import io
 import json
 import logging
 import os
@@ -21,6 +22,8 @@ import urllib.parse
 import collections
 import shlex
 import sys
+import unittest
+from unittest import mock
 
 from .authproxy import JSONRPCException
 from .messages import MY_SUBVERSION
@@ -313,6 +316,11 @@ class TestNode():
                     pass  # Treat identical to ConnectionResetError
                 elif e.errno == errno.ECONNREFUSED:
                     pass  # Port not yet open?
+                elif e.errno == errno.EINVAL and sys.platform == 'darwin':
+                    # macOS answers EINVAL when an option is set on a socket that has been shut down. http.client
+                    # sets TCP_NODELAY right after the connect, and a node that exits during startup can drop the
+                    # connection in between. Treat identical to ConnectionResetError.
+                    pass
                 else:
                     raise  # unknown OS error
             except ValueError as e:  # cookie file not found and no rpcuser or rpcpassword; gridcoinresearchd is still starting
@@ -841,3 +849,54 @@ class TestNodeCLI():
             return json.loads(cli_stdout, parse_float=decimal.Decimal)
         except (json.JSONDecodeError, decimal.InvalidOperation):
             return cli_stdout.rstrip("\n")
+
+
+class TestFrameworkTestNode(unittest.TestCase):
+    """Which connection errors wait_for_rpc_connection() asks again after."""
+
+    class ExitsAfterFirstPoll:
+        """A node process that runs at the first poll and has exited at the second."""
+        returncode = 1
+
+        def __init__(self):
+            self.polls = 0
+
+        def poll(self):
+            self.polls += 1
+            return None if self.polls == 1 else self.returncode
+
+    def wait_with_connect_error(self, error, platform):
+        node = TestNode.__new__(TestNode)
+        node.index = 0
+        node.datadir = ""
+        node.chain = "regtest"
+        node.rpchost = None
+        node.rpc_timeout = 4
+        node.coverage_dir = None
+        node.use_cli = False
+        node.cleanup_on_exit = False
+        node.log = logging.getLogger("TestFramework.unit")
+        node.process = self.ExitsAfterFirstPoll()
+        node.stderr = io.BytesIO()
+
+        proxy = mock.Mock()
+        proxy.getblockcount.side_effect = error
+        with mock.patch(__name__ + ".get_rpc_proxy", return_value=proxy), \
+             mock.patch(__name__ + ".rpc_url", return_value="http://127.0.0.1:1"), \
+             mock.patch.object(sys, "platform", platform), \
+             mock.patch.object(time, "sleep"):
+            node.wait_for_rpc_connection()
+
+    def test_refused_connection_is_asked_again(self):
+        # The second poll then finds the node gone.
+        with self.assertRaises(FailedToStartError):
+            self.wait_with_connect_error(OSError(errno.ECONNREFUSED, "Connection refused"), "linux")
+
+    def test_connection_dropped_on_macos_is_asked_again(self):
+        with self.assertRaises(FailedToStartError):
+            self.wait_with_connect_error(OSError(errno.EINVAL, "Invalid argument"), "darwin")
+
+    def test_invalid_argument_elsewhere_is_raised(self):
+        with self.assertRaises(OSError) as raised:
+            self.wait_with_connect_error(OSError(errno.EINVAL, "Invalid argument"), "linux")
+        self.assertEqual(raised.exception.errno, errno.EINVAL)
