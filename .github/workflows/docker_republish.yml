@@ -1,0 +1,237 @@
+name: Docker Image Republish
+
+# Rebuilds the two published images of one release with the recipe in
+# contrib/docker, and pushes them over that release's image tags. It is for a
+# fix to the recipe itself, such as a runtime library the image lacks.
+#
+# No wallet source is built. The binaries are copied out of the images already
+# published for that version, so they are the ones the release tag produced.
+# Only contrib/docker is taken from the ref the run is started on. No git tag
+# and no release asset changes.
+#
+# A run pushes only when it is started on the default branch, so the recipe
+# that is pushed is the merged one. A run on any other ref builds and checks.
+#
+# A pull request that touches the recipe or this file runs the same build and
+# checks on the binaries of the images tagged latest, and pushes nothing. A
+# recipe change that goes with a change of the build environment (a new base
+# image) cannot pass there: the published binaries are from the old one.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release whose images to rebuild, as its image tag (5.5.3.0)"
+        required: true
+        type: string
+      push:
+        description: "Push the rebuilt images over that version's tags"
+        type: boolean
+        default: false
+      latest:
+        description: "Also move the latest tags (for the newest release only)"
+        type: boolean
+        default: false
+  pull_request:
+    paths:
+      - 'contrib/docker/**'
+      - '!contrib/docker/README.md'
+      - '.github/workflows/docker_republish.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  republish:
+    name: Rebuild Docker Images
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    env:
+      HEADLESS_IMAGE: ghcr.io/${{ github.repository_owner }}/gridcoinresearchd
+      GUI_IMAGE: ghcr.io/${{ github.repository_owner }}/gridcoinresearch
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Choose the Source Images
+        id: source
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+          INPUT_PUSH: ${{ inputs.push }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
+            if ! [[ $INPUT_VERSION =~ ^[0-9]+(\.[0-9]+){3}(-[a-z0-9]+)?$ ]]; then
+              echo "::error::version must be an image tag such as 5.5.3.0 or 5.5.2.1-testnet"
+              exit 1
+            fi
+            if [ "$INPUT_PUSH" = "true" ] && [ "$GITHUB_REF" != "refs/heads/$DEFAULT_BRANCH" ]; then
+              echo "::error::images are pushed only from a run started on $DEFAULT_BRANCH"
+              exit 1
+            fi
+            echo "tag=$INPUT_VERSION" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=latest" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # docker create starts nothing, so the copy needs no emulation. Each
+      # binary comes from the image named after it. The GUI image holds the
+      # daemon too, and its rebuild takes the one staged from the headless
+      # image, so the two must be the same file. Both files of the GUI image
+      # come out of one container, so that pair is of one image even if the
+      # tag moves during the run.
+      - name: Stage Binaries from the Published Images
+        env:
+          SOURCE_TAG: ${{ steps.source.outputs.tag }}
+        run: |
+          set -euo pipefail
+          cd contrib/docker
+
+          copy_out() {
+            local image=$1 arch=$2 id
+            shift 2
+            docker pull --quiet --platform "linux/$arch" "$image:$SOURCE_TAG"
+            id=$(docker create --platform "linux/$arch" "$image:$SOURCE_TAG")
+            while [ $# -gt 0 ]; do
+              docker cp "$id:/usr/local/bin/$1" "$2"
+              shift 2
+            done
+            docker rm "$id" > /dev/null
+          }
+
+          for arch in amd64 arm64; do
+            mkdir -p "bin/$arch"
+            copy_out "$HEADLESS_IMAGE" "$arch" gridcoinresearchd "bin/$arch/gridcoinresearchd"
+            copy_out "$GUI_IMAGE" "$arch" \
+              gridcoinresearch "bin/$arch/gridcoinresearch" \
+              gridcoinresearchd "$RUNNER_TEMP/gui-daemon-$arch"
+
+            if ! cmp -s "bin/$arch/gridcoinresearchd" "$RUNNER_TEMP/gui-daemon-$arch"; then
+              echo "::error::the $arch daemons of the two $SOURCE_TAG images differ"
+              exit 1
+            fi
+          done
+
+          chmod +x bin/amd64/gridcoin* bin/arm64/gridcoin*
+
+          echo "Staged binaries:"
+          file bin/amd64/* bin/arm64/*
+          sha256sum bin/amd64/* bin/arm64/*
+
+          # A pull that fell back to another platform would stage the wrong binary.
+          check_arch() {
+            local path=$1 want=$2 found
+            found=$(file -b "$path")
+            if [[ $found != *"$want"* ]]; then
+              echo "::error::$path is not built for $want: $found"
+              exit 1
+            fi
+          }
+
+          for name in gridcoinresearchd gridcoinresearch; do
+            check_arch "bin/amd64/$name" x86-64
+            check_arch "bin/arm64/$name" aarch64
+          done
+
+      # The recipe's own ldd step fails a build whose image lacks a library.
+      # Starting the daemon for its version shows that the loader agrees, on
+      # both architectures, and that the binary is the version asked for. A
+      # release prints "Gridcoin Core v" and its four numbers and nothing
+      # more. For a tag with a suffix only the numbers are compared.
+      - name: Build and Check Each Image
+        env:
+          SOURCE_TAG: ${{ steps.source.outputs.tag }}
+        run: |
+          set -euo pipefail
+          cd contrib/docker
+
+          numbers=${SOURCE_TAG%%-*}
+          if [ "$SOURCE_TAG" = "latest" ]; then
+            want='^Gridcoin Core '
+          elif [ "$SOURCE_TAG" = "$numbers" ]; then
+            want="^Gridcoin Core v?${numbers//./\\.}\$"
+          else
+            want="^Gridcoin Core v?${numbers//./\\.}(-|\$)"
+          fi
+
+          for arch in amd64 arm64; do
+            docker buildx build --platform "linux/$arch" --load \
+              -f Dockerfile.headless -t "republish-headless:$arch" .
+            docker buildx build --platform "linux/$arch" --load \
+              -f Dockerfile.gui -t "republish-gui:$arch" .
+
+            for image in headless gui; do
+              out=$(docker run --rm --platform "linux/$arch" \
+                --entrypoint /usr/local/bin/gridcoinresearchd \
+                "republish-$image:$arch" -version)
+              echo "$image $arch: $out"
+              if ! [[ ${out%%$'\n'*} =~ $want ]]; then
+                echo "::error::the $image image for $arch did not print the version of $SOURCE_TAG"
+                exit 1
+              fi
+            done
+          done
+
+      - name: Choose the Tags to Push
+        id: tags
+        if: github.event_name == 'workflow_dispatch' && inputs.push
+        env:
+          VERSION: ${{ steps.source.outputs.tag }}
+          MOVE_LATEST: ${{ inputs.latest }}
+        run: |
+          for image in headless gui; do
+            if [ "$image" = "headless" ]; then name=$HEADLESS_IMAGE; else name=$GUI_IMAGE; fi
+            {
+              echo "$image<<END_OF_TAGS"
+              echo "$name:$VERSION"
+              if [ "$MOVE_LATEST" = "true" ]; then
+                echo "$name:latest"
+              fi
+              echo "END_OF_TAGS"
+            } >> "$GITHUB_OUTPUT"
+          done
+
+      - name: Log in to GitHub Container Registry
+        if: github.event_name == 'workflow_dispatch' && inputs.push
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # The same action and settings as the release job in cmake_production.yml.
+      # The layers come from the builds checked above.
+      - name: Build and Push Headless Image
+        if: github.event_name == 'workflow_dispatch' && inputs.push
+        uses: docker/build-push-action@v6
+        with:
+          context: contrib/docker
+          file: contrib/docker/Dockerfile.headless
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.tags.outputs.headless }}
+
+      - name: Build and Push GUI Image
+        if: github.event_name == 'workflow_dispatch' && inputs.push
+        uses: docker/build-push-action@v6
+        with:
+          context: contrib/docker
+          file: contrib/docker/Dockerfile.gui
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.tags.outputs.gui }}
+
+      - name: Show the Pushed Images
+        if: github.event_name == 'workflow_dispatch' && inputs.push
+        env:
+          VERSION: ${{ steps.source.outputs.tag }}
+        run: |
+          docker buildx imagetools inspect "$HEADLESS_IMAGE:$VERSION"
+          docker buildx imagetools inspect "$GUI_IMAGE:$VERSION"

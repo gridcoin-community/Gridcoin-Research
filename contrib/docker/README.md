@@ -15,6 +15,11 @@ Both architectures use dynamically-linked binaries built with Ubuntu 24.04 syste
 The Docker container provides the hermetic runtime environment (consistent library versions)
 instead of static linking.
 
+The images of a release may be rebuilt after it, when the image recipe itself needs a fix
+(for example a runtime library the image lacked). The binaries inside stay the ones the
+release built; only the image around them changes. A version tag such as `5.5.3.0` then
+points to the rebuilt image, and a reference by digest keeps the older one.
+
 ## Quick Start
 
 ### Headless (Daemon)
