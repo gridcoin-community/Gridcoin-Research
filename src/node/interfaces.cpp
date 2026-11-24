@@ -718,6 +718,17 @@ public:
         return MakeSignalHandler(uiInterface.GuiStateMRCQuote_connect(interfaces::ForwardNotify(std::move(fn))));
     }
 
+    void requestUnbookedReceiveAddresses(uint64_t request_id) override
+    {
+        m_cache.RequestUnbookedReceiveAddresses(request_id);
+    }
+
+    std::unique_ptr<Handler> handleUnbookedReceiveAddresses(UnbookedFn fn) override
+    {
+        return MakeSignalHandler(
+            uiInterface.GuiStateUnbookedReceiveAddresses_connect(interfaces::ForwardNotify(std::move(fn))));
+    }
+
 private:
     node::GuiCache& m_cache;
 };
@@ -770,7 +781,9 @@ public:
 
     std::shared_ptr<WalletCoinSource> makeWalletCoinSource() override
     {
-        return pwalletMain ? MakeWalletCoinSource(pwalletMain) : nullptr;
+        // The rebuild runs on the GUI state cache's coin-list thread
+        // (requestReload).
+        return pwalletMain ? MakeWalletCoinSource(pwalletMain, node::ScheduleCoinReload) : nullptr;
     }
 
     std::unique_ptr<GuiState> makeGuiState() override { return MakeGuiState(); }

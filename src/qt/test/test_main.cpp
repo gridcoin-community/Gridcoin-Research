@@ -17,6 +17,7 @@
 #include "coinselectionmodeltests.h"
 #include "coinselectionviewtests.h"
 #include "coreconnectwaittests.h"
+#include "editaddressdialogtests.h"
 #include "filetransferdialogtests.h"
 #include "guiipcworkertests.h"
 #include "guiutiltests.h"
@@ -280,6 +281,10 @@ int main(int argc, char *argv[])
 
     WalletModelTests test24;
     if (QTest::qExec(&test24) != 0)
+        fInvalid = true;
+
+    EditAddressDialogTests test24b;
+    if (QTest::qExec(&test24b) != 0)
         fInvalid = true;
 
     TableModelIndexTests test25;

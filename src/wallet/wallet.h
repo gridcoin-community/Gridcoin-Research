@@ -1070,7 +1070,8 @@ public:
 
 
     std::set< std::set<CTxDestination> > GetAddressGroupings();
-    std::map<CTxDestination, int64_t> GetAddressBalances();
+    //! Needs cs_main: it reads each transaction's finality and depth.
+    std::map<CTxDestination, int64_t> GetAddressBalances() EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     isminetype IsMine(const CTxIn& txin) const;
     int64_t GetDebit(const CTxIn& txin, const isminefilter& filter=(ISMINE_SPENDABLE|ISMINE_WATCH_ONLY)) const;

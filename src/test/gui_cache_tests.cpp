@@ -5,7 +5,8 @@
 //!
 //! \file gui_cache_tests.cpp
 //! \brief The node's GUI state cache (node/gui_cache.h): its rate limit, its
-//! timer, the parts it recomputes, and the lock rules it keeps.
+//! timer, the parts it recomputes, its two scan threads (the picker's list and
+//! the coin list's rebuilds), and the lock rules it keeps.
 //!
 //! The cases run the cache on fakes passed through its own constructor
 //! (test/gui_cache_fakes.h): a Compute whose parts count their calls, a manual
@@ -16,9 +17,11 @@
 //! short; whether an update is due is decided by the manual clock alone, so a
 //! case controls it exactly.
 //!
-//! The cache computes nothing while no GUI is subscribed, so every case but
-//! the one about that subscribes first (AddSubscriber), as a GUI's
-//! GuiState::handleChanged does.
+//! The cache computes no update while no GUI is subscribed, so every case
+//! about updates but the one about that subscribes first (AddSubscriber), as a
+//! GUI's GuiState::handleChanged does. The scan cases need no subscriber: a
+//! scan serves the GUI that asks for it. Each scan case declares its gates
+//! before the cache and one OpenGateOnExit per gate after it.
 //!
 
 #include "gridcoin/staking/status.h"
@@ -31,6 +34,7 @@
 
 #include <boost/test/unit_test.hpp>
 
+#include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <condition_variable>
@@ -49,10 +53,15 @@ namespace {
 
 using node::GuiCache;
 using interfaces::GuiStateSnapshot;
+using gui_cache_test::CoinJobs;
 using gui_cache_test::Deliveries;
 using gui_cache_test::FakeCompute;
+using gui_cache_test::Gate;
 using gui_cache_test::InScope;
+using gui_cache_test::OpenGateOnExit;
+using gui_cache_test::PublishedFakeCache;
 using gui_cache_test::Quotes;
+using gui_cache_test::UnbookedAnswers;
 using gui_cache_test::WaitUntil;
 
 //! Timer-case cadence. Short, so the timer's real-time waits stay short.
@@ -677,6 +686,312 @@ BOOST_AUTO_TEST_CASE(a_failed_quote_is_answered_with_its_error)
     BOOST_CHECK_EQUAL(answer.request_id, 10U);
     BOOST_CHECK(answer.quote.create_error);
     BOOST_CHECK(answer.quote.create_error_msg.find("the quote failed") != std::string::npos);
+
+    cache.Stop();
+}
+
+BOOST_AUTO_TEST_CASE(an_unbooked_request_is_walked_and_answered_on_the_picker_thread)
+{
+    FakeCompute compute;
+    Deliveries deliveries;
+    Quotes quotes;
+    UnbookedAnswers answers;
+    GuiCache cache(compute.Make(), deliveries.Make(), 4000ms, 30000ms, quotes.Make(), answers.Make());
+
+    // No subscriber: the list is computed for the GUI that asks, as a quote
+    // is, on the picker's own thread.
+    cache.StartTimer();
+    cache.RequestUnbookedReceiveAddresses(3);
+    BOOST_REQUIRE(answers.WaitForCount(1));
+
+    const std::vector<UnbookedAnswers::Answer> got = answers.Answers();
+    BOOST_CHECK_EQUAL(got.size(), 1U);
+    BOOST_CHECK_EQUAL(got[0].request_id, 3U);
+    BOOST_CHECK(got[0].addresses == (std::vector<std::string>{"b", "a"}));
+    BOOST_CHECK(got[0].error.empty());
+    BOOST_CHECK_EQUAL(got[0].thread, gui_cache_test::PICKER_THREAD);
+    BOOST_CHECK_EQUAL(answers.AnsweredUnderALock(), 0);
+    BOOST_CHECK_EQUAL(compute.unbooked_calls.load(), 1);
+
+    // The timer took no hold of cs_main for it.
+    BOOST_CHECK_EQUAL(compute.cs_main_runs.load(), 0);
+
+    cache.Stop();
+}
+
+BOOST_AUTO_TEST_CASE(unbooked_requests_made_while_a_walk_runs_share_the_next)
+{
+    FakeCompute compute;
+    Deliveries deliveries;
+    Quotes quotes;
+    UnbookedAnswers answers;
+    Gate walk_gate;
+
+    // Only the first walk waits in the gate.
+    std::atomic<bool> first_walk{true};
+    compute.unbooked_hook = [&] {
+        if (first_walk.exchange(false)) walk_gate.Pass();
+    };
+
+    GuiCache cache(compute.Make(), deliveries.Make(), 4000ms, 30000ms, quotes.Make(), answers.Make());
+    OpenGateOnExit open_walk_gate{walk_gate};
+
+    cache.StartTimer();
+
+    // Walk 1 has taken request 1 and sits in the gate.
+    cache.RequestUnbookedReceiveAddresses(1);
+    BOOST_REQUIRE(walk_gate.WaitEntered());
+
+    for (uint64_t request_id = 2; request_id <= 101; ++request_id) {
+        cache.RequestUnbookedReceiveAddresses(request_id);
+    }
+
+    // Request 2 posted the one walk queued, and the ninety-nine after it
+    // posted none. The picker's thread is held in the gate, so the count
+    // cannot move under the check.
+    BOOST_CHECK_EQUAL(cache.QueuedPickerJobsForTest(), 1U);
+
+    walk_gate.Open();
+    BOOST_REQUIRE(answers.WaitForCount(101));
+
+    // Every request is answered once: 1 by its own walk, 2 to 101 by one more.
+    std::vector<int> times(102, 0);
+    for (const UnbookedAnswers::Answer& answer : answers.Answers()) {
+        BOOST_REQUIRE(answer.request_id >= 1 && answer.request_id <= 101);
+        ++times[answer.request_id];
+    }
+    BOOST_CHECK(std::all_of(times.begin() + 1, times.end(), [](int n) { return n == 1; }));
+    BOOST_CHECK_EQUAL(compute.unbooked_calls.load(), 2);
+
+    cache.Stop();
+    BOOST_CHECK_EQUAL(answers.Count(), 101);
+}
+
+BOOST_AUTO_TEST_CASE(a_failed_unbooked_walk_is_answered_with_its_error)
+{
+    // A walk that throws is answered with its error, as a failed quote is.
+    {
+        FakeCompute compute;
+        Deliveries deliveries;
+        Quotes quotes;
+        UnbookedAnswers answers;
+        compute.unbooked_throws = true;
+        GuiCache cache(compute.Make(), deliveries.Make(), 4000ms, 30000ms, quotes.Make(), answers.Make());
+
+        cache.StartTimer();
+        cache.RequestUnbookedReceiveAddresses(4);
+        BOOST_REQUIRE(answers.WaitForCount(1));
+
+        const UnbookedAnswers::Answer answer = answers.Answers()[0];
+        BOOST_CHECK_EQUAL(answer.request_id, 4U);
+        BOOST_CHECK(answer.addresses.empty());
+        BOOST_CHECK_EQUAL(answer.error, "the unbooked walk failed");
+
+        cache.Stop();
+        BOOST_CHECK_EQUAL(answers.Count(), 1);
+    }
+
+    // So is a request to a cache that has no walk to run.
+    {
+        FakeCompute compute;
+        Deliveries deliveries;
+        Quotes quotes;
+        UnbookedAnswers answers;
+        GuiCache::Compute without_walk = compute.Make();
+        without_walk.unbooked = nullptr;
+        GuiCache cache(std::move(without_walk), deliveries.Make(), 4000ms, 30000ms, quotes.Make(), answers.Make());
+
+        cache.StartTimer();
+        cache.RequestUnbookedReceiveAddresses(5);
+        BOOST_REQUIRE(answers.WaitForCount(1));
+
+        const UnbookedAnswers::Answer answer = answers.Answers()[0];
+        BOOST_CHECK_EQUAL(answer.request_id, 5U);
+        BOOST_CHECK(answer.addresses.empty());
+        BOOST_CHECK_EQUAL(answer.error, "this cache does not compute them");
+        BOOST_CHECK_EQUAL(compute.unbooked_calls.load(), 0);
+
+        cache.Stop();
+        BOOST_CHECK_EQUAL(answers.Count(), 1);
+    }
+}
+
+BOOST_AUTO_TEST_CASE(a_stop_waits_for_the_scans_in_progress_and_starts_no_other)
+{
+    FakeCompute compute;
+    Deliveries deliveries;
+    Quotes quotes;
+    UnbookedAnswers answers;
+    CoinJobs coin_job_a;
+    CoinJobs coin_job_b;
+    CoinJobs coin_probe;
+    Gate walk_gate;
+    Gate coin_gate;
+
+    // Only the first walk waits in the gate.
+    std::atomic<bool> first_walk{true};
+    compute.unbooked_hook = [&] {
+        if (first_walk.exchange(false)) walk_gate.Pass();
+    };
+
+    GuiCache cache(compute.Make(), deliveries.Make(), 4000ms, 30000ms, quotes.Make(), answers.Make());
+    OpenGateOnExit open_walk_gate{walk_gate};
+    OpenGateOnExit open_coin_gate{coin_gate};
+
+    cache.StartTimer();
+
+    // A walk and a rebuild in progress, each held in its gate. These are
+    // REQUIREs made before the stopper starts, so a red here unwinds through
+    // the guards with no helper thread alive.
+    cache.RequestUnbookedReceiveAddresses(1);
+    BOOST_REQUIRE(cache.RequestCoinReload(coin_job_a.Make(&coin_gate)));
+    BOOST_REQUIRE(walk_gate.WaitEntered());
+    BOOST_REQUIRE(coin_gate.WaitEntered());
+
+    // And a walk and a rebuild queued behind them.
+    cache.RequestUnbookedReceiveAddresses(2);
+    BOOST_CHECK(cache.RequestCoinReload(coin_job_b.Make()));
+
+    // From here to the join, only CHECKs: a REQUIRE would unwind past a
+    // joinable std::thread.
+    std::atomic<bool> stop_returned{false};
+    std::thread stopper([&] {
+        cache.Stop();
+        stop_returned = true;
+    });
+
+    // The gates open only once the stopper is inside Stop(), past the stop
+    // flag and both scan threads' RequestStop(): Stop() asks the picker's
+    // thread before the coin-list thread, and a rebuild is refused only once
+    // the coin-list thread has been asked. A probe taken before that is
+    // queued behind B and dropped unrun with it.
+    BOOST_CHECK(WaitUntil([&] { return !cache.RequestCoinReload(coin_probe.Make()); }));
+
+    // Stop waits for the scans in progress.
+    std::this_thread::sleep_for(TIMER_CHANCE);
+    BOOST_CHECK(!stop_returned);
+
+    walk_gate.Open();
+    coin_gate.Open();
+    stopper.join();
+    BOOST_CHECK(stop_returned);
+
+    // Nothing queued ran, and the walk in progress, ended after the stop, was
+    // not answered.
+    BOOST_CHECK_EQUAL(compute.unbooked_calls.load(), 1);
+    BOOST_CHECK_EQUAL(coin_job_b.Runs(), 0);
+    BOOST_CHECK_EQUAL(coin_probe.Runs(), 0);
+    BOOST_CHECK_EQUAL(answers.Count(), 0);
+
+    // A stopped cache takes no job.
+    const GuiCache::CoinJob job = coin_job_b.Make();
+    BOOST_CHECK(!cache.RequestCoinReload(job));
+
+    // Nor answers a request: no scan thread runs after Stop() (structural,
+    // since the picker's thread is joined by now).
+    cache.RequestUnbookedReceiveAddresses(3);
+    std::this_thread::sleep_for(TIMER_CHANCE);
+    BOOST_CHECK_EQUAL(answers.Count(), 0);
+}
+
+BOOST_AUTO_TEST_CASE(schedule_coin_reload_needs_a_running_cache)
+{
+    CoinJobs coin_jobs;
+
+    // With no cache published, nothing takes the job, and it never runs.
+    BOOST_REQUIRE(node::GetGuiCache() == nullptr);
+    {
+        const GuiCache::CoinJob job = coin_jobs.Make();
+        BOOST_CHECK(!node::ScheduleCoinReload(job));
+    }
+    std::this_thread::sleep_for(TIMER_CHANCE);
+    BOOST_CHECK_EQUAL(coin_jobs.Runs(), 0);
+
+    // With one published, the job runs once, on the coin list's thread.
+    FakeCompute compute;
+    PublishedFakeCache published(compute, 4000ms, 30000ms);
+    BOOST_CHECK(node::ScheduleCoinReload(coin_jobs.Make()));
+    BOOST_REQUIRE(WaitUntil([&] { return coin_jobs.Runs() >= 1; }));
+    std::this_thread::sleep_for(TIMER_CHANCE);
+    BOOST_CHECK_EQUAL(coin_jobs.Runs(), 1);
+    BOOST_CHECK_EQUAL(coin_jobs.LastThread(), gui_cache_test::COIN_THREAD);
+}
+
+BOOST_AUTO_TEST_CASE(quotes_and_updates_are_served_while_a_scan_runs)
+{
+    FakeCompute compute;
+    Deliveries deliveries;
+    Quotes quotes;
+    UnbookedAnswers answers;
+    CoinJobs coin_jobs;
+    Gate coin_gate;
+    Gate picker_gate;
+    compute.unbooked_hook = [&] { picker_gate.Pass(); };
+    GuiCache cache(compute.Make(), deliveries.Make(), 4000ms, 30000ms, quotes.Make(), answers.Make());
+    OpenGateOnExit open_picker_gate{picker_gate};
+    OpenGateOnExit open_coin_gate{coin_gate};
+
+    cache.AddSubscriber();
+
+    InScope(cache, GuiCache::CHAIN);
+    cache.StartTimer();
+    BOOST_REQUIRE(deliveries.WaitFor([](const GuiStateSnapshot& snap) { return snap.sequence == 1; }));
+
+    // Phase 1: a walk held in its gate. A quote and an update are served on
+    // the timer meanwhile. Each wait is a REQUIRE, so a red ends the case with
+    // the gate still shut, through its guard.
+    cache.RequestUnbookedReceiveAddresses(1);
+    BOOST_REQUIRE(picker_gate.WaitEntered());
+
+    cache.RequestMRCQuote(25, 7);
+    BOOST_REQUIRE(quotes.WaitForCount(1));
+    cache.RequestUpdate();
+    BOOST_REQUIRE(deliveries.WaitFor([](const GuiStateSnapshot& snap) { return snap.sequence == 2; }));
+
+    // The walk is still held.
+    BOOST_CHECK_EQUAL(answers.Count(), 0);
+
+    picker_gate.Open();
+    BOOST_REQUIRE(answers.WaitForCount(1));
+
+    // Phase 2: a rebuild held in its gate, the same way.
+    BOOST_REQUIRE(cache.RequestCoinReload(coin_jobs.Make(&coin_gate)));
+    BOOST_REQUIRE(coin_gate.WaitEntered());
+
+    cache.RequestMRCQuote(30, 8);
+    BOOST_REQUIRE(quotes.WaitForCount(2));
+    cache.RequestUpdate();
+    BOOST_REQUIRE(deliveries.WaitFor([](const GuiStateSnapshot& snap) { return snap.sequence == 3; }));
+
+    coin_gate.Open();
+
+    cache.Stop();
+}
+
+BOOST_AUTO_TEST_CASE(the_picker_is_answered_while_a_rebuild_runs)
+{
+    FakeCompute compute;
+    Deliveries deliveries;
+    Quotes quotes;
+    UnbookedAnswers answers;
+    CoinJobs coin_jobs;
+    Gate coin_gate;
+    GuiCache cache(compute.Make(), deliveries.Make(), 4000ms, 30000ms, quotes.Make(), answers.Make());
+    OpenGateOnExit open_coin_gate{coin_gate};
+
+    cache.StartTimer();
+
+    // A rebuild held in its gate: the picker's own thread still walks and
+    // answers.
+    BOOST_REQUIRE(cache.RequestCoinReload(coin_jobs.Make(&coin_gate)));
+    BOOST_REQUIRE(coin_gate.WaitEntered());
+
+    cache.RequestUnbookedReceiveAddresses(5);
+    BOOST_REQUIRE(answers.WaitForCount(1));
+    BOOST_CHECK_EQUAL(answers.Answers()[0].thread, gui_cache_test::PICKER_THREAD);
+    BOOST_CHECK_EQUAL(answers.Answers()[0].request_id, 5U);
+
+    coin_gate.Open();
 
     cache.Stop();
 }

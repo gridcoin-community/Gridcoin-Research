@@ -5,13 +5,17 @@
 #include "interfaces/wallet_coin_source.h"
 
 #include "node/ui_interface.h"
+#include "sync.h"
 #include "wallet/wallet.h"
 #include "wallet/wallet_event_queue.h"
 #include "wallet/walletcoinstore.h"
 
 #include <boost/signals2/connection.hpp>
 
+#include <atomic>
+#include <exception>
 #include <memory>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -28,8 +32,9 @@ class WalletCoinSourceImpl : public WalletCoinSource,
                              public std::enable_shared_from_this<WalletCoinSourceImpl>
 {
 public:
-    explicit WalletCoinSourceImpl(CWallet* wallet)
+    WalletCoinSourceImpl(CWallet* wallet, ReloadScheduler schedule)
         : m_wallet(wallet)
+        , m_schedule(std::move(schedule))
         , m_store(wallet, m_queue)
     {
         m_store.start();
@@ -118,6 +123,46 @@ public:
         return m_store.reloadAndSnapshot();
     }
 
+    void requestReload() override
+    {
+        // A rebuild queued and not yet started serves this request too, so a
+        // source has at most one queued.
+        if (m_reload_queued.exchange(true)) return;
+
+        // The rebuild takes cs_main and cs_wallet and is O(wallet), so it never
+        // runs on the caller's thread: the scheduler runs it on a core thread
+        // (the GUI state cache's coin-list thread), where the store's rebuild
+        // takes those locks itself. The job holds this source weakly, so a
+        // source its owner has dropped is not rebuilt, and it hands back its
+        // reference for the scheduler to release after the rebuild.
+        std::weak_ptr<WalletCoinSourceImpl> weak = weak_from_this();
+        CoinReloadJob job = [weak]() -> std::shared_ptr<void> {
+            std::shared_ptr<WalletCoinSourceImpl> self = weak.lock();
+            if (self) {
+                // Cleared as the rebuild starts, so a request made while it runs
+                // queues another.
+                self->m_reload_queued = false;
+                self->runReload();
+            }
+            return self;
+        };
+
+        if (!m_schedule || !m_schedule(std::move(job))) {
+            m_reload_queued = false;
+            noteReloadEnded("no core thread is running to load the coin list");
+        }
+    }
+
+    bool consumeReloadEnded(std::string& error) override
+    {
+        LOCK(m_reload_mutex);
+        if (!m_reload_ended) return false;
+        m_reload_ended = false;
+        error = std::move(m_reload_error);
+        m_reload_error.clear();
+        return true;
+    }
+
     std::vector<GRC::WalletCoinEvent> drainEvents(std::size_t max_batch) override
     {
         return m_queue.drain(max_batch);
@@ -147,6 +192,31 @@ public:
     }
 
 private:
+    //! The rebuild, on the scheduler's thread; the store's rebuild takes its
+    //! own locks. Its outcome is kept for consumeReloadEnded.
+    void runReload()
+    {
+        std::string error;
+
+        try {
+            m_store.reloadAndSnapshot();
+        } catch (const std::exception& e) {
+            error = e.what();
+            if (error.empty()) error = "the rebuild failed";
+        } catch (...) {
+            error = "the rebuild failed";
+        }
+
+        noteReloadEnded(std::move(error));
+    }
+
+    void noteReloadEnded(std::string error)
+    {
+        LOCK(m_reload_mutex);
+        m_reload_ended = true;
+        m_reload_error = std::move(error);
+    }
+
     //! Producer: a wallet transaction appeared / changed / was deleted. Runs
     //! on the emitting core thread under the locks it already holds
     //! (CT_NEW/CT_UPDATED sites hold cs_main + cs_wallet; CT_DELETED sites
@@ -164,6 +234,19 @@ private:
         NO_THREAD_SAFETY_ANALYSIS;
 
     CWallet* const m_wallet;
+
+    //! Runs requestReload's rebuild (MakeWalletCoinSource).
+    const ReloadScheduler m_schedule;
+
+    //! A rebuild is queued and has not started: a request made meanwhile is
+    //! served by it (requestReload).
+    std::atomic<bool> m_reload_queued{false};
+
+    //! The last rebuild's end, until consumeReloadEnded takes it. A leaf:
+    //! nothing is taken while it is held.
+    Mutex m_reload_mutex;
+    bool m_reload_ended GUARDED_BY(m_reload_mutex){false};
+    std::string m_reload_error GUARDED_BY(m_reload_mutex);
 
     //! m_queue before m_store: the store binds a queue reference at
     //! construction (member init order == declaration order).
@@ -249,11 +332,11 @@ void WalletCoinSourceImpl::onBlocksChanged(bool /*syncing*/, int height, int64_t
 
 } // namespace
 
-std::shared_ptr<WalletCoinSource> MakeWalletCoinSource(CWallet* wallet)
+std::shared_ptr<WalletCoinSource> MakeWalletCoinSource(CWallet* wallet, ReloadScheduler schedule)
 {
     // Two-phase like MakeWalletTxSource: shared ownership first, then
     // subscribe() (weak_from_this() validity).
-    auto source = std::make_shared<WalletCoinSourceImpl>(wallet);
+    auto source = std::make_shared<WalletCoinSourceImpl>(wallet, std::move(schedule));
     source->subscribe();
     return source;
 }

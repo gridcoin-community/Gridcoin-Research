@@ -13,9 +13,9 @@
 
 #include <memory>
 
-//! WalletModel's coin list load over fakes (qt_test::FakeCoinSource): where the
-//! wallet scan runs, what a scan that throws leads to, and the model's
-//! destruction while a scan runs.
+//! WalletModel's coin list load over fakes (qt_test::FakeCoinSource): that the
+//! model only asks the core for the rebuild, what a rebuild or a request that
+//! fails leads to, and the model's destruction while the core is busy.
 class WalletModelTests : public QObject
 {
     Q_OBJECT
@@ -26,11 +26,13 @@ private slots:
     void init();
     void cleanup();
 
-    void coinLoadRunsOnTheCoinLoadWorker();
+    void coinLoadIsRequestedOfTheCore();
     void coinLoadFailureIsContainedAndReported();
-    void destructionWaitsForTheCoinLoad();
+    void aRequestThatThrowsIsReportedAsAFailedLoad();
+    void destructionDoesNotWaitBehindTheCoreForTheCoinLoad();
     void failureWithAForcedReloadOwedRunsItOnce();
     void coinSelectionModelReportsAFailedLoad();
+    void aThrowAfterTheEndIsReadLosesNoEnd();
     void anOlderContextDoesNotEndALaterOperationsCapability();
 
 private:

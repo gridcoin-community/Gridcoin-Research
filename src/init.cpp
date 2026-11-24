@@ -264,11 +264,12 @@ void Shutdown(void* parg)
 
         SetShutdownInProgress();
 
-        // Stop the GUI state cache before anything it reads goes: its timer takes
-        // cs_main and reads the chain and the wallet. Disconnect its triggers,
-        // unpublish it so SetBestChain stops updating it, and join the timer, not
-        // under cs_main, which the timer may be waiting for. A no-op after an
-        // early AppInit2 failure that never started it.
+        // Stop the GUI state cache before anything it reads goes: its timer and
+        // its two scan threads take cs_main and read the chain and the wallet.
+        // Disconnect its triggers, unpublish it so SetBestChain stops updating
+        // it, and join the three threads, not under cs_main, which any of them
+        // may be waiting for. A no-op after an early AppInit2 failure that never
+        // started it.
         LogPrintf("INFO: %s: Stopping the GUI state cache.", __func__);
         g_gui_cache_handlers.clear();
         node::StopGuiCache();
@@ -3194,13 +3195,19 @@ bool AppInit2(ThreadHandlerPtr threads)
     // node with no GUI attached pays nothing for them. SetBestChain keeps it
     // fresh in its own scope; the timer delivers each new snapshot and each MRC
     // quote a GUI asks for, and takes cs_main only for what SetBestChain leaves
-    // pending and for those requests.
+    // pending and for those requests. Two threads of its own walk the wallet for
+    // what a GUI asks of it (the "add existing" picker's list, a coin-list
+    // rebuild), each job taking cs_main itself, so none of that waits in the
+    // timer's line.
     node::StartGuiCache(std::make_unique<node::GuiCache>(
         node::MakeProductionCompute(),
         [](const interfaces::GuiStateSnapshot& snapshot) { uiInterface.GuiStateChanged(snapshot); },
         node::GUI_CACHE_MIN_INTERVAL, node::GUI_CACHE_TICK,
         [](uint64_t request_id, const interfaces::MRCSnapshot& quote) {
             uiInterface.GuiStateMRCQuote(request_id, quote);
+        },
+        [](uint64_t request_id, const std::vector<std::string>& addresses, const std::string& error) {
+            uiInterface.GuiStateUnbookedReceiveAddresses(request_id, addresses, error);
         }));
 
     // The cache's other triggers. Their signals are emitted under other locks

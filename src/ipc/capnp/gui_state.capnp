@@ -31,10 +31,13 @@ interface GuiState $Proxy.wrap("interfaces::GuiState") {
     requestMRCQuote @3 (context :Proxy.Context, feeBoost :Int64, requestId :UInt64) -> ();
     handleMRCQuote @4 (context :Proxy.Context, callback :MRCQuoteCallback) -> (result :Handler.Handler);
     requestUpdate @5 (context :Proxy.Context) -> ();
+    requestUnbookedReceiveAddresses @6 (context :Proxy.Context, requestId :UInt64) -> ();
+    handleUnbookedReceiveAddresses @7 (context :Proxy.Context, callback :UnbookedReceiveAddressesCallback) -> (result :Handler.Handler);
 }
 
-# The node calls these back on its cache's timer thread. Each carries the whole
-# value: unlike the payload-free refetch triggers, a push is the data itself.
+# The node calls these back from its one notification dispatcher thread,
+# grc-ipc-notify. Each carries the whole value: unlike the payload-free refetch
+# triggers, a push is the data itself.
 interface ChangedCallback $Proxy.wrap("ProxyCallback<std::function<void(const interfaces::GuiStateSnapshot&)>>") {
     destroy @0 (context :Proxy.Context) -> ();
     call @1 (context :Proxy.Context, snapshot :GuiStateSnapshot) -> ();
@@ -43,6 +46,11 @@ interface ChangedCallback $Proxy.wrap("ProxyCallback<std::function<void(const in
 interface MRCQuoteCallback $Proxy.wrap("ProxyCallback<std::function<void(uint64_t, const interfaces::MRCSnapshot&)>>") {
     destroy @0 (context :Proxy.Context) -> ();
     call @1 (context :Proxy.Context, requestId :UInt64, snapshot :Mrc.MRCSnapshot) -> ();
+}
+
+interface UnbookedReceiveAddressesCallback $Proxy.wrap("ProxyCallback<std::function<void(uint64_t, const std::vector<std::string>&, const std::string&)>>") {
+    destroy @0 (context :Proxy.Context) -> ();
+    call @1 (context :Proxy.Context, requestId :UInt64, addresses :List(Text), error :Text) -> ();
 }
 
 # Every interfaces::GuiStateSnapshot member, by its C++ name. The three parts

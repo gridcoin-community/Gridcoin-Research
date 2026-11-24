@@ -6,6 +6,7 @@
 
 #include "interfaces/wallet_coin_channel.h"
 #include "interfaces/wallet_coin_source.h"
+#include "logging.h"
 #include "qt/coinselectionmodel.h"
 #include "qt/guiipcworker.h"
 #include "qt/optionsmodel.h"
@@ -14,13 +15,16 @@
 #include "util.h"
 
 #include <QCoreApplication>
+#include <QElapsedTimer>
 #include <QSignalSpy>
 #include <QTest>
 
-#include <chrono>
-#include <future>
+#include <functional>
+#include <list>
 #include <memory>
+#include <string>
 #include <thread>
+#include <vector>
 
 namespace {
 
@@ -38,19 +42,38 @@ struct ModelOverFakeCoins
 
     ~ModelOverFakeCoins()
     {
-        // A held scan is let go, so the model's destruction does not wait it out.
+        // A held scan is let go, so nothing waits it out.
         coin_source.m_release = true;
     }
 };
 
-//! The thread \p worker runs its jobs on.
-std::thread::id ThreadOf(GuiIpcWorker& worker)
+//! Keeps the lines logged while it lives.
+class LogCapture
 {
-    std::thread::id id;
-    const std::future<void> done = worker.Post([&id] { id = std::this_thread::get_id(); });
-    if (!done.valid() || done.wait_for(std::chrono::seconds{10}) != std::future_status::ready) return {};
-    return id;
-}
+public:
+    LogCapture()
+        : m_callback(LogInstance().PushBackCallback([this](const std::string& line) { m_lines.push_back(line); }))
+    {
+    }
+    ~LogCapture() { LogInstance().DeleteCallback(m_callback); }
+
+    LogCapture(const LogCapture&) = delete;
+    LogCapture& operator=(const LogCapture&) = delete;
+
+    //! How many lines contain \p text.
+    int Count(const std::string& text) const
+    {
+        int count = 0;
+        for (const std::string& line : m_lines) {
+            if (line.find(text) != std::string::npos) ++count;
+        }
+        return count;
+    }
+
+private:
+    std::vector<std::string> m_lines;
+    std::list<std::function<void(const std::string&)>>::iterator m_callback;
+};
 
 } // namespace
 
@@ -97,40 +120,33 @@ void WalletModelTests::cleanup()
     m_data_dir.reset();
 }
 
-// The wallet scan runs on the process's coin-load worker, and its completion
-// is announced on the GUI thread.
-void WalletModelTests::coinLoadRunsOnTheCoinLoadWorker()
+// The model only asks the core for the rebuild, on the GUI thread, and the
+// core runs it on a thread of its own. The rebuild's end is read on the drain
+// ticks and announced on the GUI thread.
+void WalletModelTests::coinLoadIsRequestedOfTheCore()
 {
-    // Before the model, as in main(), so that it outlives the model.
-    GuiIpcWorker worker(GuiIpcWorker::Role::CoinLoad);
-
-    // Asked first, so that the worker's thread is running before the scan
-    // starts: an id is unique only among threads alive at the same time.
-    const std::thread::id worker_thread = ThreadOf(worker);
-    QVERIFY(worker_thread != std::thread::id{});
-    QVERIFY(worker_thread != std::this_thread::get_id());
-
     ModelOverFakeCoins fixture;
 
     QSignalSpy finished(fixture.model.get(), &WalletModel::coinSourceLoadFinished);
     QSignalSpy failed(fixture.model.get(), &WalletModel::coinSourceLoadFailed);
 
     fixture.model->ensureCoinSourceLoaded();
+    QCOMPARE(fixture.coin_source.m_reload_requests.load(), 1);
 
     QVERIFY(finished.wait(10000));
     QCOMPARE(finished.count(), 1);
     QCOMPARE(failed.count(), 0);
     QVERIFY(fixture.model->isCoinSourceLoaded());
     QCOMPARE(fixture.coin_source.m_reloads.load(), 1);
-    QVERIFY(fixture.coin_source.m_reload_thread.load() == worker_thread);
+    QVERIFY(fixture.coin_source.m_reload_thread.load() != std::thread::id{});
+    QVERIFY(fixture.coin_source.m_reload_thread.load() != std::this_thread::get_id());
 }
 
-// A scan that throws, as one across IPC does when the core drops the
+// A rebuild that fails, as one across IPC does when the core drops the
 // connection, ends nothing but itself: the failure is reported on the GUI
-// thread, nothing is marked loaded, and the next request scans again.
+// thread, nothing is marked loaded, and the next request rebuilds again.
 void WalletModelTests::coinLoadFailureIsContainedAndReported()
 {
-    GuiIpcWorker worker(GuiIpcWorker::Role::CoinLoad);
     ModelOverFakeCoins fixture;
     fixture.coin_source.m_throw = true;
 
@@ -146,50 +162,72 @@ void WalletModelTests::coinLoadFailureIsContainedAndReported()
     QCOMPARE(finished.count(), 0);
     QVERIFY(!fixture.model->isCoinSourceLoaded());
 
-    // Asked again, the model scans again, and this time the scan succeeds.
+    // Asked again, the model asks again, and this time the rebuild succeeds.
     fixture.coin_source.m_throw = false;
     fixture.model->ensureCoinSourceLoaded();
 
     QVERIFY(finished.wait(10000));
     QCOMPARE(finished.count(), 1);
     QCOMPARE(failed.count(), 1);
+    QCOMPARE(fixture.coin_source.m_reload_requests.load(), 2);
     QCOMPARE(fixture.coin_source.m_reloads.load(), 2);
     QVERIFY(fixture.model->isCoinSourceLoaded());
 }
 
-// A model destroyed while its scan runs waits for the scan, so the scan never
-// outlives the model it reports to.
-void WalletModelTests::destructionWaitsForTheCoinLoad()
+// A request that throws, as one across IPC does when the core drops the
+// connection, escapes nothing and is reported as a failed load.
+void WalletModelTests::aRequestThatThrowsIsReportedAsAFailedLoad()
+{
+    ModelOverFakeCoins fixture;
+    fixture.coin_source.m_request_throws = true;
+
+    QSignalSpy finished(fixture.model.get(), &WalletModel::coinSourceLoadFinished);
+    QSignalSpy failed(fixture.model.get(), &WalletModel::coinSourceLoadFailed);
+
+    fixture.model->ensureCoinSourceLoaded();
+
+    QVERIFY(failed.wait(10000));
+    QCOMPARE(failed.count(), 1);
+    const QString message = failed.at(0).at(0).toString();
+    QVERIFY2(message.contains("could not reach the core"), qPrintable(message));
+    QCOMPARE(finished.count(), 0);
+    QCOMPARE(fixture.coin_source.m_reload_requests.load(), 1);
+    QCOMPARE(fixture.coin_source.m_reloads.load(), 0);
+    QVERIFY(!fixture.model->isCoinSourceLoaded());
+}
+
+// A model destroyed while the core holds cs_main (here its stand-in), with
+// a rebuild asked for and not yet run, does not wait for the core: nothing
+// of the rebuild runs on this model's side. The worker is declared as the
+// GUI's main() declares it, so a rebuild posted to it would run.
+void WalletModelTests::destructionDoesNotWaitBehindTheCoreForTheCoinLoad()
 {
     GuiIpcWorker worker(GuiIpcWorker::Role::CoinLoad);
     ModelOverFakeCoins fixture;
-    fixture.coin_source.m_hold = true;
+    fixture.coin_source.m_defer_reload = true;
+    fixture.coin_source.m_take_cs_main = true;
+
+    qt_test::CsMainStandInHolder core_busy;
 
     fixture.model->ensureCoinSourceLoaded();
-    QTRY_VERIFY_WITH_TIMEOUT(fixture.coin_source.m_reload_waiting.load(), 10000);
 
-    // The scan is let go only once the model is being destroyed.
-    std::thread releaser([&fixture] {
-        std::this_thread::sleep_for(std::chrono::milliseconds{200});
-        fixture.coin_source.m_release = true;
-    });
-
+    QElapsedTimer timer;
+    timer.start();
     fixture.model.reset();
-    const int ended_when_destroyed = fixture.coin_source.m_reloads_ended;
-    releaser.join();
+    const qint64 elapsed_ms = timer.elapsed();
 
-    // What the scan posted to the destroyed model is dropped.
-    QCoreApplication::processEvents();
+    core_busy.Release();
 
-    QCOMPARE(ended_when_destroyed, 1);
+    QVERIFY2(elapsed_ms < 10000, qPrintable(QString::number(elapsed_ms)));
+    QCOMPARE(fixture.coin_source.m_reloads.load(), 0);
+    QCOMPARE(fixture.coin_source.m_reload_requests.load(), 1);
 }
 
-// A forced reload asked for while a scan runs is owed one more pass. When the
-// scan fails, that pass still runs, once, and a failure of its own owes
+// A forced reload asked for while a rebuild runs is owed one more pass. When
+// the rebuild fails, that pass still runs, once, and a failure of its own owes
 // nothing more.
 void WalletModelTests::failureWithAForcedReloadOwedRunsItOnce()
 {
-    GuiIpcWorker worker(GuiIpcWorker::Role::CoinLoad);
     ModelOverFakeCoins fixture;
     fixture.coin_source.m_throw = true;
     fixture.coin_source.m_hold = true;
@@ -209,16 +247,16 @@ void WalletModelTests::failureWithAForcedReloadOwedRunsItOnce()
 
     // No third pass.
     QTest::qWait(300);
+    QCOMPARE(fixture.coin_source.m_reload_requests.load(), 2);
     QCOMPARE(fixture.coin_source.m_reloads.load(), 2);
     QCOMPARE(failed.count(), 2);
     QCOMPARE(finished.count(), 0);
     QVERIFY(!fixture.model->isCoinSourceLoaded());
 }
 
-// A coin view loading when the scan fails is told why, and stays loading.
+// A coin view loading when the rebuild fails is told why, and stays loading.
 void WalletModelTests::coinSelectionModelReportsAFailedLoad()
 {
-    GuiIpcWorker worker(GuiIpcWorker::Role::CoinLoad);
     ModelOverFakeCoins fixture;
     fixture.coin_source.m_throw = true;
 
@@ -235,6 +273,26 @@ void WalletModelTests::coinSelectionModelReportsAFailedLoad()
     QVERIFY2(message.contains("the core dropped the connection"), qPrintable(message));
     QCOMPARE(finished.count(), 0);
     QVERIFY(selection.isLoading());
+}
+
+// The read of a rebuild's end clears it in the source, so a drain that throws
+// after the read must not lose it: the load still finishes, and the model is
+// no longer in flight, so a forced reload asks again.
+void WalletModelTests::aThrowAfterTheEndIsReadLosesNoEnd()
+{
+    ModelOverFakeCoins fixture;
+    fixture.coin_source.m_drain_throws_once = true;
+
+    QSignalSpy finished(fixture.model.get(), &WalletModel::coinSourceLoadFinished);
+
+    LogCapture log;
+    fixture.model->ensureCoinSourceLoaded();
+
+    QVERIFY(finished.wait(10000));
+    QCOMPARE(log.Count("wallet event drain failed"), 1);
+
+    fixture.model->ensureCoinSourceLoaded(/*force=*/true);
+    QCOMPARE(fixture.coin_source.m_reload_requests.load(), 2);
 }
 
 //! The IPC slot holds one capability, the latest begun. An operation that

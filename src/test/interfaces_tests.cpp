@@ -16,6 +16,7 @@
 #include "interfaces/sidestake.h"
 #include "interfaces/staking.h"
 #include "interfaces/wallet.h"
+#include "interfaces/wallet_coin_source.h"
 #include "key.h"
 #include "key_io.h"
 #include "node/access_policy.h"
@@ -58,7 +59,9 @@
 #include <atomic>
 #include <chrono>
 #include <condition_variable>
+#include <future>
 #include <memory>
+#include <string>
 #include <thread>
 #include <vector>
 
@@ -657,6 +660,44 @@ BOOST_AUTO_TEST_CASE(wallet_address_book_query_surface)
     }
 }
 
+BOOST_AUTO_TEST_CASE(wallet_unbooked_receive_addresses_take_cs_main)
+{
+    // A local wallet with one entry paying a key it holds, so the walk reads an
+    // entry's finality and depth, and the case depends on no other case.
+    CWallet test_wallet;
+    CKey key;
+    key.MakeNewKey(true);
+
+    {
+        LOCK2(cs_main, test_wallet.cs_wallet);
+
+        BOOST_REQUIRE(test_wallet.AddKey(key));
+
+        CMutableTransaction mtx;
+        mtx.vout.resize(1);
+        mtx.vout[0].nValue = 1 * COIN;
+        mtx.vout[0].scriptPubKey.SetDestination(key.GetPubKey().GetID());
+        const CTransaction tx(mtx);
+
+        test_wallet.mapWallet[tx.GetHash()] = CWalletTx(&test_wallet, tx);
+    }
+
+    auto iface = interfaces::MakeWallet(&test_wallet);
+
+    // The walk takes cs_main, so it cannot return while this thread holds it.
+    std::future<std::vector<std::string>> f;
+    {
+        LOCK(cs_main);
+        f = std::async(std::launch::async, [&] { return iface->getUnbookedReceiveAddresses(); });
+        BOOST_CHECK(f.wait_for(std::chrono::milliseconds(300)) == std::future_status::timeout);
+    }
+    BOOST_CHECK(f.get().empty());
+
+    // The plain call, with no lock held. The entry is in no block and not in
+    // the mempool, so it is untrusted and books no balance.
+    BOOST_CHECK(iface->getUnbookedReceiveAddresses().empty());
+}
+
 BOOST_AUTO_TEST_CASE(node_value_queries_are_safe_in_empty_environment)
 {
     std::unique_ptr<interfaces::Node> node = interfaces::MakeNode();
@@ -889,6 +930,161 @@ BOOST_AUTO_TEST_CASE(gui_state_quote_latest_request_wins)
     BOOST_CHECK_EQUAL(answers[0].thread, gui_cache_test::TIMER_THREAD);
     BOOST_CHECK_EQUAL(compute.quote_calls.load(), 1);
     BOOST_CHECK_EQUAL(quotes.AnsweredUnderALock(), 0);
+}
+
+BOOST_AUTO_TEST_CASE(gui_state_unbooked_request_never_waits_for_cs_main)
+{
+    gui_cache_test::FakeCompute compute;
+    gui_cache_test::UnbookedAnswers answers;
+
+    PublishedFakeCache published(compute, 4000ms, 30000ms);
+
+    std::unique_ptr<interfaces::GuiState> gui_state = interfaces::MakeGuiState();
+    BOOST_REQUIRE(gui_state);
+
+    std::unique_ptr<interfaces::Handler> handler = gui_state->handleUnbookedReceiveAddresses(answers.Make());
+
+    // The request only queues the walk for the cache's own thread, so it
+    // returns while another thread holds cs_main. The fake's walk takes no
+    // lock, so its answer may come inside the scope; it is read after it.
+    std::future<void> asked;
+    {
+        LOCK(cs_main);
+        asked = std::async(std::launch::async, [&] { gui_state->requestUnbookedReceiveAddresses(7); });
+        BOOST_CHECK(asked.wait_for(std::chrono::seconds(10)) == std::future_status::ready);
+    }
+
+    BOOST_REQUIRE(answers.WaitForCount(1));
+    const std::vector<gui_cache_test::UnbookedAnswers::Answer> got = answers.Answers();
+    BOOST_REQUIRE_EQUAL(got.size(), 1U);
+    BOOST_CHECK_EQUAL(got[0].request_id, 7U);
+    BOOST_CHECK(got[0].addresses == (std::vector<std::string>{"b", "a"}));
+    BOOST_CHECK(got[0].error.empty());
+    BOOST_CHECK_EQUAL(got[0].thread, gui_cache_test::PICKER_THREAD);
+    BOOST_CHECK_EQUAL(answers.AnsweredUnderALock(), 0);
+}
+
+BOOST_AUTO_TEST_CASE(wallet_coin_source_reload_runs_only_on_its_scheduler)
+{
+    CWallet test_wallet;
+
+    // A scheduler that keeps the jobs it is given, for the case to run.
+    Mutex jobs_mutex;
+    std::vector<interfaces::CoinReloadJob> jobs; // guarded by jobs_mutex
+    const interfaces::ReloadScheduler schedule = [&](interfaces::CoinReloadJob job) {
+        LOCK(jobs_mutex);
+        jobs.push_back(std::move(job));
+        return true;
+    };
+
+    // Declared before the request's future, so a REQUIRE that ends the case
+    // waits for the request's thread before the source goes.
+    std::shared_ptr<interfaces::WalletCoinSource> source = interfaces::MakeWalletCoinSource(&test_wallet, schedule);
+    std::string error;
+
+    // (a) Asked while cs_main is held: the request hands the rebuild to the
+    // scheduler and returns, and nothing has run.
+    std::future<void> asked;
+    {
+        LOCK(cs_main);
+        asked = std::async(std::launch::async, [&] { source->requestReload(); });
+        BOOST_CHECK(asked.wait_for(std::chrono::seconds(10)) == std::future_status::ready);
+    }
+    {
+        LOCK(jobs_mutex);
+        BOOST_REQUIRE_EQUAL(jobs.size(), 1U);
+    }
+    BOOST_CHECK(!source->consumeReloadEnded(error));
+
+    // (b) A second request while that job is queued is served by it.
+    source->requestReload();
+    {
+        LOCK(jobs_mutex);
+        BOOST_CHECK_EQUAL(jobs.size(), 1U);
+    }
+
+    // (c) The job runs the rebuild, on this thread holding no lock, as the
+    // coin list's thread runs it: the store's rebuild takes cs_main and
+    // cs_wallet itself. The job hands back the source, which must not outlive
+    // this scope.
+    {
+        interfaces::CoinReloadJob job;
+        {
+            LOCK(jobs_mutex);
+            job = jobs[0];
+        }
+        std::shared_ptr<void> first_keep = job();
+        BOOST_CHECK(first_keep);
+    }
+    BOOST_CHECK(source->consumeReloadEnded(error));
+    BOOST_CHECK(error.empty());
+    BOOST_CHECK(!source->consumeReloadEnded(error));
+    {
+        LOCK(jobs_mutex);
+        jobs.clear();
+    }
+
+    // (d) The job cleared the queued flag as it started, so a further request
+    // keeps a second job.
+    source->requestReload();
+    {
+        LOCK(jobs_mutex);
+        BOOST_CHECK_EQUAL(jobs.size(), 1U);
+    }
+
+    // (e) A source its owner has dropped is not rebuilt.
+    interfaces::CoinReloadJob queued;
+    {
+        LOCK(jobs_mutex);
+        BOOST_REQUIRE_EQUAL(jobs.size(), 1U);
+        queued = jobs[0];
+    }
+    source.reset();
+    std::shared_ptr<void> second_keep = queued();
+    BOOST_CHECK(!second_keep);
+
+    // (f) With no scheduler, or one that refuses, the request ends at once
+    // with the reason, and so does the next one.
+    const std::shared_ptr<interfaces::WalletCoinSource> unscheduled = interfaces::MakeWalletCoinSource(&test_wallet);
+    const std::shared_ptr<interfaces::WalletCoinSource> refused =
+        interfaces::MakeWalletCoinSource(&test_wallet, [](interfaces::CoinReloadJob) { return false; });
+    for (const std::shared_ptr<interfaces::WalletCoinSource>& each : {unscheduled, refused}) {
+        each->requestReload();
+        BOOST_CHECK(each->consumeReloadEnded(error));
+        BOOST_CHECK_EQUAL(error, "no core thread is running to load the coin list");
+
+        error.clear();
+        each->requestReload();
+        BOOST_CHECK(each->consumeReloadEnded(error));
+        BOOST_CHECK_EQUAL(error, "no core thread is running to load the coin list");
+    }
+}
+
+BOOST_AUTO_TEST_CASE(init_coin_source_reloads_on_the_published_cache)
+{
+    // A local wallet stands in for pwalletMain for the case, and the guard
+    // puts pwalletMain back at any exit, after the cache has stopped.
+    CWallet test_wallet;
+    struct RestoreWalletOnExit
+    {
+        CWallet* saved;
+
+        ~RestoreWalletOnExit() { pwalletMain = saved; }
+    } restore_wallet{pwalletMain};
+    pwalletMain = &test_wallet;
+
+    gui_cache_test::FakeCompute compute;
+    PublishedFakeCache published(compute, 4000ms, 30000ms);
+
+    // The source the GUI takes: its rebuild runs on the published cache's
+    // coin list thread.
+    std::shared_ptr<interfaces::WalletCoinSource> source = interfaces::MakeGridcoinInit()->makeWalletCoinSource();
+    BOOST_REQUIRE(source);
+
+    std::string error;
+    source->requestReload();
+    BOOST_REQUIRE(gui_cache_test::WaitUntil([&] { return source->consumeReloadEnded(error); }));
+    BOOST_CHECK(error.empty());
 }
 
 BOOST_AUTO_TEST_CASE(gui_state_computes_only_while_a_gui_is_subscribed)

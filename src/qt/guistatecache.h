@@ -9,6 +9,8 @@
 #include "qt/notificationlifetime.h"
 
 #include <QObject>
+#include <QString>
+#include <QStringList>
 
 #include <memory>
 
@@ -39,18 +41,34 @@ public:
     //! False until the core has pushed a first computed snapshot.
     bool computed() const { return m_snapshot.sequence != 0; }
 
+    //! Ask the core for the "add existing" picker's list
+    //! (interfaces::GuiState::requestUnbookedReceiveAddresses). Returns at
+    //! once; the answer arrives as unbookedReceiveAddressesAnswered() with
+    //! \p request_id. A request across IPC can throw once the core has gone.
+    void requestUnbookedReceiveAddresses(quint64 request_id);
+
 Q_SIGNALS:
     //! Emitted after the stored snapshot is replaced.
     void changed();
 
+    //! The core's answer to requestUnbookedReceiveAddresses() \p request_id:
+    //! the list, or an empty list and \p error. Emitted on the GUI thread.
+    void unbookedReceiveAddressesAnswered(quint64 request_id, const QStringList& addresses, const QString& error);
+
 private:
     void accept(const interfaces::GuiStateSnapshot& incoming);
 
+    //! The core's GUI state the requests go to. It must outlive this, as the
+    //! subscriptions' handlers already require.
+    interfaces::GuiState& m_gui_state;
+
     interfaces::GuiStateSnapshot m_snapshot;
 
-    //! Guards the subscription fn against running while this is destroyed.
+    //! Guards the subscription fns against running while this is destroyed.
     NotificationLifetime m_notify_lifetime;
     std::unique_ptr<interfaces::Handler> m_handler;
+    //! The subscription to the picker's answers.
+    std::unique_ptr<interfaces::Handler> m_unbooked_handler;
 };
 
 #endif // GRIDCOIN_QT_GUISTATECACHE_H

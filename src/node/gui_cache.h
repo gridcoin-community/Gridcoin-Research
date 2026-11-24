@@ -13,13 +13,16 @@
 #include <atomic>
 #include <chrono>
 #include <condition_variable>
+#include <cstddef>
 #include <cstdint>
+#include <deque>
 #include <functional>
 #include <limits>
 #include <memory>
 #include <optional>
 #include <string>
 #include <thread>
+#include <vector>
 
 extern CCriticalSection cs_main;
 
@@ -33,6 +36,65 @@ static constexpr std::chrono::milliseconds GUI_CACHE_MIN_INTERVAL{4000};
 //! How often the cache's timer wakes with nothing pending, to catch the
 //! time-based out-of-sync test turning without a block.
 static constexpr std::chrono::milliseconds GUI_CACHE_TICK{30000};
+
+//!
+//! \brief A core thread of the GUI state cache's own, for work a GUI asks for
+//! that walks the whole wallet, so that work never runs on the cache's timer.
+//! It runs the jobs posted to it one at a time, in order, and holds no lock of
+//! its own while one runs: each job takes what it needs.
+//!
+class GuiScanThread
+{
+public:
+    //! \param name The thread's internal name.
+    explicit GuiScanThread(std::string name);
+
+    //! Stops the thread (RequestStop(), then Join()).
+    ~GuiScanThread();
+
+    GuiScanThread(const GuiScanThread&) = delete;
+    GuiScanThread& operator=(const GuiScanThread&) = delete;
+
+    //! Start the thread. Once; not after RequestStop(). Takes only the
+    //! thread's own leaf lock. A thread started after RequestStop() runs no
+    //! job: Loop() sees m_stopping and returns at once.
+    void Start();
+
+    //! Queue \p job behind the ones already queued and return true; false
+    //! once RequestStop() has been called, or the thread has ended on an
+    //! unhandled exception, and the job is dropped. Takes only a leaf lock.
+    bool Post(std::function<void()> job);
+
+    //! Ask the thread to stop: it ends the job it is running, if any, and
+    //! starts no other. The jobs still queued are dropped unrun. Never blocks.
+    void RequestStop();
+
+    //! Wait for the thread to end, after RequestStop(). Must not be called
+    //! holding cs_main or cs_wallet: the job in progress may be waiting for
+    //! either.
+    void Join();
+
+    //! The jobs queued and not yet started. For tests.
+    std::size_t Queued() const;
+
+private:
+    void Loop();
+
+    const std::string m_name;
+
+    //! A leaf: nothing is taken while it is held.
+    mutable Mutex m_mutex;
+    std::condition_variable m_cv;
+    std::deque<std::function<void()>> m_jobs GUARDED_BY(m_mutex);
+    //! Set and read under m_mutex only, so the thread's wait cannot miss it.
+    //! Start() does not read it, so Start() takes no second lock.
+    bool m_stopping GUARDED_BY(m_mutex){false};
+
+    //! Serializes starting and joining the thread. A leaf too: Start() and
+    //! Join() take no other lock while they hold it.
+    Mutex m_thread_mutex;
+    std::thread m_thread GUARDED_BY(m_thread_mutex);
+};
 
 //!
 //! \brief The node's copy of the state the GUI shows that needs cs_main to
@@ -56,12 +118,13 @@ static constexpr std::chrono::milliseconds GUI_CACHE_TICK{30000};
 //! The cache works only while a GUI is subscribed (AddSubscriber; a GUI's
 //! interfaces::GuiState::handleChanged counts as one while its Handler lives).
 //! With none, UpdateLocked returns after its lock-free check and the timer makes
-//! no update and takes no cs_main for one; the marks just accumulate. Only a
-//! quote a GUI asks for is still computed. The subscription that ends that (the
-//! first) asks for a forced update (RequestUpdate), so a GUI that attaches gets
-//! a computed snapshot within one timer cycle. The monolithic GUI subscribes
-//! once it starts, so it always has one; a daemon computes only while a
-//! multiprocess GUI is attached, and one with no GUI pays nothing for the cache.
+//! no update and takes no cs_main for one; the marks just accumulate. Only what
+//! a GUI asks for (a quote, the picker's list, a coin-list rebuild) is still
+//! computed. The subscription that ends that (the first) asks for a forced
+//! update (RequestUpdate), so a GUI that attaches gets a computed snapshot
+//! within one timer cycle. The monolithic GUI subscribes once it starts, so it
+//! always has one; a daemon computes only while a multiprocess GUI is attached,
+//! and one with no GUI pays nothing for the cache.
 //!
 //! A GUI may also ask for the MRC figures at a fee boost (RequestMRCQuote). The
 //! timer serves the latest such request under cs_main, not held to the
@@ -69,12 +132,23 @@ static constexpr std::chrono::milliseconds GUI_CACHE_TICK{30000};
 //! through its own fn (QuoteFn) with the request's id, a failure included.
 //! Quotes are user-paced, so they do not wait for a subscriber.
 //!
+//! The work a GUI asks for that walks the whole wallet runs on two threads of
+//! the cache's own (GuiScanThread), never on the timer: the "add existing"
+//! picker's list (RequestUnbookedReceiveAddresses) on one, a coin-list rebuild
+//! (RequestCoinReload) on the other. So no update or quote waits in the
+//! timer's line behind such a job, and the picker's list waits in line behind
+//! no rebuild. Each job takes cs_main and cs_wallet itself, so while it walks
+//! it still keeps out every other thread that needs either, the timer
+//! included. Like quotes, these do not wait for a subscriber.
+//!
 //! Lock invariants (a deadlock is a matter of order; cs_main being recursive
 //! does not prevent one):
 //!  1. Every lock an update takes is taken after cs_main, and each such pair
 //!     already occurs in the node (SetBestChain's wallet, mempool and
 //!     miner-status work; the researcher and MRC snapshots the GUI takes today),
-//!     so no new order is added. The cache's own two locks are leaves.
+//!     so no new order is added. The cache's own locks are leaves: none is
+//!     held while another lock is taken. That includes each scan thread's
+//!     two, which is why StartTimer starts them before it takes the timer's.
 //!  2. The snapshot's leaf lock is never held while another lock is taken.
 //!  3. The timer never holds its wake mutex while taking cs_main, and nothing
 //!     takes cs_main while holding the wake mutex.
@@ -82,6 +156,10 @@ static constexpr std::chrono::milliseconds GUI_CACHE_TICK{30000};
 //!  5. A handler of a signal emitted under another lock only marks (MarkDirty):
 //!     an atomic or and the wake notify. A GUI's subscription and request calls
 //!     only count, record and notify, too.
+//!  6. A scan thread holds no lock between jobs, and none of its own while it
+//!     runs one. A job takes cs_main, then cs_wallet and the coin store's leaf
+//!     locks, in the canonical order, and the picker's answers are delivered
+//!     holding no lock.
 //!
 class GuiCache
 {
@@ -120,6 +198,12 @@ public:
 
         //! Run the function with cs_main held: production is LOCK(cs_main); f().
         std::function<void(const std::function<void()>&)> run_under_cs_main;
+
+        //! The "add existing" picker's list: the wallet's receive addresses with
+        //! a balance and no address-book entry. Runs on the cache's picker
+        //! thread holding no lock: it takes cs_main and cs_wallet itself. None,
+        //! and each request is answered with an error.
+        std::function<std::vector<std::string>()> unbooked;
     };
 
     //! Receives every new snapshot, on the timer thread, holding no lock. The
@@ -130,6 +214,16 @@ public:
     //! Receives each quote answer (RequestMRCQuote), on the timer thread,
     //! holding no lock, with the id of the request it answers.
     using QuoteFn = std::function<void(uint64_t request_id, const interfaces::MRCSnapshot&)>;
+
+    //! Receives each answer to RequestUnbookedReceiveAddresses, on the picker
+    //! thread, holding no lock: the list, or an empty list and the error.
+    using UnbookedFn = std::function<void(uint64_t request_id, const std::vector<std::string>& addresses,
+                                          const std::string& error)>;
+
+    //! A coin-list rebuild (WalletCoinSource::requestReload), run on the
+    //! cache's coin-list thread holding no lock: it takes cs_main and cs_wallet
+    //! itself. It returns a reference the thread drops after it returns.
+    using CoinJob = std::function<std::shared_ptr<void>()>;
 
     //! How long the timer waits, once an update looks due to it, before it takes
     //! cs_main for it. An update SetBestChain is about to make in its own scope
@@ -146,10 +240,12 @@ public:
     //! (GUI_CACHE_TICK in production).
     //! \param deliver_quote Receives the quote answers; none, and they go
     //! nowhere.
+    //! \param deliver_unbooked Receives the picker's answers; none, and they
+    //! go nowhere.
     GuiCache(Compute compute, DeliverFn deliver, std::chrono::milliseconds min_interval,
-             std::chrono::milliseconds tick, QuoteFn deliver_quote = {});
+             std::chrono::milliseconds tick, QuoteFn deliver_quote = {}, UnbookedFn deliver_unbooked = {});
 
-    //! Stops the timer (Stop()).
+    //! Stops the timer and the scan threads (Stop()).
     ~GuiCache();
 
     GuiCache(const GuiCache&) = delete;
@@ -200,12 +296,34 @@ public:
     //! so only the latest is answered. Never blocks.
     void RequestMRCQuote(CAmount fee_boost, uint64_t request_id);
 
-    //! Start the timer thread ("grc-guistate"). Once; not after Stop().
+    //! The GUI asks for the "add existing" picker's list. The picker thread
+    //! walks the wallet (Compute::unbooked) and answers through the UnbookedFn
+    //! with \p request_id, a failure with its error. A walk serves every
+    //! request made before it starts, so requests made together share one, and
+    //! none replaces another. Once Stop() is called, or the picker thread
+    //! has ended on an unhandled exception, a request not yet answered gets
+    //! no answer. Never blocks.
+    void RequestUnbookedReceiveAddresses(uint64_t request_id);
+
+    //! Queue a coin-list rebuild on the coin-list thread, behind any already
+    //! queued, and return true; false once Stop() has been called, or the
+    //! coin-list thread has ended on an unhandled exception, and the job is
+    //! dropped. Never blocks.
+    bool RequestCoinReload(CoinJob job);
+
+    //! The picker walks queued and not yet started. For tests.
+    std::size_t QueuedPickerJobsForTest() const;
+
+    //! Start the timer thread ("grc-guistate") and the two scan threads
+    //! ("grc-picker", "grc-coinlist"). Once; not after Stop().
     void StartTimer();
 
-    //! Stop and join the timer. Idempotent. Nothing is delivered after it
-    //! returns. Must not be called holding cs_main: the timer may be waiting for
-    //! it.
+    //! Stop and join the timer and the two scan threads. Idempotent. Nothing is
+    //! delivered after it returns. Each thread ends the work it has started
+    //! (the timer an update and a quote, the picker thread one walk, the
+    //! coin-list thread one rebuild) and starts none after it; a job still
+    //! queued is dropped. Must not be called holding cs_main: any of them may
+    //! be waiting for it.
     void Stop();
 
     //! The current snapshot, copied under the leaf lock alone.
@@ -229,6 +347,7 @@ private:
     const std::chrono::milliseconds m_min_interval;
     const std::chrono::milliseconds m_tick;
     const QuoteFn m_deliver_quote;
+    const UnbookedFn m_deliver_unbooked;
 
     //! The GUIs subscribed to the deliveries (AddSubscriber). None, and the
     //! cache computes nothing.
@@ -270,6 +389,17 @@ private:
     Mutex m_timer_mutex;
     std::thread m_timer GUARDED_BY(m_timer_mutex);
 
+    //! The picker's requests no walk has taken yet, and whether a walk is
+    //! queued for them. A leaf.
+    Mutex m_unbooked_mutex;
+    std::vector<uint64_t> m_unbooked GUARDED_BY(m_unbooked_mutex);
+    bool m_unbooked_posted GUARDED_BY(m_unbooked_mutex){false};
+
+    //! The scan threads: one walks for the picker and one rebuilds coin lists,
+    //! so the picker's list never waits in line behind a rebuild.
+    GuiScanThread m_picker_scan{"grc-picker"};
+    GuiScanThread m_coin_scan{"grc-coinlist"};
+
     //! A GUI is subscribed (lock-free).
     bool HasSubscribers() const;
 
@@ -310,6 +440,14 @@ private:
     //! Wait SETTLE, or until Stop(). False when stopped.
     bool Settle();
 
+    //! Take every picker request queued, walk once (Compute::unbooked) and
+    //! answer each, holding no lock. The picker thread only.
+    void ServeUnbooked();
+
+    //! Run one coin-list rebuild, and drop its reference after it returns. The
+    //! coin-list thread only.
+    void RunCoinJob(const CoinJob& job);
+
     void TimerLoop();
 };
 
@@ -325,10 +463,17 @@ GuiCache* GetGuiCache();
 //! updates it. The node owns it from here.
 void StartGuiCache(std::unique_ptr<GuiCache> cache);
 
-//! Unpublish the node's cache and stop its timer. The object stays alive until
-//! the next StartGuiCache() or exit, because a trigger already running on
-//! another thread may still mark it. Must not be called holding cs_main.
+//! Unpublish the node's cache, then stop and join its timer and its two scan
+//! threads (GuiCache::Stop): each ends the job it has started, and a job still
+//! queued is dropped. The object stays alive until the next StartGuiCache() or
+//! exit, because a trigger already running on another thread may still mark
+//! it. Must not be called holding cs_main.
 void StopGuiCache();
+
+//! Queue a coin-list rebuild on the node's cache (GuiCache::RequestCoinReload),
+//! or return false when none is published, it has stopped, or its coin-list
+//! thread has ended on an unhandled exception.
+bool ScheduleCoinReload(GuiCache::CoinJob job);
 
 } // namespace node
 

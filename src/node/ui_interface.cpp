@@ -38,6 +38,7 @@ struct UISignals {
     boost::signals2::signal<CClientUIInterface::MandatorySideStakeChangedSig> MandatorySideStakeChanged;
     boost::signals2::signal<CClientUIInterface::GuiStateChangedSig> GuiStateChanged;
     boost::signals2::signal<CClientUIInterface::GuiStateMRCQuoteSig> GuiStateMRCQuote;
+    boost::signals2::signal<CClientUIInterface::GuiStateUnbookedReceiveAddressesSig> GuiStateUnbookedReceiveAddresses;
 };
 static UISignals g_ui_signals;
 
@@ -69,6 +70,7 @@ ADD_SIGNALS_IMPL_WRAPPER(RwSettingsUpdated);
 ADD_SIGNALS_IMPL_WRAPPER(MandatorySideStakeChanged);
 ADD_SIGNALS_IMPL_WRAPPER(GuiStateChanged);
 ADD_SIGNALS_IMPL_WRAPPER(GuiStateMRCQuote);
+ADD_SIGNALS_IMPL_WRAPPER(GuiStateUnbookedReceiveAddresses);
 
 void CClientUIInterface::ThreadSafeMessageBox(const std::string& message, const std::string& caption, int style) { return g_ui_signals.ThreadSafeMessageBox(message, caption, style); }
 void CClientUIInterface::UpdateMessageBox(const std::string& version, const int& update_type, const std::string& message) { return g_ui_signals.UpdateMessageBox(version, update_type, message); }
@@ -114,6 +116,7 @@ void CClientUIInterface::RwSettingsUpdated() { return g_ui_signals.RwSettingsUpd
 void CClientUIInterface::MandatorySideStakeChanged() { return g_ui_signals.MandatorySideStakeChanged(); }
 void CClientUIInterface::GuiStateChanged(const interfaces::GuiStateSnapshot& snapshot) { return g_ui_signals.GuiStateChanged(snapshot); }
 void CClientUIInterface::GuiStateMRCQuote(uint64_t request_id, const interfaces::MRCSnapshot& quote) { return g_ui_signals.GuiStateMRCQuote(request_id, quote); }
+void CClientUIInterface::GuiStateUnbookedReceiveAddresses(uint64_t request_id, const std::vector<std::string>& addresses, const std::string& error) { return g_ui_signals.GuiStateUnbookedReceiveAddresses(request_id, addresses, error); }
 
 bool InitError(const std::string &str)
 {

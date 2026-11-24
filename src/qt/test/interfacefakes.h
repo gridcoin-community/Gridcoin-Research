@@ -17,10 +17,12 @@
 #include "interfaces/wallet.h"
 #include "interfaces/wallet_coin_source.h"
 #include "interfaces/wallet_tx_source.h"
+#include "sync.h"
 #include "util/strencodings.h"
 
 #include <atomic>
 #include <chrono>
+#include <condition_variable>
 #include <cstdint>
 #include <functional>
 #include <map>
@@ -483,20 +485,27 @@ public:
 //! keeps the fns a model registers so a test can push a snapshot (Push) or
 //! answer a quote (AnswerQuote) to them, synchronously on the test's thread,
 //! where the node's cache would call them from its timer thread. Counts the
-//! requests the model makes and keeps the last quote request's arguments.
-//! Unlike the node, it computes nothing on a subscription and answers no
-//! request by itself: the test does. A Handler it returns must not outlive it.
+//! requests the model makes and keeps the last quote request's arguments, and
+//! the id of every picker request (requestUnbookedReceiveAddresses), which
+//! Answer answers. Unlike the node, it computes nothing on a subscription and
+//! answers no request by itself: the test does. A Handler it returns must not
+//! outlive it.
 class FakeGuiState : public interfaces::GuiState
 {
 public:
     // Canned response (set by the test, or by Push).
     interfaces::GuiStateSnapshot m_snapshot;
 
+    // Set by the test: a picker request throws, as a call across IPC does
+    // when the core drops the connection.
+    bool m_request_throws = false;
+
     // Recorded calls.
     int m_request_update_calls = 0;
     int m_quote_requests = 0;
     CAmount m_last_quote_fee_boost = 0;
     uint64_t m_last_quote_request_id = 0;
+    std::vector<uint64_t> m_unbooked_requests;
 
     interfaces::GuiStateSnapshot current() override { return m_snapshot; }
 
@@ -521,6 +530,27 @@ public:
         const int id = m_next_handler_id++;
         m_quote_fns.emplace(id, std::move(fn));
         return interfaces::MakeCleanupHandler([this, id] { m_quote_fns.erase(id); });
+    }
+
+    void requestUnbookedReceiveAddresses(uint64_t request_id) override
+    {
+        if (m_request_throws) throw std::runtime_error("the picker's request could not reach the core");
+        m_unbooked_requests.push_back(request_id);
+    }
+
+    std::unique_ptr<interfaces::Handler> handleUnbookedReceiveAddresses(UnbookedFn fn) override
+    {
+        const int id = m_next_handler_id++;
+        m_unbooked_fns.emplace(id, std::move(fn));
+        return interfaces::MakeCleanupHandler([this, id] { m_unbooked_fns.erase(id); });
+    }
+
+    //! Deliver a picker answer to every registered
+    //! handleUnbookedReceiveAddresses fn, as the core's picker thread would.
+    void Answer(uint64_t request_id, const std::vector<std::string>& addresses, const std::string& error)
+    {
+        const std::map<int, UnbookedFn> fns = m_unbooked_fns;
+        for (const auto& entry : fns) entry.second(request_id, addresses, error);
     }
 
     //! Make \p snapshot the current one and deliver it to every registered
@@ -548,6 +578,7 @@ private:
     int m_next_handler_id = 0;
     std::map<int, ChangedFn> m_changed_fns;
     std::map<int, MRCQuoteFn> m_quote_fns;
+    std::map<int, UnbookedFn> m_unbooked_fns;
 };
 
 //! Fake interfaces::PSGTPoolContext: serves a canned poolStatus() and counts
@@ -1100,11 +1131,76 @@ public:
     void noteAddressBookChanged(const std::string&, const std::string&) override {}
 };
 
+//! Stands in for the core's cs_main in this test binary. Here the GUI reaches
+//! the core only through these fakes, so a fake that stands for a core walk or
+//! rebuild takes this lock where the core takes cs_main, and
+//! CsMainStandInHolder holds it as a core thread busy under cs_main would. The
+//! interface headers declare the real cs_main, but no GUI code takes it, and
+//! neither does this test.
+inline RecursiveMutex cs_main_stand_in;
+
+//! Holds cs_main_stand_in on a thread of its own, as a core thread in a long
+//! walk holds cs_main, from its construction until Release(), or for 20 s at
+//! most, so that a case that never releases it still ends. Its destructor
+//! releases it and joins the thread.
+class CsMainStandInHolder
+{
+public:
+    CsMainStandInHolder()
+        : m_thread([this] {
+              LOCK(cs_main_stand_in);
+              {
+                  LOCK(m_mutex);
+                  m_held = true;
+              }
+              m_cv.notify_all();
+
+              const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{20};
+              WAIT_LOCK(m_mutex, lock);
+              while (!m_release) {
+                  if (m_cv.wait_until(lock, deadline) == std::cv_status::timeout) break;
+              }
+          })
+    {
+        WAIT_LOCK(m_mutex, lock);
+        while (!m_held) m_cv.wait(lock);
+    }
+
+    ~CsMainStandInHolder()
+    {
+        Release();
+        m_thread.join();
+    }
+
+    CsMainStandInHolder(const CsMainStandInHolder&) = delete;
+    CsMainStandInHolder& operator=(const CsMainStandInHolder&) = delete;
+
+    void Release()
+    {
+        {
+            LOCK(m_mutex);
+            m_release = true;
+        }
+        m_cv.notify_all();
+    }
+
+private:
+    Mutex m_mutex;
+    std::condition_variable m_cv;
+    bool m_held GUARDED_BY(m_mutex){false};
+    bool m_release GUARDED_BY(m_mutex){false};
+    //! Last, so the thread starts after the state it reads.
+    std::thread m_thread;
+};
+
 //! Fake interfaces::WalletCoinSource: a synthetic coin source
 //! (interfaces::MakeSyntheticCoinSource) whose wallet scan, reloadAndSnapshot(),
 //! records the thread it runs on, and can be held until the test releases it
 //! or made to throw, as a call across IPC throws when the core drops the
-//! connection. Everything else is the synthetic source's.
+//! connection. requestReload() runs that scan on a thread of its own, standing
+//! for the core's, and then records its end for consumeReloadEnded(), unless
+//! the test defers it; it can also be made to throw. Everything else is the
+//! synthetic source's. Its destructor joins the scans it started.
 class FakeCoinSource : public interfaces::WalletCoinSource
 {
 public:
@@ -1112,6 +1208,16 @@ public:
     std::atomic<bool> m_throw{false};
     std::atomic<bool> m_hold{false};
     std::atomic<bool> m_release{false};
+    //! requestReload() records the request and starts no scan.
+    std::atomic<bool> m_defer_reload{false};
+    //! A scan off the thread that made this fake takes cs_main_stand_in
+    //! first, where the core's rebuild takes cs_main.
+    std::atomic<bool> m_take_cs_main{false};
+    //! requestReload() throws.
+    std::atomic<bool> m_request_throws{false};
+    //! The first drainEvents() after a consumeReloadEnded() that returned
+    //! true throws, once.
+    std::atomic<bool> m_drain_throws_once{false};
 
     // Observed.
     std::atomic<int> m_reloads{0};
@@ -1119,10 +1225,28 @@ public:
     std::atomic<int> m_reloads_ended{0};
     std::atomic<bool> m_reload_waiting{false};
     std::atomic<std::thread::id> m_reload_thread{};
+    std::atomic<int> m_reload_requests{0};
+
+    ~FakeCoinSource() override
+    {
+        m_release = true;
+
+        std::vector<std::thread> threads;
+        {
+            LOCK(m_mutex);
+            threads.swap(m_threads);
+        }
+        for (std::thread& thread : threads) thread.join();
+    }
 
     GRC::CoinGroupsResult reloadAndSnapshot() override
     {
         m_reload_thread = std::this_thread::get_id();
+
+        if (m_take_cs_main && std::this_thread::get_id() != m_maker_thread) {
+            LOCK(cs_main_stand_in);
+        }
+
         ++m_reloads;
 
         struct Ended
@@ -1187,6 +1311,8 @@ public:
     }
     std::vector<GRC::WalletCoinEvent> drainEvents(std::size_t max_batch) override
     {
+        if (m_drain_throw_armed.exchange(false)) throw std::runtime_error("a coin drain failed");
+
         return m_synthetic->drainEvents(max_batch);
     }
     bool consumeNeedsResync() override { return m_synthetic->consumeNeedsResync(); }
@@ -1195,8 +1321,47 @@ public:
         m_synthetic->noteAddressBookChanged(address, label);
     }
 
+    void requestReload() override
+    {
+        ++m_reload_requests;
+
+        if (m_request_throws) throw std::runtime_error("the coin list's request could not reach the core");
+        if (m_defer_reload) return;
+
+        LOCK(m_mutex);
+        m_threads.emplace_back([this] {
+            std::string error;
+            try {
+                reloadAndSnapshot();
+            } catch (const std::exception& e) {
+                error = e.what();
+            }
+
+            LOCK(m_mutex);
+            m_reload_ended = true;
+            m_reload_error = error;
+        });
+    }
+
+    bool consumeReloadEnded(std::string& error) override
+    {
+        LOCK(m_mutex);
+        if (!m_reload_ended) return false;
+        m_reload_ended = false;
+        error = m_reload_error;
+        if (m_drain_throws_once.exchange(false)) m_drain_throw_armed = true;
+        return true;
+    }
+
 private:
     const std::shared_ptr<interfaces::WalletCoinSource> m_synthetic{interfaces::MakeSyntheticCoinSource(1, 1)};
+    const std::thread::id m_maker_thread{std::this_thread::get_id()};
+    std::atomic<bool> m_drain_throw_armed{false};
+
+    Mutex m_mutex;
+    std::vector<std::thread> m_threads GUARDED_BY(m_mutex);
+    bool m_reload_ended GUARDED_BY(m_mutex){false};
+    std::string m_reload_error GUARDED_BY(m_mutex);
 };
 
 } // namespace qt_test

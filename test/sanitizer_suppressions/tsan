@@ -25,6 +25,12 @@ deadlock:libdb
 # no cycle; the DEBUG_LOCKORDER build, which forgets a lock when it is destroyed, runs
 # the whole suite clean.
 deadlock:txmempool_tests::unbroadcast_*
+# update_in_scope_is_rate_limited keeps a GuiCache on the stack and takes its snapshot
+# mutex (GuiCache::Current) under cs_main. The CNode of net_tests'
+# version_time_checks_use_the_receive_time, run later, puts cs_vRecvMsg at the same stack
+# address and takes cs_main under it, which TSan reads as the same two mutexes taken in
+# the other order. The objects are different, and there is no cycle.
+deadlock:gui_cache_tests::update_in_scope_is_rate_limited
 
 # Intermittent issues
 # -------------------
