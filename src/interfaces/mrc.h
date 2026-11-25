@@ -75,10 +75,14 @@ struct MRCSnapshot
 
     //! Fee-ordered mempool MRC queue (mempool.GetMRCQueue()) evaluated against
     //! this request's fee. \p queue_length is the total pending MRC count; \p pos
-    //! is this request's 0-based position among strictly-higher-fee entries; \p
-    //! found_in_queue is true if this CPID's MRC is already pending. The fees
-    //! bound the queue for the fee-boost UI: head (highest), tail (lowest), and
-    //! pay-limit (the fee at output_limit-1, i.e. the last that would be paid).
+    //! is this request's 0-based position: the number of entries ahead of this
+    //! CPID's own entry (all entries when it has none) whose fee is at least this
+    //! request's, so a tie counts (GRC::MeasureMRCQueue); \p found_in_queue is
+    //! true if this CPID's MRC is already pending. The fees bound the queue for
+    //! the fee-boost UI: head (highest), tail (lowest), and pay-limit (the fee at
+    //! min(queue_length, output_limit) - 1, an estimate of the last paid slot,
+    //! see GRC::MRCQueuePosition; capped at the head fee; the head fee when there
+    //! is no such slot, so 0 for an empty queue).
     int queue_length = 0;
     int pos = 0;
     bool found_in_queue = false;

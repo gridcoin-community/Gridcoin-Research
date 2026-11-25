@@ -59,6 +59,37 @@ private:
     std::list<std::function<void(const std::string&)>>::iterator m_callback;
 };
 
+// MakeTx, MakeMrcTx and MakeEntry as txmempool_tests has them: a mempool entry
+// for an MRC at a given fee and CPID.
+
+//! Build a v2 transaction carrying the supplied contracts (if any).
+CTransaction MakeTx(const std::vector<GRC::Contract>& contracts = {},
+                    const std::vector<CTxIn>& vin = {},
+                    const std::vector<CTxOut>& vout = {})
+{
+    CMutableTransaction mtx;
+    mtx.nVersion = 2;
+    mtx.vin = vin;
+    mtx.vout = vout;
+    mtx.vContracts = contracts;
+    return CTransaction(mtx);
+}
+
+//! Build a v2 transaction carrying a single MRC contract for the given CPID.
+CTransaction MakeMrcTx(const GRC::Cpid& cpid, CAmount fee, const uint256& last_block = uint256())
+{
+    GRC::MRC mrc;
+    mrc.m_mining_id = cpid;
+    mrc.m_fee = fee;
+    mrc.m_last_block_hash = last_block;
+    return MakeTx({GRC::MakeContract<GRC::MRC>(GRC::ContractAction::ADD, mrc)});
+}
+
+CTxMemPoolEntry MakeEntry(const CTransaction& tx)
+{
+    return CTxMemPoolEntry(tx, 0, 0, 0, ::GetSerializeSize(tx, SER_NETWORK, PROTOCOL_VERSION));
+}
+
 struct Setup {
     // First member: restores the tip globals, mock time and the arguments
     // this fixture forces, after the members below are gone. The destructor
@@ -462,6 +493,91 @@ BOOST_AUTO_TEST_CASE(the_gui_cache_quote_is_the_trial_at_the_boost_asked)
     BOOST_CHECK_EQUAL(quote.fee, 0);
 }
 
+// The quote also measures the request against the mempool's MRC queue, with
+// GRC::MeasureMRCQueue at the fee the request would carry: the minimum fee
+// unboosted, the boosted fee once the boosted rerun has set it. The queue built
+// here gives the head, tail and pay-limit fees three different values, and a
+// position that is not the queue length.
+BOOST_AUTO_TEST_CASE(the_gui_cache_quote_carries_the_queue_position)
+{
+    // The fixture's StateGuard leaves the mempool as it is; this one empties it
+    // on entry and on exit, so no entry for the fixture's CPID outlives the case.
+    grc_test::MempoolStateGuard mempool_guard;
+
+    // Regtest opens the MRC version gate on this mock chain. The accrual is
+    // large enough that the minimum fee is not rounded away.
+    SelectParams(CBaseChainParams::REGTEST);
+    account.m_accrual = 1000 * COIN;
+    g_previous_block_time = GetAdjustedTime();
+
+    LOCK(cs_main);
+    pindexBest = pindex->pprev;
+    nBestHeight = pindexBest->nHeight;
+
+    interfaces::GuiStateSnapshot current;
+    current.out_of_sync = false;
+    current.has_researcher = true;
+    current.researcher.has_active_beacon = true;
+
+    const node::GuiCache::Compute compute = node::MakeProductionCompute();
+
+    // The empty pool gives the request's minimum fee m, the reward r and the
+    // block's MRC output limit L.
+    const interfaces::MRCSnapshot empty = compute.mrc_quote(0, current);
+    BOOST_REQUIRE_MESSAGE(!empty.create_error, empty.create_error_msg);
+    const CAmount m = empty.min_fee;
+    const CAmount r = empty.reward;
+    const int L = empty.output_limit;
+    BOOST_REQUIRE_GE(L, 1);
+    BOOST_REQUIRE_GE(m, 3);
+    BOOST_REQUIRE_GE(r - m, L + 3);
+
+    // L + 1 foreign entries above m (m + 2 to m + L + 2), one foreign entry
+    // below it (m - 1), then the fixture's own CPID at m - 2, the tail.
+    for (int i = 0; i <= L; ++i) {
+        const CTransaction tx = MakeMrcTx(GRC::Cpid(InsecureRandBytes(16)), m + 2 + i);
+        BOOST_REQUIRE(mempool.addUnchecked(tx.GetHash(), MakeEntry(tx)));
+    }
+    const CTransaction below = MakeMrcTx(GRC::Cpid(InsecureRandBytes(16)), m - 1);
+    BOOST_REQUIRE(mempool.addUnchecked(below.GetHash(), MakeEntry(below)));
+    const CTransaction own = MakeMrcTx(cpid, m - 2);
+    BOOST_REQUIRE(mempool.addUnchecked(own.GetHash(), MakeEntry(own)));
+
+    // The pay-limit slot is descending index L - 1. Head, tail and pay limit
+    // differ from one another, and pos (L + 1) differs from the length (L + 3).
+    const CAmount head = m + L + 2;
+    const CAmount tail = m - 2;
+    const CAmount pay_limit = m + 3;
+    BOOST_REQUIRE(head != tail && head != pay_limit && tail != pay_limit);
+
+    // Unboosted, the request carries m: the L + 1 entries above it are ahead,
+    // and the m - 1 entry is ahead of the own entry but below the fee.
+    const interfaces::MRCSnapshot quote = compute.mrc_quote(0, current);
+    BOOST_REQUIRE_MESSAGE(!quote.create_error, quote.create_error_msg);
+    BOOST_CHECK_EQUAL(quote.queue_length, L + 3);
+    BOOST_CHECK_EQUAL(quote.pos, L + 1);
+    BOOST_CHECK_EQUAL(quote.found_in_queue, true);
+    BOOST_CHECK_EQUAL(quote.queue_head_fee, head);
+    BOOST_CHECK_EQUAL(quote.queue_tail_fee, tail);
+    BOOST_CHECK_EQUAL(quote.queue_pay_limit_fee, pay_limit);
+
+    // The same six values as the function gives for the mempool's queue.
+    const GRC::MRCQueuePosition measured = GRC::MeasureMRCQueue(mempool.GetMRCQueue(), cpid, m, L);
+    BOOST_CHECK_EQUAL(quote.queue_length, measured.queue_length);
+    BOOST_CHECK_EQUAL(quote.pos, measured.pos);
+    BOOST_CHECK_EQUAL(quote.found_in_queue, measured.found);
+    BOOST_CHECK_EQUAL(quote.queue_head_fee, measured.head_fee);
+    BOOST_CHECK_EQUAL(quote.queue_tail_fee, measured.tail_fee);
+    BOOST_CHECK_EQUAL(quote.queue_pay_limit_fee, measured.pay_limit_fee);
+
+    // Boosted to the reward r, above the head, the request has nothing ahead.
+    // CreateMRC takes a fee up to the reward, inclusive.
+    const interfaces::MRCSnapshot boosted = compute.mrc_quote(r - m, current);
+    BOOST_REQUIRE_MESSAGE(!boosted.boosted_fee_error, boosted.boosted_fee_error_msg);
+    BOOST_CHECK_EQUAL(boosted.pos, 0);
+    BOOST_CHECK_EQUAL(boosted.found_in_queue, true);
+}
+
 // DESIGN rule: a submit whose rebuilt fee is higher, or whose net payout is lower,
 // than the terms the user confirmed is refused with the fresh figures and
 // broadcasts nothing. This runs the real MRCImpl::Submit on the mock chain of the
@@ -569,6 +685,97 @@ BOOST_AUTO_TEST_CASE(terms_hold_only_when_paying_no_more_and_receiving_no_less)
     BOOST_CHECK(!GRC::MRCTermsHold(10, 99, 10, 90));  // net 89 < 90
     BOOST_CHECK(GRC::MRCTermsHold(9, 100, 10, 90));   // pays less, nets more
     BOOST_CHECK(!GRC::MRCTermsHold(10, 100, 10, 91)); // net 90 < 91
+}
+
+// GRC::MeasureMRCQueue on queues built by hand, fees in satoshis. pos counts
+// the entries ahead of the own entry whose fee is at least the request's, so a
+// tie counts and an entry after the own one does not. The pay limit is the fee
+// at index min(size, limit) - 1, capped at the head fee.
+BOOST_AUTO_TEST_CASE(the_queue_position_counts_ties_ahead_of_the_own_entry)
+{
+    using Queue = std::vector<std::pair<CAmount, GRC::Cpid>>;
+    const auto make_cpid = [](unsigned char byte) { return GRC::Cpid(std::vector<unsigned char>(16, byte)); };
+    const GRC::Cpid a = make_cpid(0x0a);
+    const GRC::Cpid b = make_cpid(0x0b);
+    const GRC::Cpid c = make_cpid(0x0c);
+    const GRC::Cpid d = make_cpid(0x0d);
+    const GRC::Cpid e = make_cpid(0x0e);
+
+    // An empty queue: nothing ahead, and all three fees are 0.
+    {
+        const GRC::MRCQueuePosition q = GRC::MeasureMRCQueue(Queue{}, a, 4, 2);
+        BOOST_CHECK_EQUAL(q.queue_length, 0);
+        BOOST_CHECK_EQUAL(q.pos, 0);
+        BOOST_CHECK_EQUAL(q.found, false);
+        BOOST_CHECK_EQUAL(q.head_fee, 0);
+        BOOST_CHECK_EQUAL(q.tail_fee, 0);
+        BOOST_CHECK_EQUAL(q.pay_limit_fee, 0);
+    }
+
+    // No own entry: 5 and 4 are at least the fee 4 (a tie counts), 3 is not.
+    // The pay limit is queue[1].
+    {
+        const GRC::MRCQueuePosition q = GRC::MeasureMRCQueue(Queue{{5, a}, {4, b}, {3, c}}, d, 4, 2);
+        BOOST_CHECK_EQUAL(q.queue_length, 3);
+        BOOST_CHECK_EQUAL(q.pos, 2);
+        BOOST_CHECK_EQUAL(q.found, false);
+        BOOST_CHECK_EQUAL(q.head_fee, 5);
+        BOOST_CHECK_EQUAL(q.tail_fee, 3);
+        BOOST_CHECK_EQUAL(q.pay_limit_fee, 4);
+    }
+
+    // The own entry is present: above the head nothing is ahead; at the head
+    // fee the head counts.
+    {
+        const GRC::MRCQueuePosition q = GRC::MeasureMRCQueue(Queue{{5, a}, {4, d}}, d, 6, 2);
+        BOOST_CHECK_EQUAL(q.pos, 0);
+        BOOST_CHECK_EQUAL(q.found, true);
+    }
+    {
+        const GRC::MRCQueuePosition q = GRC::MeasureMRCQueue(Queue{{5, a}, {4, d}}, d, 5, 2);
+        BOOST_CHECK_EQUAL(q.pos, 1);
+        BOOST_CHECK_EQUAL(q.found, true);
+    }
+
+    // Ties: both entries at the request's fee count; above it neither does.
+    {
+        const GRC::MRCQueuePosition q = GRC::MeasureMRCQueue(Queue{{4, a}, {4, b}}, c, 4, 2);
+        BOOST_CHECK_EQUAL(q.pos, 2);
+    }
+    {
+        const GRC::MRCQueuePosition q = GRC::MeasureMRCQueue(Queue{{4, a}, {4, b}}, c, 5, 2);
+        BOOST_CHECK_EQUAL(q.pos, 0);
+    }
+
+    // An entry after the own one is not counted, though its fee is the
+    // request's.
+    {
+        const GRC::MRCQueuePosition q = GRC::MeasureMRCQueue(Queue{{5, a}, {4, d}, {3, e}}, d, 3, 2);
+        BOOST_CHECK_EQUAL(q.pos, 1);
+        BOOST_CHECK_EQUAL(q.found, true);
+    }
+
+    // A limit inside the queue takes the slot at limit - 1; a limit beyond it
+    // takes the last entry.
+    const Queue four{{9, a}, {7, b}, {5, c}, {3, d}};
+    {
+        const GRC::MRCQueuePosition q = GRC::MeasureMRCQueue(four, e, 1, 2);
+        BOOST_CHECK_EQUAL(q.queue_length, 4);
+        BOOST_CHECK_EQUAL(q.pay_limit_fee, 7);
+    }
+    {
+        const GRC::MRCQueuePosition q = GRC::MeasureMRCQueue(four, e, 1, 10);
+        BOOST_CHECK_EQUAL(q.queue_length, 4);
+        BOOST_CHECK_EQUAL(q.pay_limit_fee, 3);
+    }
+
+    // A limit of 0 has no paid slot: the pay limit is the head fee.
+    {
+        const GRC::MRCQueuePosition q = GRC::MeasureMRCQueue(Queue{{5, a}}, b, 1, 0);
+        BOOST_CHECK_EQUAL(q.pay_limit_fee, 5);
+        BOOST_CHECK_EQUAL(q.head_fee, 5);
+        BOOST_CHECK_EQUAL(q.tail_fee, 5);
+    }
 }
 
 //! A researcher staking from a wallet unlocked for staking only signs the claim

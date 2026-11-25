@@ -16,6 +16,8 @@
 
 #include <optional>
 #include <stdexcept>
+#include <utility>
+#include <vector>
 
 class CPubKey;
 class CWallet;
@@ -393,6 +395,42 @@ void CreateMRC(CBlockIndex* pindex, MRC& mrc, CAmount &nReward, CAmount &fee, CW
 //! confirmed_fee and receives no less than confirmed_net (the reward less the fee).
 //!
 bool MRCTermsHold(CAmount fee_now, CAmount reward_now, CAmount confirmed_fee, CAmount confirmed_net);
+
+//!
+//! \brief Where a new MRC request stands in the mempool's MRC queue.
+//!
+//! \p pos is zero-based: the entries ahead of \p cpid's own entry (all of them
+//! when it has none) whose fee is at least \p request_fee. \p pay_limit_fee is
+//! the MRC fee at index min(queue size, \p output_limit) - 1 of the queue as
+//! passed (descending MRC fee), capped at the head fee; with no such index it
+//! is the head fee. It only estimates the last paid slot: the staker orders
+//! MRCs by fee rate (network fee plus its share of the MRC fee, per byte),
+//! skips its own CPID and drops MRCs that fail validation, so the paid set can
+//! differ from the queue's order. \p tail_fee is the lowest fee, capped at the
+//! head fee, so an empty queue gives 0 for all three fees.
+//!
+struct MRCQueuePosition
+{
+    int queue_length = 0;
+    int pos = 0;
+    bool found = false;
+    CAmount head_fee = 0;
+    CAmount tail_fee = 0;
+    CAmount pay_limit_fee = 0;
+};
+
+//!
+//! \brief Measure a request against the MRC queue.
+//!
+//! \param queue: The mempool's MRC queue in descending fee order
+//! (CTxMemPool::GetMRCQueue()).
+//! \param cpid: The requester's CPID.
+//! \param request_fee: The fee the request carries.
+//! \param output_limit: The number of MRC outputs a block pays
+//! (GetMRCOutputLimit()).
+//!
+MRCQueuePosition MeasureMRCQueue(const std::vector<std::pair<CAmount, Cpid>>& queue, const Cpid& cpid,
+                                 CAmount request_fee, int output_limit);
 
 //!
 //! \brief The MRC request page's state at the chain tip, read in one cs_main hold:

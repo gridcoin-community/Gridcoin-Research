@@ -5345,12 +5345,6 @@ UniValue createmrcrequest(const UniValue& params) {
         throw runtime_error("MRC request is in zero payout interval.");
     }
 
-    int pos{0};
-    bool found{false};
-    CAmount tail_fee{std::numeric_limits<CAmount>::max()};
-    CAmount pay_limit_fee{std::numeric_limits<CAmount>::max()};
-    CAmount head_fee{0};
-    int queue_length{0};
     int limit = static_cast<int>(GetMRCOutputLimit(pindex->nVersion, false));
 
     // This sorts the MRCs in descending order of MRC fees to allow determination of the payout limit fee.
@@ -5363,56 +5357,32 @@ UniValue createmrcrequest(const UniValue& params) {
     GRC::Cpid mrc_cpid;
     if (auto cpid = mrc.m_mining_id.TryCpid()) mrc_cpid = *cpid;
 
-    for (const auto& [mempool_fee, mempool_cpid] : mrc_queue) {
-        found |= mempool_cpid == mrc_cpid;
-
-        if (!found && mempool_fee >= mrc.m_fee) ++pos;
-        head_fee = std::max(head_fee, mempool_fee);
-        tail_fee = std::min(tail_fee, mempool_fee);
-
-        ++queue_length;
-    }
-
-    // The tail fee converges from the max numeric limit of CAmount; however, when the above loop is done
-    // it cannot end up with a number higher than the head fee. This can happen if there are no MRC transactions
-    // in the loop.
-    tail_fee = std::min(head_fee, tail_fee);
-
-    // Here we select the minimum of the queue size - 1 in the case where the queue does not reach the
-    // m_mrc_output_limit - 1, or the m_mrc_output_limit - 1 if the queue is (over)full,
-    // i.e. the number of MRC's in the queue exceeds the m_mrc_output_limit for paying in a block.
-    int pay_limit_fee_pos = std::min<int>(mrc_queue.size(), limit) - 1;
-
-    if (pay_limit_fee_pos >= 0) {
-        pay_limit_fee = mrc_queue[pay_limit_fee_pos].first;
-    }
-
-    pay_limit_fee = std::min(head_fee, pay_limit_fee);
+    const GRC::MRCQueuePosition queue_pos = GRC::MeasureMRCQueue(mrc_queue, mrc_cpid, mrc.m_fee, limit);
 
     if (!dry_run && !force) {
-        if (found) {
+        if (queue_pos.found) {
             throw runtime_error("Outstanding MRC request already present in the mempool for CPID.");
         }
 
-        if (pos >= limit) {
+        if (queue_pos.pos >= limit) {
             throw runtime_error("MRC request queue is full.");
         }
     }
 
-    resp.pushKV("outstanding_request", found);
+    resp.pushKV("outstanding_request", queue_pos.found);
     // Sadly, humans start indexing by 1.
     resp.pushKV("limit", limit);
-    resp.pushKV("mrcs_in_queue", queue_length);
-    resp.pushKV("head_fee", ValueFromAmount(head_fee));
+    resp.pushKV("mrcs_in_queue", queue_pos.queue_length);
+    resp.pushKV("head_fee", ValueFromAmount(queue_pos.head_fee));
 
-    if (queue_length >= limit) {
-        resp.pushKV("pay_limit_position_fee", ValueFromAmount(pay_limit_fee));
+    if (queue_pos.queue_length >= limit) {
+        resp.pushKV("pay_limit_position_fee", ValueFromAmount(queue_pos.pay_limit_fee));
     } else {
         resp.pushKV("pay_limit_position_fee", "N/A");
     }
 
-    resp.pushKV("tail_fee", ValueFromAmount(tail_fee));
-    resp.pushKV("pos", pos + 1);
+    resp.pushKV("tail_fee", ValueFromAmount(queue_pos.tail_fee));
+    resp.pushKV("pos", queue_pos.pos + 1);
 
     if (!dry_run) {
         LOCK(pwalletMain->cs_wallet);
