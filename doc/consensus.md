@@ -734,8 +734,7 @@ release sets them.
 | The scraper manifest project limit allows for the pseudo-projects (a network rule) | `BlockV15Height` | §11.14 |
 | A beacon removal carries the key of the CPID's current beacon, in validation and again when it is applied | `BlockV15Height` | §11.16 |
 | A disconnected block is reverted in the inverse order of its connection, and each revert takes only the records its own contract created | `BlockV15Height` | §11.16 |
-| A registry replay applies a superblock's beacon activations before the block's contracts | `BlockV15Height` | §11.16 |
-| The beacon registry is rebuilt from the chain's beacon contracts as the first version 15 block connects | `BlockV15Height` | §11.16 |
+| The beacon registry is rebuilt from the chain's beacon contracts as the last block below the height connects | `BlockV15Height` | §11.16 |
 | A poll removal names its poll by transaction id (poll payload version 4), and only a removal carries that version | `BlockV15Height` | §11.17 |
 | A transaction that carries a vote has at most two outputs, and the vote's balance claim names each address key and each output once | `BlockV15Height` | §11.17 |
 | A block's MRCs do not include the CPID of the block's own claim | block version 15 | §11.18 |
@@ -743,7 +742,20 @@ release sets them.
 | A new poll whose title is already taken registers nothing | `BlockV15Height`, at the poll's block | §11.17 |
 | A poll starts at its block's time, and a vote is linked only from a later block | `BlockV15Height`, at the poll's block | §11.17 |
 | A poll closes at a block, and every bound of its tally is that block | `BlockV15Height`, at the first block past the poll's end | §11.17 |
-| A vote transaction passes a claimed output through to its outputs at the same address, as a coinstake does | `BlockV15Height`, at the poll's block | §11.17 |
+| A vote transaction in the poll's block or a later one passes a claimed output through to its outputs at the same address, as a coinstake does | `BlockV15Height`, at the poll's block | §11.17 |
+| A beacon contract carries beacon payload version 4, whose signature covers the contract's action and the record the contract acts on | `BlockV15Height` | §11.19 |
+| A beacon advertisement is refused when its key is pending, or active and unexpired, under another CPID | `BlockV15Height` | §11.19 |
+| A beacon is stamped with its block's time, and a beacon contract is judged at its block's time | `BlockV15Height` | §11.19 |
+| An MRC carries MRC payload version 2, whose signature covers every field of the payload | `BlockV15Height`, at the height after the MRC's last block | §11.20 |
+| A block that carries a superblock pays no MRC | block version 15 | §11.20 |
+| Each MRC a block pays leaves the foundation a share of its fee | block version 15 | §11.20 |
+| The MRCs of one block are paid at different addresses | block version 15 | §11.20 |
+| A poll's text is valid UTF-8 | `BlockV15Height` | §11.17 |
+| A research reward, in a block's claim or in an MRC, is checked against the CPID's accrual | block version 15 for a claim; `BlockV15Height` at the height after the MRC's last block for an MRC | §11.21 |
+| A convergence at the manifest level, and the validation of a superblock by manifest, go by the agreement of scraper manifests | `BlockV15Height` | §11.22 |
+| The scraper and superblock code treats the node as in sync until the block before the tip is one hour old | `BlockV15Height` | §11.23 |
+| The values in the statistics that make a superblock are finite and not negative | `BlockV15Height` | §11.24 |
+| A received scraper manifest's signature has the form that `CKey::Sign()` writes (a network rule) | `BlockV15Height`, at the receiver's tip | §11.25 |
 
 A rule gated on "block version 15" reads the version of the block being
 checked. A block's version follows from its height (§12.2), so on an accepted
@@ -1124,7 +1136,11 @@ receiver's tip is at or above the height the limit is `nMaxProjects + 3`.
 
 A node that is in sync refuses a manifest over the limit.
 
-> **Source:** `CScraperManifest::UnserializeCheck()` and `RecvManifest()` in `src/gridcoin/scraper/scraper_net.cpp`; `MANIFEST_PSEUDO_PROJECTS` in `src/gridcoin/scraper/scraper_net.h`.
+A scraper publishes a manifest in one layout: the beacon list is part 0 alone,
+each project is the next part alone, in the order of the projects, and there is
+no other part. A received manifest must be in that layout.
+
+> **Source:** `CScraperManifest::UnserializeCheck()` and `RecvManifest()` in `src/gridcoin/scraper/scraper_net.cpp`; `MANIFEST_PSEUDO_PROJECTS` in `src/gridcoin/scraper/scraper_net.h`; `ScraperSendFileManifestContents()` in `src/gridcoin/scraper/scraper.cpp`.
 
 ### 11.15 Not Consensus, Switched at the Same Height
 
@@ -1181,15 +1197,15 @@ Below the height the earlier order applies.
 
 #### Replay
 
-A registry replay at startup follows block connection for a block at or above
-the height: the superblock's beacon activations, then the block's contracts.
-Below the height the earlier order applies.
+A registry replay at startup follows block connection at every height: the
+superblock's beacon activations, then the block's contracts.
 
 #### Rebuild at activation
 
-As the first block at `BlockV15Height` connects, each node rebuilds its beacon
-registry from the beacon contracts in the chain, and does so again if a block
-at that height connects after a disconnect.
+As the last block below `BlockV15Height` connects, each node rebuilds its
+beacon registry from the beacon contracts in the chain, and does so again if a
+block at that height connects after a disconnect. The first version 15 block is
+validated on the rebuilt registry.
 
 > **Source:** `BeaconRegistry::BlockValidate()`, `RemoveCarriesCurrentKey()`, `Delete()`, `Revert()` and `Deactivate()` in `src/gridcoin/beacon.cpp`; `AcceptToMemoryPool()` in `src/validation.cpp`; `RevertContracts()` and `ReplayBlock()` in `src/gridcoin/contract/contract.cpp`; `DisconnectBlocksBatch()` and `ReorganizeChain()` in `src/node/chainman.cpp`; `RebuildBeaconRegistry()` in `src/gridcoin/gridcoin.cpp`.
 
@@ -1206,7 +1222,9 @@ From `BlockV15Height` block validation refuses:
 - a transaction that carries a vote and has more than two outputs (the wallet
   builds one burn output and at most one change output);
 - a vote whose balance claim does not name each address key and each output
-  once.
+  once;
+- a poll whose text is not valid UTF-8: its title, URL and question, each
+  choice's label, and each additional field's name and value.
 
 The memory pool applies the same rules at the height of the next block. From
 the height it also refuses, without a misbehavior score, a vote for a poll that
@@ -1261,9 +1279,10 @@ throughout.
 A claimed output that is spent supplies no weight, except that a coinstake
 passes it through to its outputs at the same address. For a poll whose block is
 at or above `BlockV15Height`, a transaction that carries a vote, for any poll,
-passes the output through in the same way. One vote's resolution passes outputs
-through at most 512 vote transactions; past that count a vote transaction
-spends the output like any other.
+passes the output through in the same way when its block is the poll's block or
+a later one. One vote's resolution passes outputs through at most 512 vote
+transactions; past that count a vote transaction spends the output like any
+other.
 
 #### Disconnects
 
@@ -1284,6 +1303,136 @@ The miner selects MRCs by the same check (`MRCEligibleForClaim()`), at every
 height.
 
 > **Source:** `BlockRewardRules` in `src/gridcoin/consensus/block_rewards.cpp`; `MRCEligibleForClaim()` in `src/gridcoin/mrc.cpp`; `CreateRestOfTheBlock()` in `src/miner.cpp`.
+
+### 11.19 Beacon Contracts: Payload Version 4, Keys and Times
+
+#### Payload version
+
+From `BlockV15Height` a beacon contract carries beacon payload version 4. A
+lower payload version is invalid from the height, and version 4 is invalid
+below it. The memory pool judges at the height of the next block.
+
+The signature of a version 4 payload covers the contract's action and the hash
+of the record the contract acts on: the CPID's current beacon; for a CPID with
+no beacon, its latest removal; and zero for a CPID with neither. The signature
+is verified against the record the registry holds when the contract is
+validated. The ownership proof is optional in version 4.
+
+#### Keys
+
+From the height a beacon advertisement is refused when its public key is
+pending under another CPID, or is the key of another CPID's active beacon that
+has not expired at the block's time.
+
+#### Times
+
+From the height a beacon is stamped with the time of its block, and a beacon
+contract is judged at the time of its block. Below the height the transaction's
+time is used. A beacon recorded below the height keeps its stamp.
+
+> **Source:** `BeaconRegistry::PayloadVersionFitsHeight()`, `SignatureVerifies()`, `CurrentRecordHash()`, `KeyHeldByAnotherCpid()`, `BlockValidate()` and `Add()` in `src/gridcoin/beacon.cpp`.
+
+### 11.20 MRC Payload Version 2 and the MRCs of a Block
+
+An MRC carries the payload version of the block after its last block: version 2
+when that height is at or above `BlockV15Height`, and version 1 below. An MRC
+of the other version is invalid. The signature of a version 2 payload covers
+every field of the payload.
+
+In a block of version 15:
+
+- a block that carries a superblock pays no MRC;
+- each MRC leaves the foundation a share of its fee: the fee times the
+  foundation's allocation is above zero;
+- the MRCs are paid at different addresses.
+
+The miner follows the three rules at every height, by the functions block
+validation uses.
+
+> **Source:** `MRC::VersionForBlock()`, `MRCLeavesFoundationShare()`, `MRCPaidAtNewAddress()` and `BlockMayPayMRCs()` in `src/gridcoin/mrc.cpp`; `ValidateMRC()` in `src/validation.cpp`; `BlockRewardRules` in `src/gridcoin/consensus/block_rewards.cpp`; `CreateRestOfTheBlock()` in `src/miner.cpp`.
+
+### 11.21 Research Rewards Against the Accrual
+
+From block version 15 the research reward that a block's claim states, and the
+research reward of an MRC, are checked against the CPID's accrual (§7.3).
+
+A block's claim goes by the version of the block. An MRC is checked for the
+block after the MRC's last block: block validation passes the block's parent,
+the miner the block it builds on, and the mempool the tip. The rule applies to
+an MRC when that next height is at or above `BlockV15Height`, which is the
+height at which a block has version 15 (§12.2).
+
+> **Source:** `BlockRewardRules::CheckResearchReward()` in `src/gridcoin/consensus/block_rewards.cpp`; `ValidateMRC()` in `src/validation.cpp`.
+
+### 11.22 Agreement of Scraper Manifests
+
+From `BlockV15Height` the construction of a convergence at the manifest level
+and the validation of a superblock by manifest go by the agreements that
+`ManifestsAgreedBySupermajority()` gives:
+
+- Manifests agree when they have the same part hashes in the same order, the
+  same consensus block and the same project names in the same order.
+- The content hash of a manifest in an agreement is the hash of its part hashes
+  and its consensus block, as the node computes it from the manifest.
+- An agreement is of a supermajority (`NumScrapersForSupermajority()`) of the
+  scrapers that hold manifests: that many scrapers each hold a manifest in it.
+- The agreements are ordered by the time of their latest manifest, latest
+  first.
+
+The construction builds the convergence from the latest agreement. The
+validation rebuilds the superblock from each agreement that has the
+superblock's convergence hint.
+
+The construction goes by the height after the best block, the height of the
+block that a superblock made from the convergence is staked in. The validation
+goes by the height of the block that carries the superblock. The convergence by
+project and its validation are not changed.
+
+> **Source:** `ManifestsAgreedBySupermajority()` and `ScraperConstructConvergedManifest()` in `src/gridcoin/scraper/scraper.cpp`; `SuperblockValidator::TryByManifest()` in `src/gridcoin/quorum.cpp`.
+
+### 11.23 Sync State of the Scraper and Superblock Code
+
+From `BlockV15Height` the scraper and superblock code treats the node as in
+sync until the block before the tip is one hour old.
+
+Code that works on a block goes by that block's height. Code with no block in
+hand goes by the height after the best block.
+
+> **Source:** `EvaluateScraperSync()` and `ScraperOutOfSync()` in `src/validation.cpp`.
+
+### 11.24 Statistics Values
+
+From `BlockV15Height` the statistics that make a superblock follow four rules
+for the values in them:
+
+- A record of a project part is one CPID's total credit, RAC time and RAC for
+  that project. A record is passed over when one of the three is not finite or
+  is negative.
+- A record's magnitude is its share of the project's RAC total only when that
+  total is above zero. A project without such a total gives no magnitude.
+- A project's total credit across all CPIDs that is not finite or is negative
+  is taken as zero.
+- A value that a superblock stores as an integer is rounded. A value that is
+  not a number or is below zero is stored as zero, and a value at or above 2^64
+  as the largest 64-bit unsigned integer.
+
+The statistics carry which rules they were made under, and a superblock built
+or hashed from them converts under the same rules. Superblock validation goes
+by the height of the block that carries the superblock. The scraper, which has
+no block to go by when it computes statistics, goes by the chain height it
+sees, as it does for the superblock version.
+
+> **Source:** `ProcessProjectStatsFromStreamByCPID()` and the `GetScraperStats...()` functions in `src/gridcoin/scraper/scraper.cpp`; `RoundStatsValue()` in `src/gridcoin/superblock.cpp`; `SuperblockValidator` in `src/gridcoin/quorum.cpp`.
+
+### 11.25 Scraper Manifest Signature Form
+
+This is a rule of the scraper network, not of block validity.
+
+A scraper signs a manifest with `CKey::Sign()`. When the receiver's tip is at
+or above `BlockV15Height`, a received manifest's signature must have the form
+that `CKey::Sign()` writes.
+
+> **Source:** `CScraperManifest::UnserializeCheck()` and `RecvManifest()` in `src/gridcoin/scraper/scraper_net.cpp`.
 
 ---
 
