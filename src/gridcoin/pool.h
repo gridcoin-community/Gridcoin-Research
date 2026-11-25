@@ -473,8 +473,11 @@ public:
 
     //!
     //! \brief Get all pools that were ACTIVE as of the supplied block
-    //! height — the consensus-critical view used by voting AVW
-    //! (voting/registry.cpp and voting/result.cpp).
+    //! height — the view the vote counter and the active vote weight read
+    //! (voting/result.cpp and voting/registry.cpp). Every node tallying the
+    //! same poll must get the same set from it, or the active vote weight of
+    //! a balance-and-magnitude poll, and the figures derived from it, can
+    //! differ.
     //!
     //! For each CPID currently in m_pool_entries, walks back through
     //! m_previous_hash via m_pool_db.find() (which falls back to LevelDB

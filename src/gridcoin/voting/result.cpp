@@ -1290,8 +1290,9 @@ public:
     //! \param txdb Used to fetch vote contracts from disk.
     //! \param poll Poll to count votes for.
     //! \param poll_start_height Block height of the poll's starting block,
-    //! used to anchor consensus-critical PoolRegistry queries (AVW) so
-    //! every node tallying the same poll uses an identical registry view.
+    //! used to anchor the PoolRegistry query that decides which voters count
+    //! as pools, an input to the active vote weight (AVW), so every node
+    //! tallying the same poll uses an identical registry view.
     //! \param legacy_money_supply Money supply of the poll's last block,
     //! forwarded to the legacy vote counter for its magnitude factor, or 0
     //! for a poll that does not use the factor.
@@ -1891,8 +1892,11 @@ PollResultOption PollResult::BuildFor(const PollReference& poll_ref, const CBloc
         CTxDB txdb("r");
         PollResult result(std::move(*poll));
 
-        // Anchor consensus-critical pool queries (AVW) to the poll's start
-        // height. Skeleton poll references shouldn't reach here, but if
+        // Anchor the vote counter's pool query, which decides which voters
+        // count as pools for the active vote weight (AVW), to the poll's
+        // start height, the height GetActiveVoteWeight queries the pools at,
+        // so every node tallying the same poll uses an identical registry
+        // view. Skeleton poll references shouldn't reach here, but if
         // GetStartingHeight() returns std::nullopt, fall back to the
         // current tip so VoteCounter still functions; the per-vote
         // recording is best-effort in that degenerate case.

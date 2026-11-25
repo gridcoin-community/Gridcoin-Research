@@ -645,10 +645,17 @@ BOOST_AUTO_TEST_CASE(builtin_pools_match_g_mining_pools_pre_v15)
 {
     // Q3 shadow check: pre-V15, ActivePoolsAtHeight must yield the same SET of
     // (CPID, name, URL) as the legacy g_mining_pools list. Order is incidental —
-    // membership is what AVW consumes (the consumer drops the result into an
-    // unordered_set), so this compares as a set, not a sequence. If this
-    // assertion fires, grandfathering has diverged from the hardcoded list and
-    // AVW will fork the chain on the next pre-V15 poll.
+    // membership is what AVW consumes (the vote counter drops the result into
+    // an unordered_set), so this compares as a set, not a sequence. If this
+    // assertion fires, the builtin seeds have diverged from the hardcoded
+    // list. A differing CPID changes which CPIDs IsPoolCpid treats as pools
+    // and, because the seeds sit at height 0, the pools subtracted from the
+    // displayed active vote weight of balance-and-magnitude polls of any era
+    // (no block validation reads that weight); once V15 is active it also
+    // changes which CPIDs POOL_REGISTER validation treats as builtin, which is
+    // a block-validation rule. That rule is inert while V15 has no activation
+    // height and consensus-relevant from the height it is given. A differing
+    // name changes which BOINC usernames IsPoolUsername treats as pools.
     GRC::PoolRegistry& registry = GRC::GetPoolRegistry();
 
     // height 0 is sufficient: the seeds are all at m_height == 0, so the
@@ -662,8 +669,8 @@ BOOST_AUTO_TEST_CASE(builtin_pools_match_g_mining_pools_pre_v15)
     // ActivePoolsAtHeight returns entries in std::map<Cpid, ...> iteration
     // order (lexicographic by CPID bytes), which is NOT the same as the
     // legacy push-order. So compare as sets rather than as sequences —
-    // matching CPID set with matching names/URLs is the consensus-relevant
-    // invariant; ordering is incidental.
+    // matching CPID set with matching names/URLs is the invariant this case
+    // pins; ordering is incidental.
     std::map<GRC::Cpid, std::pair<std::string, std::string>> legacy_map;
     for (const GRC::MiningPool& p : legacy_pools) {
         legacy_map[p.m_cpid] = {p.m_name, p.m_url};
