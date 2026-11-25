@@ -732,6 +732,10 @@ release sets them.
 | A poll's eligibility claim names each address key and each output once | `BlockV15Height` | §11.13 |
 | AutoGreylist deep copy, total credit and project status record | the three `AutoGreylist...Height` gates | §9.6 |
 | The scraper manifest project limit allows for the pseudo-projects (a network rule) | `BlockV15Height` | §11.14 |
+| A beacon removal carries the key of the CPID's current beacon, in validation and again when it is applied | `BlockV15Height` | §11.16 |
+| A disconnected block is reverted in the inverse order of its connection, and each revert takes only the records its own contract created | `BlockV15Height` | §11.16 |
+| A registry replay applies a superblock's beacon activations before the block's contracts | `BlockV15Height` | §11.16 |
+| The beacon registry is rebuilt from the chain's beacon contracts as the first version 15 block connects | `BlockV15Height` | §11.16 |
 
 A rule gated on "block version 15" reads the version of the block being
 checked. A block's version follows from its height (§12.2), so on an accepted
@@ -1131,6 +1135,55 @@ A node that is in sync refuses a manifest over the limit.
   height.
 
 > **Source:** `src/version.h`; the version handshake and the PSGT handlers in `src/net_processing.cpp`; `EnsurePoolRegistrationActive()` in `src/rpc/blockchain.cpp`.
+
+### 11.16 Beacon Registry: Removals, Disconnects and the Rebuild
+
+Block validation reads the beacon registry to judge beacon contracts, research
+rewards and MRCs, so the registry is consensus state. The rules below take
+effect at `BlockV15Height`.
+
+#### Removal
+
+A beacon removal (a `REMOVE` beacon contract, contract version 2 or later) is
+valid only when the CPID has a current beacon and the removal's payload carries
+that beacon's public key. Block validation and the memory pool apply the same
+check; the memory pool judges at the height the transaction would be mined at.
+
+The key is judged again when the removal is applied. A removal that does not
+carry the key of the CPID's active beacon then changes nothing and stores no
+record.
+
+#### Disconnect
+
+A block is reverted in the inverse order of its connection: its contracts
+first, last transaction first, and then its superblock's beacon activations.
+Below the height the earlier order applies.
+
+- Reverting an advertisement removes only the records that advertisement's own
+  transaction created.
+- Reverting a removal restores every record the removal took, a pending beacon
+  included, and erases the removal's own record.
+- Reverting a superblock returns the beacons it activated to pending and makes
+  the beacons those activations replaced active again. It restores the pending
+  beacons that superblock expired, and only those, and erases their expiration
+  records. Below the height the earlier rule applies.
+- When the superblock being disconnected is not the one whose expired set the
+  registry holds, the node rebuilds the beacon registry from the chain after
+  the disconnect.
+
+#### Replay
+
+A registry replay at startup follows block connection for a block at or above
+the height: the superblock's beacon activations, then the block's contracts.
+Below the height the earlier order applies.
+
+#### Rebuild at activation
+
+As the first block at `BlockV15Height` connects, each node rebuilds its beacon
+registry from the beacon contracts in the chain, and does so again if a block
+at that height connects after a disconnect.
+
+> **Source:** `BeaconRegistry::BlockValidate()`, `RemoveCarriesCurrentKey()`, `Delete()`, `Revert()` and `Deactivate()` in `src/gridcoin/beacon.cpp`; `AcceptToMemoryPool()` in `src/validation.cpp`; `RevertContracts()` and `ReplayBlock()` in `src/gridcoin/contract/contract.cpp`; `DisconnectBlocksBatch()` and `ReorganizeChain()` in `src/node/chainman.cpp`; `RebuildBeaconRegistry()` in `src/gridcoin/gridcoin.cpp`.
 
 ---
 
