@@ -13,12 +13,21 @@ class GUIFrontEndTests : public QObject
     Q_OBJECT
 
 private Q_SLOTS:
+    void cleanupTestCase();
     void detachSequence();
     void guardRunsDetachOnThrow();
     void detachResumesAfterThrowingHook();
     void guardRunsEveryHookPastTwoThrows();
     void bridgeSlotSignatures();
     void coreStopQuitDefaultsToRequestQuit();
+    void widgetsPathBlocksUntilSlotReturns();
+    void detachClosesBeforeFirstHook();
+    void queuedModalMessageNeverBlocksPostingThread();
+    void queuedModalMessageIsLogged();
+    void widgetsFrontEndKeepsTheOldRouting();
+    void detachGuardReapsGlobalPool();
+    void detachGuardReapsJobStartedByHook();
+    void detachGuardKeepsPoolThreads();
 };
 
 #endif // BITCOIN_QT_TEST_GUIFRONTENDTESTS_H
