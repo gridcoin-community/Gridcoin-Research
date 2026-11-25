@@ -111,8 +111,11 @@ jobs:
             -DCMAKE_C_COMPILER_LAUNCHER=ccache \
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
 
+      # check-build-warnings.sh fails the step on any compiler or linker warning in
+      # the tree's own build. Every build of the tree in these workflows goes
+      # through it.
       - name: Build
-        run: cmake --build build_qml
+        run: ./contrib/devtools/check-build-warnings.sh -- cmake --build build_qml
 
       # The QML import path variables are cleared so that the module has to
       # resolve through the test binary's own import path. Both binaries default
