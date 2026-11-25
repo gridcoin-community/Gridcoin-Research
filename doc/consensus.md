@@ -736,6 +736,14 @@ release sets them.
 | A disconnected block is reverted in the inverse order of its connection, and each revert takes only the records its own contract created | `BlockV15Height` | §11.16 |
 | A registry replay applies a superblock's beacon activations before the block's contracts | `BlockV15Height` | §11.16 |
 | The beacon registry is rebuilt from the chain's beacon contracts as the first version 15 block connects | `BlockV15Height` | §11.16 |
+| A poll removal names its poll by transaction id (poll payload version 4), and only a removal carries that version | `BlockV15Height` | §11.17 |
+| A transaction that carries a vote has at most two outputs, and the vote's balance claim names each address key and each output once | `BlockV15Height` | §11.17 |
+| A block's MRCs do not include the CPID of the block's own claim | block version 15 | §11.18 |
+| A claim lists each MRC under the MRC's own CPID | block version 15 | §11.18 |
+| A new poll whose title is already taken registers nothing | `BlockV15Height`, at the poll's block | §11.17 |
+| A poll starts at its block's time, and a vote is linked only from a later block | `BlockV15Height`, at the poll's block | §11.17 |
+| A poll closes at a block, and every bound of its tally is that block | `BlockV15Height`, at the first block past the poll's end | §11.17 |
+| A vote transaction passes a claimed output through to its outputs at the same address, as a coinstake does | `BlockV15Height`, at the poll's block | §11.17 |
 
 A rule gated on "block version 15" reads the version of the block being
 checked. A block's version follows from its height (§12.2), so on an accepted
@@ -1184,6 +1192,98 @@ registry from the beacon contracts in the chain, and does so again if a block
 at that height connects after a disconnect.
 
 > **Source:** `BeaconRegistry::BlockValidate()`, `RemoveCarriesCurrentKey()`, `Delete()`, `Revert()` and `Deactivate()` in `src/gridcoin/beacon.cpp`; `AcceptToMemoryPool()` in `src/validation.cpp`; `RevertContracts()` and `ReplayBlock()` in `src/gridcoin/contract/contract.cpp`; `DisconnectBlocksBatch()` and `ReorganizeChain()` in `src/node/chainman.cpp`; `RebuildBeaconRegistry()` in `src/gridcoin/gridcoin.cpp`.
+
+### 11.17 Polls and Votes
+
+#### Contract validation
+
+From `BlockV15Height` block validation refuses:
+
+- a poll contract with payload version 4 that is not a removal, and a removal
+  with any other payload version. A version 4 removal carries only the
+  transaction id of the poll it removes. Below the height a removal names its
+  poll by title and version 4 is refused;
+- a transaction that carries a vote and has more than two outputs (the wallet
+  builds one burn output and at most one change output);
+- a vote whose balance claim does not name each address key and each output
+  once.
+
+The memory pool applies the same rules at the height of the next block. From
+the height it also refuses, without a misbehavior score, a vote for a poll that
+is not registered or has finished, and a vote whose responses are not choices
+of its poll. A vote's claim is weighed when the poll is tallied, not when the
+vote is validated.
+
+#### Titles
+
+A poll's title key is its title with ASCII white space trimmed from both ends
+and ASCII letters lowered. From `BlockV15Height` a new poll whose title key is
+held by any poll registered since block version 11, active or removed, or by an
+earlier poll of the same block, registers nothing: its transaction is valid,
+its burn is spent, and a vote that names it is linked to nothing. No block is
+refused over a title. Below the height the earlier rules apply.
+
+A removal from the height resolves only to an active poll registered since
+block version 11. One that names anything else stores nothing. A removed poll
+keeps its title.
+
+#### The poll's window
+
+For a poll whose block is at or above `BlockV15Height`:
+
+- the poll starts at the time of its block and ends at that time plus its
+  duration;
+- the closing block is the block before the first block, after the poll's
+  block, whose time exceeds the end. A later block does not reopen the poll;
+- a vote is linked when its block is after the poll's block and at or before
+  the closing block. A vote in the poll's own block is never linked, and
+  transaction times are not read.
+
+The tally of such a poll is bounded by the closing block, or by the tip while
+the poll is open:
+
+- a claimed output is confirmed, and a spend of it is mined, at or before that
+  block;
+- a beacon confirmed after it supplies no magnitude;
+- magnitude comes from the latest superblock at or before it, and the money
+  supply is read at it;
+- the active vote weight averages from the poll's block through it.
+
+A poll whose block is below the height and whose first block past the end is at
+or above it takes the closing block for its end only: a vote in a later block
+is not linked, and the tally bounds above use the closing block. Its start, its
+end time and the votes in its own block keep the earlier rules. A poll whose
+first block past the end is below the height keeps the earlier rules
+throughout.
+
+#### Claimed outputs that a vote spends
+
+A claimed output that is spent supplies no weight, except that a coinstake
+passes it through to its outputs at the same address. For a poll whose block is
+at or above `BlockV15Height`, a transaction that carries a vote, for any poll,
+passes the output through in the same way. One vote's resolution passes outputs
+through at most 512 vote transactions; past that count a vote transaction
+spends the output like any other.
+
+#### Disconnects
+
+The poll and vote contracts of a disconnected block are reverted last to first,
+at every height. Reverting a poll erases its record and its title; reverting a
+removal makes the poll current again; reverting a vote erases its link.
+
+> **Source:** `PollFitsHeight()`, `VoteTxWellShaped()`, `PollRegistry::ValidateAt()`, `BlockValidate()`, `AddPoll()` and the snapshot and vote link functions in `src/gridcoin/voting/registry.cpp`; `VoteResolver::ResolveAmount()` and `VoteCounter` in `src/gridcoin/voting/result.cpp`; `RevertContracts()` in `src/gridcoin/contract/contract.cpp`.
+
+### 11.18 MRCs and the Block's Claim
+
+In a block of version 15:
+
+- no MRC the block pays is for the CPID of the block's own claim;
+- the claim lists each MRC under the MRC's own CPID.
+
+The miner selects MRCs by the same check (`MRCEligibleForClaim()`), at every
+height.
+
+> **Source:** `BlockRewardRules` in `src/gridcoin/consensus/block_rewards.cpp`; `MRCEligibleForClaim()` in `src/gridcoin/mrc.cpp`; `CreateRestOfTheBlock()` in `src/miner.cpp`.
 
 ---
 
