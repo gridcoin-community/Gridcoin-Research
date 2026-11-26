@@ -15,6 +15,7 @@
 #include "consensus/consensus.h"
 
 #include <algorithm>
+#include <cmath>
 #include <limits>
 #include <vector>
 
@@ -653,7 +654,10 @@ double GRC::GetEstimatedTimetoStake(bool ignore_staking_status, double dDiff, do
 
     LogPrint(BCLog::LogFlags::NOISY, "GetEstimatedTimetoStake debug: dConfidence = %f", dConfidence);
     // If nThrows is negative, this just means we overshot in the Gantt chart loop and have to backtrack by nThrows.
-    nThrows = (int64_t)((log(1 - dConfidence) - log(1 - dCumulativeProbability)) / log(1 - dProbAccumulator));
+    // The quotient is not finite when, for example, dCumulativeProbability has reached 1, or dProbAccumulator has passed
+    // 1 at a very low difficulty. The cast of such a value is undefined, so it counts as no further throws.
+    const double dThrows = (log(1 - dConfidence) - log(1 - dCumulativeProbability)) / log(1 - dProbAccumulator);
+    nThrows = std::isfinite(dThrows) ? (int64_t)dThrows : 0;
     LogPrint(BCLog::LogFlags::NOISY, "GetEstimatedTimetoStake debug: nThrows = %i", nThrows);
 
     nDeltaTime = nThrows * (GRC::STAKE_TIMESTAMP_MASK + 1);
