@@ -44,7 +44,7 @@ std::unique_ptr<GuiFrontEnd> MakeQmlFrontEnd()
 int main(int argc, char* argv[])
 {
     // The root, WindowManager.qml, reaches RectangularShadow (see the test's
-    // expected-failure list); without a root the GUI would run with nothing on screen.
+    // expected-failure list). Without a root the GUI would end at start with an error box; this check ends it first, with one line on stderr.
     if (QLibraryInfo::version() < QVersionNumber(6, 9)) {
         std::cerr << "gridcoinresearch-qml: the carried QML needs Qt 6.9 or later; this is Qt " << qVersion() << ".\n";
         return 1;
