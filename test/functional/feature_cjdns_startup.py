@@ -47,9 +47,12 @@ class CJDNSStartupTest(GridcoinTestFramework):
         assert_equal(CJDNS in advertised, expected)
         assert_equal(info["connections"], 0)
 
-    def check_proxy_classification(self):
+    def check_proxy_classification(self, *, runtime=False):
         # Only CJDNS has a proxy in this configuration. A loopback server proves
         # fc00::/8 is classified before proxy choice; it never dials that address.
+        # With runtime=True the node starts without -proxy and gets it from
+        # changesettings, which must also give CJDNS the proxy: without one,
+        # the node dials the address directly and the server sees nothing.
         observed = []
         errors = []
         complete = threading.Event()
@@ -91,8 +94,14 @@ class CJDNSStartupTest(GridcoinTestFramework):
             thread.start()
             try:
                 proxy = "127.0.0.1:%d" % server.getsockname()[1]
-                self.restart_node(0, self.common + ["-cjdnsreachable",
-                                                   "-onlynet=cjdns", "-proxy=" + proxy])
+                options = ["-cjdnsreachable", "-onlynet=cjdns"]
+                if runtime:
+                    self.restart_node(0, self.common + options)
+                    result = self.nodes[0].changesettings("proxy=" + proxy)
+                    assert_equal(result["settings_changed_taking_immediate_effect"],
+                                 ["proxy=" + proxy])
+                else:
+                    self.restart_node(0, self.common + options + ["-proxy=" + proxy])
                 target = "[" + CJDNS + "]:32749"
                 assert_equal(self.nodes[0].addnode(target, "onetry"), {"result": "ok"})
                 self.wait_until(complete.is_set, timeout=35)
@@ -104,7 +113,12 @@ class CJDNSStartupTest(GridcoinTestFramework):
                              [{"addednode": target, "connected": True,
                                "addresses": [{"address": target, "connected": "outbound"}]}])
                 self.nodes[0].addnode(target, "remove")
-                self.log.info("CJDNS proxy selection and connected getaddednodeinfo passed")
+                if runtime:
+                    # Leave no stored proxy behind for a later restart.
+                    self.nodes[0].changesettings("proxy=")
+                    self.log.info("Runtime -proxy change reaches CJDNS passed")
+                else:
+                    self.log.info("CJDNS proxy selection and connected getaddednodeinfo passed")
             finally:
                 release.set()
                 thread.join(timeout=2)
@@ -135,6 +149,7 @@ class CJDNSStartupTest(GridcoinTestFramework):
         self.check("proxy without opt-in", ["-proxy=127.0.0.1:9"], False)
         self.check("onlynet=ipv4 with opt-in", ["-onlynet=ipv4", "-cjdnsreachable"], False)
         self.check_proxy_classification()
+        self.check_proxy_classification(runtime=True)
         self.log.info("CJDNS startup and default-off checks passed (bitcoin#23077)")
 
 
