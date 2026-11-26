@@ -1153,7 +1153,9 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             bool fReachable = IsReachable(addr);
             // Gridcoin choice: relay and store CJDNS addresses even when this
             // host cannot dial CJDNS (-cjdnsreachable unset), so peers that can
-            // reach CJDNS still learn them. Reachability only gates dialing.
+            // reach CJDNS still learn them. Reachability gates dialing and the
+            // relay fan-out: as for any network we cannot reach ourselves, the
+            // address is relayed to 1 peer instead of 2, as in Bitcoin Core.
             const bool fRelayable = fReachable || addr.IsCJDNS();
 
             if (addr.nTime > nSince && !pfrom->fGetAddr && vAddr.size() <= 10 && addr.IsRoutable())
@@ -1161,7 +1163,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
                 // Relay to a deterministic, limited subset of nodes (issue #2558
                 // PR 9c: the selection + relay logic moved into CConnman, which
                 // keeps it under m_nodes_mutex so the chosen CNode* stay valid).
-                if (g_connman) g_connman->RelayAddress(addr, fRelayable);
+                if (g_connman) g_connman->RelayAddress(addr, fReachable);
             }
             // Do not store addresses outside our network.
             // (peers.dat is BIP155-capable since the addrman V3 format, so
