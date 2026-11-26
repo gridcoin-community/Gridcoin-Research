@@ -20,7 +20,9 @@ names later changes will add.
 - On Debian and Ubuntu the module needs `qt6-declarative-dev` to build. At run time the module
   needs `qml6-module-qtquick`; the carried tree also needs `qml6-module-qtquick-controls`,
   `-layouts`, `-templates`, `-window`, `-shapes`, `qml6-module-qt-labs-platform`,
-  `qml6-module-qtqml-models` and `qml6-module-qtqml-workerscript`. Five carried files import
+  `qml6-module-qtqml-models` and `qml6-module-qtqml-workerscript`. For its SVG icons it also
+  needs `qt6-svg-plugins` where the archive ships Qt's SVG image plugin as a package of its
+  own (`install_deps` installs it there). Five carried files import
   `QtQml`, among them the root `WindowManager.qml` that `gridcoinresearch-qml` loads, the theme
   and the clock, so the executable and `test_gridcoin-qml` (which loads them) need
   `qml6-module-qtqml-models`. No package provides `QtQuick.Effects` before Qt 6.5 (section 8).
