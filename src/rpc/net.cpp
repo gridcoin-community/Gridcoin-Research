@@ -226,8 +226,12 @@ UniValue getaddednodeinfo(const UniValue& params)
     for (auto const& strAddNode : laddedNodes)
     {
         vector<CService> vservNode(0);
-        if(Lookup(strAddNode.c_str(), vservNode, Params().GetDefaultPort(), GetNameLookup(), 0))
+        if (Lookup(strAddNode.c_str(), vservNode, Params().GetDefaultPort(), GetNameLookup(), 0)) {
+            for (auto& service : vservNode) {
+                service = MaybeFlipIPv6toCJDNS(service);
+            }
             laddedAddresses.push_back(make_pair(strAddNode, vservNode));
+        }
         else
         {
             UniValue obj(UniValue::VOBJ);
@@ -384,7 +388,8 @@ UniValue setban(const UniValue& params)
     else
         LookupSubNet(params[0].get_str().c_str(), subNet);
 
-    if (! (isSubnet ? subNet.IsValid() : netAddr.IsValid()) )
+    // Also reject addresses that cannot be stored as a ban (e.g. Tor v3).
+    if (! (isSubnet ? subNet.IsValid() : (netAddr.IsValid() && CSubNet(netAddr).IsValid())) )
         throw JSONRPCError(RPC_CLIENT_INVALID_IP_OR_SUBNET, "Error: Invalid IP/Subnet");
 
     if (strCommand == "add")

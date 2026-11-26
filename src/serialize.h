@@ -339,8 +339,14 @@ void WriteCompactSize(Stream& os, uint64_t nSize)
     return;
 }
 
+/**
+ * Decode a CompactSize-encoded variable-length integer.
+ *
+ * As these are primarily used to encode the size of vector-like serializations, by default a range
+ * check is performed. When used as a generic number encoding, range_check should be set to false.
+ */
 template<typename Stream>
-uint64_t ReadCompactSize(Stream& is)
+uint64_t ReadCompactSize(Stream& is, bool range_check = true)
 {
     uint8_t chSize = ser_readdata8(is);
     uint64_t nSizeRet = 0;
@@ -366,8 +372,9 @@ uint64_t ReadCompactSize(Stream& is)
         if (nSizeRet < 0x100000000ULL)
             throw std::ios_base::failure("non-canonical ReadCompactSize()");
     }
-    if (nSizeRet > (uint64_t)MAX_SIZE)
+    if (range_check && nSizeRet > (uint64_t)MAX_SIZE) {
         throw std::ios_base::failure("ReadCompactSize(): size too large");
+    }
     return nSizeRet;
 }
 
@@ -573,6 +580,31 @@ public:
     template<typename Stream>
     void Unserialize(Stream& s) {
         n = ReadCompactSize<Stream>(s);
+    }
+};
+
+/** Formatter for integers in CompactSize format (bitcoin#19954). Gridcoin keeps
+ *  the older CCompactSize/COMPACTSIZE wrapper for existing callers. */
+template<bool RangeCheck>
+struct CompactSizeFormatter
+{
+    template<typename Stream, typename I>
+    void Unser(Stream& s, I& v)
+    {
+        uint64_t n = ReadCompactSize<Stream>(s, RangeCheck);
+        if (n < std::numeric_limits<I>::min() || n > std::numeric_limits<I>::max()) {
+            throw std::ios_base::failure("CompactSize exceeds limit of type");
+        }
+        v = n;
+    }
+
+    template<typename Stream, typename I>
+    void Ser(Stream& s, I v)
+    {
+        static_assert(std::is_unsigned<I>::value, "CompactSize only supported for unsigned integers");
+        static_assert(std::numeric_limits<I>::max() <= std::numeric_limits<uint64_t>::max(), "CompactSize only supports 64-bit integers and below");
+
+        WriteCompactSize<Stream>(s, v);
     }
 };
 

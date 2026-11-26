@@ -35,6 +35,7 @@ from .messages import (
     msg_headers,
     msg_ping,
     msg_pong,
+    msg_sendaddrv2,
     msg_tx,
     msg_verack,
     msg_version,
@@ -216,7 +217,7 @@ class P2PInterface(P2PConnection):
     This class provides high-level callbacks (on_version, on_ping, ...) and
     state tracking (message_count, last_message) on top of P2PConnection."""
 
-    def __init__(self):
+    def __init__(self, support_addrv2=False):
         super().__init__()
         # Track number of messages of each type received.
         self.message_count = defaultdict(int)
@@ -226,6 +227,7 @@ class P2PInterface(P2PConnection):
         self.ping_counter = 1
         # The network services received from the peer.
         self.nServices = 0
+        self.support_addrv2 = support_addrv2
         self.on_connection_send_msg = None
 
     def peer_connect_send_version(self):
@@ -283,6 +285,12 @@ class P2PInterface(P2PConnection):
     def on_addr(self, message):
         pass
 
+    def on_addrv2(self, message):
+        pass
+
+    def on_sendaddrv2(self, message):
+        pass
+
     def on_block(self, message):
         pass
 
@@ -318,6 +326,9 @@ class P2PInterface(P2PConnection):
 
     def on_version(self, message):
         # Don't assert on the peer's advertised version; just ack and record services.
+        # BIP155 negotiation precedes verack (bitcoin#20564).
+        if self.support_addrv2:
+            self.send_message(msg_sendaddrv2())
         self.send_message(msg_verack())
         self.nServices = message.nServices
 

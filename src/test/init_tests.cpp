@@ -153,8 +153,8 @@ BOOST_AUTO_TEST_CASE(every_registered_argument_has_its_settings_class)
         "-reservebalance", "-scraper", "-scraperkey", "-seednode", "-showorphans", "-shrinkdebugfile",
         "-staking", "-stakingefficiency", "-synctime", "-timeout", "-txindexdbcache", "-updatecheckinterval"};
     const std::set<std::string> elevate{
-        "-?", "-bind", "-discover", "-dns", "-dnsseed", "-enablesidestaking", "-externalip", "-listen",
-        "-onlynet", "-paytxfee", "-proxy", "-sidestake", "-sidestakeaddresses", "-sidestakeallocations",
+        "-?", "-bind", "-cjdnsreachable", "-discover", "-dns", "-dnsseed", "-enablesidestaking", "-externalip",
+        "-listen", "-onlynet", "-paytxfee", "-proxy", "-sidestake", "-sidestakeaddresses", "-sidestakeallocations",
         "-sidestakedescriptions", "-tor", "-upnp"};
     std::set<std::string> refuse{
         "-h", "-help", "-help-debug", "-version", "-conf", "-pid", "-datadir", "-blocksdir", "-nonewprivs",

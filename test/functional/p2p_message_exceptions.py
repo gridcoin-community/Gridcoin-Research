@@ -52,6 +52,12 @@ CASES = [
     ("an inv count in a non-canonical CompactSize", b"inv",
      b"\xfd\x01\x00",
      "non-canonical ReadCompactSize()"),
+    # One addrv2 record (time, services, network id, length, address, port)
+    # whose IPv4 address is 5 bytes long.
+    ("an addrv2 IPv4 address with the wrong length", b"addrv2",
+     ser_compact_size(1) + struct.pack("<I", 0) + ser_compact_size(1)
+     + bytes([1]) + ser_compact_size(5) + bytes(5) + struct.pack(">H", 32749),
+     "BIP155 IPv4 address with length 5 (should be 4)"),
 ]
 
 
