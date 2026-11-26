@@ -314,22 +314,18 @@ public:
         consensus.BlockV12Height = 1871830;
         consensus.BlockV13Height = 2870000;
         consensus.BlockV14Height = 3126500;
-        consensus.BlockV15Height = std::numeric_limits<int>::max();
+        consensus.BlockV15Height = 3355000;
         consensus.PendingPoolRetention = 28800; // identical to mainnet (~30 days at ~90s) (issue #1783)
-        consensus.ProtocolVersionGracePeriod = 900 * 21; // ~19.6 days — extended because v14 fork preceded deployment
+        consensus.ProtocolVersionGracePeriod = 900 * 14; // About two weeks at testnet's block rate.
         consensus.PollV3Height = 1944820;
         consensus.ProjectV2Height = 1944820;
-        consensus.PollMultiAddressHeight = std::numeric_limits<int>::max();
+        consensus.PollMultiAddressHeight = 3355000; // coincident with BlockV15Height
         consensus.AutoGreylistAuditHeight = 3111000;
-        // TBD: set coincident with BlockV15Height when v15 is scheduled.
-        consensus.AutoGreylistDeepCopyHeight = std::numeric_limits<int>::max();
-        // TBD: set coincident with BlockV15Height when v15 is scheduled.
-        consensus.AutoGreylistTotalCreditFixHeight = std::numeric_limits<int>::max();
-        // TBD: set coincident with BlockV15Height when v15 is scheduled. Must never be set
-        // below AutoGreylistDeepCopyHeight (see Consensus::Params).
-        consensus.AutoGreylistRedesignHeight = std::numeric_limits<int>::max();
-        // TBD: set coincident with BlockV15Height when v15 is scheduled.
-        consensus.MessageContractDisableHeight = std::numeric_limits<int>::max();
+        consensus.AutoGreylistDeepCopyHeight = 3355000; // coincident with BlockV15Height
+        consensus.AutoGreylistTotalCreditFixHeight = 3355000; // coincident with BlockV15Height
+        // Coincident with BlockV15Height. Must never be set below AutoGreylistDeepCopyHeight (see Consensus::Params).
+        consensus.AutoGreylistRedesignHeight = 3355000;
+        consensus.MessageContractDisableHeight = 3355000; // coincident with BlockV15Height
         consensus.DefaultConstantBlockReward = 10 * COIN;
         consensus.ConstantBlockRewardFloor = 0;
         consensus.ConstantBlockRewardCeiling = 500 * COIN;
