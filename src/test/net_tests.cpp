@@ -308,7 +308,14 @@ BOOST_AUTO_TEST_CASE(version_time_checks_use_the_receive_time)
 
     for (const int64_t wait : {0, 300, 600}) {
         SetMockTime(received);
-        CNode node(INVALID_SOCKET, CAddress(CService(LookupNumeric("127.0.0.1", 0)), NODE_NONE), "", true);
+        // The peer is not a local of this function. ThreadSanitizer knows a mutex
+        // by its address and is not told when a local one goes out of scope, so a
+        // local peer's locks can be taken for those of an object that an earlier
+        // case had at the same place on the stack.
+        const auto peer = std::make_unique<CNode>(INVALID_SOCKET,
+                                                  CAddress(CService(LookupNumeric("127.0.0.1", 0)), NODE_NONE),
+                                                  "", true);
+        CNode& node = *peer;
         // The handler answers with our own VERSION and a VERACK. With the
         // socket closed, SocketSendData() drops them rather than pass
         // INVALID_SOCKET to send(). Closing marks the node for disconnection,
@@ -385,7 +392,14 @@ BOOST_AUTO_TEST_CASE(getdata_entries_wait_for_room_in_the_send_queue_in_the_orde
     // In units of 1000 bytes.
     gArgs.ForceSetArg("-maxsendbuffer", "1");
 
-    CNode node(INVALID_SOCKET, CAddress(CService(LookupNumeric("127.0.0.1", 0)), NODE_NONE), "", true);
+    // The peer is not a local of this function. ThreadSanitizer knows a mutex
+    // by its address and is not told when a local one goes out of scope, so a
+    // local peer's locks can be taken for those of an object that an earlier
+    // case had at the same place on the stack.
+    const auto peer = std::make_unique<CNode>(INVALID_SOCKET,
+                                              CAddress(CService(LookupNumeric("127.0.0.1", 0)), NODE_NONE),
+                                              "", true);
+    CNode& node = *peer;
     node.CloseSocketDisconnect();
     node.fDisconnect = false;
 
