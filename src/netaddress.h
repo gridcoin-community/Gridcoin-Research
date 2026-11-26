@@ -11,10 +11,35 @@
 
 #include "compat.h"
 #include "serialize.h"
+#include "prevector.h"
+#include "util/string.h"
+#include "util/strencodings.h"
+#include "tinyformat.h"
+
+#include <algorithm>
+#include <array>
+#include <ios>
+#include <iterator>
 
 #include <stdint.h>
 #include <string>
 #include <vector>
+
+/**
+ * A flag that is ORed into the protocol version to designate that addresses
+ * should be serialized in (unserialized from) v2 format (BIP155).
+ * Make sure that this does not collide with any of the values in `version.h`
+ * (Gridcoin has no SERIALIZE_TRANSACTION_NO_WITNESS).
+ */
+static const int ADDRV2_FORMAT = 0x20000000;
+
+/// Size of TORv3 address (in bytes). This is the length of just the address
+/// as used in BIP155, without the checksum and the version byte.
+static constexpr size_t ADDR_TORV3_SIZE = 32;
+
+/// Size of CJDNS address (in bytes). Defined for BIP155 size checks only;
+/// Gridcoin does not support CJDNS (id 6 addresses are ignored).
+static constexpr size_t ADDR_CJDNS_SIZE = 16;
 
 enum Network
 {
@@ -28,12 +53,53 @@ enum Network
     NET_MAX,
 };
 
-/** IP address (IPv6, or IPv4 using mapped IPv6 range (::FFFF:0:0/96)) */
+/// Prefix of an IPv6 address when it contains an embedded IPv4 address.
+/// Used when (un)serializing addresses in ADDRv1 format (pre-BIP155).
+static const std::array<uint8_t, 12> IPV4_IN_IPV6_PREFIX{
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xFF, 0xFF
+};
+
+/// Prefix of an IPv6 address when it contains an embedded TORv2 address.
+/// Used when (un)serializing addresses in ADDRv1 format (pre-BIP155).
+/// Such dummy IPv6 addresses are guaranteed to not be publicly routable as they
+/// fall under RFC4193's fc00::/7 subnet allocated to unique-local addresses.
+static const std::array<uint8_t, 6> TORV2_IN_IPV6_PREFIX{
+    0xFD, 0x87, 0xD8, 0x7E, 0xEB, 0x43
+};
+
+/// Prefix of an IPv6 address when it contains an embedded "internal" address.
+/// Used when (un)serializing addresses in ADDRv1 format (pre-BIP155).
+/// The prefix comes from 0xFD + SHA256("bitcoin")[0:5].
+/// Such dummy IPv6 addresses are guaranteed to not be publicly routable as they
+/// fall under RFC4193's fc00::/7 subnet allocated to unique-local addresses.
+static const std::array<uint8_t, 6> INTERNAL_IN_IPV6_PREFIX{
+    0xFD, 0x6B, 0x88, 0xC0, 0x87, 0x24 // 0xFD + sha256("bitcoin")[0:5].
+};
+
+/// Size of IPv4 address (in bytes).
+static constexpr size_t ADDR_IPV4_SIZE = 4;
+
+/// Size of IPv6 address (in bytes).
+static constexpr size_t ADDR_IPV6_SIZE = 16;
+
+/// Size of TORv2 address (in bytes).
+static constexpr size_t ADDR_TORV2_SIZE = 10;
+
+/// Size of "internal" (NET_INTERNAL) address (in bytes).
+static constexpr size_t ADDR_INTERNAL_SIZE = 10;
+
+/** Network address with network-specific, flexible-size storage. */
 class CNetAddr
 {
     protected:
-        unsigned char ip[16]; // in network byte order
-        uint32_t scopeId; // for scoped/link-local ipv6 addresses
+        /**
+         * Network to which this address belongs.
+         */
+        Network m_net{NET_IPV6};
+
+        // Raw network address in network byte order, without legacy IPv6 prefixes.
+        prevector<ADDR_IPV6_SIZE, uint8_t> m_addr{ADDR_IPV6_SIZE, 0x0};
+        uint32_t scopeId{0}; // for scoped/link-local ipv6 addresses
 
     public:
         CNetAddr();
@@ -42,10 +108,13 @@ class CNetAddr
         void SetIP(const CNetAddr& ip);
 
         /**
-        * Set raw IPv4 or IPv6 address (in network byte order)
-        * @note Only NET_IPV4 and NET_IPV6 are allowed for network.
-        */
-        void SetRaw(Network network, const uint8_t *data);
+         * Set from a legacy IPv6 address.
+         * Legacy IPv6 address may be a normal IPv6 address, or another address
+         * (e.g. IPv4) disguised as IPv6. This encoding is used in the legacy
+         * `addr` encoding.
+         */
+        void SetLegacyIPv6(const uint8_t ipv6[16]);
+
         /**
         * Transform an arbitrary string into a non-routable ipv6 address.
         * Useful for mapping resolved addresses back to their source.
@@ -68,15 +137,22 @@ class CNetAddr
         bool IsRFC6052() const; // IPv6 well-known prefix (64:FF9B::/96)
         bool IsRFC6145() const; // IPv6 IPv4-translated address (::FFFF:0:0:0/96)
         bool IsTor() const;
+        bool IsCJDNS() const;
         bool IsLocal() const;
         bool IsRoutable() const;
         bool IsInternal() const;
         bool IsValid() const;
         bool IsMulticast() const;
+
+        /**
+         * Check if the current object can be serialized in pre-ADDRv2/BIP155 format.
+         */
+        bool IsAddrV1Compatible() const;
+
         enum Network GetNetwork() const;
         std::string ToString() const;
         std::string ToStringIP() const;
-        unsigned int GetByte(int n) const;
+        std::vector<unsigned char> GetAddrBytes() const;
         uint64_t GetHash() const;
         bool GetInAddr(struct in_addr* pipv4Addr) const;
         std::vector<unsigned char> GetGroup() const;
@@ -89,15 +165,235 @@ class CNetAddr
         friend bool operator!=(const CNetAddr& a, const CNetAddr& b);
         friend bool operator<(const CNetAddr& a, const CNetAddr& b);
 
-        ADD_SERIALIZE_METHODS;
-
-        template <typename Stream, typename Operation>
-        inline void SerializationOp(Stream& s, Operation ser_action)
+        /**
+         * Serialize to a stream.
+         */
+        template <typename Stream>
+        void Serialize(Stream& s) const
         {
-            READWRITE(ip);
+            if (s.GetVersion() & ADDRV2_FORMAT) {
+                SerializeV2Stream(s);
+            } else {
+                SerializeV1Stream(s);
+            }
+        }
+
+        /**
+         * Unserialize from a stream.
+         */
+        template <typename Stream>
+        void Unserialize(Stream& s)
+        {
+            if (s.GetVersion() & ADDRV2_FORMAT) {
+                UnserializeV2Stream(s);
+            } else {
+                UnserializeV1Stream(s);
+            }
         }
 
         friend class CSubNet;
+
+    private:
+        /**
+         * BIP155 network ids recognized by this software.
+         * I2P (5) and CJDNS (6) are listed for completeness but Gridcoin has no
+         * NET_I2P and does not support NET_CJDNS, so they are silently ignored on
+         * unserialize (treated like unknown future ids).
+         */
+        enum BIP155Network : uint8_t {
+            IPV4 = 1,
+            IPV6 = 2,
+            TORV2 = 3,
+            TORV3 = 4,
+            I2P = 5,
+            CJDNS = 6,
+        };
+
+        /**
+         * Size of CNetAddr when serialized as ADDRv1 (pre-BIP155) (in bytes).
+         */
+        static constexpr size_t V1_SERIALIZATION_SIZE = ADDR_IPV6_SIZE;
+
+        /**
+         * Maximum size of an address as defined in BIP155 (in bytes).
+         * This is only the size of the address, not the entire CNetAddr object
+         * when serialized.
+         */
+        static constexpr size_t MAX_ADDRV2_SIZE = 512;
+
+        /**
+         * Get the BIP155 network id of this address.
+         * Must not be called for IsInternal() objects.
+         * @returns BIP155 network id
+         */
+        BIP155Network GetBIP155Network() const;
+
+        /**
+         * Set `m_net` from the provided BIP155 network id and size after validation.
+         * @retval true the network was recognized, is valid and `m_net` was set
+         * @retval false not recognised (from future?, or I2P/CJDNS) and should be silently ignored
+         * @throws std::ios_base::failure if the network is one of the supported BIP155
+         * networks (id 1..4) with wrong address size.
+         */
+        bool SetNetFromBIP155Network(uint8_t possible_bip155_net, size_t address_size);
+
+        /**
+         * Serialize in pre-ADDRv2/BIP155 format to an array.
+         */
+        void SerializeV1Array(uint8_t (&arr)[V1_SERIALIZATION_SIZE]) const
+        {
+            size_t prefix_size;
+
+            switch (m_net) {
+            case NET_IPV6:
+                assert(m_addr.size() == sizeof(arr)); // LINT-OK-ASSERT: m_addr size always matches m_net, enforced by every setter
+                memcpy(arr, m_addr.data(), m_addr.size());
+                return;
+            case NET_IPV4:
+                prefix_size = IPV4_IN_IPV6_PREFIX.size();
+                assert(prefix_size + m_addr.size() == sizeof(arr)); // LINT-OK-ASSERT: m_addr size always matches m_net, enforced by every setter
+                memcpy(arr, IPV4_IN_IPV6_PREFIX.data(), prefix_size);
+                memcpy(arr + prefix_size, m_addr.data(), m_addr.size());
+                return;
+            case NET_TOR:
+                if (m_addr.size() == ADDR_TORV3_SIZE) {
+                    break;
+                }
+                prefix_size = TORV2_IN_IPV6_PREFIX.size();
+                assert(prefix_size + m_addr.size() == sizeof(arr)); // LINT-OK-ASSERT: TORv3 broke out above, so m_addr is the TORv2 size
+                memcpy(arr, TORV2_IN_IPV6_PREFIX.data(), prefix_size);
+                memcpy(arr + prefix_size, m_addr.data(), m_addr.size());
+                return;
+            case NET_INTERNAL:
+                prefix_size = INTERNAL_IN_IPV6_PREFIX.size();
+                assert(prefix_size + m_addr.size() == sizeof(arr)); // LINT-OK-ASSERT: m_addr size always matches m_net, enforced by every setter
+                memcpy(arr, INTERNAL_IN_IPV6_PREFIX.data(), prefix_size);
+                memcpy(arr + prefix_size, m_addr.data(), m_addr.size());
+                return;
+            case NET_CJDNS: // Reserved; unreadable in Gridcoin.
+                break;
+            case NET_UNROUTABLE:
+            case NET_MAX:
+                assert(false); // LINT-OK-ASSERT: m_net is never set to UNROUTABLE/MAX
+            } // no default case, so the compiler can warn about missing cases
+
+            // TORv3 and the reserved CJDNS type have no V1 representation.
+            memset(arr, 0x0, V1_SERIALIZATION_SIZE);
+        }
+
+        /**
+         * Serialize in pre-ADDRv2/BIP155 format to a stream.
+         */
+        template <typename Stream>
+        void SerializeV1Stream(Stream& s) const
+        {
+            uint8_t serialized[V1_SERIALIZATION_SIZE];
+
+            SerializeV1Array(serialized);
+
+            s << serialized;
+        }
+
+        /**
+         * Serialize as ADDRv2 / BIP155.
+         */
+        template <typename Stream>
+        void SerializeV2Stream(Stream& s) const
+        {
+            if (IsInternal()) {
+                // Serialize NET_INTERNAL as embedded in IPv6. We need to
+                // serialize such addresses from addrman.
+                s << static_cast<uint8_t>(BIP155Network::IPV6);
+                WriteCompactSize(s, ADDR_IPV6_SIZE);
+                SerializeV1Stream(s);
+                return;
+            }
+
+            s << static_cast<uint8_t>(GetBIP155Network());
+            s << m_addr;
+        }
+
+        /**
+         * Unserialize from a pre-ADDRv2/BIP155 format from an array.
+         */
+        void UnserializeV1Array(uint8_t (&arr)[V1_SERIALIZATION_SIZE])
+        {
+            // Use SetLegacyIPv6() so that m_net is set correctly. For example
+            // ::FFFF:0102:0304 should be set as m_net=NET_IPV4 (1.2.3.4).
+            SetLegacyIPv6(arr);
+        }
+
+        /**
+         * Unserialize from a pre-ADDRv2/BIP155 format from a stream.
+         */
+        template <typename Stream>
+        void UnserializeV1Stream(Stream& s)
+        {
+            uint8_t serialized[V1_SERIALIZATION_SIZE];
+
+            s >> serialized;
+
+            UnserializeV1Array(serialized);
+        }
+
+        /**
+         * Unserialize from a ADDRv2 / BIP155 format.
+         */
+        template <typename Stream>
+        void UnserializeV2Stream(Stream& s)
+        {
+            uint8_t bip155_net;
+            s >> bip155_net;
+
+            const size_t address_size = ReadCompactSize(s);
+
+            if (address_size > MAX_ADDRV2_SIZE) {
+                throw std::ios_base::failure(strprintf(
+                    "Address too long: %u > %u", address_size, MAX_ADDRV2_SIZE));
+            }
+
+            scopeId = 0;
+
+            if (SetNetFromBIP155Network(bip155_net, address_size)) {
+                m_addr.resize(address_size);
+                s.read(AsWritableBytes(Span<uint8_t>{m_addr.data(), m_addr.size()}));
+
+                if (m_net != NET_IPV6) {
+                    return;
+                }
+
+                // Do some special checks on IPv6 addresses.
+
+                // Recognize NET_INTERNAL embedded in IPv6, such addresses are not
+                // gossiped but could be coming from addrman, when unserializing from
+                // disk.
+                if (HasPrefix(m_addr, INTERNAL_IN_IPV6_PREFIX)) {
+                    m_net = NET_INTERNAL;
+                    memmove(m_addr.data(), m_addr.data() + INTERNAL_IN_IPV6_PREFIX.size(),
+                            ADDR_INTERNAL_SIZE);
+                    m_addr.resize(ADDR_INTERNAL_SIZE);
+                    return;
+                }
+
+                if (!HasPrefix(m_addr, IPV4_IN_IPV6_PREFIX) &&
+                    !HasPrefix(m_addr, TORV2_IN_IPV6_PREFIX)) {
+                    return;
+                }
+
+                // IPv4 and TORv2 are not supposed to be embedded in IPv6 (like in V1
+                // encoding). Unserialize as !IsValid(), thus ignoring them.
+            } else {
+                // If we receive an unknown BIP155 network id (from the future?), or
+                // I2P/CJDNS which Gridcoin does not support, then ignore the
+                // address - unserialize as !IsValid().
+                s.ignore(address_size);
+            }
+
+            // Mimic a default-constructed CNetAddr object which is !IsValid() and thus
+            // will not be gossiped, but continue reading next addresses from the stream.
+            m_net = NET_IPV6;
+            m_addr.assign(ADDR_IPV6_SIZE, 0x0);
+        }
 };
 
 class CSubNet
@@ -105,18 +401,19 @@ class CSubNet
     protected:
         /// Network (base) address
         CNetAddr network;
-        /// Netmask, in network byte order
+        /// Raw-address mask in network byte order. Remaining bytes retain the
+        /// legacy prefix mask so disk serialization is lossless.
         uint8_t netmask[16];
         /// Is this value valid? (only used to signal parse errors)
         bool valid;
 
     public:
         CSubNet();
-        CSubNet(const CNetAddr &addr, int32_t mask);
-        CSubNet(const CNetAddr &addr, const CNetAddr &mask);
+        CSubNet(const CNetAddr& addr, uint8_t mask);
+        CSubNet(const CNetAddr& addr, const CNetAddr& mask);
 
         //constructor for single ip subnet (<ipv4>/32 or <ipv6>/128)
-        explicit CSubNet(const CNetAddr &addr);
+        explicit CSubNet(const CNetAddr& addr);
 
         bool Match(const CNetAddr &addr) const;
 
@@ -133,8 +430,32 @@ class CSubNet
         inline void SerializationOp(Stream& s, Operation ser_action)
         {
             READWRITE(network);
-            READWRITE(netmask);
+            if (ser_action.ForRead()) {
+                // Legacy masks include the IPv6 embedding prefix; raw addresses do not.
+                READWRITE(netmask);
+                std::rotate(std::begin(netmask),
+                            std::begin(netmask) + GetLegacyMaskOffset(), std::end(netmask));
+            } else {
+                uint8_t legacy_netmask[sizeof(netmask)];
+                GetLegacyNetmask(legacy_netmask);
+                READWRITE(legacy_netmask);
+            }
             READWRITE(valid);
+        }
+
+    private:
+        size_t GetLegacyMaskOffset() const
+        {
+            if (network.IsIPv4()) return IPV4_IN_IPV6_PREFIX.size();
+            if (network.IsTor()) return TORV2_IN_IPV6_PREFIX.size();
+            if (network.IsInternal()) return INTERNAL_IN_IPV6_PREFIX.size();
+            return 0;
+        }
+
+        void GetLegacyNetmask(uint8_t (&mask)[ADDR_IPV6_SIZE]) const
+        {
+            std::copy(std::begin(netmask), std::end(netmask), std::begin(mask));
+            std::rotate(std::begin(mask), std::end(mask) - GetLegacyMaskOffset(), std::end(mask));
         }
 };
 
@@ -174,7 +495,9 @@ class CService : public CNetAddr
         template <typename Stream, typename Operation>
         inline void SerializationOp(Stream& s, Operation ser_action)
         {
-             READWRITE(ip);
+             // Go through CNetAddr's (un)serializer so m_net is set on read.
+             // The bytes on the wire are unchanged.
+             READWRITEAS(CNetAddr, *this);
              READWRITE(WrapBigEndian(port));
         }
 };

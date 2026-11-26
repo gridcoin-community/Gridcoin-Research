@@ -30,6 +30,8 @@ set(JSON_TEST_FILES
 )
 
 set(BINARY_TEST_FILES
+    netaddress_19534_peers.bin
+    netaddress_19534_banlist.bin
     mainnet_beacon.bin
     superblock_packed.bin
     testnet_beacon.bin
