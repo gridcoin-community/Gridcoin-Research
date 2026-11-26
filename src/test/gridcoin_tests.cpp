@@ -82,6 +82,23 @@ BOOST_AUTO_TEST_CASE(gridcoin_V8ShouldBeEnabledOnBlock312000InTestnet)
     BOOST_CHECK(IsV8Enabled(312000) == true);
 }
 
+BOOST_AUTO_TEST_CASE(gridcoin_ConsensusGenesisHashMatchesEachNetwork)
+{
+    grc_test::StateGuard guard; // puts the selected network back
+
+    for (const auto& [network, constant] : {std::pair{CBaseChainParams::MAIN, hashGenesisBlock},
+                                            std::pair{CBaseChainParams::TESTNET, hashGenesisBlockTestNet},
+                                            std::pair{CBaseChainParams::REGTEST, hashGenesisBlockRegTest}}) {
+        BOOST_TEST_CONTEXT("chain " << network) {
+            SelectParams(network);
+            const uint256& field = Params().GetConsensus().hashGenesisBlock;
+            BOOST_CHECK_EQUAL(field.ToString(), constant.ToString());
+            BOOST_CHECK_EQUAL(field.ToString(), CreateGenesisBlock().GetHash(true).ToString());
+            BOOST_CHECK(!field.IsNull());
+        }
+    }
+}
+
 namespace {
 //! Clears the unit-test opt-in for one case, so ConsensusOverridesAllowed()
 //! answers as it does in a node, and puts it back afterwards.
