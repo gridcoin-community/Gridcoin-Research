@@ -312,7 +312,7 @@ jobs:
         # Removed -j flag; CTest reads env var
         # See the arm64 job: bounded twice so a hang is reported rather than
         # running to the six-hour job default.
-        timeout-minutes: 45
+        timeout-minutes: 75
         run: ctest --test-dir ${{ matrix.build_dir }} --output-on-failure --timeout 1800
 
       # 8b. Test (Windows)
@@ -637,7 +637,10 @@ jobs:
         # backstop for a hang outside ctest itself. Without either, a stuck test
         # ran to the six-hour job default on a runner billed at ten times the
         # Linux rate, and produced no usable log when it was finally cancelled.
-        timeout-minutes: 45
+        # 75 minutes leaves room for the unit suites and the functional_tests
+        # case's own ctest timeout (FUNCTIONAL_TEST_CTEST_TIMEOUT, 3600 s), so
+        # ctest reports a functional test that overran before the step ends.
+        timeout-minutes: 75
         # Boost.Test catches a crash's signal and reports only the case it was
         # in. With the signal left to the system, macOS writes the symbolicated
         # report the next step prints.
@@ -1118,7 +1121,7 @@ jobs:
       - name: Test
         # See the arm64 job: bounded twice so a hang is reported rather than
         # running to the six-hour job default. Crashes reach the system, as there.
-        timeout-minutes: 45
+        timeout-minutes: 75
         env:
           BOOST_TEST_CATCH_SYSTEM_ERRORS: "no"
         run: ctest --test-dir build --output-on-failure --timeout 1800
