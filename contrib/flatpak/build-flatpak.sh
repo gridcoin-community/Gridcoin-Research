@@ -4,7 +4,7 @@ export LC_ALL=C
 # Build a Gridcoin Flatpak bundle locally.
 #
 # Prerequisites:
-#   flatpak install flathub org.kde.Platform//6.9 org.kde.Sdk//6.9
+#   flatpak install flathub org.kde.Platform//6.11 org.kde.Sdk//6.11
 #   sudo apt install flatpak-builder   # or equivalent
 #
 # Usage:
