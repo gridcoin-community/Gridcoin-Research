@@ -1,5 +1,4 @@
 #include "walletmodel.h"
-#include "qt/guiipcworker.h"
 #include "qt/guilog.h"
 #include "guiconstants.h"
 #include "optionsmodel.h"
@@ -93,12 +92,11 @@ WalletModel::~WalletModel()
 
     unsubscribeFromCoreSignals();
 
-    // A coin-store scan still running reports to this model when it ends, so
-    // wait for it: it never outlives the model that started it. It holds
-    // only node-side locks.
-    if (m_coin_load_done.valid()) {
-        m_coin_load_done.wait();
-    }
+    // Nothing to wait for: the core computes the coin list's rebuild and the
+    // address picker's list on threads of its own, and neither reports to this
+    // model from there. A rebuild's end is read by drainCoinEventQueue, and
+    // the list arrives as a queued signal, which Qt drops once this model is
+    // gone.
 }
 
 qint64 WalletModel::getBalance() const
@@ -148,6 +146,10 @@ void WalletModel::setGuiState(GuiStateCache* cache)
     if (m_gui_state_connection) {
         disconnect(m_gui_state_connection);
     }
+    if (m_unbooked_connection) {
+        disconnect(m_unbooked_connection);
+    }
+    m_gui_state_cache = cache;
 
     if (!cache) {
         return;
@@ -156,6 +158,11 @@ void WalletModel::setGuiState(GuiStateCache* cache)
     m_gui_state_connection = connect(cache, &GuiStateCache::changed, this, [this, cache]() {
         applyPushedBalances(*cache);
     });
+
+    // The picker's list, answered by the core (requestUnbookedReceiveAddresses).
+    // This model is the context, so Qt drops an answer that arrives after it.
+    m_unbooked_connection = connect(cache, &GuiStateCache::unbookedReceiveAddressesAnswered,
+                                    this, &WalletModel::unbookedReceiveAddressesAnswered);
 
     applyPushedBalances(*cache);
 }
@@ -231,6 +238,12 @@ void WalletModel::drainEventQueue()
             // slower route. The budget is for CONSECUTIVE failures, so clear it here
             // too.
             m_drain_failures = 0;
+
+            // The coin list's rebuild ends on the core's thread, and only
+            // drainCoinEventQueue reads that end. Read it on a quiet tick
+            // too, but only while a load is in flight, so an idle model
+            // still makes no coin call.
+            if (m_coin_load_in_flight) drainCoinEventQueue();
             return;
         }
 
@@ -777,6 +790,20 @@ void WalletModel::drainCoinEventQueue()
     m_coin_draining = true;
     struct CoinDrainGuard { bool& f; ~CoinDrainGuard() { f = false; } } drain_guard{m_coin_draining};
 
+    // Read before the drain: a rebuild queues its Resets before it reports its
+    // end, so an end read here has its Resets in the queue, and this drain or
+    // coinSourceLoadEnded's applies them before the announcement. Asked only
+    // while a load is in flight, so an idle model makes no call for it. The end
+    // is queued as soon as it is read: the read clears it in the source, so a
+    // throw later in this drain must not lose it. Queued, so the resync check
+    // below still runs first, and coinSourceLoadEnded drains again, which the
+    // guard above skips while this drain runs.
+    std::string reload_error;
+    if (m_coin_load_in_flight && m_coin_source.consumeReloadEnded(reload_error)) {
+        const QString error = QString::fromStdString(reload_error);
+        QMetaObject::invokeMethod(this, [this, error] { coinSourceLoadEnded(error); }, Qt::QueuedConnection);
+    }
+
     auto events = m_coin_source.drainEvents(MODEL_EVENT_DRAIN_MAX_BATCH);
     if (!events.empty()) {
         emit coinEventsDrained(events);
@@ -817,40 +844,25 @@ void WalletModel::ensureCoinSourceLoaded(bool force)
     m_coin_load_started = true;
     m_coin_load_in_flight = true;
 
-    // O(wallet) scan under cs_main + cs_wallet -- the reason this never runs
-    // on the GUI thread. It runs on the coin-load worker, a thread that
-    // outlives the connection to the core: a thread that has made IPC calls
-    // must not exit while its connection may be destroyed (see GuiIpcWorker),
-    // and a disconnect mid-scan ends the call just as the connection is
-    // destroyed. A worker of its own, so a prompt never waits behind a scan.
-    //
-    // The job posts its end back to this model, which outlives it (the
-    // destructor waits for it). Queued to this QObject, so Qt drops it if the
-    // model is gone before it runs. A scan that throws, as one across IPC does
-    // when the core drops the connection, is reported the same way.
-    interfaces::WalletCoinSource* source = &m_coin_source;
-    GuiIpcWorker* const worker = GuiIpcWorker::Current(GuiIpcWorker::Role::CoinLoad);
-
-    m_coin_load_done = worker ? worker->Post([this, source] {
-        QString error;
-
-        try {
-            source->reloadAndSnapshot();
-        } catch (const std::exception& e) {
-            error = QString::fromStdString(e.what());
-            if (error.isEmpty()) error = QStringLiteral("the scan failed");
-        } catch (...) {
-            error = QStringLiteral("the scan failed");
-        }
-
-        QMetaObject::invokeMethod(this, [this, error] { coinSourceLoadEnded(error); }, Qt::QueuedConnection);
-    }) : std::future<void>();
-
-    if (!m_coin_load_done.valid()) {
-        QMetaObject::invokeMethod(this, [this] {
-            coinSourceLoadEnded(QStringLiteral("no thread is running to load the coin list"));
-        }, Qt::QueuedConnection);
+    // The rebuild is O(wallet) under cs_main and cs_wallet, so this model only
+    // asks for it: the core runs it on a thread of its own (its GUI state
+    // cache's coin-list thread), and the request returns at once. The
+    // rebuild's Resets arrive through the coin event queue, and its end
+    // through consumeReloadEnded(), which drainCoinEventQueue reads while this
+    // load is in flight. Nothing reports to this model from another thread, so
+    // its destructor has nothing to wait for. A request that throws, as one
+    // across IPC does when the core drops the connection, is reported as a
+    // failed load.
+    QString error;
+    try {
+        m_coin_source.requestReload();
+        return;
+    } catch (const std::exception& e) {
+        error = QString::fromStdString(e.what());
+    } catch (...) {
     }
+    if (error.isEmpty()) error = QStringLiteral("the coin list's load could not be requested");
+    QMetaObject::invokeMethod(this, [this, error] { coinSourceLoadEnded(error); }, Qt::QueuedConnection);
 }
 
 void WalletModel::coinSourceLoadEnded(const QString& error)
@@ -880,4 +892,60 @@ void WalletModel::coinSourceLoadEnded(const QString& error)
         m_coin_reload_pending = false;
         ensureCoinSourceLoaded(/*force=*/true);
     }
+}
+
+quint64 WalletModel::requestUnbookedReceiveAddresses()
+{
+    // Every request is posted. The core's walk serves all the requests queued
+    // before it starts, so asking again costs no extra walk, and an answer that
+    // never arrives strands only the request that made it.
+    const quint64 serial = ++m_unbooked_serial;
+    postUnbookedRequest(serial);
+    return serial;
+}
+
+void WalletModel::postUnbookedRequest(quint64 serial)
+{
+    m_unbooked_outstanding.insert(serial);
+
+    // The list needs cs_main for a whole-wallet walk, so the core computes it
+    // on a thread of its own (its GUI state cache's picker thread) and answers
+    // through the cache's unbookedReceiveAddressesAnswered(). This only asks,
+    // and returns at once. A failure is queued too, never emitted inline, so
+    // the caller holds the serial before any answer arrives.
+    QString error;
+    if (m_gui_state_cache) {
+        try {
+            m_gui_state_cache->requestUnbookedReceiveAddresses(serial);
+            return;
+        } catch (const std::exception& e) {
+            error = QString::fromStdString(e.what());
+        } catch (...) {
+        }
+        if (error.isEmpty()) error = QStringLiteral("the unbooked addresses could not be requested");
+    } else {
+        error = QStringLiteral("no core state cache is connected to list the unbooked addresses");
+    }
+    QMetaObject::invokeMethod(this, [this, serial, error] {
+        if (m_unbooked_outstanding.erase(serial)) unbookedLoadEnded(serial, {}, error);
+    }, Qt::QueuedConnection);
+}
+
+void WalletModel::unbookedReceiveAddressesAnswered(quint64 request_id, const QStringList& addresses,
+                                                   const QString& error)
+{
+    // An answer to a request this model is not waiting for.
+    if (!m_unbooked_outstanding.erase(request_id)) return;
+
+    QStringList sorted = addresses;
+    sorted.sort();
+    unbookedLoadEnded(request_id, sorted, error);
+}
+
+void WalletModel::unbookedLoadEnded(quint64 serial, const QStringList& addresses, const QString& error)
+{
+    if (!error.isEmpty()) {
+        GUILogPrintf("WARN: %s: the unbooked address list could not be loaded: %s", __func__, error.toStdString());
+    }
+    emit unbookedReceiveAddressesLoaded(serial, addresses, error);
 }

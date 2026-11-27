@@ -173,6 +173,17 @@ namespace ipc {
 //! Major 5 carries everything major 4 had through minor 2 (above), and the
 //! minor restarts at 0.
 //!
+//! Minor 1 (under major 5): GuiState gained `requestUnbookedReceiveAddresses
+//! @6` and `handleUnbookedReceiveAddresses @7`, with the
+//! UnbookedReceiveAddressesCallback interface (gui_state.capnp), and
+//! WalletCoinSource gained `requestReload @18` and `consumeReloadEnded @19`
+//! (wallet_coin_source.capnp). The node's GUI state cache computes the "add
+//! existing" picker's list and runs the coin list's rebuild on core threads of
+//! its own, on the GUI's request, so ~WalletModel waits for neither. Additive,
+//! but against an older node the GUI's first request gets the UNIMPLEMENTED
+//! reply, and the picker and the coin list then fail to load. The minor turns
+//! that pairing into the "Update the node" hard fail at connect.
+//!
 //! Protocol 2: on Windows the GUI identifies itself to the node before it
 //! authenticates. It calls Init.beginAttest (@17), writes the nonce into the
 //! one-shot named pipe that names, and calls Init.finishAttest (@18)
@@ -182,7 +193,7 @@ namespace ipc {
 //! meets UNIMPLEMENTED from an older node's beginAttest and stops before it
 //! presents its cookie. On POSIX the order is unchanged.
 constexpr uint32_t IPC_SCHEMA_MAJOR = 5;
-constexpr uint32_t IPC_SCHEMA_MINOR = 0;
+constexpr uint32_t IPC_SCHEMA_MINOR = 1;
 constexpr uint32_t IPC_PROTOCOL_VERSION = 2;
 
 //! Domain-separation tag hashed into the node identity token. Bump the suffix if

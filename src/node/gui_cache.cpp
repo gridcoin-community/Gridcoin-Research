@@ -10,6 +10,7 @@
 #include "gridcoin/staking/difficulty.h"
 #include "gridcoin/staking/status.h"
 #include "interfaces/researcher.h"
+#include "interfaces/wallet.h"
 #include "logging.h"
 #include "util/threadnames.h"
 #include "validation.h"
@@ -17,19 +18,134 @@
 
 #include <algorithm>
 #include <exception>
+#include <stdexcept>
 #include <utility>
 
 extern CWallet* pwalletMain;
 
 namespace node {
 
+GuiScanThread::GuiScanThread(std::string name)
+    : m_name(std::move(name))
+{
+}
+
+GuiScanThread::~GuiScanThread()
+{
+    RequestStop();
+    Join();
+}
+
+void GuiScanThread::Start()
+{
+    LOCK(m_thread_mutex);
+
+    if (m_thread.joinable()) return;
+
+    // m_stopping is not read here, so this lock is held alone. A Start after
+    // RequestStop() starts a thread that runs no job: Post has refused every
+    // job since, RequestStop() dropped the rest, and Loop() returns on
+    // m_stopping before it takes one. The next Join() joins it.
+
+    // As the timer's: nothing may escape a std::thread body. Each job contains
+    // its own failures; anything reaching here stops this thread, so say so.
+    m_thread = std::thread([this] {
+        util::ThreadRename(std::string{m_name});
+
+        try {
+            Loop();
+        } catch (const std::exception& e) {
+            LogPrintf("ERROR: GuiScanThread: %s stopped after an unhandled exception: %s. "
+                      "It will not run again until restart.", m_name, e.what());
+        } catch (...) {
+            LogPrintf("ERROR: GuiScanThread: %s stopped after an unknown unhandled exception. "
+                      "It will not run again until restart.", m_name);
+        }
+
+        // A thread that has stopped takes no more jobs: refuse them, as after
+        // RequestStop(), so a caller learns it at once. No job lets an
+        // exception reach here; this is the guard if one ever does.
+        {
+            std::deque<std::function<void()>> dropped;
+            {
+                LOCK(m_mutex);
+                m_stopping = true;
+                dropped.swap(m_jobs);
+            }
+        }
+    });
+}
+
+bool GuiScanThread::Post(std::function<void()> job)
+{
+    {
+        LOCK(m_mutex);
+        if (m_stopping) return false;
+        m_jobs.push_back(std::move(job));
+    }
+    m_cv.notify_one();
+    return true;
+}
+
+void GuiScanThread::RequestStop()
+{
+    // The dropped jobs are destroyed once the lock is released, so no capture's
+    // destructor runs under it.
+    std::deque<std::function<void()>> dropped;
+    {
+        LOCK(m_mutex);
+        m_stopping = true;
+        dropped.swap(m_jobs);
+    }
+    m_cv.notify_all();
+}
+
+void GuiScanThread::Join()
+{
+    LOCK(m_thread_mutex);
+
+    // A job that stops the cache runs on this thread, which cannot join
+    // itself; the destructor joins it.
+    if (m_thread.joinable() && m_thread.get_id() != std::this_thread::get_id()) {
+        m_thread.join();
+    }
+}
+
+std::size_t GuiScanThread::Queued() const
+{
+    LOCK(m_mutex);
+    return m_jobs.size();
+}
+
+void GuiScanThread::Loop()
+{
+    while (true) {
+        std::function<void()> job;
+
+        {
+            WAIT_LOCK(m_mutex, lock);
+
+            while (m_jobs.empty() && !m_stopping) m_cv.wait(lock);
+
+            if (m_stopping) return;
+
+            job = std::move(m_jobs.front());
+            m_jobs.pop_front();
+        }
+
+        // Holding no lock: the job takes what it needs.
+        job();
+    }
+}
+
 GuiCache::GuiCache(Compute compute, DeliverFn deliver, std::chrono::milliseconds min_interval,
-                   std::chrono::milliseconds tick, QuoteFn deliver_quote)
+                   std::chrono::milliseconds tick, QuoteFn deliver_quote, UnbookedFn deliver_unbooked)
     : m_compute(std::move(compute))
     , m_deliver(std::move(deliver))
     , m_min_interval(min_interval)
     , m_tick(tick)
     , m_deliver_quote(std::move(deliver_quote))
+    , m_deliver_unbooked(std::move(deliver_unbooked))
 {
 }
 
@@ -175,8 +291,43 @@ void GuiCache::RequestMRCQuote(CAmount fee_boost, uint64_t request_id)
     m_wake_cv.notify_one();
 }
 
+void GuiCache::RequestUnbookedReceiveAddresses(uint64_t request_id)
+{
+    // A walk takes every request queued when it starts, so a walk is posted
+    // only when none is queued: a flood keeps at most one queued and one
+    // running. Once the cache has stopped, the post is refused and the
+    // request gets no answer.
+    bool post;
+    {
+        LOCK(m_unbooked_mutex);
+        m_unbooked.push_back(request_id);
+        post = !std::exchange(m_unbooked_posted, true);
+    }
+
+    if (post && !m_picker_scan.Post([this] { ServeUnbooked(); })) {
+        LOCK(m_unbooked_mutex);
+        m_unbooked_posted = false;
+    }
+}
+
+std::size_t GuiCache::QueuedPickerJobsForTest() const
+{
+    return m_picker_scan.Queued();
+}
+
+bool GuiCache::RequestCoinReload(CoinJob job)
+{
+    return m_coin_scan.Post([this, job = std::move(job)] { RunCoinJob(job); });
+}
+
 void GuiCache::StartTimer()
 {
+    // The scan threads first, before the timer's lock, so no lock of the
+    // cache's is held while another is taken. One started after Stop()
+    // runs no job: its Loop() returns on m_stopping.
+    m_picker_scan.Start();
+    m_coin_scan.Start();
+
     LOCK(m_timer_mutex);
 
     if (m_timer.joinable() || m_stop.load()) {
@@ -209,6 +360,13 @@ void GuiCache::Stop()
         m_wake = true;
     }
     m_wake_cv.notify_all();
+
+    // Both scan threads are asked first, so neither starts a job while the
+    // other is joined. Each then ends only the job it has started.
+    m_picker_scan.RequestStop();
+    m_coin_scan.RequestStop();
+    m_picker_scan.Join();
+    m_coin_scan.Join();
 
     LOCK(m_timer_mutex);
 
@@ -335,6 +493,71 @@ void GuiCache::AnswerQuote(uint64_t request_id, const interfaces::MRCSnapshot& a
         LogPrintf("ERROR: %s: delivering the MRC quote failed: %s", __func__, e.what());
     } catch (...) {
         LogPrintf("ERROR: %s: delivering the MRC quote failed with an unknown exception", __func__);
+    }
+}
+
+void GuiCache::ServeUnbooked()
+{
+    std::vector<uint64_t> request_ids;
+    {
+        LOCK(m_unbooked_mutex);
+        m_unbooked_posted = false;
+        request_ids.swap(m_unbooked);
+    }
+
+    if (request_ids.empty()) return;
+
+    std::vector<std::string> addresses;
+    std::string error;
+
+    // The walk takes cs_main and cs_wallet itself, so this thread holds no lock
+    // around it, and nothing on the timer waits in line behind it.
+    try {
+        if (!m_compute.unbooked) throw std::runtime_error("this cache does not compute them");
+
+        addresses = m_compute.unbooked();
+    } catch (const std::exception& e) {
+        addresses.clear();
+        error = e.what();
+        if (error.empty()) error = "the walk failed";
+    } catch (...) {
+        addresses.clear();
+        error = "unknown exception";
+    }
+
+    if (!error.empty()) {
+        LogPrintf("ERROR: %s: the unbooked receive addresses could not be listed: %s", __func__, error);
+    }
+
+    // Holding no lock, as a quote is answered. One walk serves every request
+    // taken with it.
+    for (const uint64_t request_id : request_ids) {
+        if (m_stop.load()) return;
+
+        try {
+            if (m_deliver_unbooked) m_deliver_unbooked(request_id, addresses, error);
+        } catch (const std::exception& e) {
+            LogPrintf("ERROR: %s: delivering the unbooked receive addresses failed: %s", __func__, e.what());
+        } catch (...) {
+            LogPrintf("ERROR: %s: delivering the unbooked receive addresses failed with an unknown exception",
+                      __func__);
+        }
+    }
+}
+
+void GuiCache::RunCoinJob(const CoinJob& job)
+{
+    // The rebuild takes cs_main and cs_wallet itself and releases them before
+    // the job returns. Its reference is dropped here, after that, so a source
+    // whose last owner has gone is destroyed on this thread holding no lock.
+    std::shared_ptr<void> keepalive;
+
+    try {
+        keepalive = job();
+    } catch (const std::exception& e) {
+        LogPrintf("ERROR: %s: a coin-list rebuild failed: %s", __func__, e.what());
+    } catch (...) {
+        LogPrintf("ERROR: %s: a coin-list rebuild failed with an unknown exception", __func__);
     }
 }
 
@@ -559,6 +782,16 @@ GuiCache::Compute MakeProductionCompute()
         return GRC::BuildMRCSnapshot(pwalletMain, fee_boost, /*no_sign=*/true, ResearcherEligible(current));
     };
 
+    // The "add existing receive address" picker's list, on the cache's picker
+    // thread: Wallet's getUnbookedReceiveAddresses itself, whose LOCK2 takes
+    // cs_main and cs_wallet for the walk. Shutdown() stops the cache before it
+    // deletes pwalletMain.
+    compute.unbooked = []() {
+        if (!pwalletMain) throw std::runtime_error("no wallet is loaded");
+
+        return interfaces::MakeWallet(pwalletMain)->getUnbookedReceiveAddresses();
+    };
+
     // StakingStatus::tryGetEstimatedTimeToStake, without the try. Seconds.
     compute.etts = [](interfaces::GuiStateSnapshot& snap) NO_THREAD_SAFETY_ANALYSIS {
         AssertLockHeld(cs_main);
@@ -618,6 +851,13 @@ void StopGuiCache()
     if (cache) {
         cache->Stop();
     }
+}
+
+bool ScheduleCoinReload(GuiCache::CoinJob job)
+{
+    GuiCache* const cache = GetGuiCache();
+
+    return cache && cache->RequestCoinReload(std::move(job));
 }
 
 } // namespace node

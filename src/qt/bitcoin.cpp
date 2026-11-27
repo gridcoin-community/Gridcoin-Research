@@ -823,7 +823,10 @@ static void RemoveGuiTerminationHandler() {}
 //! this a permanent no-op there.
 static std::atomic<bool> g_gui_archive_running{false};
 //! Stands in for the core's GUI state cache when the core runs none: the GUI
-//! keeps the state it shows at startup, as no snapshot ever arrives.
+//! keeps the state it shows at startup, as no snapshot ever arrives. A picker
+//! request is answered at once with an empty list and an error, so the picker
+//! reports a failed load rather than loading for ever; the subscriber queues
+//! the answer, so it is never delivered inside the request.
 class NoGuiState : public interfaces::GuiState
 {
 public:
@@ -838,6 +841,18 @@ public:
     {
         return interfaces::MakeCleanupHandler([] {});
     }
+    void requestUnbookedReceiveAddresses(uint64_t request_id) override
+    {
+        if (m_unbooked_fn) m_unbooked_fn(request_id, {}, "no GUI state cache is running in the core");
+    }
+    std::unique_ptr<interfaces::Handler> handleUnbookedReceiveAddresses(UnbookedFn fn) override
+    {
+        m_unbooked_fn = std::move(fn);
+        return interfaces::MakeCleanupHandler([this] { m_unbooked_fn = nullptr; });
+    }
+
+private:
+    UnbookedFn m_unbooked_fn;
 };
 
 static std::thread g_gui_archive_thread;
@@ -1761,8 +1776,8 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
                 }
                 // The windowed coin-control source (#3183): same ownership and
                 // teardown contract as the tx source. Construction is cheap —
-                // the initial wallet scan runs lazily on the coin-load worker
-                // (WalletModel) at first dialog open, and the store
+                // the initial wallet scan runs lazily in the core, on the coin
+                // view's first request (WalletModel), at first dialog open, and the store
                 // stays warm (but silent) between dialog opens.
                 std::shared_ptr<interfaces::WalletCoinSource> wallet_coin_source;
                 const std::string synthetic_coins = gArgs.GetArg("-devsyntheticcoins", "");

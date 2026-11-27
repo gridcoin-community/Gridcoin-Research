@@ -156,7 +156,7 @@ public:
     CoinBulkSelectionResult applyValueFilter(bool less_or_equal, int64_t value,
                                              uint32_t max_inputs);
 
-    // ---- load / resync (Qt thread, or the GUI's coin-load worker off the GUI thread) ----
+    // ---- load / resync (reloadAndSnapshot on a core thread; seedSynthetic where its source is made) ----
 
     //! Rebuild the store from the wallet: AvailableCoins conditions +
     //! change-walk grouping (memoized). Holds cs_main + cs_wallet across the

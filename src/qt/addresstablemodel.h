@@ -62,9 +62,12 @@ public:
      */
     QString addRow(const QString &type, const QString &label, const QString &address);
 
-    /* Return list of owned addresses not yet in the address book.
+    /* Ask the core for the owned addresses with a balance that are not yet in
+       the address book, and return the request's serial
+       (WalletModel::requestUnbookedReceiveAddresses). The answer arrives as
+       unbookedReceiveAddressesLoaded() with that serial. Returns at once.
      */
-    QStringList unbookedReceiveAddresses() const;
+    quint64 requestUnbookedReceiveAddresses();
 
     /* Look up label for address in address book, if not found return empty string.
      */
@@ -88,6 +91,11 @@ private:
 
 signals:
     void defaultAddressChanged(const QString &address);
+
+    /** The answer to requestUnbookedReceiveAddresses() \p serial, relayed from
+        WalletModel: the sorted list, or an empty list and \p error. Emitted on
+        the GUI thread. */
+    void unbookedReceiveAddressesLoaded(quint64 serial, const QStringList& addresses, const QString& error);
 
 public slots:
     /* Update address list from core.

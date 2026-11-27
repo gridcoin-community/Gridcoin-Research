@@ -10,6 +10,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <memory>
 #include <set>
 #include <string>
@@ -51,7 +52,7 @@ public:
     //! Register a per-view cursor with a display mode and sort. Registration
     //! over a not-yet-loaded store is valid and yields empty scopes until
     //! reloadAndSnapshot's Reset arrives — consumers run the initial scan off
-    //! the paint path (the GUI's coin-load worker, off the GUI thread) and render a loading
+    //! the paint path (a core thread, on the GUI's requestReload()) and render a loading
     //! state meanwhile. Re-registering an existing view_id replaces it and
     //! pushes a CoinReset. \p view_id is one of the GRC::VIEW_COIN_*
     //! identifiers; \p sort_column is a GRC::CoinSortColumn.
@@ -139,8 +140,8 @@ public:
     virtual std::vector<GRC::WalletCoinEvent> drainEvents(std::size_t max_batch) = 0;
 
     //! True (once) after a bulk wallet mutation pass (rescan / reaccept)
-    //! bypassed per-tx notifications. The drain point polls this and
-    //! schedules reloadAndSnapshot off the paint path.
+    //! bypassed per-tx notifications. The drain point polls this and asks
+    //! for a rebuild (requestReload).
     virtual bool consumeNeedsResync() = 0;
 
     //! GUI up-channel: an address-book entry changed. Beyond re-snapshotting
@@ -153,15 +154,34 @@ public:
     //! drain path schedules off-thread.
     virtual void noteAddressBookChanged(const std::string& address,
                                         const std::string& label) = 0;
+
+    //! Ask for reloadAndSnapshot()'s rebuild on a core thread and return at
+    //! once. A request made while this source's rebuild is queued and not yet
+    //! started is served by that rebuild, so each source has at most one
+    //! queued rebuild. The rebuild's Resets arrive through drainEvents(), and
+    //! its end through consumeReloadEnded(). For the GUI, which must not wait
+    //! on cs_main.
+    virtual void requestReload() = 0;
+
+    //! True once after each requested rebuild has ended, setting error to
+    //! its failure or to empty. Takes only a leaf lock.
+    virtual bool consumeReloadEnded(std::string& error) = 0;
 };
+
+//! Runs a rebuild job on a core thread that holds no lock, since the job takes
+//! its own, or returns false when it cannot. The job returns a reference for
+//! the scheduler to drop after it returns.
+using CoinReloadJob = std::function<std::shared_ptr<void>()>;
+using ReloadScheduler = std::function<bool(CoinReloadJob)>;
 
 //! Return an in-process WalletCoinSource over the given wallet, which must
 //! outlive the returned object. Same ownership contract as MakeWalletTxSource:
 //! shared_ptr, with producer subscriptions holding a weak reference locked per
 //! callback, closing the cross-thread teardown race. The in-process
-//! implementation lands with the coin store (the #3183 series' store PR);
-//! until then this factory has no definition and nothing links against it.
-std::shared_ptr<WalletCoinSource> MakeWalletCoinSource(CWallet* wallet);
+//! implementation lands with the coin store (the #3183 series' store PR).
+//! \p schedule runs requestReload()'s rebuild; none, and each request ends at
+//! once with an error.
+std::shared_ptr<WalletCoinSource> MakeWalletCoinSource(CWallet* wallet, ReloadScheduler schedule = {});
 
 //! DEV HARNESS ONLY (-devsyntheticcoins=<n>[:<groups>]): a WalletCoinSource
 //! over a null-wallet coin store seeded with <total_coins> synthetic records

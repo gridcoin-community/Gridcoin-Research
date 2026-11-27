@@ -43,7 +43,7 @@ EditAddressDialog::EditAddressDialog(Mode mode, QWidget* parent)
         // Replace the address line edit with a combo box of unbooked addresses
         addressCombo = new QComboBox(this);
         addressCombo->setFont(GUIUtil::bitcoinAddressFont());
-        ui->formLayout->replaceWidget(ui->addressEdit, addressCombo);
+        delete ui->formLayout->replaceWidget(ui->addressEdit, addressCombo);
         ui->addressEdit->hide();
         break;
     }
@@ -69,8 +69,22 @@ void EditAddressDialog::setModel(AddressTableModel *model)
 
     if(mode == AddExistingReceivingAddress && addressCombo)
     {
-        addressCombo->addItems(model->unbookedReceiveAddresses());
+        addressCombo->setPlaceholderText(tr("Loading..."));
+        addressCombo->setEnabled(false);
+        ui->buttonBox->button(QDialogButtonBox::Ok)->setEnabled(false);
+        connect(model, &AddressTableModel::unbookedReceiveAddressesLoaded, this, &EditAddressDialog::unbookedReceiveAddressesLoaded);
+        m_unbooked_serial = model->requestUnbookedReceiveAddresses();
     }
+}
+
+void EditAddressDialog::unbookedReceiveAddressesLoaded(quint64 serial, const QStringList& addresses, const QString& error)
+{
+    Q_UNUSED(error);
+    if (serial != m_unbooked_serial) return;
+    addressCombo->setPlaceholderText(QString());
+    addressCombo->addItems(addresses);
+    addressCombo->setEnabled(true);
+    ui->buttonBox->button(QDialogButtonBox::Ok)->setEnabled(true);
 }
 
 void EditAddressDialog::loadRow(int row)

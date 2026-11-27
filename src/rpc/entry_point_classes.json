@@ -100,10 +100,18 @@
       "class": "read_only",
       "effect": "read_only"
     },
+    "GuiState.handleUnbookedReceiveAddresses": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
     "GuiState.requestMRCQuote": {
       "class": "read_only",
       "effect": "read_only",
       "note": "quotes the claim from a trial built unsigned (no_sign)"
+    },
+    "GuiState.requestUnbookedReceiveAddresses": {
+      "class": "read_only",
+      "effect": "read_only"
     },
     "GuiState.requestUpdate": {
       "class": "read_only",
@@ -690,6 +698,14 @@
       "class": "read_only",
       "effect": "read_only"
     },
+    "UnbookedReceiveAddressesCallback.call": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "UnbookedReceiveAddressesCallback.destroy": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
     "VoidCallback.call": {
       "class": "read_only",
       "effect": "read_only"
@@ -959,6 +975,10 @@
       "class": "free",
       "effect": "state"
     },
+    "WalletCoinSource.consumeReloadEnded": {
+      "class": "free",
+      "effect": "state"
+    },
     "WalletCoinSource.destroy": {
       "class": "read_only",
       "effect": "read_only"
@@ -996,6 +1016,10 @@
       "effect": "state"
     },
     "WalletCoinSource.reloadAndSnapshot": {
+      "class": "free",
+      "effect": "state"
+    },
+    "WalletCoinSource.requestReload": {
       "class": "free",
       "effect": "state"
     },

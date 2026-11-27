@@ -36,8 +36,9 @@ public:
     enum class Role {
         //! Work a modal dialog waits for, such as a file transfer or a passphrase check.
         Modal,
-        //! The coin list's wallet scan, which takes as long as the wallet is large, so a prompt
-        //! must never wait behind it.
+        //! No job is posted here since the core runs the coin list's rebuild on a thread of its
+        //! own (WalletCoinSource::requestReload). Kept so the worker's role and teardown order
+        //! stay as they were; retiring it is a separate change.
         CoinLoad,
     };
 

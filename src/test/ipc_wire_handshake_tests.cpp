@@ -281,6 +281,9 @@ struct GuiStateStore {
     Mutex mutex;
     interfaces::GuiState::ChangedFn changed GUARDED_BY(mutex);
     interfaces::GuiState::MRCQuoteFn quote GUARDED_BY(mutex);
+    interfaces::GuiState::UnbookedFn unbooked GUARDED_BY(mutex);
+    //! The ids of the picker requests the client made, in order.
+    std::vector<uint64_t> unbooked_requests GUARDED_BY(mutex);
     interfaces::GuiStateSnapshot current GUARDED_BY(mutex);
 
     bool HasChanged()
@@ -303,14 +306,23 @@ struct GuiStateStore {
         fn(request_id, snapshot);
     }
 
+    //! Call the client's picker fn, as the cache's picker thread does.
+    void AnswerUnbooked(uint64_t request_id, const std::vector<std::string>& addresses, const std::string& error)
+    {
+        interfaces::GuiState::UnbookedFn fn = WITH_LOCK(mutex, return unbooked);
+        fn(request_id, addresses, error);
+    }
+
     void Clear()
     {
         interfaces::GuiState::ChangedFn changed_fn;
         interfaces::GuiState::MRCQuoteFn quote_fn;
+        interfaces::GuiState::UnbookedFn unbooked_fn;
         {
             LOCK(mutex);
             std::swap(changed_fn, changed);
             std::swap(quote_fn, quote);
+            std::swap(unbooked_fn, unbooked);
         }
     }
 };
@@ -352,6 +364,19 @@ struct StoringGuiState : interfaces::GuiState {
     {
         LOCK(m_store.mutex);
         m_store.quote = interfaces::GuardNotify(std::move(fn));
+        return interfaces::MakeCleanupHandler([] {});
+    }
+
+    void requestUnbookedReceiveAddresses(uint64_t request_id) override
+    {
+        LOCK(m_store.mutex);
+        m_store.unbooked_requests.push_back(request_id);
+    }
+
+    std::unique_ptr<interfaces::Handler> handleUnbookedReceiveAddresses(UnbookedFn fn) override
+    {
+        LOCK(m_store.mutex);
+        m_store.unbooked = interfaces::GuardNotify(std::move(fn));
         return interfaces::MakeCleanupHandler([] {});
     }
 
@@ -1134,6 +1159,55 @@ BOOST_AUTO_TEST_CASE(wire_gui_state_quote_reaches_the_client)
     BOOST_CHECK_EQUAL(got->second.min_fee, 28);
     BOOST_CHECK(got->second.boosted_fee_error);
     BOOST_CHECK_EQUAL(got->second.boosted_fee_error_msg, "too much");
+}
+
+BOOST_AUTO_TEST_CASE(wire_gui_state_unbooked_reaches_the_client)
+{
+    GuiStateStore store;
+    interfaces::NodeIdentity id;
+    id.network = "main";
+    WireLink link([&store, &id, slot = ipc::MakeAttachSlot()](int) -> std::unique_ptr<interfaces::Init> {
+        return ipc::MakeServeInit(std::make_unique<GuiStateInner>(store), "the-cookie", id, slot, {});
+    });
+    ClearAtExit clear_store(store);
+    BOOST_REQUIRE(ipc::ClientHandshake(*link.client, "the-cookie", "main").ok);
+
+    std::unique_ptr<interfaces::GuiState> gui_state = link.client->makeGuiState();
+    BOOST_REQUIRE(gui_state);
+
+    struct Answer {
+        uint64_t request_id;
+        std::vector<std::string> addresses;
+        std::string error;
+    };
+    Mutex received_mutex;
+    std::vector<Answer> received; // guarded by received_mutex
+    std::unique_ptr<interfaces::Handler> handler = gui_state->handleUnbookedReceiveAddresses(
+        [&](uint64_t request_id, const std::vector<std::string>& addresses, const std::string& error) {
+            LOCK(received_mutex);
+            received.push_back(Answer{request_id, addresses, error});
+        });
+
+    // The request reaches the node with its id.
+    gui_state->requestUnbookedReceiveAddresses(9);
+    {
+        LOCK(store.mutex);
+        BOOST_REQUIRE_EQUAL(store.unbooked_requests.size(), 1U);
+        BOOST_CHECK_EQUAL(store.unbooked_requests[0], 9U);
+    }
+
+    // A list, then an error, reach the client's handler in order, intact.
+    store.AnswerUnbooked(9, {"a", "b"}, "");
+    store.AnswerUnbooked(9, {}, "no wallet is loaded");
+
+    LOCK(received_mutex);
+    BOOST_REQUIRE_EQUAL(received.size(), 2U);
+    BOOST_CHECK_EQUAL(received[0].request_id, 9U);
+    BOOST_CHECK(received[0].addresses == (std::vector<std::string>{"a", "b"}));
+    BOOST_CHECK(received[0].error.empty());
+    BOOST_CHECK_EQUAL(received[1].request_id, 9U);
+    BOOST_CHECK(received[1].addresses.empty());
+    BOOST_CHECK_EQUAL(received[1].error, "no wallet is loaded");
 }
 
 // A GUI that goes away while the node still holds its fn: the node's next push

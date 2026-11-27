@@ -12,6 +12,7 @@
 #include <functional>
 #include <memory>
 #include <string>
+#include <vector>
 
 class CBasicKeyStore;
 class CWallet;
@@ -157,6 +158,13 @@ public:
      *  asked for, tagged with that request's id.
      *  @note emitted from the cache's timer thread with no lock held. */
     ADD_SIGNALS_DECL_WRAPPER(GuiStateMRCQuote, void, uint64_t request_id, const interfaces::MRCSnapshot& quote);
+
+    /** The node's GUI state cache answers a GUI's "add existing" picker request
+     *  (interfaces::GuiState::requestUnbookedReceiveAddresses) with the list, or
+     *  an empty list and the error, tagged with that request's id.
+     *  @note emitted from the cache's picker thread with no lock held. */
+    ADD_SIGNALS_DECL_WRAPPER(GuiStateUnbookedReceiveAddresses, void, uint64_t request_id,
+                             const std::vector<std::string>& addresses, const std::string& error);
 
     /** A mandatory (contract) sidestake entry was added, deleted, or reverted.
      *  Payload-free refetch trigger for the GUI sidestake table (the mandatory

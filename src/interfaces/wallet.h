@@ -628,6 +628,7 @@ public:
 
     //! Owned addresses with a positive balance that are not yet in the address
     //! book (encoded), for the "add existing receive address" picker.
+    //! Takes cs_main and walks the whole wallet, so it can wait on block connection: never call it on the GUI thread. The GUI's picker gets this list from the core's GUI state cache (GuiState::requestUnbookedReceiveAddresses).
     virtual std::vector<std::string> getUnbookedReceiveAddresses() = 0;
 
     //! Register a handler for encryption/lock status changes.

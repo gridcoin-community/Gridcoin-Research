@@ -26,6 +26,8 @@ add_executable(test_gridcoin-qt
     filetransferdialogtests.cpp
     guiipcworkertests.cpp
     walletmodeltests.cpp
+    editaddressdialogtests.cpp
+    editaddressdialogtests.h
     tablemodelindextests.cpp
     ../../test/wine.cpp
 )

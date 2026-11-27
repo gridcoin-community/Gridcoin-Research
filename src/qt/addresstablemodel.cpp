@@ -141,6 +141,11 @@ AddressTableModel::AddressTableModel(WalletModel* parent)
     columns << tr("Label") << tr("Address");
     priv = new AddressTablePriv(parent, this);
     priv->refreshAddressTable();
+
+    // The picker's list is asked of the core through the wallet model, which
+    // answers on the GUI thread; relay it, signal to signal.
+    connect(parent, &WalletModel::unbookedReceiveAddressesLoaded,
+            this, &AddressTableModel::unbookedReceiveAddressesLoaded);
 }
 
 AddressTableModel::~AddressTableModel()
@@ -422,14 +427,9 @@ bool AddressTableModel::removeRows(int row, int count, const QModelIndex &parent
     return true;
 }
 
-QStringList AddressTableModel::unbookedReceiveAddresses() const
+quint64 AddressTableModel::requestUnbookedReceiveAddresses()
 {
-    QStringList result;
-    for (const std::string& address : walletModel->wallet().getUnbookedReceiveAddresses()) {
-        result.append(QString::fromStdString(address));
-    }
-    result.sort();
-    return result;
+    return walletModel->requestUnbookedReceiveAddresses();
 }
 
 /* Look up label for address in address book, if not found return empty string.

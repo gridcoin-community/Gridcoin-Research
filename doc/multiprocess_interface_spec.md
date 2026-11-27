@@ -283,7 +283,7 @@ handshake (`ipc/handshake.h`):
 
 ```cpp
 constexpr uint32_t IPC_SCHEMA_MAJOR   = 5;
-constexpr uint32_t IPC_SCHEMA_MINOR   = 0;
+constexpr uint32_t IPC_SCHEMA_MINOR   = 1;
 constexpr uint32_t IPC_PROTOCOL_VERSION = 2;
 ```
 
@@ -381,6 +381,17 @@ an older node gets `UNIMPLEMENTED` for `beginElevation`, so the same actions
 fail. The major turns both pairings into the "use matching builds" refusal at
 connect. Major 5 carries everything major 4 had through minor 2, and the minor
 restarts at 0.
+
+**Minor 1** (under major 5). `GuiState` gained
+`requestUnbookedReceiveAddresses @6` and `handleUnbookedReceiveAddresses @7`,
+with the `UnbookedReceiveAddressesCallback` interface (`gui_state.capnp`), and
+`WalletCoinSource` gained `requestReload @18` and `consumeReloadEnded @19`
+(`wallet_coin_source.capnp`). The node's GUI state cache computes the "add
+existing" picker's list and runs the coin list's rebuild on core threads of its
+own, on the GUI's request, so `~WalletModel` waits for neither. Additive, but
+against an older node the GUI's first request gets the `UNIMPLEMENTED` reply,
+and the picker and the coin list then fail to load. The minor turns that
+pairing into the "Update the node" hard fail at connect.
 
 
 Rules a client must honor (from `ClientHandshake` and design §4.2):
@@ -831,8 +842,9 @@ and is 0 before the first update).
 - `handleChanged(fn)` subscribes to the snapshots. Unlike the refetch triggers of
   §5.1 the push carries the data: keep a snapshot when its sequence is higher than
   the last one's. The cache makes updates only while at least one subscription
-  is alive, so a node with no front end attached pays nothing for them (only a
-  quote, below, is computed then); the first subscription also asks for a forced
+  is alive, so a node with no front end attached pays nothing for them (only
+  what a front end asks for, a quote or the picker's list below, is computed
+  then); the first subscription also asks for a forced
   update, so a front end that attaches gets a computed snapshot within one timer
   cycle.
 - `current()` returns the cache's copy (a leaf lock in the node, never `cs_main`),
@@ -846,10 +858,22 @@ and is 0 before the first update).
   request it takes: one whose figures cannot be computed carries the error
   (`create_error`, `create_error_msg`). One quote is pending at a time and only
   the latest request is answered, so drop an answer whose id is not your latest.
+- `requestUnbookedReceiveAddresses(request_id)` asks for the "add existing"
+  picker's list and returns at once; `handleUnbookedReceiveAddresses(fn)`
+  receives the list, or an empty list and an error, with the request's id.
+  Every request taken while the cache's picker thread runs is answered, and
+  requests taken together share one walk under `cs_main`, on a node thread of
+  its own. Once the cache has stopped, or its picker thread has ended on an
+  unhandled exception, a request still queued or waiting for its walk gets no
+  answer.
 
 The node computes updates at most every four seconds (once synced, about one a
-block) and serves requests and quotes outside that interval, on its cache's own
-thread. Callbacks arrive on the cache's own thread; a handler enqueues the
+block), in `SetBestChain`'s scope after a tip change or on its cache's timer
+thread, and serves requests and quotes outside that interval on the timer. It
+computes the picker's list on a thread of the cache's own. Callbacks fire on a
+core thread: in the multiprocess node, its one notification dispatcher thread,
+grc-ipc-notify; in the monolithic build, the cache's timer thread for snapshots
+and quotes, and its picker thread for the picker's list. A handler enqueues the
 value and returns (§5.1).
 
 ---

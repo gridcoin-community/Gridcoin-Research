@@ -12,9 +12,11 @@
 //!
 //! FakeCompute is a Compute whose parts count their calls, on a manual clock that
 //! moves only when a case moves it, with a run_under_cs_main that takes the real
-//! cs_main and counts the timer's acquisitions. Deliveries and Quotes record what
-//! the cache delivers, and on which thread. InScope is what SetBestChain does:
-//! mark the parts dirty and call UpdateLocked under cs_main.
+//! cs_main and counts the timer's acquisitions. Deliveries, Quotes and
+//! UnbookedAnswers record what the cache delivers, and on which thread. A Gate
+//! holds a scan in progress until a case opens it, and CoinJobs makes the coin
+//! jobs a case schedules. InScope is what SetBestChain does: mark the parts
+//! dirty and call UpdateLocked under cs_main.
 //!
 
 #include "amount.h"
@@ -47,6 +49,12 @@ constexpr auto WAIT_LIMIT = 10s;
 //! The internal name of the cache's timer thread.
 constexpr char TIMER_THREAD[] = "grc-guistate";
 
+//! The internal name of the scan thread that walks the picker's list.
+constexpr char PICKER_THREAD[] = "grc-picker";
+
+//! The internal name of the scan thread that runs the coin list's rebuilds.
+constexpr char COIN_THREAD[] = "grc-coinlist";
+
 //!
 //! \brief A Compute whose parts count their calls and fill only what a case
 //! reads, on a manual clock.
@@ -61,6 +69,7 @@ public:
     std::atomic<int> etts_calls{0};
     std::atomic<int> researcher_calls{0};
     std::atomic<int> quote_calls{0};
+    std::atomic<int> unbooked_calls{0};
 
     //! Calls of run_under_cs_main: only the timer makes them.
     std::atomic<int> cs_main_runs{0};
@@ -79,6 +88,9 @@ public:
     //! The quote throws while set.
     std::atomic<bool> quote_throws{false};
 
+    //! The picker's walk throws while set.
+    std::atomic<bool> unbooked_throws{false};
+
     //! What the last quote read of the snapshot it was handed.
     std::atomic<uint64_t> quote_saw_sequence{0};
     std::atomic<bool> quote_saw_researcher{false};
@@ -89,6 +101,10 @@ public:
     //! Run inside the chain part, with cs_main held. Set before the cache is
     //! constructed.
     std::function<void()> chain_hook;
+
+    //! Run at the start of the picker's walk, holding no lock. Set before the
+    //! cache is constructed.
+    std::function<void()> unbooked_hook;
 
     node::GuiCache::Compute Make()
     {
@@ -131,6 +147,15 @@ public:
             interfaces::MRCSnapshot quote;
             quote.fee = fee_boost;
             return quote;
+        };
+        // The picker's walk takes no lock: the real walk's locks are the
+        // wallet's own. So a case can hold a walk in progress without holding
+        // cs_main, and a quote can still take it.
+        compute.unbooked = [this]() {
+            ++unbooked_calls;
+            if (unbooked_hook) unbooked_hook();
+            if (unbooked_throws) throw std::runtime_error("the unbooked walk failed");
+            return std::vector<std::string>{"b", "a"};
         };
         compute.out_of_sync = [this] { return out_of_sync.load(); };
         compute.now_ms = [this] { return clock_ms.load(); };
@@ -274,6 +299,72 @@ private:
 };
 
 //!
+//! \brief Records the picker's lists the cache answers, the thread that
+//! answered each, and whether that thread held any lock while it did. Its
+//! Make() serves as the cache's UnbookedFn and as a
+//! GuiState::UnbookedFn.
+//!
+class UnbookedAnswers
+{
+public:
+    struct Answer {
+        uint64_t request_id = 0;
+        std::vector<std::string> addresses;
+        std::string error;
+        std::string thread;
+    };
+
+    std::function<void(uint64_t, const std::vector<std::string>&, const std::string&)> Make()
+    {
+        return [this](uint64_t request_id, const std::vector<std::string>& addresses, const std::string& error) {
+            const bool no_lock_held = LockStackEmpty();
+            {
+                LOCK(m_mutex);
+                m_answers.push_back(Answer{request_id, addresses, error, util::ThreadGetInternalName()});
+                if (!no_lock_held) ++m_answered_under_a_lock;
+            }
+            m_cv.notify_all();
+        };
+    }
+
+    int AnsweredUnderALock()
+    {
+        LOCK(m_mutex);
+        return m_answered_under_a_lock;
+    }
+
+    //! Wait until at least \p count answers have arrived.
+    bool WaitForCount(size_t count)
+    {
+        const auto deadline = std::chrono::steady_clock::now() + WAIT_LIMIT;
+        WAIT_LOCK(m_mutex, lock);
+        while (m_answers.size() < count) {
+            if (m_cv.wait_until(lock, deadline) == std::cv_status::timeout) return false;
+        }
+        return true;
+    }
+
+    //! The answers so far, as an int so a case compares it with a plain number.
+    int Count()
+    {
+        LOCK(m_mutex);
+        return static_cast<int>(m_answers.size());
+    }
+
+    std::vector<Answer> Answers()
+    {
+        LOCK(m_mutex);
+        return m_answers;
+    }
+
+private:
+    Mutex m_mutex;
+    std::condition_variable m_cv;
+    std::vector<Answer> m_answers GUARDED_BY(m_mutex);
+    int m_answered_under_a_lock GUARDED_BY(m_mutex){0};
+};
+
+//!
 //! \brief Publishes a cache on a FakeCompute as the node's for a case,
 //! delivering through the uiInterface signals as init.cpp's does, and
 //! unpublishes and stops it at any exit. Declare the recorders its deliveries
@@ -290,6 +381,9 @@ public:
             interval, tick,
             [](uint64_t request_id, const interfaces::MRCSnapshot& quote) {
                 uiInterface.GuiStateMRCQuote(request_id, quote);
+            },
+            [](uint64_t request_id, const std::vector<std::string>& addresses, const std::string& error) {
+                uiInterface.GuiStateUnbookedReceiveAddresses(request_id, addresses, error);
             }));
     }
 
@@ -320,6 +414,97 @@ inline bool WaitUntil(const std::function<bool()>& condition)
     }
     return true;
 }
+
+//!
+//! \brief Holds the thread that passes it until a case opens it.
+//!
+//! The state only: it does nothing when it dies. A case declares its gates
+//! before the cache, so they outlive the cache's join of its threads, and one
+//! OpenGateOnExit per gate after the cache, so a failing case opens each gate
+//! before the cache stops.
+//!
+class Gate
+{
+public:
+    //! Mark the gate entered, then wait until it is opened.
+    void Pass()
+    {
+        WAIT_LOCK(m_mutex, lock);
+        m_entered = true;
+        while (!m_open) m_cv.wait(lock);
+    }
+
+    //! Wait until a thread has entered the gate.
+    bool WaitEntered()
+    {
+        return WaitUntil([this] { return WITH_LOCK(m_mutex, return m_entered); });
+    }
+
+    void Open()
+    {
+        {
+            LOCK(m_mutex);
+            m_open = true;
+        }
+        m_cv.notify_all();
+    }
+
+private:
+    Mutex m_mutex;
+    std::condition_variable m_cv;
+    bool m_entered GUARDED_BY(m_mutex){false};
+    bool m_open GUARDED_BY(m_mutex){false};
+};
+
+//! Opens a gate at any exit of a case. Declared after the cache.
+struct OpenGateOnExit
+{
+    Gate& gate;
+
+    ~OpenGateOnExit() { gate.Open(); }
+};
+
+//!
+//! \brief Makes the coin jobs a case schedules, and records where they ran.
+//! Declared before the cache, since a job writes here and can run until the
+//! cache's Stop() joins its coin-list thread.
+//!
+class CoinJobs
+{
+public:
+    //! A job that records its thread and its run, passes \p gate if it has
+    //! one, and returns a non-null reference.
+    node::GuiCache::CoinJob Make(Gate* gate = nullptr)
+    {
+        return [this, gate]() -> std::shared_ptr<void> {
+            {
+                LOCK(m_mutex);
+                m_threads.push_back(util::ThreadGetInternalName());
+                ++m_runs;
+            }
+            if (gate) gate->Pass();
+            return std::make_shared<int>(0);
+        };
+    }
+
+    int Runs()
+    {
+        LOCK(m_mutex);
+        return m_runs;
+    }
+
+    //! The internal name of the thread of the last run, or empty before one.
+    std::string LastThread()
+    {
+        LOCK(m_mutex);
+        return m_threads.empty() ? std::string{} : m_threads.back();
+    }
+
+private:
+    Mutex m_mutex;
+    std::vector<std::string> m_threads GUARDED_BY(m_mutex);
+    int m_runs GUARDED_BY(m_mutex){0};
+};
 
 } // namespace gui_cache_test
 

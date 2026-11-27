@@ -899,6 +899,8 @@ Gridcoin is a multi-threaded application. Key threads include:
 | `ThreadDumpAddress` | `src/net.cpp` | Periodically dumps known peer addresses to `peers.dat` |
 | RPC threads | `src/rpc/server.cpp` | Thread pool serving JSON-RPC requests |
 | `grc-guistate` | `src/node/gui_cache.cpp` | The GUI state cache's timer thread: computes the state the GUI needs (under `cs_main`, on this thread) and pushes it to the subscribed GUI; runs only while a GUI is subscribed |
+| `grc-picker` | `src/node/gui_cache.cpp` | The GUI state cache's picker thread: on a GUI's request, walks the wallet for the "add existing" picker's list (taking `cs_main` and `cs_wallet` itself) and pushes the answer; idle otherwise |
+| `grc-coinlist` | `src/node/gui_cache.cpp` | The GUI state cache's coin-list thread: on a GUI's request, runs a coin list's O(wallet) rebuild (taking `cs_main` and `cs_wallet` itself); idle otherwise |
 | Scheduler | `src/scheduler.cpp` | Runs deferred and periodic tasks |
 
 Ignoring IDE/editor files
@@ -1414,9 +1416,10 @@ GUI
     The action re-checks the state in the core and does not trust what the GUI
     last showed.
   - A push is computed by the core, never by the GUI: in SetBestChain's scope
-    under the `cs_main` it already holds, or on the cache's own thread, which
-    takes `cs_main` first. Updates triggered by blocks are at least four seconds
-    apart, so a catch-up makes a few pushes and not one per block.
+    under the `cs_main` it already holds, or on one of the cache's own threads,
+    each of which takes `cs_main` first. Updates triggered by blocks are at
+    least four seconds apart, so a catch-up makes a few pushes and not one per
+    block.
   - The GUI thread never blocks, even on a user action: the action runs off the
     GUI thread and reports back.
   - A rare race is never fixed with a lock that makes a freeze certain for

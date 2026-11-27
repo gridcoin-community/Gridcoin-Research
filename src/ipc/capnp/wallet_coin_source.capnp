@@ -43,6 +43,8 @@ interface WalletCoinSource $Proxy.wrap("interfaces::WalletCoinSource") {
     drainEvents @15 (context :Proxy.Context, maxBatch :UInt64) -> (result :List(WalletCoinEvent));
     consumeNeedsResync @16 (context :Proxy.Context) -> (result :Bool);
     noteAddressBookChanged @17 (context :Proxy.Context, address :Text, label :Text) -> ();
+    requestReload @18 (context :Proxy.Context) -> ();
+    consumeReloadEnded @19 (context :Proxy.Context) -> (error :Text, result :Bool);
 }
 
 # --- Records and aggregates (GRC::CoinRecord / GRC::CoinGroupInfo) ---

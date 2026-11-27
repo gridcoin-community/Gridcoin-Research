@@ -91,9 +91,9 @@ CoinSelectionModel::CoinSelectionModel(WalletModel* wallet_model,
     connect(m_fetch_timer, &QTimer::timeout, this, &CoinSelectionModel::onFetchTimeout);
 
     // Register before wiring the drain so the registration Reset is the first
-    // event this model sees; the initial wallet scan runs on WalletModel's
-    // coin-load worker (never this GUI thread — the scan holds
-    // cs_main+cs_wallet and is O(wallet)).
+    // event this model sees; the initial wallet scan runs on the core's
+    // coin-list thread, on WalletModel's request (never this GUI thread — the
+    // scan holds cs_main+cs_wallet and is O(wallet)).
     m_source.registerView(m_view_id, m_mode, GRC::COINCOL_AMOUNT, /*desc*/ 1);
 
     // Reconcile the GUI-side selection against the store (prunes stale

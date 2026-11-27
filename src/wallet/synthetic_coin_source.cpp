@@ -7,6 +7,7 @@
 #include "amount.h"
 #include "arith_uint256.h"
 #include "logging.h"
+#include "sync.h"
 #include "tinyformat.h"
 #include "wallet/wallet_event_queue.h"
 #include "wallet/walletcoinstore.h"
@@ -105,8 +106,8 @@ public:
 
     GRC::CoinGroupsResult reloadAndSnapshot() override
     {
-        // The synthetic snapshot was installed at construction; the load
-        // thread's call is a harmless no-op that reports the directory.
+        // The synthetic snapshot was installed at construction, so a call is a
+        // harmless no-op that reports the directory; requestReload() below does not call it.
         GRC::CoinGroupsResult result;
         result.groups = m_store.getGroupDirectory();
         result.total_groups = static_cast<int>(result.groups.size());
@@ -125,9 +126,31 @@ public:
         // Synthetic records have no address book.
     }
 
+    // The rebuild is the no-op reloadAndSnapshot() already is for the seeded
+    // store, so a request takes no core lock and queues nothing: its end is
+    // recorded at once, with no error.
+    void requestReload() override
+    {
+        LOCK(m_reload_mutex);
+        m_reload_ended = true;
+    }
+
+    bool consumeReloadEnded(std::string& error) override
+    {
+        LOCK(m_reload_mutex);
+        if (!m_reload_ended) return false;
+        m_reload_ended = false;
+        error.clear();
+        return true;
+    }
+
 private:
     GRC::WalletCoinEventQueue m_queue;
     GRC::WalletCoinStore m_store;
+
+    //! A requested rebuild's end, until consumeReloadEnded takes it. A leaf.
+    Mutex m_reload_mutex;
+    bool m_reload_ended GUARDED_BY(m_reload_mutex){false};
 };
 
 SyntheticCoinSourceImpl::SyntheticCoinSourceImpl(int total_coins, int groups)

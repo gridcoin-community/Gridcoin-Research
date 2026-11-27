@@ -2,10 +2,12 @@
 #define BITCOIN_QT_WALLETMODEL_H
 
 #include <QObject>
-#include <future>
+#include <QPointer>
+#include <QStringList>
 #include <map>
 #include <memory>
 #include <optional>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -64,6 +66,14 @@ public:
     //! model asks the wallet for no balance scan; balanceChanged is emitted
     //! when a pushed figure differs from the last one shown.
     void setGuiState(GuiStateCache* cache);
+
+    //! Ask the core for the "add existing receive address" picker's list, and
+    //! return the request's serial. The answer comes as
+    //! unbookedReceiveAddressesLoaded(), queued, with that serial: a list, or
+    //! an empty list and an error. Each request is answered with its own
+    //! serial; every one is posted, and the core's walk serves all of those
+    //! queued before it starts.
+    quint64 requestUnbookedReceiveAddresses();
 
     enum StatusCode // Returned by sendCoins
     {
@@ -254,16 +264,18 @@ public:
     //! coinEventsDrained. THE single drain point for the coin channel:
     //! drainEvents is destructive, and the consolidate-wizard flow can have
     //! two live coin views — per-consumer drain timers would steal each
-    //! other's events. Driven by the periodic tick; also called synchronously
+    //! other's events. Driven by the periodic tick when it drains transaction
+    //! events, or while a coin load is in flight; also called synchronously
     //! by CoinSelectionModel's fetch/sort paths.
     void drainCoinEventQueue();
 
-    //! Run the coin store's initial wallet scan (reloadAndSnapshot) on the
-    //! process's coin-load GuiIpcWorker — never the GUI thread: the scan holds
-    //! cs_main + cs_wallet and is O(wallet). Idempotent unless \p force
-    //! (the bulk-resync path). Completion is drained and then announced via
-    //! coinSourceLoadFinished(); a scan that fails, or finds no worker to run
-    //! on, is announced via coinSourceLoadFailed().
+    //! Ask the core to rebuild the coin store (WalletCoinSource::requestReload)
+    //! and return at once: the rebuild holds cs_main + cs_wallet and is
+    //! O(wallet), so it runs on a core thread of its own (the GUI state cache's
+    //! coin-list thread), never on the GUI thread. Idempotent unless \p force
+    //! (the bulk-resync path). Its end is read by drainCoinEventQueue, then
+    //! drained and announced via coinSourceLoadFinished(); a rebuild that fails,
+    //! or a request the core cannot take, is announced via coinSourceLoadFailed().
     void ensureCoinSourceLoaded(bool force = false);
 
     //! True once a coin-store scan has completed and been drained. A consumer
@@ -291,10 +303,6 @@ private:
     //! The windowed coin-control boundary (#3183). Not owned (see coinSource()).
     interfaces::WalletCoinSource& m_coin_source;
 
-    //! Ready once the latest coin-store scan's job has finished on the worker
-    //! (see ensureCoinSourceLoaded). The destructor waits for it: the job
-    //! reports to this model.
-    std::future<void> m_coin_load_done;
     bool m_coin_load_started = false;
     //! Set on the GUI thread when a completed scan has been drained (see
     //! isCoinSourceLoaded).
@@ -353,6 +361,18 @@ private:
 
     //! The connection to the cache's changed(), kept so a new cache replaces it.
     QMetaObject::Connection m_gui_state_connection;
+    //! The cache the core's pushed state arrives through (setGuiState), and
+    //! the picker's list with it. Null until set, or once the cache is gone.
+    QPointer<GuiStateCache> m_gui_state_cache;
+    //! The connection to the cache's unbookedReceiveAddressesAnswered().
+    QMetaObject::Connection m_unbooked_connection;
+
+    void postUnbookedRequest(quint64 serial);
+    void unbookedReceiveAddressesAnswered(quint64 request_id, const QStringList& addresses, const QString& error);
+    void unbookedLoadEnded(quint64 serial, const QStringList& addresses, const QString& error);
+    quint64 m_unbooked_serial = 0;
+    //! The requests posted and not yet answered. Each answer is taken once.
+    std::set<quint64> m_unbooked_outstanding;
 
     //! Retained interface notification handlers (status and address-book
     //! changes), cleared on teardown. interfaces::Handler disconnects on
@@ -427,6 +447,10 @@ signals:
     //! loaded, coinSourceLoadFinished() is not emitted for it, and the next
     //! ensureCoinSourceLoaded() scans again. Emitted on the GUI thread.
     void coinSourceLoadFailed(const QString& message);
+
+    //! The answer to requestUnbookedReceiveAddresses() \p serial, sorted, or an
+    //! empty list and \p error. Emitted on the GUI thread.
+    void unbookedReceiveAddressesLoaded(quint64 serial, const QStringList& addresses, const QString& error);
 
     // Signal that balance in wallet changed
     void balanceChanged(qint64 balance, qint64 stake, qint64 unconfirmedBalance, qint64 immatureBalance);

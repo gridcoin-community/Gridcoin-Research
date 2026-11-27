@@ -17,6 +17,7 @@
 #include <functional>
 #include <memory>
 #include <string>
+#include <vector>
 
 namespace interfaces {
 
@@ -76,14 +77,15 @@ struct GuiStateSnapshot
 //! snapshot the node pushes, and the requests a GUI may make of it.
 //!
 //! No method takes cs_main or waits for the node's work: a read takes the
-//! cache's leaf lock alone, and a request only records itself for the cache's
-//! timer, which takes cs_main on its own thread and answers through a
-//! registered fn. In the multiprocess build each call is an IPC round trip to
-//! the node, which answers at once, and the fns are called back from it.
+//! cache's leaf lock alone, and a request only records itself for one of the
+//! cache's threads (the timer for a quote, the picker thread for the picker's
+//! list), which takes cs_main on its own and answers through a registered fn.
+//! In the multiprocess build each call is an IPC round trip to the node, which
+//! answers at once, and the fns are called back from it.
 //!
 //! The cache makes no update while no GUI is subscribed (handleChanged), so a
-//! node with no GUI attached pays nothing for it; only a quote a GUI asks for is
-//! computed then.
+//! node with no GUI attached pays nothing for it; only what a GUI asks for (a
+//! quote, or the picker's list) is computed then.
 //!
 class GuiState
 {
@@ -95,8 +97,10 @@ public:
     //! first update.
     virtual GuiStateSnapshot current() = 0;
 
-    //! Receives every snapshot the cache publishes, on the cache's timer thread,
-    //! holding no lock. The sequences never decrease but may repeat, so keep a
+    //! Receives every snapshot the cache publishes on a core thread, holding no
+    //! lock: the cache's timer thread when delivery is Inline (the monolithic
+    //! build), the notification dispatcher thread when it is Dispatched (the
+    //! multiprocess node). The sequences never decrease but may repeat, so keep a
     //! snapshot only when its sequence is higher than the last one's. The fn must
     //! only hand the snapshot off (interfaces/handler.h, THE HANDLER CONTRACT).
     using ChangedFn = std::function<void(const GuiStateSnapshot&)>;
@@ -124,12 +128,36 @@ public:
     //! one replaces it, so only the latest is answered.
     virtual void requestMRCQuote(CAmount fee_boost, uint64_t request_id) = 0;
 
-    //! Receives each quote answer, on the cache's timer thread, holding no lock,
-    //! with the id of the request it answers.
+    //! Receives each quote answer on a core thread, holding no lock, with the id
+    //! of the request it answers: the cache's timer thread when delivery is
+    //! Inline (the monolithic build), the notification dispatcher thread when it
+    //! is Dispatched (the multiprocess node).
     using MRCQuoteFn = std::function<void(uint64_t request_id, const MRCSnapshot&)>;
 
     //! Subscribe to the quote answers (GuardNotify-wrapped).
     virtual std::unique_ptr<Handler> handleMRCQuote(MRCQuoteFn fn) = 0;
+
+    //! Ask for the "add existing receive address" picker's list: the wallet's
+    //! receive addresses with a balance and no address-book entry
+    //! (Wallet::getUnbookedReceiveAddresses). Returns at once. The cache's
+    //! picker thread computes it, never its timer, and answers the
+    //! handleUnbookedReceiveAddresses fns with request_id. Every request
+    //! taken while the cache's picker thread runs is answered, and requests
+    //! taken together share one walk. Once the cache has stopped, or its picker
+    //! thread has ended on an unhandled exception, a request still queued or
+    //! waiting for its walk gets no answer. One that cannot be computed is
+    //! answered with an empty list and the error.
+    virtual void requestUnbookedReceiveAddresses(uint64_t request_id) = 0;
+
+    //! Receives each answer holding no lock: on the cache's picker thread when
+    //! delivery is Inline (the monolithic build), on the notification dispatcher
+    //! thread when it is Dispatched (the multiprocess node), and inside the
+    //! request from the GUI's NoGuiState stand-in (no cache in the core).
+    using UnbookedFn = std::function<void(uint64_t request_id, const std::vector<std::string>& addresses,
+                                          const std::string& error)>;
+
+    //! Subscribe to the answers (GuardNotify-wrapped).
+    virtual std::unique_ptr<Handler> handleUnbookedReceiveAddresses(UnbookedFn fn) = 0;
 };
 
 //! Return a GuiState over the node's GUI state cache, or null if the cache is
