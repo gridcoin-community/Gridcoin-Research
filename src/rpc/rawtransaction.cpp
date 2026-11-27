@@ -196,6 +196,13 @@ UniValue PollPayloadToJson(const GRC::ContractPayload& payload)
     UniValue out(UniValue::VOBJ);
 
     out.pushKV("version", (int)poll.m_version);
+
+    // A REMOVE by txid (version 4, from v15) carries only the poll's id.
+    if (poll.m_version == GRC::PollPayload::REMOVE_BY_TXID_VERSION) {
+        out.pushKV("poll_txid", poll.m_poll_txid.ToString());
+        return out;
+    }
+
     out.pushKV("title", poll.m_poll.m_title);
     out.pushKV("question", poll.m_poll.m_question);
     out.pushKV("url", poll.m_poll.m_url);

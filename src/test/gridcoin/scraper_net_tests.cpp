@@ -9,6 +9,7 @@
 #include "key_io.h"
 #include "serialize.h"
 #include "streams.h"
+#include "test/state_guard.h"
 #include "util.h"
 #include "version.h"
 
@@ -18,7 +19,9 @@
 #include <memory>
 #include <vector>
 
-BOOST_AUTO_TEST_SUITE(scraper_net_tests)
+// The receive check reads the scraper sync state, and a read keeps the state.
+// The guard puts it back.
+BOOST_AUTO_TEST_SUITE(scraper_net_tests, *boost::unit_test::fixture<grc_test::StateGuard>())
 
 //!
 //! An empty part is a peer or filesystem condition, not a programming error.
@@ -224,9 +227,10 @@ namespace {
 //! key it carries, as a manifest is. nTime is current so IsManifestCurrent()
 //! passes, and a chainless test process is out of sync by age, which skips
 //! authorization.
-CDataStream ManifestPrefix(size_t part_count, int beacon_list,
-                           const std::vector<int>& project_part1s,
-                           const std::vector<unsigned>& project_partcs = {})
+//!
+//! This one stops before the project dentries, for a case that writes their
+//! count itself.
+CDataStream ManifestPrefixBeforeProjects(size_t part_count, int beacon_list)
 {
     CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
 
@@ -234,6 +238,22 @@ CDataStream ManifestPrefix(size_t part_count, int beacon_list,
     for (size_t i = 0; i < part_count; ++i) {
         vph[i] = Hash(std::vector<unsigned char>{static_cast<unsigned char>(i + 1)});
     }
+
+    ss << vph;
+    ss << CPubKey();
+    ss << EncodeDestination(CTxDestination(CPubKey().GetID()));
+    ss << static_cast<int64_t>(GetAdjustedTime());
+    ss << uint256();
+    ss << beacon_list << static_cast<unsigned int>(0);
+
+    return ss;
+}
+
+CDataStream ManifestPrefix(size_t part_count, int beacon_list,
+                           const std::vector<int>& project_part1s,
+                           const std::vector<unsigned>& project_partcs = {})
+{
+    CDataStream ss = ManifestPrefixBeforeProjects(part_count, beacon_list);
 
     std::vector<CScraperManifest::dentry> projects;
     for (size_t i = 0; i < project_part1s.size(); ++i) {
@@ -244,12 +264,6 @@ CDataStream ManifestPrefix(size_t part_count, int beacon_list,
         projects.push_back(d);
     }
 
-    ss << vph;
-    ss << CPubKey();
-    ss << EncodeDestination(CTxDestination(CPubKey().GetID()));
-    ss << static_cast<int64_t>(GetAdjustedTime());
-    ss << uint256();
-    ss << beacon_list << static_cast<unsigned int>(0);
     ss << projects;
 
     return ss;
@@ -452,9 +466,11 @@ BOOST_AUTO_TEST_CASE(unserializecheck_refuses_a_reference_one_past_the_end)
 //!
 BOOST_AUTO_TEST_CASE(unserializecheck_refuses_too_many_projects)
 {
-    // One part, and one dentry too many -- all referencing part 0, so nothing
-    // but the project cap can be what rejects this.
-    CDataStream ss = ManifestPrefix(1, 0, std::vector<int>(1025, 0));
+    // A count of one dentry too many, and no dentry behind it, as the part-hash
+    // case above is built. Nothing but the project cap refuses this: a count the
+    // cap admits is read, and the read throws.
+    CDataStream ss = ManifestPrefixBeforeProjects(1, 0);
+    WriteCompactSize(ss, 1025);
 
     auto manifest = std::shared_ptr<CScraperManifest>(new CScraperManifest());
     unsigned int banscore = 0;
@@ -465,16 +481,17 @@ BOOST_AUTO_TEST_CASE(unserializecheck_refuses_too_many_projects)
 }
 
 //!
-//! The boundary from the other side: exactly at the cap is admitted, and fails
-//! later on the truncated stream instead. The cap is MAX_MANIFEST_PROJECTS,
-//! i.e. 1024 dentries, which is what this pins. (The often-quoted "~1020
-//! projects" is a downstream consequence of that ceiling, not the ceiling
-//! itself: 1024 parts allows 1023 dentries once the beacon list takes one, and
-//! roughly three of those are pseudo-projects.)
+//! The boundary from the other side: a count exactly at the cap is admitted by
+//! the cap, and fails on the truncated stream instead. The cap is
+//! MAX_MANIFEST_PROJECTS, i.e. 1024 dentries, which is what this pins. (The
+//! often-quoted "~1020 projects" is a downstream consequence of that ceiling,
+//! not the ceiling itself: 1024 parts allows 1023 dentries once the beacon list
+//! takes one, and roughly three of those are pseudo-projects.)
 //!
 BOOST_AUTO_TEST_CASE(unserializecheck_admits_projects_at_the_cap)
 {
-    CDataStream ss = ManifestPrefix(1, 0, std::vector<int>(1024, 0));
+    CDataStream ss = ManifestPrefixBeforeProjects(1, 0);
+    WriteCompactSize(ss, 1024);
 
     auto manifest = std::shared_ptr<CScraperManifest>(new CScraperManifest());
     unsigned int banscore = 0;

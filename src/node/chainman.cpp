@@ -25,6 +25,7 @@
 #include "gridcoin/tally.h"
 #include "gridcoin/contract/contract.h"
 #include "gridcoin/contract/registry.h"
+#include "gridcoin/voting/payloads.h"
 #include "gridcoin/staking/chain_trust.h"
 #include "util.h"
 #include "util/time.h"
@@ -51,11 +52,19 @@ extern CWallet* pwalletMain;
 
 void UpdateSyncTime(const CBlockIndex* const pindexBest)
 {
+    // The scraper sync state is given the age it had reached before the block
+    // time changes, and the new age after.
+    EvaluateScraperSync();
+
     if (pindexBest && pindexBest->pprev) {
         g_previous_block_time.store(pindexBest->pprev->GetBlockTime());
     } else {
         g_previous_block_time.store(0);
     }
+
+    g_scraper_sync_in_force.store(pindexBest != nullptr && IsV15Enabled(pindexBest->nHeight + 1));
+
+    EvaluateScraperSync();
 
     if (!OutOfSyncByAge()) {
         g_nTimeBestReceived.store(GetAdjustedTime());
@@ -129,6 +138,10 @@ static bool DisconnectBlocksBatch(CTxDB& txdb, list<CTransaction>& vResurrect, u
     // rebuilt lives at that call site.
     int sb_cross_count = 0;
 
+    // From block version 15, set when a superblock disconnect finds the registry's superblock state not current
+    // (BeaconRegistry::SuperblockStateCurrent). The registry is then rebuilt below.
+    bool stale_superblock_state = false;
+
     while(pindexBest != pcommon)
     {
         if(!pindexBest->pprev)
@@ -171,18 +184,28 @@ static bool DisconnectBlocksBatch(CTxDB& txdb, list<CTransaction>& vResurrect, u
             GRC::Tally::ForgetRewardBlock(pindexBest);
         }
 
+        // From block version 15 the block is reverted in the inverse order of its connection: its contracts first,
+        // in reverse, then its superblock, which connection applies before the contracts. Below block version 15 the
+        // superblock is reverted first and the contracts after it, in block order, as before.
+        const bool v15_revert_order = IsV15Enabled(pindexBest->nHeight);
+
+        if (v15_revert_order && pindexBest->IsContract()) {
+            GRC::RevertContracts(block, pindexBest);
+        }
+
         if (pindexBest->IsSuperblock()) {
             // Revert beacon activations which were done by the superblock to revert and resurrect pending records
-            // for the reverted activations. This is safe to do before the transactional level reverts with beacon
-            // contracts, because any beacon that is activated CANNOT have been a new advertisement in the superblock
-            // itself. It would not be verified. AND if the beacon is a renewal, it would never be in the activation list
-            // for a superblock. We call GetBeaconRegistry directly here, because the IHandler class does not have
-            // a virtual method that corresponds to this call, as it is only relevant to beacons.
-            GRC::GetBeaconRegistry().Deactivate(pindexBest->GetBlockHash());
+            // for the reverted activations. We call GetBeaconRegistry directly here, because the IHandler class does
+            // not have a virtual method that corresponds to this call, as it is only relevant to beacons.
+            if (IsV15Enabled(pindexBest->nHeight) && !GRC::GetBeaconRegistry().SuperblockStateCurrent(pindexBest->GetBlockHash())) {
+                stale_superblock_state = true;
+            }
 
-            // Count it so we can decide after the loop whether to flag a beacon-registry rebuild
-            // for the next startup (the Deactivate-via-m_expired_pending path is only correct
-            // for one SB at a time; see the comment above the loop).
+            GRC::GetBeaconRegistry().Deactivate(pindexBest->GetBlockHash(), pindexBest->nHeight);
+
+            // Count it so we can decide after the loop whether to rebuild the beacon registry in-line
+            // (the Deactivate-via-m_expired_pending path is only correct for one SB at a time; see the
+            // comment above the loop).
             ++sb_cross_count;
 
             GRC::Quorum::PopSuperblock(pindexBest);
@@ -199,24 +222,8 @@ static bool DisconnectBlocksBatch(CTxDB& txdb, list<CTransaction>& vResurrect, u
 
         // Delete beacons, scraper entries, protocol entries, projects, polls and votes from contracts
         // in disconnected blocks.
-        if (pindexBest->IsContract())
-        {
-            // Skip coinbase and coinstake transactions:
-            for (auto tx = std::next(block.vtx.begin(), 2), end = block.vtx.end();
-                tx != end;
-                ++tx)
-            {
-                // This reverts contracts for those contract types which have handlers that properly handle
-                // contract level reversions.
-                for (const auto& contract : tx->GetContracts())
-                {
-                    if (GRC::RegistryBookmarks::IsRegistryRevertCapable(contract.m_type.Value())) {
-                        const GRC::ContractContext contract_context(contract, *tx, pindexBest);
-
-                        GRC::RegistryBookmarks::GetRegistryWithRevert(contract.m_type.Value()).Revert(contract_context);
-                    }
-                }
-            }
+        if (!v15_revert_order && pindexBest->IsContract()) {
+            GRC::RevertContracts(block, pindexBest);
         }
 
         // New best block
@@ -383,12 +390,16 @@ static bool DisconnectBlocksBatch(CTxDB& txdb, list<CTransaction>& vResurrect, u
         // Single-SB reorgs are NOT rebuilt: the existing Deactivate path is
         // fidelity-correct for that case and the rebuild would be wasted work on
         // the most common case.
-        if (sb_cross_count >= 2) {
-            LogPrintf("WARN: %s: reorg disconnected %d superblock(s); beacon registry expired-pending "
+        //
+        // Startup coherence recovery resets the beacon registry at one superblock crossed instead, because it abandons
+        // blocks without reverting them (RunStartupCoherenceRecovery, coherence.cpp).
+        if (sb_cross_count >= 2 || stale_superblock_state) {
+            LogPrintf("WARN: %s: reorg disconnected %d superblock(s)%s; beacon registry expired-pending "
                       "fidelity is degraded for the prior SB(s). Rebuilding beacon registry in-line "
                       "to maintain consensus.",
-                      __func__, sb_cross_count);
-            GRC::RebuildBeaconRegistry();
+                      __func__, sb_cross_count,
+                      stale_superblock_state ? ", superblock state not current" : "");
+            GRC::RebuildBeaconRegistry(GRC::BeaconRebuildReason::SUPERBLOCK_DISCONNECT);
         }
     }
 
@@ -664,6 +675,122 @@ EXCLUSIVE_LOCKS_REQUIRED(cs_main)
                     pwalletMain->NotifyTransactionChanged(pwalletMain, tx.GetHash(), CT_DELETED);
                 }
             }
+
+            // Retire the pooled polls whose title this block takes. Another poll with a title key this block
+            // registers can no longer register: from v15 it would be mined with its burn spent and nothing
+            // registered. The pool holds one poll per title key, so it is another user's poll, built before this
+            // block's poll reached that user's node. It leaves the pool with its descendants and is abandoned, which
+            // releases its inputs in its sender's wallet, as the MESSAGE sweep below does and for the reasons given
+            // there; like that sweep it is not undone if this block is disconnected, and the sender can send again.
+            //
+            // Keyed on the POLL ADDs this block carries, not on the registry: below v15 a poll the pool admitted while
+            // the registry already held its title registers by its txid and is left to be mined; from v15 the
+            // pool refuses one (AcceptToMemoryPool), and the sweep below retires one admitted before. This block's own
+            // transactions left the pool above. A legacy contract (below V11) names no title key.
+            for (const auto& block_tx : block.vtx) {
+                for (const auto& contract : block_tx.GetContracts()) {
+                    if (contract.m_type != GRC::ContractType::POLL || contract.m_version < 2
+                        || contract.m_action != GRC::ContractAction::ADD) {
+                        continue;
+                    }
+
+                    const std::string title_key =
+                        GRC::PollTitleKey(contract.SharePayloadAs<GRC::PollPayload>()->m_poll.m_title);
+
+                    uint256 pooled_hash;
+                    CTransaction pooled_tx;
+
+                    if (!mempool.HasPollForTitle(title_key, &pooled_hash)
+                        || !mempool.lookup(pooled_hash, pooled_tx)) {
+                        continue;
+                    }
+
+                    std::vector<CTransaction> removed;
+                    mempool.remove(pooled_tx, /*fRecursive=*/true, MemPoolRemovalReason::UNKNOWN, &removed);
+
+                    for (const auto& removed_tx : removed) {
+                        LogPrintf("%s: block %s takes the title of poll %s. Removed transaction %s from the mempool.",
+                                  __func__,
+                                  pindex->GetBlockHash().ToString(),
+                                  pooled_hash.ToString(),
+                                  removed_tx.GetHash().ToString());
+
+                        unsigned int inputs_released = 0;
+
+                        if (pwalletMain->AbandonTransaction(removed_tx.GetHash(), &inputs_released)) {
+                            LogPrintf("%s: Abandoned wallet transaction %s, releasing %u input(s).",
+                                      __func__, removed_tx.GetHash().ToString(), inputs_released);
+                        }
+                    }
+                }
+            }
+
+            // Retire the pooled polls the next block would not take: a poll with a claimed output this block spends,
+            // since every block checks the claim again (PollRegistry::BlockValidate), and from v15 a poll whose title
+            // the registry now holds, which the pool would refuse (TitleTakenAt). Each leaves with its descendants
+            // and is abandoned, as the title eviction above does and for the same reasons.
+            //
+            // Keyed on what this block spends, not on a full claim check: during a reorg a claimed output's
+            // transaction can be back in the pool, unconfirmed for a block or two, and a poll that waits for it is
+            // mined once it confirms.
+            {
+                const int next_height = pindex->nHeight + 1;
+                const GRC::PollRegistry& polls = GRC::GetPollRegistry();
+                const std::vector<uint256> pooled_polls = mempool.GetPollTxs();
+                std::set<COutPoint> spent_by_block;
+
+                if (!pooled_polls.empty()) {
+                    for (const auto& block_tx : block.vtx) {
+                        for (const auto& txin : block_tx.vin) {
+                            spent_by_block.insert(txin.prevout);
+                        }
+                    }
+                }
+
+                for (const uint256& poll_hash : pooled_polls) {
+                    CTransaction poll_tx;
+
+                    // Already gone as a descendant of one removed earlier in this loop.
+                    if (!mempool.lookup(poll_hash, poll_tx)) continue;
+
+                    bool admissible = true;
+                    for (const auto& contract : poll_tx.GetContracts()) {
+                        if (contract.m_type != GRC::ContractType::POLL || contract.m_version < 2) continue;
+
+                        if (polls.TitleTakenAt(contract, next_height)) {
+                            admissible = false;
+                            break;
+                        }
+
+                        const auto payload = contract.SharePayloadAs<GRC::PollPayload>();
+
+                        for (const auto& address_claim : payload->m_claim.m_balance_claim.m_address_claims) {
+                            for (const auto& txo : address_claim.m_outpoints) {
+                                if (spent_by_block.count(txo)) admissible = false;
+                            }
+                        }
+                        if (!admissible) break;
+                    }
+                    if (admissible) continue;
+
+                    std::vector<CTransaction> removed;
+                    mempool.remove(poll_tx, /*fRecursive=*/true, MemPoolRemovalReason::UNKNOWN, &removed);
+
+                    for (const auto& removed_tx : removed) {
+                        LogPrintf("%s: the block at height %d leaves poll %s unminable. Removed transaction %s from "
+                                  "the mempool.",
+                                  __func__, pindex->nHeight, poll_hash.ToString(), removed_tx.GetHash().ToString());
+
+                        unsigned int inputs_released = 0;
+
+                        if (pwalletMain->AbandonTransaction(removed_tx.GetHash(), &inputs_released)) {
+                            LogPrintf("%s: Abandoned wallet transaction %s, releasing %u input(s).",
+                                      __func__, removed_tx.GetHash().ToString(), inputs_released);
+                        }
+                    }
+                }
+            }
+
             // Retire MESSAGE contract transactions the chain has left behind.
             //
             // One accepted below the disable height never leaves the pool on its own
@@ -702,8 +829,7 @@ EXCLUSIVE_LOCKS_REQUIRED(cs_main)
             // Inert until the height is scheduled: MessageContractDisableHeight is
             // INT_MAX on every network (chainparams.cpp), so IsMessageContractEnabled()
             // is always true and none of this runs. Only the hidden
-            // -messagecontractdisableheight arg lowers it, for isolated testnet and
-            // regtest exercise.
+            // -messagecontractdisableheight arg lowers it, for regtest exercise.
             // Retirement is deliberately IRREVERSIBLE, and that is a choice
             // rather than an oversight. If this block is later disconnected the
             // swept transactions are valid again, but they were never mined so
@@ -804,6 +930,64 @@ EXCLUSIVE_LOCKS_REQUIRED(cs_main)
                 }
             }
 
+            // Retire beacon contracts that can no longer be mined. The same shape as the MESSAGE and POOL sweeps
+            // above, with BeaconRegistry::IsStrandedAtHeight owning the question, from the block version 15 height:
+            //
+            //  - A block carries beacon payload version 4 from that height and the lower versions below it, which
+            //    is also what AcceptToMemoryPool asks of the next block. From the height no block carries a
+            //    contract of a lower version.
+            //  - A version 4 payload is signed over the record its contract acts on. A contract signed over a
+            //    record cannot be mined once a block changes the record, as a superblock that activates the CPID's
+            //    pending beacon does.
+            //
+            // The sweep takes such a contract and its pooled descendants out of the pool, and the wallet abandons
+            // its own, which releases the coins.
+            //
+            // Only from the height on: a version 4 contract the pool holds below the height, after a
+            // reorganization across it, becomes valid again as the chain returns.
+            //
+            // Nothing runs below the height. From it, the cost is the listing of the pool's beacon contracts,
+            // which the pool's beacon index answers without a scan when it holds none, and one signature check
+            // for each that it does hold.
+            {
+                const int next_height = pindex->nHeight + 1;
+
+                if (IsV15Enabled(next_height)) {
+                    for (const uint256& beacon_hash : mempool.GetBeaconTxs()) {
+                        CTransaction beacon_tx;
+
+                        // Already gone as a descendant of one removed earlier in this loop.
+                        if (!mempool.lookup(beacon_hash, beacon_tx)) continue;
+
+                        bool left_behind = false;
+                        for (const auto& contract : beacon_tx.GetContracts()) {
+                            if (GRC::GetBeaconRegistry().IsStrandedAtHeight(contract, next_height)) {
+                                left_behind = true;
+                                break;
+                            }
+                        }
+                        if (!left_behind) continue;
+
+                        std::vector<CTransaction> removed;
+                        mempool.remove(beacon_tx, /*fRecursive=*/true,
+                                       MemPoolRemovalReason::UNKNOWN, &removed);
+
+                        for (const auto& tx : removed) {
+                            LogPrintf("%s: A beacon contract can no longer be mined at height %d. Removed "
+                                      "transaction %s from the mempool.",
+                                      __func__, next_height, tx.GetHash().ToString());
+
+                            unsigned int inputs_released = 0;
+
+                            if (pwalletMain->AbandonTransaction(tx.GetHash(), &inputs_released)) {
+                                LogPrintf("%s: Abandoned wallet transaction %s, releasing %u input(s).",
+                                          __func__, tx.GetHash().ToString(), inputs_released);
+                            }
+                        }
+                    }
+                }
+            }
+
             // Clean up spent outputs in wallet that are now not spent if mempool transactions erased above. This
             // is ugly and heavyweight and should be replaced when the upstream wallet code is ported. Unlike the
             // repairwallet rpc, this is silent.
@@ -835,6 +1019,17 @@ EXCLUSIVE_LOCKS_REQUIRED(cs_main)
         cnt_con++;
 
         UpdateSyncTime(pindexBest);
+
+        // The beacon registry is rebuilt from the chain's beacon contracts as the last block below the height
+        // connects, here on its way into the chain and again if a block at that height connects after a disconnect,
+        // so the first block version 15 block is validated on the rebuilt registry. The first block version
+        // 15 block's beacon contracts are judged against records of the registry (BeaconRegistry::ValidateAt,
+        // BlockValidate), and wallets sign theirs at this tip, so the rebuild comes before that block, not
+        // with it. Not at the genesis block, which a chain whose height is 1 has as its last block below it: there
+        // is no history to rebuild.
+        if (pindexBest->pprev && IsV15Enabled(nBestHeight + 1) && !IsV15Enabled(nBestHeight)) {
+            GRC::RebuildBeaconRegistry(GRC::BeaconRebuildReason::V15_ACTIVATION);
+        }
 
         if (IsV9Enabled_Tally(nBestHeight)
             && !IsV11Enabled(nBestHeight)

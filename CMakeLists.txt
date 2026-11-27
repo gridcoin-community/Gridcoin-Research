@@ -1055,6 +1055,12 @@ if(ENABLE_TESTS AND ENABLE_DAEMON)
         set(_functional_timeout_factor "--timeout-factor=${FUNCTIONAL_TEST_TIMEOUT_FACTOR}")
     endif()
 
+    # The ctest timeout of the functional_tests case, in seconds. While
+    # create_cache.py is not ported, test_runner.py runs the scripts one at a
+    # time, so the case lasts as long as the whole suite. The CI sanitizer job
+    # sets a longer one, because its node runs the suite several times slower.
+    set(FUNCTIONAL_TEST_CTEST_TIMEOUT 3600 CACHE STRING "ctest TIMEOUT of the functional_tests case, in seconds")
+
     find_package(Python3 COMPONENTS Interpreter)
     if(Python3_Interpreter_FOUND)
         set(PACKAGE_NAME "${PROJECT_NAME}")
@@ -1098,7 +1104,7 @@ if(ENABLE_TESTS AND ENABLE_DAEMON)
             set_tests_properties(functional_tests PROPERTIES
                 ENVIRONMENT "${_functional_env}"
                 RUN_SERIAL TRUE   # tests spin up daemons; don't overlap with other ctest cases
-                TIMEOUT 1800
+                TIMEOUT ${FUNCTIONAL_TEST_CTEST_TIMEOUT}
             )
 
             # Every RPC row and capnp method has an access class in

@@ -97,6 +97,8 @@ struct StateSnapshot
     int max_outbound{0};
 
     int64_t previous_block_time{0};
+    bool scraper_sync_latched{false};
+    bool scraper_sync_in_force{false};
     int64_t mock_time{0};
     bool mock_deterministic{false};
 
@@ -208,6 +210,8 @@ private:
     uint256 m_hash_best_chain;
     int m_n_best_height;
     int64_t m_previous_block_time;
+    bool m_scraper_sync_latched;
+    bool m_scraper_sync_in_force;
     BlockMap m_moved_index;
     std::unordered_set<uint256, BlockHasher> m_preexisting_keys;
 };

@@ -91,7 +91,7 @@ struct CTxMemPoolEvictionKey
 //! Phase 1 of the mempool modernization (#3029). The entry caches the fee, size,
 //! time, and entry height that callers previously recomputed, plus lightweight
 //! Gridcoin contract tags (contract type(s); the BEACON CPID; the MRC CPID, fee,
-//! and last-block-hash; the mandatory-sidestake flag) derived from a single pass
+//! and last-block-hash; the mandatory-sidestake flag; a POLL ADD's title key) derived from a single pass
 //! over the transaction's
 //! contracts. The tags are populated here but not yet consumed -- the O(n)
 //! contract scans they will replace remain in place until Phase 2 swaps them for
@@ -118,6 +118,9 @@ private:
     bool m_has_mandatory_sidestake{false};
     bool m_has_message{false};
     bool m_has_pool_register{false};
+    bool m_has_poll_add{false};
+    std::string m_poll_title_key;
+    uint256 m_removed_poll_txid; //!< Null unless a master-key REMOVE names its poll by txid (payload version 4).
 
 public:
     CTxMemPoolEntry(const CTransaction& tx, CAmount fee, int64_t time,
@@ -147,6 +150,13 @@ public:
     bool HasMandatorySidestake() const { return m_has_mandatory_sidestake; }
     bool HasMessageContract() const { return m_has_message; }
     bool HasPoolRegister() const { return m_has_pool_register; }
+    //! Whether the transaction adds a poll. A master-key REMOVE names a poll's title but adds none.
+    bool HasPollAdd() const { return m_has_poll_add; }
+    //! The added poll's title key (GRC::PollTitleKey): empty without a POLL ADD, and for a title of white space only.
+    //! The title index keys on HasPollAdd(), not on an empty key.
+    const std::string& GetPollTitleKey() const { return m_poll_title_key; }
+    //! The poll a master-key REMOVE names by txid (payload version 4); null for any other transaction.
+    const uint256& GetRemovedPollTxid() const { return m_removed_poll_txid; }
 };
 
 //! Aggregate mempool statistics, collected under a single lock for getmempoolinfo.
@@ -187,6 +197,9 @@ public:
     //! CPID dropped while one of its beacons remained would let the wallet send a
     //! second advertisement.
     std::map<GRC::Cpid, size_t> m_beacon_by_cpid;
+    //! One POLL ADD per title key (GRC::PollTitleKey); value is the tx hash. Sound as a key-unique map because
+    //! AcceptToMemoryPool refuses a poll whose title key a pooled poll already holds, so mapTx never holds two.
+    std::map<std::string, uint256> m_poll_by_title_key;
     size_t m_mandatory_sidestake_count{0};         //!< Mandatory-sidestake txs in the pool.
     //! MESSAGE-contract txs in the pool. Existence counter only, so the
     //! disable-height sweep in ConnectBlock costs one integer compare per block
@@ -369,6 +382,40 @@ public:
         return true;
     }
 
+    //! \brief Whether the pool already holds a poll with the title key \p title_key (GRC::PollTitleKey). When it
+    //! does and \p existing is non-null, that poll's transaction hash is written there.
+    bool HasPollForTitle(const std::string& title_key, uint256* existing = nullptr) const
+    {
+        LOCK(cs);
+        auto it = m_poll_by_title_key.find(title_key);
+        if (it == m_poll_by_title_key.end()) return false;
+        if (existing) *existing = it->second;
+        return true;
+    }
+
+    //! \brief Hashes of the pooled polls, one per title key (the m_poll_by_title_key index).
+    std::vector<uint256> GetPollTxs() const
+    {
+        LOCK(cs);
+        std::vector<uint256> found;
+        found.reserve(m_poll_by_title_key.size());
+        for (const auto& [title_key, hash] : m_poll_by_title_key) found.push_back(hash);
+        return found;
+    }
+
+    //! \brief Whether the pool holds a master-key REMOVE that names the poll \p poll_txid (payload version 4).
+    //!
+    //! removepoll asks, so that a second REMOVE of one poll is not sent before the first is mined. A scan, since a
+    //! REMOVE is a rare act of the master key and only that RPC asks. \p poll_txid is a poll's id, never null.
+    bool HasPollRemoveFor(const uint256& poll_txid) const
+    {
+        LOCK(cs);
+        for (const auto& [hash, entry] : mapTx) {
+            if (entry.GetRemovedPollTxid() == poll_txid) return true;
+        }
+        return false;
+    }
+
     bool HasBeaconForCpid(const GRC::Cpid& cpid) const
     {
         LOCK(cs);
@@ -439,6 +486,24 @@ public:
 
         for (const auto& [hash, entry] : mapTx) {
             if (entry.HasPoolRegister()) found.push_back(hash);
+        }
+        return found;
+    }
+
+    //! \brief Hashes of pooled transactions carrying a beacon contract.
+    //!
+    //! For the sweep in SetBestChain of beacon contracts whose payload version
+    //! the next block does not carry. The beacon index answers for a pool that
+    //! holds none without a scan, which is nearly every pool at nearly every
+    //! block: beacon contracts are a handful a day.
+    std::vector<uint256> GetBeaconTxs() const
+    {
+        LOCK(cs);
+        std::vector<uint256> found;
+        if (m_beacon_by_cpid.empty()) return found;
+
+        for (const auto& [hash, entry] : mapTx) {
+            if (entry.HasBeacon()) found.push_back(hash);
         }
         return found;
     }

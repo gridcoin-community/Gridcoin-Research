@@ -61,6 +61,20 @@ typedef std::map<ScraperID, mCSManifest> mmCSManifestsBinnedByScraper;
 /** Make the smart shared pointer a little less awkward for CScraperManifest */
 typedef std::shared_ptr<CScraperManifest> CScraperManifest_shared_ptr;
 
+/** Manifests that a supermajority of the scrapers agree on. Each of them has the content hash of its part hashes and
+ *  its consensus block, and all of them have the same part hashes in the same order, the same consensus block and the
+ *  same project names in the same order, so the superblock made from a convergence built from one of them is the
+ *  superblock made from any other. See ManifestsAgreedBySupermajority(), which from v15 the construction of a
+ *  convergence and the validation of a superblock by manifest both take the agreements from. */
+struct ManifestAgreement
+{
+    /** The content hash the manifests state. */
+    uint256 m_content_hash;
+    /** The latest of the agreeing manifests of each scraper that holds one. The key is the scraper and the value is the
+     *  manifest hash. */
+    std::map<ScraperID, uint256> m_manifests;
+};
+
 /** Note the CParts pointed to by this map are safe to access, because the pointers are guaranteed valid
  * as long as the holding CScraperManifests (both in the CScaperManifest global map, and this cache)
  * still exist. So the safety of these pointers is coincident with the lifespan of CScraperManifests
@@ -340,6 +354,13 @@ struct ScraperStatsVerifiedBeaconsTotalCredits
     ScraperStats mScraperStats;
     ScraperPendingBeaconMap mVerifiedMap;
     std::map<std::string, double> m_total_credit_map;
+
+    //! Whether the statistics were computed under the rules for statistics
+    //! values that begin with block version 15 (see
+    //! ProcessProjectStatsFromStreamByCPID() in scraper.cpp). A superblock
+    //! built or hashed from the statistics converts its values under the same
+    //! rules.
+    bool m_checked_values = false;
 };
 
 #endif // GRIDCOIN_SCRAPER_FWD_H

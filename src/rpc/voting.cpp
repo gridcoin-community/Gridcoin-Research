@@ -3,6 +3,7 @@
 #include <mutex>
 #include <optional>
 #include <stdexcept>
+#include <tuple>
 
 #include "init.h"
 #include "gridcoin/contract/contract.h"
@@ -16,13 +17,22 @@
 #include "protocol.h"
 #include "rpc/util.h"
 #include "server.h"
+#include "txmempool.h"
 #include "uint256.h"
 #include "util/strencodings.h"
+#include "util/string.h"
 #include "util/time.h"
 
 using namespace GRC;
 
 namespace {
+//! The error for a title that more than one poll has: their ids, so the caller can name one. The title is not echoed.
+std::string ManyPollsError(const std::vector<const PollReference*>& polls)
+{
+    return strprintf("%u polls have that title. Use the poll id: %s", polls.size(),
+                     Join(polls, std::string(", "), [](const PollReference* ref) { return ref->Txid().ToString(); }));
+}
+
 const PollReference* TryPollByTitleOrId(const std::string& title_or_id)
     EXCLUSIVE_LOCKS_REQUIRED(cs_main, PollRegistry::cs_poll_registry)
 {
@@ -31,20 +41,33 @@ const PollReference* TryPollByTitleOrId(const std::string& title_or_id)
     if (title_or_id.size() == sizeof(uint256) * 2 && IsHex(title_or_id)) {
         const uint256 txid = uint256S(title_or_id);
 
-        // This will return a ref to the poll in the registry if found, or, try and load it and return the ref if
-        // the load is successful.
-        if (const PollReference* ref = registry.TryByTxidWithAddHistoricalPollAndVotes(txid)) {
+        // A poll the registry holds, or else a poll below V11 from the legacy store.
+        LegacyPollStore::Lookup legacy_lookup = LegacyPollStore::Lookup::NOT_LEGACY;
+
+        if (const PollReference* ref = registry.TryByTxidOrLegacy(txid, legacy_lookup)) {
             return ref;
+        }
+
+        if (legacy_lookup == LegacyPollStore::Lookup::BELOW_FLOOR) {
+            throw JSONRPCError(RPC_INVALID_PARAMETER,
+                               strprintf("poll before the legacy floor (height %d), not available",
+                                         registry.LegacyFloor()));
+        }
+
+        if (legacy_lookup == LegacyPollStore::Lookup::INCOMPLETE) {
+            throw JSONRPCError(RPC_INVALID_PARAMETER,
+                               "poll not yet closed on this node's chain, or a block in its window could not be "
+                               "read; not available");
         }
     }
 
-    const std::string title = boost::to_lower_copy(title_or_id);
+    const std::vector<const PollReference*> polls = registry.FindByTitle(GRC::PollTitleKey(title_or_id));
 
-    if (const PollReference* ref = registry.TryByTitle(title)) {
-        return ref;
+    if (polls.size() > 1) {
+        throw JSONRPCError(RPC_INVALID_PARAMETER, ManyPollsError(polls));
     }
 
-    return nullptr;
+    return polls.empty() ? nullptr : polls.front();
 }
 
 UniValue PollChoicesToJson(const Poll::ChoiceList& choices)
@@ -102,32 +125,22 @@ UniValue PollToJson(const Poll& poll, const uint256 txid)
     return json;
 }
 
-UniValue PollToJson(const Poll& poll, const PollReference& poll_ref)
-{
-    UniValue json = PollToJson(poll, poll_ref.Txid());
-    json.pushKV("votes", (uint64_t)poll_ref.Votes().size());
-
-    return json;
-}
-
-UniValue PollResultToJson(const PollResult& result, const PollReference& poll_ref)
+UniValue PollResultToJson(const PollResult& result, const PollSnapshot& snapshot)
 {
     UniValue json(UniValue::VOBJ);
 
-    json.pushKV("poll_id", poll_ref.Txid().ToString());
-    json.pushKV("poll_title", poll_ref.Title());
-    json.pushKV("poll_expired", poll_ref.Expired(GetAdjustedTime()));
+    json.pushKV("poll_id", snapshot.m_txid.ToString());
+    json.pushKV("poll_title", snapshot.m_title);
 
-    {
-        LOCK(cs_main);
+    // Judged on the tip the result was tallied on, by its blocks, as the result's own finished flag.
+    json.pushKV("poll_expired", snapshot.m_finished);
 
-        if (auto start_height = poll_ref.GetStartingHeight()) {
-            json.pushKV("starting_block_height", *start_height);
-        }
+    if (snapshot.m_pindex_start) {
+        json.pushKV("starting_block_height", snapshot.m_pindex_start->nHeight);
+    }
 
-        if (auto end_height = poll_ref.GetEndingHeight()) {
-            json.pushKV("ending_block_height", *end_height);
-        }
+    if (snapshot.m_pindex_end) {
+        json.pushKV("ending_block_height", snapshot.m_pindex_end->nHeight);
     }
 
     json.pushKV("votes", (uint64_t)result.m_vote_count);
@@ -174,38 +187,27 @@ UniValue PollResultToJson(const PollResult& result, const PollReference& poll_re
     return json;
 }
 
-UniValue PollResultToJson(const PollReference& poll_ref)
+//!
+//! \brief Find the poll \p title_or_id names and take its snapshot on the current tip, under cs_main and the registry
+//! lock. Nothing of the registry is read after they are released.
+//!
+//! \throws JSONRPCError RPC_IN_WARMUP before there is a tip.
+//!
+std::optional<PollSnapshot> SnapshotPollByTitleOrId(const std::string& title_or_id)
 {
-    // The "buildPollTable" timer is created by PollResult::BuildFor(), the engine
-    // that actually reads it -- this RPC is only one of its callers (the poll-result
-    // cache and the GUI reach it too), and creating the label here left every other
-    // path warning on a missing timer. See the comment there.
+    // cs_main before cs_poll_registry, the order block connection takes them: a txid argument may load a historical
+    // poll, which needs cs_main.
+    LOCK2(cs_main, PollRegistry::cs_poll_registry);
 
-    // Mark a traversal in progress for the whole call (RAII, cleared on every
-    // return/throw below); the count-based scope keeps the reorg detector armed
-    // even if this overlaps a GUI table build.
-    PollRegistry::TraversalScope traversal(GetPollRegistry());
-
-    // Pin the chain tip once so the whole tally reads a single consistent tip.
-    const CBlockIndex* pindex_tip = nullptr;
-    {
-        LOCK(cs_main);
-        pindex_tip = pindexBest;
-    }
-
-    if (!pindex_tip) {
+    if (!pindexBest) {
         throw JSONRPCError(RPC_IN_WARMUP, "Chain tip not available yet");
     }
 
-    try {
-         if (const PollResultOption result = PollResult::BuildFor(poll_ref, pindex_tip)) {
-            return PollResultToJson(*result, poll_ref);
-        }
-    } catch (InvalidDuetoReorgFork& e) {
-        throw JSONRPCError(RPC_INTERNAL_ERROR, "Failed to load poll from disk due to reorg in progress during inquiry.");
+    if (const PollReference* ref = TryPollByTitleOrId(title_or_id)) {
+        return GetPollRegistry().Snapshot(*ref, pindexBest);
     }
 
-    throw JSONRPCError(RPC_INTERNAL_ERROR, "Failed to load poll from disk");
+    return std::nullopt;
 }
 
 UniValue VoteDetailsToJson(const PollResult& result)
@@ -238,35 +240,6 @@ UniValue VoteDetailsToJson(const PollResult& result)
     }
 
     return json;
-}
-
-UniValue VoteDetailsToJson(const PollReference& poll_ref)
-{
-    // Mark a traversal in progress for the whole call (RAII, cleared on every
-    // return/throw below); the count-based scope keeps the reorg detector armed
-    // even if this overlaps a GUI table build.
-    PollRegistry::TraversalScope traversal(GetPollRegistry());
-
-    // Pin the chain tip once so the whole tally reads a single consistent tip.
-    const CBlockIndex* pindex_tip = nullptr;
-    {
-        LOCK(cs_main);
-        pindex_tip = pindexBest;
-    }
-
-    if (!pindex_tip) {
-        throw JSONRPCError(RPC_IN_WARMUP, "Chain tip not available yet");
-    }
-
-    try {
-        if (const PollResultOption result = PollResult::BuildFor(poll_ref, pindex_tip)) {
-            return VoteDetailsToJson(*result);
-        }
-    } catch (InvalidDuetoReorgFork& e) {
-        throw JSONRPCError(RPC_INTERNAL_ERROR, "Failed to load poll from disk due to reorg in progress during inquiry.");
-    }
-
-    throw JSONRPCError(RPC_INTERNAL_ERROR, "Failed to load poll from disk.");
 }
 
 UniValue AddressClaimToJson(const AddressClaim& claim)
@@ -515,7 +488,7 @@ const AddPollBuild& addpoll_build()
     uint32_t payload_version = 0;
     {
         LOCK(cs_main);
-        payload_version = IsPollV3Enabled(nBestHeight) ? 3 : 2;
+        payload_version = IsPollV3Enabled(nBestHeight + 1) ? 3 : 2; // for the next block, which can take the poll
     }
 
     std::lock_guard<std::mutex> guard(cache_mutex);
@@ -739,11 +712,39 @@ UniValue listpolls(const UniValue& params)
 
     const bool active = params.size() > 0 ? !params[0].get_bool() : true;
 
-    LOCK(GRC::PollRegistry::cs_poll_registry);
+    // Which polls are open is judged by blocks on one tip, as the poll table and getpollresults judge it,
+    // so the RPCs agree. cs_main is taken before cs_poll_registry and both are held while the polls are judged,
+    // so no reorg lands in between (the snapshot's off-main-chain throw cannot fire here). The polls are read from
+    // disk after the locks are released.
+    std::vector<std::tuple<uint256, uint64_t, int64_t>> wanted; // Poll txid, vote count and start.
+    {
+        LOCK2(cs_main, PollRegistry::cs_poll_registry);
 
-    for (const auto& iter : GetPollRegistry().Polls().OnlyActive(active)) {
-        if (const PollOption poll = iter->TryPollFromDisk()) {
-            json.push_back(PollToJson(*poll, iter.Ref()));
+        if (!pindexBest) {
+            return json;
+        }
+
+        PollRegistry& registry = GetPollRegistry();
+
+        for (const auto& iter : registry.Polls()) {
+            const PollSnapshot snapshot = registry.Snapshot(iter->Ref(), pindexBest);
+
+            if (!active || !snapshot.m_finished) {
+                wanted.emplace_back(snapshot.m_txid, snapshot.m_votes.size(), snapshot.m_start_time);
+            }
+        }
+    }
+
+    CTxDB txdb("r");
+
+    for (const auto& [txid, votes, start_time] : wanted) {
+        if (PollOption poll = ReadPollFromDisk(txdb, txid)) {
+            // The poll's start, which from v15 is its block's time.
+            poll->m_timestamp = start_time;
+
+            UniValue entry = PollToJson(*poll, txid);
+            entry.pushKV("votes", votes);
+            json.push_back(entry);
         }
     }
 
@@ -771,26 +772,23 @@ UniValue getpollresults(const UniValue& params)
 {
     const std::string title_or_id = params[0].get_str();
 
-    // We only need to lock the registry to retrieve the reference. If there is a reorg during the PollResultToJson, it will
-    // throw.
+    // The lookup and the snapshot are taken under the locks; the tally runs without them and throws on a reorg.
 
-#if defined(__clang__)
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wthread-safety-analysis"
-#endif
-   const PollReference* ref = nullptr;
-   {
-       // cs_main before cs_poll_registry, the order block connection takes them: a
-       // txid argument may load a historical poll, which needs cs_main.
-       LOCK2(cs_main, GRC::PollRegistry::cs_poll_registry);
-       ref = TryPollByTitleOrId(title_or_id);
-   }
-   if (ref) {
-        return PollResultToJson(*ref);
+    // Mark a traversal in progress for the whole call (RAII, cleared on every return/throw below); the count-based
+    // scope keeps the reorg detector armed even if this overlaps a GUI table build.
+    PollRegistry::TraversalScope traversal(GetPollRegistry());
+
+    try {
+        if (const std::optional<PollSnapshot> snapshot = SnapshotPollByTitleOrId(title_or_id)) {
+            if (const PollResultOption result = PollResult::BuildFor(*snapshot)) {
+                return PollResultToJson(*result, *snapshot);
+            }
+
+            throw JSONRPCError(RPC_INTERNAL_ERROR, "Failed to load poll from disk");
+        }
+    } catch (InvalidDuetoReorgFork& e) {
+        throw JSONRPCError(RPC_INTERNAL_ERROR, "Failed to load poll from disk due to reorg in progress during inquiry.");
     }
-#if defined(__clang__)
-#pragma clang diagnostic pop
-#endif
 
     throw JSONRPCError(RPC_MISC_ERROR, "No matching poll found");
 }
@@ -877,7 +875,7 @@ UniValue vote(const UniValue& params)
 
     EnsureWalletIsUnlocked();
 
-    const std::string title = boost::to_lower_copy(params[0].get_str());
+    const std::string title = GRC::PollTitleKey(params[0].get_str());
 
     uint256 poll_txid;
     PollOption poll;
@@ -885,12 +883,18 @@ UniValue vote(const UniValue& params)
     {
         LOCK(GRC::PollRegistry::cs_poll_registry);
 
-        if (const PollReference* ref = GetPollRegistry().TryByTitle(title)) {
-            poll = ref->TryReadFromDisk();
-            poll_txid = ref->Txid();
-        } else {
+        const std::vector<const PollReference*> polls = GetPollRegistry().FindByTitle(title);
+
+        if (polls.size() > 1) {
+            throw JSONRPCError(RPC_INVALID_PARAMETER, ManyPollsError(polls));
+        }
+
+        if (polls.empty()) {
             throw JSONRPCError(RPC_MISC_ERROR, "No poll exists with that title");
         }
+
+        poll = polls.front()->TryReadFromDisk();
+        poll_txid = polls.front()->Txid();
     }
 
     if (!poll) {
@@ -966,6 +970,190 @@ UniValue votebyid(const UniValue& params)
     return SubmitVote(*poll, std::move(builder));
 }
 
+static const RPCHelpMan removepoll_help = RPCHelpMan{
+    "removepoll",
+    "Remove a poll registered since block version 11, by its id, from block version 15. Requires the master key. "
+    "The poll keeps its title.",
+    {
+        {"poll_id", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "ID (transaction hash) of the poll to remove."},
+    },
+    RPCResult{RPCResult::Type::OBJ, "", "",
+        {
+            {RPCResult::Type::STR_HEX, "poll_id", "The removed poll's id."},
+            {RPCResult::Type::STR_HEX, "txid", "The removal's transaction id."},
+        }},
+    RPCExamples{
+        HelpExampleCli("removepoll", "\"<poll_txid>\"") +
+        HelpExampleRpc("removepoll", "\"<poll_txid>\"")},
+};
+const RPCHelpMan& removepoll_helpman() { return removepoll_help; }
+
+UniValue removepoll(const UniValue& params)
+{
+    EnsureWalletIsUnlocked();
+
+    const uint256 poll_txid = uint256S(params[0].get_str());
+    GRC::Contract contract;
+
+    // An empty, all-zero or non-hex id parses to null, which names no poll. It is refused before the memory pool
+    // lookup below.
+    if (poll_txid.IsNull()) {
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "No poll registered since block version 11 has that id.");
+    }
+
+    // As addpoll and vote: a node behind the network may list a poll the chain has already removed.
+    if (OutOfSyncByAge()) {
+        throw JSONRPCError(RPC_MISC_ERROR, "Cannot remove a poll with a wallet that is not in sync.");
+    }
+
+    {
+        LOCK(cs_main);
+
+        // A REMOVE names its poll by id from block version 15; below it the network accepts only the older
+        // form, which names a title.
+        if (!IsV15Enabled(nBestHeight + 1)) {
+            throw JSONRPCError(RPC_MISC_ERROR, "Polls can be removed by id from block version 15.");
+        }
+
+        // removepoll refuses while the pool holds a REMOVE of this poll, so that a second is not sent before the
+        // first is mined.
+        if (mempool.HasPollRemoveFor(poll_txid)) {
+            throw JSONRPCError(RPC_MISC_ERROR, "A removal of that poll is already waiting to be mined.");
+        }
+
+        LOCK(GRC::PollRegistry::cs_poll_registry);
+
+        // Only an ACTIVE poll the registry stores (registered since V11); a pre-V11 poll is never removed.
+        if (!GetPollRegistry().TryByTxid(poll_txid) || !GetPollRegistry().IsStored(poll_txid)) {
+            throw JSONRPCError(RPC_INVALID_PARAMETER, "No poll registered since block version 11 has that id.");
+        }
+
+        contract = GRC::MakeContract<GRC::PollPayload>(
+            uint32_t {3}, GRC::ContractAction::REMOVE, GRC::PollPayload::REMOVE_BY_TXID_VERSION, poll_txid);
+    }
+
+    std::pair<CWalletTx, std::string> result;
+    {
+        LOCK(cs_main);
+        result = GRC::SendContract(contract);
+    }
+
+    if (!result.second.empty()) {
+        throw JSONRPCError(RPC_WALLET_ERROR, result.second);
+    }
+
+    UniValue res(UniValue::VOBJ);
+    res.pushKV("poll_id", poll_txid.ToString());
+    res.pushKV("txid", result.first.GetHash().ToString());
+
+    return res;
+}
+
+static const RPCHelpMan votewithclaim_help{
+    "votewithclaim",
+    "Regtest only. Cast a vote whose balance claim lists exactly the given outputs, for\n"
+    "testing the tally. It builds a balance claim only, with no magnitude claim, even on a\n"
+    "poll weighted by magnitude.",
+    {
+        {"poll_id", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "ID (transaction hash) of the poll to vote for."},
+        {"choice_ids", RPCArg::Type::ARR, RPCArg::Optional::NO, "Numeric IDs of the choices to vote for (0 to 255).",
+            {
+                {"choice_id", RPCArg::Type::NUM, RPCArg::Optional::OMITTED, ""},
+            }},
+        {"outpoints", RPCArg::Type::ARR, RPCArg::Optional::NO, "Wallet outputs to claim.",
+            {
+                {"", RPCArg::Type::OBJ, RPCArg::Optional::OMITTED, "",
+                    {
+                        {"txid", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "The transaction id"},
+                        {"vout", RPCArg::Type::NUM, RPCArg::Optional::NO, "The output number"},
+                    }},
+            }},
+        {"fee_outpoint", RPCArg::Type::STR, RPCArg::Optional::OMITTED, "\"<txid>:<vout>\" to pay the fee from."},
+    },
+    RPCResult{RPCResult::Type::OBJ, "", "",
+        {{RPCResult::Type::ELISION, "", "Vote submission detail; see source (SubmitVote)."}}},
+    RPCExamples{
+        HelpExampleCli("votewithclaim", "\"<poll_txid>\" \"[0]\" \"[{\\\"txid\\\":\\\"<txid>\\\",\\\"vout\\\":0}]\"")},
+};
+const RPCHelpMan& votewithclaim_helpman() { return votewithclaim_help; }
+
+UniValue votewithclaim(const UniValue& params)
+{
+    if (!Params().IsMockableChain()) {
+        throw JSONRPCError(RPC_METHOD_NOT_FOUND, "votewithclaim is available on regtest only");
+    }
+
+    EnsureWalletIsUnlocked();
+
+    const uint256 poll_id = uint256S(params[0].get_str());
+    PollOption poll;
+
+    {
+        LOCK(GRC::PollRegistry::cs_poll_registry);
+
+        if (const PollReference* ref = GetPollRegistry().TryByTxid(poll_id)) {
+            poll = ref->TryReadFromDisk();
+        } else {
+            throw JSONRPCError(RPC_MISC_ERROR, "No poll exists for that ID");
+        }
+    }
+
+    if (!poll) {
+        throw JSONRPCError(RPC_INTERNAL_ERROR, "Failed to load poll from disk");
+    }
+
+    std::vector<COutPoint> outpoints;
+
+    for (const UniValue& entry : params[2].get_array().getValues()) {
+        const uint256 txid = ParseHashO(entry, "txid");
+        const int vout = find_value(entry.get_obj(), "vout").get_int();
+
+        if (vout < 0) {
+            throw JSONRPCError(RPC_INVALID_PARAMETER, "vout must be non-negative");
+        }
+
+        outpoints.emplace_back(txid, vout);
+    }
+
+    std::optional<COutPoint> fee_outpoint;
+
+    if (params.size() > 3 && !params[3].isNull()) {
+        const std::string& fee = params[3].get_str();
+        const auto colon = fee.find(':');
+        uint32_t vout = 0;
+
+        if (colon == std::string::npos || !ParseUInt32(fee.substr(colon + 1), &vout)) {
+            throw JSONRPCError(RPC_INVALID_PARAMETER, "fee_outpoint must be \"<txid>:<vout>\"");
+        }
+
+        fee_outpoint = COutPoint(ParseHashV(UniValue(fee.substr(0, colon)), "fee_outpoint txid"), vout);
+    }
+
+    try {
+        VoteBuilder builder = VoteBuilder::ForPoll(*poll, poll_id);
+
+        for (const UniValue& choice : params[1].get_array().getValues()) {
+            const int choice_id = choice.get_int();
+
+            if (choice_id < 0 || choice_id > std::numeric_limits<uint8_t>::max()) {
+                throw JSONRPCError(RPC_INVALID_PARAMETER, strprintf("choice id %d is out of range", choice_id));
+            }
+
+            builder = builder.AddResponse(static_cast<uint8_t>(choice_id));
+        }
+
+        builder = builder.SetClaimOutpoints(std::move(outpoints));
+
+        if (fee_outpoint) {
+            builder = builder.SetFeeOutpoint(*fee_outpoint);
+        }
+
+        return SubmitVote(*poll, std::move(builder));
+    } catch (const VotingError& e) {
+        throw JSONRPCError(RPC_INVALID_PARAMETER, e.what());
+    }
+}
+
 static const RPCHelpMan votedetails_help{
     "votedetails",
     "Display the vote details for the specified poll.\n"
@@ -987,25 +1175,23 @@ UniValue votedetails(const UniValue& params)
 {
     const std::string title_or_id = params[0].get_str();
 
-    // We only need to lock the registry to retrieve the reference. If there is a reorg during the PollResultToJson, it will
-    // throw.
-#if defined(__clang__)
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wthread-safety-analysis"
-#endif
-   const PollReference* ref = nullptr;
-   {
-       // cs_main before cs_poll_registry, the order block connection takes them: a
-       // txid argument may load a historical poll, which needs cs_main.
-       LOCK2(cs_main, GRC::PollRegistry::cs_poll_registry);
-       ref = TryPollByTitleOrId(title_or_id);
-   }
-   if (ref) {
-        return VoteDetailsToJson(*ref);
+    // The lookup and the snapshot are taken under the locks; the tally runs without them and throws on a reorg.
+
+    // Mark a traversal in progress for the whole call (RAII, cleared on every return/throw below); the count-based
+    // scope keeps the reorg detector armed even if this overlaps a GUI table build.
+    PollRegistry::TraversalScope traversal(GetPollRegistry());
+
+    try {
+        if (const std::optional<PollSnapshot> snapshot = SnapshotPollByTitleOrId(title_or_id)) {
+            if (const PollResultOption result = PollResult::BuildFor(*snapshot)) {
+                return VoteDetailsToJson(*result);
+            }
+
+            throw JSONRPCError(RPC_INTERNAL_ERROR, "Failed to load poll from disk.");
+        }
+    } catch (InvalidDuetoReorgFork& e) {
+        throw JSONRPCError(RPC_INTERNAL_ERROR, "Failed to load poll from disk due to reorg in progress during inquiry.");
     }
-#if defined(__clang__)
-#pragma clang diagnostic pop
-#endif
 
     throw JSONRPCError(RPC_MISC_ERROR, "No matching poll found");
 }

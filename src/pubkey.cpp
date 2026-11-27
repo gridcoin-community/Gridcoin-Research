@@ -300,3 +300,20 @@ bool CExtPubKey::Derive(CExtPubKey &out, unsigned int _nChild) const {
     }
     return (!secp256k1_ecdsa_signature_normalize(secp256k1_context_static, nullptr, &sig));
 }
+
+/* static */ bool CPubKey::CheckSignatureForm(const std::vector<unsigned char>& vchSig) {
+    secp256k1_ecdsa_signature sig;
+    if (!ecdsa_signature_parse_der_lax(&sig, vchSig.data(), vchSig.size())) {
+        return false;
+    }
+    if (secp256k1_ecdsa_signature_normalize(secp256k1_context_static, nullptr, &sig)) {
+        return false;
+    }
+    /* Compare with the form that CKey::Sign() writes. */
+    unsigned char der[SIGNATURE_SIZE];
+    size_t der_len = SIGNATURE_SIZE;
+    if (!secp256k1_ecdsa_signature_serialize_der(secp256k1_context_static, der, &der_len, &sig)) {
+        return false;
+    }
+    return vchSig.size() == der_len && memcmp(vchSig.data(), der, der_len) == 0;
+}

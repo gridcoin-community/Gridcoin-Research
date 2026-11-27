@@ -862,46 +862,60 @@ public:
     bool pollV3Enabled() override
     {
         LOCK(cs_main);
-        return IsPollV3Enabled(nBestHeight);
+        return IsPollV3Enabled(nBestHeight + 1); // for the next block, which can take a poll built now
     }
 
     std::string currentPollTitle() override
     {
-        // Raw title; the GUI applies its cosmetic formatting (length cap, '_' -> ' ').
-        return GRC::GetCurrentPollTitle();
+        // Raw title; the GUI applies its cosmetic formatting (length cap, '_' -> ' '). Whether a poll is open is judged
+        // by blocks on the tip, which needs cs_main. The GUI calls this on its own thread, at
+        // startup and every minute, and must not wait for cs_main, which a rescan can hold for minutes: while another
+        // thread holds it, return the last title read. The try takes cs_main first, before
+        // GetCurrentPollTitle takes cs_poll_registry, so it compensates no lock-order inversion.
+        TRY_LOCK(cs_main, locked_main);
+
+        if (!locked_main) {
+            LOCK(m_last_read_mutex);
+            return m_last_poll_title;
+        }
+
+        std::string title = GRC::GetCurrentPollTitle();
+
+        LOCK(m_last_read_mutex);
+        m_last_poll_title = title;
+
+        return title;
     }
 
     int64_t latestActivePollTime() override
     {
-        // The newest active poll's timestamp. Needs only cs_poll_registry:
-        // Polls().OnlyActive() filters on GetAdjustedTime() and PollReference::Time()
-        // reads a stored timestamp — neither touches cs_main — so cs_main is not
-        // taken, avoiding needless contention on it.
-        //
-        // The lock is held across the WHOLE walk, not just while building the
-        // sequence. This used to be a WITH_LOCK around Polls().OnlyActive() alone,
-        // which released cs_poll_registry at the end of that expression and then ran
-        // begin/end, operator++/!= and Ref() unlocked — every one of them
-        // EXCLUSIVE_LOCKS_REQUIRED(cs_poll_registry), over a GUARDED_BY map that
-        // PollRegistry::Delete erases from and Reset() clears. A block being
-        // disconnected on the validation thread while the GUI walked here was an
-        // iterator use-after-free.
-        //
-        // The old comment claimed this matched PollResultCache::BuildPollTable. It
-        // did not: BuildPollTable additionally holds a TraversalScope and rechecks
-        // reorg_occurred_during_reg_traversal per element, precisely because it must
-        // drop the lock to tally (which takes cs_main, and cs_main must be acquired
-        // BEFORE cs_poll_registry). Nothing here needs cs_main, so simply keeping
-        // the lock is both correct and cheaper than replicating that protocol —
-        // a writer cannot mutate the map underneath us at all, so no reorg
-        // bookkeeping is required.
+        // The newest open poll's timestamp, judged by blocks on the tip like the poll table. This
+        // runs in the node; the GUI calls it through the interface and takes no lock itself. Like currentPollTitle()
+        // it must not wait for cs_main: while another thread holds it, return the last time read.
+        // Otherwise cs_main is taken before cs_poll_registry, the order block connection takes them, and both are held
+        // across the whole walk, so the registry does not change during it and every poll is judged on the same tip.
+        TRY_LOCK(cs_main, locked_main);
+
+        if (!locked_main) {
+            LOCK(m_last_read_mutex);
+            return m_last_poll_time;
+        }
+
         GRC::PollRegistry& registry = GRC::GetPollRegistry();
 
         int64_t latest = 0;
         LOCK(GRC::PollRegistry::cs_poll_registry);
-        for (const auto& iter : registry.Polls().OnlyActive()) {
-            latest = std::max<int64_t>(latest, iter->Ref().Time());
+
+        if (pindexBest) {
+            for (const auto& iter : registry.Polls()) {
+                if (registry.OpenAt(iter->Ref(), pindexBest)) {
+                    latest = std::max<int64_t>(latest, iter->Ref().Time());
+                }
+            }
         }
+
+        LOCK(m_last_read_mutex);
+        m_last_poll_time = latest;
 
         return latest;
     }
@@ -924,13 +938,19 @@ public:
     //! submitPoll() without its capability scope and exception boundary.
     VotingSubmitResult SubmitPollUnderScope(const PollSubmission& poll)
     {
+        // As addpoll: a node out of sync may not yet hold a title the network holds.
+        if (OutOfSyncByAge()) {
+            return Failed("Cannot add a poll with a wallet that is not in sync.");
+        }
+
         // The payload version (and, pre-v3, the forced SURVEY type) depend on the
-        // chain height, so they are resolved node-side rather than in the GUI.
+        // chain height, so they are resolved node-side rather than in the GUI, for
+        // the next block, which is the block that can take the poll.
         uint32_t payload_version = 0;
         GRC::PollType type_by_version = GRC::PollType::SURVEY;
         {
             LOCK(cs_main);
-            const bool v3_enabled = IsPollV3Enabled(nBestHeight);
+            const bool v3_enabled = IsPollV3Enabled(nBestHeight + 1);
             payload_version = v3_enabled ? 3 : 2;
             type_by_version = v3_enabled ? static_cast<GRC::PollType>(poll.type) : GRC::PollType::SURVEY;
         }
@@ -990,6 +1010,11 @@ public:
     VotingSubmitResult SubmitVoteUnderScope(const std::string& poll_txid,
                                             const std::vector<uint8_t>& choice_offsets)
     {
+        // As the vote RPCs.
+        if (OutOfSyncByAge()) {
+            return Failed("The wallet must be in sync to vote.");
+        }
+
         const uint256 txid = uint256S(poll_txid);
 
         // Look up and read the poll under cs_poll_registry, then copy out the poll
@@ -1048,6 +1073,12 @@ public:
     }
 
 private:
+    //! The last title and time currentPollTitle() and latestActivePollTime() read, which they return while another
+    //! thread holds cs_main; "" and 0 until the first read. A leaf lock: nothing is taken under it.
+    Mutex m_last_read_mutex;
+    std::string m_last_poll_title GUARDED_BY(m_last_read_mutex);
+    int64_t m_last_poll_time GUARDED_BY(m_last_read_mutex) = 0;
+
     //! Flatten a core tally bundle into the pointer-free value row the GUI renders.
     //! Mirrors the former VotingModel BuildPollItem field-for-field, but produces
     //! std::string / value types and leaves cosmetic string transforms (underscore
@@ -1164,6 +1195,7 @@ BeaconStatus MapBeaconError(const GRC::BeaconError error)
         case GRC::BeaconError::ALEADY_IN_MEMPOOL:  return BeaconStatus::ALREADY_IN_MEMPOOL;
         // The status the snapshot itself reports while out of sync (DeriveBeacon).
         case GRC::BeaconError::OUT_OF_SYNC:        return BeaconStatus::UNKNOWN;
+        case GRC::BeaconError::KEY_HELD_BY_ANOTHER_CPID: return BeaconStatus::ERROR_KEY_HELD_BY_ANOTHER_CPID;
     }
 
     assert(false); // unreachable: every BeaconError enumerator is handled above

@@ -208,6 +208,7 @@ public:
         consensus.DefaultMagnitudeWeightFactor = Fraction(100, 567);
         consensus.MaxMagnitudeWeightFactor = Fraction(1);
         consensus.StandardContractReplayLookback = 180 * 24 * 60 * 60;
+        consensus.ContractReplayFloorHeight = 164618;
         consensus.powLimit = uint256S("00000fffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
         /**
          * The message start string is designed to be unlikely to occur in normal data.
@@ -314,17 +315,15 @@ public:
         consensus.BlockV13Height = 2870000;
         consensus.BlockV14Height = 3126500;
         consensus.BlockV15Height = std::numeric_limits<int>::max();
-        consensus.PendingPoolRetention = 28800; // identical to mainnet (~30 days at ~90s); override via -pendingpoolretention for isolated-testnet runs (issue #1783)
+        consensus.PendingPoolRetention = 28800; // identical to mainnet (~30 days at ~90s) (issue #1783)
         consensus.ProtocolVersionGracePeriod = 900 * 21; // ~19.6 days — extended because v14 fork preceded deployment
         consensus.PollV3Height = 1944820;
         consensus.ProjectV2Height = 1944820;
         consensus.PollMultiAddressHeight = std::numeric_limits<int>::max();
         consensus.AutoGreylistAuditHeight = 3111000;
-        // Inactive by default; activated on the isolated mesh / public testnet via the
-        // -autogreylistdeepcopyheight override ahead of v15.
+        // TBD: set coincident with BlockV15Height when v15 is scheduled.
         consensus.AutoGreylistDeepCopyHeight = std::numeric_limits<int>::max();
-        // Inactive by default; activated on the isolated mesh / public testnet via the
-        // -autogreylisttotalcreditfixheight override ahead of v15.
+        // TBD: set coincident with BlockV15Height when v15 is scheduled.
         consensus.AutoGreylistTotalCreditFixHeight = std::numeric_limits<int>::max();
         // TBD: set coincident with BlockV15Height when v15 is scheduled. Must never be set
         // below AutoGreylistDeepCopyHeight (see Consensus::Params).
@@ -346,6 +345,7 @@ public:
         consensus.DefaultMagnitudeWeightFactor = Fraction(100, 567);
         consensus.MaxMagnitudeWeightFactor = Fraction(1);
         consensus.StandardContractReplayLookback = 180 * 24 * 60 * 60;
+        consensus.ContractReplayFloorHeight = 1;
         consensus.powLimit = uint256S("0000ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
 
         pchMessageStart[0] = 0xcd;
@@ -452,6 +452,7 @@ public:
         consensus.DefaultMagnitudeWeightFactor = Fraction(100, 567);
         consensus.MaxMagnitudeWeightFactor = Fraction(1);
         consensus.StandardContractReplayLookback = 180 * 24 * 60 * 60;
+        consensus.ContractReplayFloorHeight = 0;
         consensus.powLimit = uint256S("7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
 
         pchMessageStart[0] = 0xfa;
@@ -508,16 +509,16 @@ bool g_unit_test_consensus_overrides = false;
 
 int GetBlockV15Height()
 {
-    // Hidden `-blockv15height` arg lets isolated testnet / regtest activate
-    // POOL contracts at a low height for end-to-end exercise. Defaults to the
+    // Hidden `-blockv15height` arg lets regtest activate POOL contracts at a
+    // low height for end-to-end exercise. Defaults to the
     // chainparams value (std::numeric_limits<int>::max() until pinned).
     return GetConsensusOverride("-blockv15height", Params().GetConsensus().BlockV15Height);
 }
 
 int GetMessageContractDisableHeight()
 {
-    // Hidden `-messagecontractdisableheight` arg lets isolated testnet / regtest disable
-    // MESSAGE contracts at a lower height for end-to-end exercise.
+    // Hidden `-messagecontractdisableheight` arg lets regtest disable MESSAGE
+    // contracts at a lower height for end-to-end exercise.
     return GetConsensusOverride("-messagecontractdisableheight",
                                 Params().GetConsensus().MessageContractDisableHeight);
 }
@@ -525,10 +526,11 @@ int GetMessageContractDisableHeight()
 int GetPendingPoolRetention()
 {
     // Hidden `-pendingpoolretention` arg shortens the PENDING / OPEN
-    // expiration window so isolated-testnet / regtest runs can exercise
-    // expiration boundaries without waiting ~30 days of mainnet-paced
-    // blocks. Consensus-affecting on shared networks: nodes with different
-    // values will disagree on POOL_REGISTER admission across expiration
-    // boundaries and fork. Defaults to the chainparams value (28800).
+    // expiration window so regtest runs can exercise expiration boundaries
+    // without waiting ~30 days of mainnet-paced blocks. Honoured on regtest
+    // only, because the value is consensus-affecting. On a shared network
+    // nodes with different values would disagree on POOL_REGISTER admission
+    // across expiration boundaries and fork. Defaults to the chainparams
+    // value (28800).
     return GetConsensusOverride("-pendingpoolretention", Params().GetConsensus().PendingPoolRetention);
 }

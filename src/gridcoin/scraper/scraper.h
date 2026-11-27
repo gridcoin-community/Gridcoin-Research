@@ -139,7 +139,8 @@ uint256 GetFileHash(const fs::path& inputfile);
  * @return ScraperStatsVerifiedBeaconsTotalCredits
  */
 ScraperStatsVerifiedBeaconsTotalCredits GetScraperStatsByConvergedManifest(const GRC::WhitelistSnapshot& greylist,
-                                                                           const ConvergedManifest& StructConvergedManifest);
+                                                                           const ConvergedManifest& StructConvergedManifest,
+                                                                           const bool checked_values);
 /**
  * @brief Gets a copy of the extended scrapers cache global. This global is an extension of the appcache in that it
  * retains deleted entries with a deleted flag.
@@ -276,7 +277,7 @@ double MagRound(double dMag);
  * @return bool true if successful. On false, mScraperStats is empty.
  */
 bool LoadProjectObjectToStatsByCPID(const std::string& project, const SerializeData& ProjectData, const double& projectmag,
-                                    ScraperStats& mScraperStats);
+                                    ScraperStats& mScraperStats, const bool checked_values);
 
 /**
  * @brief Returns the number of scrapers required for a supermajority when determining a convergence. This is a CONSENSUS
@@ -285,6 +286,20 @@ bool LoadProjectObjectToStatsByCPID(const std::string& project, const SerializeD
  * @return unsigned int
  */
 unsigned int NumScrapersForSupermajority(unsigned int nScraperCount);
+
+/**
+ * @brief Gives the manifests that a supermajority of the scrapers agree on. This is a CONSENSUS critical function. From
+ * v15 the construction of a convergence takes the first agreement it gives, and the validation of a superblock by
+ * manifest takes the agreements that have the hint of the superblock.
+ *
+ * Manifests agree when they have the same part hashes in the same order, the same consensus block and the same project
+ * names in the same order. A manifest whose content hash is not the hash of its part hashes and its consensus block is
+ * in no agreement. An agreement is of a supermajority of the scrapers in manifests_by_scraper: that many scrapers each
+ * hold a manifest in it.
+ * @param manifests_by_scraper The manifests binned by scraper, as ScraperCullAndBinCScraperManifests() gives them.
+ * @return The agreements, ordered by the time of the latest manifest of each, latest first.
+ */
+std::vector<ManifestAgreement> ManifestsAgreedBySupermajority(const mmCSManifestsBinnedByScraper& manifests_by_scraper);
 
 /** Gets a vector of projects that require an external adapter for the scrapers to pull statistics. */
 std::vector<std::string> GetProjectsExternalAdapterRequired();

@@ -60,10 +60,17 @@ hard-won domain knowledge and must be carried forward, not condensed away.
 
 ## What does NOT fit the shared-spec pattern
 
-- **MRC binding** (mempool selection in `CreateNewBlock`): purely a miner-side
-  concern — selecting which MRC transactions to include based on priority,
-  CPID uniqueness, and output limits. The validator checks the resulting
-  outputs but has no role in the selection. No validator dual, no drift risk.
+- **MRC binding** (mempool selection in `CreateNewBlock`): the selection is the
+  miner's alone — which MRC transactions to include, by priority, CPID
+  uniqueness, and output limits. The validator checks the resulting outputs
+  but has no role in the selection. Eligibility is one shared check,
+  `GRC::MRCEligibleForClaim` (`gridcoin/mrc.h`): a block's MRCs may not
+  include its claim's CPID. The miner selects by it, and from block version 15
+  `CheckMRCRewards` refuses a block whose MRCs break it. The miner lists each MRC
+  in the claim under the MRC's own CPID, and from block version 15
+  `CheckMRCRewards` refuses a claim that lists an MRC under another CPID. One MRC
+  to a listed transaction is `ValidateMRC`'s rule, applied by `ConnectBlock` to
+  every transaction before the rewards are checked.
 
 ## Future Directions
 

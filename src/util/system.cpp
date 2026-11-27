@@ -126,9 +126,15 @@ static std::string SettingFileKeyName(const std::string& key)
  * IsArgNegated() method. One use case for this is to have a way to disable
  * options that are not normally boolean (e.g. using -nodebuglogfile to request
  * that debug log output is not sent to any file at all).
+ *
+ * A key that is itself an option is that option, whatever it begins with
+ * (-noncruncher, -nonewprivs, -nobuildwarn). A leading "no" is taken off only
+ * when the whole key is not an option, so -nononcruncher negates -noncruncher.
+ * \p args is asked whether a key is a registered option.
  */
 
-static util::SettingsValue InterpretOption(std::string& section, std::string& key, const std::string& value)
+static util::SettingsValue InterpretOption(const ArgsManager& args, std::string& section, std::string& key,
+                                            const std::string& value)
 {
     // Split section name from key name for keys like "testnet.foo" or "regtest.bar"
     size_t option_index = key.find('.');
@@ -136,7 +142,7 @@ static util::SettingsValue InterpretOption(std::string& section, std::string& ke
         section = key.substr(0, option_index);
         key.erase(0, option_index + 1);
     }
-    if (key.substr(0, 2) == "no") {
+    if (key.substr(0, 2) == "no" && !args.GetArgFlags('-' + key)) {
         key.erase(0, 2);
         // Double negatives like -nofoo=0 are supported (but discouraged)
         if (!InterpretBool(value)) {
@@ -304,7 +310,7 @@ bool ArgsManager::ParseParameters(int argc, const char* const argv[], std::strin
         // Transform -foo to foo
         key.erase(0, 1);
         std::string section;
-        util::SettingsValue value = InterpretOption(section, key, val);
+        util::SettingsValue value = InterpretOption(*this, section, key, val);
         std::optional<unsigned int> flags = GetArgFlags('-' + key);
 
         // Unknown command line options and command line options with dot
@@ -606,7 +612,7 @@ bool ArgsManager::ReadSettingsFile(std::vector<std::string>* errors)
     for (auto& [name, value] : read) {
         std::string section;
         std::string key = name;
-        (void)InterpretOption(section, key, /* value */ {}); // Split setting key into section and argname
+        (void)InterpretOption(*this, section, key, /* value */ {}); // Split setting key into section and argname
         const std::optional<unsigned int> flags = GetArgFlags('-' + key);
         if (!flags) {
             LogPrintf("Ignoring unknown rw_settings value %s", name);
@@ -1147,7 +1153,7 @@ bool ArgsManager::ReadConfigStream(std::istream& stream, const std::string& file
     for (const std::pair<std::string, std::string>& option : options) {
         std::string section;
         std::string key = option.first;
-        util::SettingsValue value = InterpretOption(section, key, option.second);
+        util::SettingsValue value = InterpretOption(*this, section, key, option.second);
         std::optional<unsigned int> flags = GetArgFlags('-' + key);
         if (flags) {
             // A command-line-only option is not stored from a config file, and is not an error.

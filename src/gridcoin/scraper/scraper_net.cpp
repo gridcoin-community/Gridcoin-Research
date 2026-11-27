@@ -569,8 +569,8 @@ EXCLUSIVE_LOCKS_REQUIRED(CSplitBlob::cs_manifest, CSplitBlob::cs_mapParts)
 // This is the complement to IsScraperAuthorizedToBroadcastManifests in the scraper.
 // It is used to determine whether received manifests are authorized.
 //
-// This check is SKIPPED while the receiving node is out of sync by age, at the
-// OutOfSyncByAge() branch in UnserializeCheck(). That is deliberate and is
+// This check is SKIPPED while the receiving node is out of sync, at the
+// ScraperOutOfSync() branch in UnserializeCheck(). That is deliberate and is
 // documented there. It is safe because of a design property that is easy to miss
 // when reading this function alone:
 //
@@ -665,7 +665,7 @@ EXCLUSIVE_LOCKS_REQUIRED(CScraperManifest::cs_mapManifest)
 }
 
 [[nodiscard]] bool CScraperManifest::UnserializeCheck(CDataStream& ss, unsigned int& banscore_out,
-                                                     const bool v15_project_cap)
+                                                     const bool v15_enabled)
 EXCLUSIVE_LOCKS_REQUIRED(CScraperManifest::cs_mapManifest, CSplitBlob::cs_manifest)
 {
     const auto pbegin = ss.begin();
@@ -741,12 +741,12 @@ EXCLUSIVE_LOCKS_REQUIRED(CScraperManifest::cs_mapManifest, CSplitBlob::cs_manife
     // exposure is point to point rather than network wide. The bounds checks in
     // this function are what actually limit what an unauthenticated sender can
     // cost us.
-    if (OutOfSyncByAge())
+    if (ScraperOutOfSync())
     {
         bCheckedAuthorized = false;
 
         LogPrint(BCLog::LogFlags::MANIFEST, "CScraperManifest::UnserializeCheck: accepting manifest "
-                 "\"%s\" without an authorization check: this node is out of sync by age. See the "
+                 "\"%s\" without an authorization check: this node is out of sync. See the "
                  "comment above for why this is deliberate.", sCManifestName);
     }
     else if (IsManifestAuthorized(nTime, pubkey, banscore_out))
@@ -965,7 +965,7 @@ EXCLUSIVE_LOCKS_REQUIRED(CScraperManifest::cs_mapManifest, CSplitBlob::cs_manife
     // Holding both concatenated in the other order is what that comment exists
     // to prevent, so the height is read in RecvManifest() before any of these
     // locks are acquired.
-    const unsigned int max_projects = v15_project_cap
+    const unsigned int max_projects = v15_enabled
         ? nMaxProjects + MANIFEST_PSEUDO_PROJECTS.size()
         : nMaxProjects;
 
@@ -975,6 +975,30 @@ EXCLUSIVE_LOCKS_REQUIRED(CScraperManifest::cs_mapManifest, CSplitBlob::cs_manife
         banscore_out = gArgs.GetArg("-banscore", 100);
 
         return error("CScraperManifest::UnserializeCheck: Too many projects in the manifest.");
+    }
+
+    // A scraper publishes a manifest in one layout. The beacon list is part 0
+    // alone, project n is part n + 1 alone, counting the projects from 0, and
+    // there is no other part. A manifest in another layout is refused. This does
+    // not depend on the sync state. banscore_out is not written. The tests above
+    // may have set it. This test is after them, so a manifest that one of them
+    // refuses is refused as it was. A scraper that is to publish another layout
+    // needs this test changed on the nodes first.
+    if (BeaconList != 0 || BeaconList_c != 0 || vph.size() != projects.size() + 1)
+    {
+        return error("CScraperManifest::UnserializeCheck: manifest is not in the layout of a published "
+                     "manifest: beacon list at part %i and %u parts after it, %u parts, %u projects",
+                     BeaconList, BeaconList_c, vph.size(), projects.size());
+    }
+
+    for (size_t n = 0; n < projects.size(); ++n)
+    {
+        if (static_cast<int64_t>(projects[n].part1) != static_cast<int64_t>(n) + 1 || projects[n].partc != 0)
+        {
+            return error("CScraperManifest::UnserializeCheck: manifest is not in the layout of a published "
+                         "manifest: project %u at part %i and %u parts after it",
+                         n, projects[n].part1, projects[n].partc);
+        }
     }
 
     ss >> nContentHash;
@@ -998,6 +1022,18 @@ EXCLUSIVE_LOCKS_REQUIRED(CScraperManifest::cs_mapManifest, CSplitBlob::cs_manife
              Hash(signature).GetHex());
 
     if (!pubkey.Verify(hash, signature)) return error("CScraperManifest: Invalid manifest signature");
+
+    // A scraper signs a manifest with CKey::Sign(). When v15 is enabled at the
+    // height of the best block, a received manifest's signature must have the
+    // form that CKey::Sign() writes. Otherwise the form is not tested. This does
+    // not depend on the sync state. banscore_out is not written. The tests above
+    // may have set it. This test is after them, so a manifest that one of them
+    // refuses is refused as it was.
+    if (v15_enabled && !CPubKey::CheckSignatureForm(signature))
+    {
+        return error("CScraperManifest::UnserializeCheck: manifest signature does not have the form that "
+                     "CKey::Sign() writes");
+    }
 
     // The signature is the last field of a manifest.
     if (!ss.empty()) return error("CScraperManifest: manifest has data after its signature");
@@ -1189,11 +1225,11 @@ bool CScraperManifest::RecvManifest(CNode* pfrom, CDataStream& vRecv)
     uint256 hash(Hash(vRecv));
 
     // Read the chain height BEFORE taking any of the manifest locks, and let go
-    // of cs_main again immediately. UnserializeCheck() needs to know whether the
-    // v15 project-count rule applies, but it runs under cs_mapManifest and
+    // of cs_main again immediately. UnserializeCheck() needs to know whether
+    // v15 is enabled at that height, but it runs under cs_mapManifest and
     // cs_manifest, and taking cs_main from there is the lock ordering
     // net_processing.cpp explicitly avoids for this same pair.
-    const bool v15_project_cap = WITH_LOCK(cs_main, return IsV15Enabled(nBestHeight));
+    const bool v15_enabled = WITH_LOCK(cs_main, return IsV15Enabled(nBestHeight));
 
     LOCK(cs_mapManifest);
 
@@ -1222,7 +1258,7 @@ bool CScraperManifest::RecvManifest(CNode* pfrom, CDataStream& vRecv)
 
         try
         {
-            if (!manifest->UnserializeCheck(vRecv, banscore, v15_project_cap))
+            if (!manifest->UnserializeCheck(vRecv, banscore, v15_enabled))
             {
                 mapManifest.erase(hash);
                 LogPrint(BCLog::LogFlags::MANIFEST, "invalid manifest %s received", hash.GetHex());

@@ -10,6 +10,7 @@
 #include "gridcoin/contract/registry.h"
 #include "gridcoin/staking/chain_trust.h"
 #include "gridcoin/staking/spam.h"
+#include "gridcoin/voting/registry.h"
 #include "node/blockstorage.h"
 #include "node/chainman.h"
 #include "util.h"
@@ -246,55 +247,13 @@ bool RunStartupCoherenceRecovery()
                   result.sb_cross_count);
     }
 
-    // Step 1: rewind in-memory chain globals + persist hashBestChain.
-    if (!RewindToConsistentTip(result.pindex_consistent)) {
-        LogPrintf("ERROR: %s: rewind to height %d failed; cannot continue.",
-                  __func__, result.pindex_consistent->nHeight);
-        return false;
-    }
-
-    // Step 2: surgical chainstate cleanup. Delete CTxIndex entries created
-    // by abandoned blocks, and clear vSpent[i] markers on surviving entries
-    // that point into abandoned blocks. Without this, ConnectInputs on the
-    // re-supplied blocks would silently reject the same input as
-    // already-spent. See the "Abandonment-style rewind + surgical
-    // chainstate cleanup" section of doc/block_corruption_recovery_design.md.
+    // Step 1: reconcile registry state with the consistent block, and sync it to disk before the chain is rewound.
     //
-    // The CTxDB handle is held across step 3 as well so the mapBlockIndex
-    // purge below can erase CDiskBlockIndex entries through the same DB
-    // handle. Both writes commit on destructor scope-exit.
-    CTxDB txdb;
-
-    {
-        uint64_t entries_deleted = 0, vspent_cleared = 0, entries_scanned = 0;
-        if (!txdb.CleanAbandonedRange(result.abandoned_positions,
-                                      &entries_deleted, &vspent_cleared, &entries_scanned)) {
-            LogPrintf("ERROR: %s: CleanAbandonedRange failed; chainstate may be inconsistent. "
-                      "Restart with -reindex.", __func__);
-            return false;
-        }
-        LogPrintf("INFO: %s: chainstate cleanup: scanned %" PRIu64 " CTxIndex entries, "
-                  "deleted %" PRIu64 ", cleared %" PRIu64 " vSpent slot(s) across surviving entries.",
-                  __func__, entries_scanned, entries_deleted, vspent_cleared);
-    }
-
-    // Step 3: purge the abandoned CBlockIndex entries from in-memory
-    // mapBlockIndex AND from on-disk LevelDB. The on-disk erase is what
-    // makes Phase 2 durable across restarts -- without it, the next
-    // LoadBlockIndex would rebuild the same ghost pnext linkages from the
-    // stale CDiskBlockIndex.hashNext values and the recovered tip would
-    // appear corrupt again on every subsequent boot. Safe at this init-time
-    // point because no live consumer holds references (wallet / Quorum /
-    // Tally / mempool / net all start later). See PurgeOrphanedBlockIndexEntries
-    // doc comment for why we do this here instead of at runtime.
-    //
-    // NB: PurgeOrphanedBlockIndexEntries nulls each entry in `abandoned_indexes`
-    // as it processes it (deliberately, to make accidental reuse of a freed
-    // pool slot less likely). After this call returns `result.abandoned_indexes`
-    // is a vector of nullptrs -- do not iterate it for any other purpose.
-    PurgeOrphanedBlockIndexEntries(txdb, result.abandoned_indexes);
-
-    // Reconcile registry state with the rewound chain.
+    // The order is the point. Once the rewind in step 2 is on disk (the consistent block's hashNext is null), a start
+    // that follows a crash no longer reaches the abandoned range by the forward walk: it sees those blocks only as
+    // side-chain entries (Phase 2.5), which count no superblock and carry no block positions. A reset still owed then
+    // would never be made. Done first, the reconcile is on disk whatever happens after it, and a start that follows a
+    // crash before the rewind finds the same range and does it again.
     //
     // The non-beacon registries (project, protocol, scraper, sidestake, pool)
     // get the regular clamp via RegistryBookmarks::UpdateRegistryBlockHeights().
@@ -333,6 +292,12 @@ bool RunStartupCoherenceRecovery()
     // LevelDB state from scratch. Cost is a few minutes of chain walk;
     // benefit is correctness regardless of how many SBs were crossed.
     //
+    // This is where recovery differs from a reorg. A reorg disconnects its blocks and reverts their contracts and
+    // superblock activations as it goes, which undoes one superblock exactly, so it rebuilds the beacon registry only
+    // when it cannot: two or more superblocks crossed, or one whose superblock state is not current
+    // (DisconnectBlocksBatch, chainman.cpp). Recovery abandons the range and reverts nothing in it, so one superblock
+    // crossed is enough to reset the beacon registry, and the poll registry is reset after every rewind (below).
+    //
     // The order below matters: Reset() FIRST so the beacon registry's
     // GetDBHeight() returns 0, THEN UpdateRegistryBlockHeights() which
     // skips the beacon registry naturally (0 > target is false).
@@ -342,9 +307,75 @@ bool RunStartupCoherenceRecovery()
         GetBeaconRegistry().Reset();
     }
 
+    // The poll registry is reset after any rewind, superblock or not, so that it holds no record from a block the
+    // rewind dropped. The contract replay from V11 rebuilds polls and votes in this start. Rewinds are rare, so the
+    // replay's cost is too. As for the beacon registry, Reset() comes first so the poll registry's GetDBHeight()
+    // returns 0 and UpdateRegistryBlockHeights() skips it.
+    LogPrintf("INFO: %s: resetting the poll registry for full replay.", __func__);
+    GetPollRegistry().Reset();
+
     RegistryBookmarks bookmarks;
     int target_height = result.pindex_consistent->nHeight;
     bookmarks.UpdateRegistryBlockHeights(target_height);
+
+    {
+        CTxDB txdb;
+
+        if (!txdb.Sync()) {
+            LogPrintf("ERROR: %s: CTxDB::Sync failed after the registry reconcile; cannot continue.", __func__);
+            return false;
+        }
+    }
+
+    LogPrintf("INFO: %s: registry bookmarks reconciled to height %d.", __func__, target_height);
+
+    // Step 2: rewind in-memory chain globals + persist hashBestChain.
+    if (!RewindToConsistentTip(result.pindex_consistent)) {
+        LogPrintf("ERROR: %s: rewind to height %d failed; cannot continue.",
+                  __func__, result.pindex_consistent->nHeight);
+        return false;
+    }
+
+    // Step 3: surgical chainstate cleanup. Delete CTxIndex entries created
+    // by abandoned blocks, and clear vSpent[i] markers on surviving entries
+    // that point into abandoned blocks. Without this, ConnectInputs on the
+    // re-supplied blocks would silently reject the same input as
+    // already-spent. See the "Abandonment-style rewind + surgical
+    // chainstate cleanup" section of doc/block_corruption_recovery_design.md.
+    //
+    // The CTxDB handle is held across step 4 as well so the mapBlockIndex
+    // purge below can erase CDiskBlockIndex entries through the same DB
+    // handle. Both writes commit on destructor scope-exit.
+    CTxDB txdb;
+
+    {
+        uint64_t entries_deleted = 0, vspent_cleared = 0, entries_scanned = 0;
+        if (!txdb.CleanAbandonedRange(result.abandoned_positions,
+                                      &entries_deleted, &vspent_cleared, &entries_scanned)) {
+            LogPrintf("ERROR: %s: CleanAbandonedRange failed; chainstate may be inconsistent. "
+                      "Restart with -reindex.", __func__);
+            return false;
+        }
+        LogPrintf("INFO: %s: chainstate cleanup: scanned %" PRIu64 " CTxIndex entries, "
+                  "deleted %" PRIu64 ", cleared %" PRIu64 " vSpent slot(s) across surviving entries.",
+                  __func__, entries_scanned, entries_deleted, vspent_cleared);
+    }
+
+    // Step 4: purge the abandoned CBlockIndex entries from in-memory
+    // mapBlockIndex AND from on-disk LevelDB. The on-disk erase is what
+    // makes Phase 2 durable across restarts -- without it, the next
+    // LoadBlockIndex would rebuild the same ghost pnext linkages from the
+    // stale CDiskBlockIndex.hashNext values and the recovered tip would
+    // appear corrupt again on every subsequent boot. Safe at this init-time
+    // point because no live consumer holds references (wallet / Quorum /
+    // Tally / mempool / net all start later). See PurgeOrphanedBlockIndexEntries
+    // doc comment for why we do this here instead of at runtime.
+    //
+    // NB: PurgeOrphanedBlockIndexEntries nulls each entry in `abandoned_indexes`
+    // as it processes it (deliberately, to make accidental reuse of a freed
+    // pool slot less likely). After this call returns `result.abandoned_indexes`
+    // is a vector of nullptrs -- do not iterate it for any other purpose.
+    PurgeOrphanedBlockIndexEntries(txdb, result.abandoned_indexes);
 
     // SeenStakes was populated by LoadBlockIndex's Refill(pindexBest) against
     // the pre-rewind tip, so its 2048-slot proof table still contains kernel
@@ -357,8 +388,8 @@ bool RunStartupCoherenceRecovery()
     g_seen_stakes.Clear();
     g_seen_stakes.Refill(pindexBest);
 
-    LogPrintf("INFO: %s: registry bookmarks reconciled to height %d. Phase 2 recovery complete; "
-              "P2P sync will re-supply blocks past the rewound tip.",
+    LogPrintf("INFO: %s: Phase 2 recovery complete at height %d; P2P sync will re-supply blocks past the "
+              "rewound tip.",
               __func__, target_height);
 
     return true;

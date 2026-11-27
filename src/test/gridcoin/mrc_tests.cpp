@@ -10,6 +10,8 @@
 #include <gridcoin/account.h>
 #include <gridcoin/beacon.h>
 #include <gridcoin/claim.h>
+#include <gridcoin/consensus/block_rewards.h>
+#include <gridcoin/contract/contract.h>
 #include <gridcoin/cpid.h>
 #include <gridcoin/mrc.h>
 #include <gridcoin/tally.h>
@@ -27,7 +29,9 @@
 #include <test/state_guard.h>
 #include <txmempool.h>
 #include <test/test_gridcoin.h>
+#include <tinyformat.h>
 #include <util.h>
+#include <validation.h>
 #include <wallet/wallet.h>
 
 #include <memory>
@@ -159,6 +163,173 @@ struct Setup {
         BOOST_REQUIRE(!wallet->GetKey(key.GetPubKey().GetID(), general));
     }
 
+    //! An MRC for the fixture's CPID on the tip, signed with its beacon key.
+    GRC::MRC SignedMRC(const CAmount research_subsidy, const CAmount fee)
+    {
+        return SignedMRC(cpid, research_subsidy, fee);
+    }
+
+    //! An MRC for \p mrc_cpid on the tip, signed with the fixture's beacon key.
+    GRC::MRC SignedMRC(const GRC::Cpid& mrc_cpid, const CAmount research_subsidy, const CAmount fee)
+    {
+        GRC::MRC mrc(GRC::MRC::VersionForBlock(pindex->nHeight + 1));
+        mrc.m_mining_id = mrc_cpid;
+        mrc.m_client_version = "6.0.0.0";
+        mrc.m_last_block_hash = pindex->GetBlockHash();
+        mrc.m_research_subsidy = research_subsidy;
+        mrc.m_fee = fee;
+
+        BOOST_REQUIRE(mrc.Sign(key));
+
+        return mrc;
+    }
+
+    //! An output of \p value to the address of the fixture's beacon, as an MRC is paid.
+    CTxOut BeaconOutput(const CAmount value) const
+    {
+        CScript script;
+        script.SetDestination(beacon.GetAddress());
+
+        return CTxOut(value, script);
+    }
+
+    //! An output of \p value to the foundation, as its share of the MRC fees is paid.
+    static CTxOut FoundationOutput(const CAmount value)
+    {
+        CScript script;
+        script.SetDestination(FoundationSideStakeAddress());
+
+        return CTxOut(value, script);
+    }
+
+    //!
+    //! \brief Judge, as block validation does, a block on the tip that pays \p mrc. Its coinstake returns the stake
+    //! it spends and nothing more, and then carries \p mrc_outputs. Its claim is a non-cruncher's.
+    //!
+    //! \return The error BlockRewardRules::Check() reports, or an empty string if it accepts the block.
+    //!
+    std::string JudgeBlockPayingMRC(
+        const GRC::MRC& mrc,
+        const int block_version,
+        const std::vector<CTxOut>& mrc_outputs) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+    {
+        return JudgeBlockPayingMRCs({mrc}, block_version, mrc_outputs);
+    }
+
+    //! As JudgeBlockPayingMRC(), for a block that pays each of \p mrcs, which name different CPIDs.
+    //! With \p with_superblock the block's claim carries a superblock as well.
+    std::string JudgeBlockPayingMRCs(
+        const std::vector<GRC::MRC>& mrcs,
+        const int block_version,
+        const std::vector<CTxOut>& mrc_outputs,
+        const bool with_superblock = false) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+    {
+        const CAmount stake = 100 * COIN;
+
+        CBlock block;
+        block.nVersion = block_version;
+        block.nTime = pindex->nTime + 64;
+
+        GRC::Claim claim;
+        std::vector<CTransaction> mrc_txs;
+
+        for (const GRC::MRC& mrc : mrcs) {
+            CMutableTransaction mrc_tx;
+            mrc_tx.nTime = block.nTime;
+            mrc_tx.vContracts.emplace_back(GRC::MakeContract<GRC::MRC>(3, GRC::ContractAction::ADD, mrc));
+
+            mrc_txs.emplace_back(mrc_tx);
+            claim.m_mrc_tx_map[*mrc.m_mining_id.TryCpid()] = mrc_txs.back().GetHash();
+        }
+
+        if (with_superblock) {
+            GRC::Superblock superblock;
+            superblock.m_cpids.Add(cpid, GRC::Magnitude::RoundFrom(1));
+            superblock.m_projects.Add("project", GRC::Superblock::ProjectStats(1, 1, 1));
+            BOOST_REQUIRE(superblock.WellFormed());
+
+            claim.m_superblock.Replace(std::move(superblock));
+        }
+
+        CMutableTransaction coinbase;
+        coinbase.vContracts.emplace_back(GRC::MakeContract<GRC::Claim>(3, GRC::ContractAction::ADD, claim));
+
+        CKey stake_key;
+        stake_key.MakeNewKey(false);
+
+        CScript stake_script;
+        stake_script.SetDestination(stake_key.GetPubKey().GetID());
+
+        CMutableTransaction coinstake;
+        coinstake.vin.resize(1);
+        coinstake.vout.resize(1);
+        coinstake.vout[0].SetEmpty();
+        coinstake.vout.emplace_back(stake, stake_script);
+
+        for (const CTxOut& output : mrc_outputs) {
+            coinstake.vout.push_back(output);
+        }
+
+        block.vtx.push_back(CTransaction(coinbase));
+        block.vtx.push_back(CTransaction(coinstake));
+
+        for (const CTransaction& mrc_tx : mrc_txs) {
+            block.vtx.push_back(mrc_tx);
+        }
+
+        uint256 block_hash = InsecureRand256();
+        CBlockIndex index;
+        index.phashBlock = &block_hash;
+        index.pprev = pindex;
+        index.nHeight = pindex->nHeight + 1;
+        index.nVersion = block_version;
+        index.nTime = block.nTime;
+
+        std::string error;
+
+        if (GRC::BlockRewardRules(block, &index, stake, 0, 0, 0).Check(error)) {
+            return {};
+        }
+
+        return error;
+    }
+
+    //!
+    //! \brief Give another CPID an active beacon that carries the fixture's key, and the fixture's accrual of 72.
+    //! The case removes the CPID's account when it is done (GRC::Tally::RemoveAccount).
+    //!
+    GRC::Cpid AddCpidWithFixtureKey() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+    {
+        const GRC::Cpid other_cpid(InsecureRandBytes(16));
+        BOOST_REQUIRE(other_cpid != cpid);
+
+        GRC::ResearchAccount& other_account = GRC::Tally::CreateAccount(other_cpid);
+        other_account.m_first_block_ptr = pindexGenesisBlock;
+        other_account.m_last_block_ptr = pindexGenesisBlock;
+        other_account.m_accrual = 72;
+
+        const GRC::Contract contract = GRC::MakeContract<GRC::BeaconPayload>(
+            GRC::ContractAction::ADD,
+            other_cpid,
+            key.GetPubKey());
+
+        // The registry keeps a beacon under its transaction's hash, so this transaction carries its contract: the
+        // fixture's own advertisement is an empty transaction of the same time.
+        CMutableTransaction beacon_tx;
+        beacon_tx.nTime = pindexGenesisBlock->nTime;
+        beacon_tx.vContracts.push_back(contract);
+
+        GRC::GetBeaconRegistry().Add({contract, CTransaction(beacon_tx), pindexGenesisBlock});
+        GRC::GetBeaconRegistry().ActivatePending({key.GetPubKey().GetID()}, beacon_tx.nTime, uint256(), 0);
+
+        const GRC::BeaconOption other_beacon = GRC::GetBeaconRegistry().TryActive(other_cpid, pindex->nTime);
+        BOOST_REQUIRE(other_beacon);
+        BOOST_REQUIRE(other_beacon->GetAddress() == beacon.GetAddress());
+        BOOST_REQUIRE(GRC::GetBeaconRegistry().TryActive(cpid, pindex->nTime));
+
+        return other_cpid;
+    }
+
     ~Setup() {
         GRC::GetBeaconRegistry().Reset();
         gArgs.ForceSetArg("forcecpid", "");
@@ -221,9 +392,47 @@ BOOST_AUTO_TEST_CASE(it_properly_records_blocks)
     account.m_last_block_ptr = account.m_first_block_ptr;
 }
 
+// The reward blocks are recorded and forgotten through the tally, as block connection and disconnection do.
+// Forgetting a reward puts the account's last reward block back to where recording had it before.
+BOOST_AUTO_TEST_CASE(forgetting_a_reward_looks_for_a_block_s_mrcs_before_its_stake)
+{
+    CBlockIndex* const later = pindex;
+    CBlockIndex* const both = pindex->pprev->pprev;
+
+    // The CPID is recorded on the stake of two blocks, and on an MRC of the first of them.
+    both->SetResearcherContext(cpid, 72, 0.0);
+    both->AddMRCResearcherContext(cpid, 72, 0.0);
+    later->SetResearcherContext(cpid, 72, 0.0);
+
+    #if defined(__clang__)
+    #pragma clang diagnostic push
+    #pragma clang diagnostic ignored "-Wthread-safety-analysis"
+    #endif
+    for (CBlockIndex* index = pindexGenesisBlock; index != later; index = index->pnext) {
+        GRC::Tally::RecordRewardBlock(index);
+    }
+    #if defined(__clang__)
+    #pragma clang diagnostic pop
+    #endif
+
+    // A block's stake is recorded first and its MRCs second, and an MRC is recorded at the block before.
+    BOOST_REQUIRE(account.m_last_block_ptr == both->pprev);
+
+    GRC::Tally::RecordRewardBlock(later);
+    BOOST_REQUIRE(account.m_last_block_ptr == later);
+
+    GRC::Tally::ForgetRewardBlock(later);
+    BOOST_CHECK(account.m_last_block_ptr == both->pprev);
+
+    GRC::Tally::ForgetRewardBlock(both);
+    BOOST_CHECK(account.m_last_block_ptr == nullptr);
+
+    account.m_last_block_ptr = account.m_first_block_ptr;
+}
+
 BOOST_AUTO_TEST_CASE(it_has_proper_fees_for_newbies)
 {
-    GRC::MRC mrc;
+    GRC::MRC mrc(1);
     mrc.m_mining_id = cpid;
     mrc.m_research_subsidy = 72;
 
@@ -244,7 +453,7 @@ BOOST_AUTO_TEST_CASE(it_has_proper_fees_for_newbies)
 
 BOOST_AUTO_TEST_CASE(it_rejects_invalid_claims)
 {
-    GRC::MRC mrc;
+    GRC::MRC mrc(1);
 
     LOCK(cs_main);
 
@@ -338,9 +547,7 @@ BOOST_AUTO_TEST_CASE(it_creates_valid_mrc_claims)
 
     LOCK2(cs_main, wallet->cs_wallet);
 
-    pindex->pprev->AddMRCResearcherContext(cpid, 72, 0.0);
-
-    BOOST_CHECK(CreateRestOfTheBlock(block, mtxCoinbase, mtxCoinstake, pindex->pprev, mrc_map));
+    BOOST_CHECK(CreateRestOfTheBlock(block, mtxCoinbase, mtxCoinstake, pindex->pprev, mrc_map, false));
 
     GRC::MRC mrc;
     CAmount reward{0}, fee{0};
@@ -640,6 +847,275 @@ BOOST_AUTO_TEST_CASE(mrc_snapshot_no_error_under_staking_only)
     BOOST_CHECK_EQUAL(snap.reward, accrual);
     BOOST_CHECK(snap.min_fee > 0);
     BOOST_CHECK(snap.min_fee < snap.reward);
+}
+
+BOOST_AUTO_TEST_CASE(an_mrc_is_eligible_beside_a_claim_for_another_cpid)
+{
+    GRC::MRC mrc;
+    mrc.m_mining_id = cpid;
+    mrc.m_fee = 28;
+
+    const GRC::Cpid other_cpid(InsecureRandBytes(16));
+    BOOST_REQUIRE(other_cpid != cpid);
+
+    BOOST_CHECK(GRC::MRCEligibleForClaim(other_cpid, mrc));
+}
+
+BOOST_AUTO_TEST_CASE(an_mrc_is_eligible_beside_a_noncruncher_claim)
+{
+    GRC::MRC mrc;
+    mrc.m_mining_id = cpid;
+    mrc.m_fee = 28;
+
+    // A non-cruncher claim names no CPID.
+    BOOST_CHECK(GRC::MRCEligibleForClaim(GRC::MiningId::ForNoncruncher().TryCpid(), mrc));
+}
+
+BOOST_AUTO_TEST_CASE(an_mrc_is_not_eligible_beside_a_claim_for_its_own_cpid)
+{
+    GRC::MRC mrc;
+    mrc.m_mining_id = cpid;
+
+    BOOST_CHECK(!GRC::MRCEligibleForClaim(cpid, mrc));
+}
+
+BOOST_AUTO_TEST_CASE(an_mrc_that_names_no_cpid_is_not_eligible)
+{
+    GRC::MRC mrc;
+    mrc.m_mining_id = GRC::MiningId::ForNoncruncher();
+
+    BOOST_CHECK(!GRC::MRCEligibleForClaim(cpid, mrc));
+    BOOST_CHECK(!GRC::MRCEligibleForClaim(GRC::MiningId::ForNoncruncher().TryCpid(), mrc));
+}
+
+
+// The foundation's share of an MRC's fee is the fee times the foundation's allocation, in whole Halfords. An MRC
+// whose fee leaves no share is not eligible. The two MRCs here are valid in every other respect.
+BOOST_AUTO_TEST_CASE(an_mrc_whose_fee_leaves_the_foundation_no_share_is_not_eligible)
+{
+    LOCK(cs_main);
+
+    account.m_accrual = 72;
+
+    BOOST_REQUIRE(FoundationSideStakeAllocation() == Fraction(4, 5));
+
+    const GRC::Cpid other_cpid(InsecureRandBytes(16));
+    BOOST_REQUIRE(other_cpid != cpid);
+
+    // Two MRCs whose fee times the foundation's allocation is below one Halford.
+    for (const GRC::MRC& mrc : {SignedMRC(2, 0), SignedMRC(1, 1)}) {
+        BOOST_REQUIRE_EQUAL(mrc.ComputeMRCFee(), 0);
+        BOOST_REQUIRE(ValidateMRC(pindex, mrc));
+
+        BOOST_CHECK(!GRC::MRCEligibleForClaim(other_cpid, mrc));
+        BOOST_CHECK(!GRC::MRCEligibleForClaim(GRC::MiningId::ForNoncruncher().TryCpid(), mrc));
+    }
+}
+
+BOOST_AUTO_TEST_CASE(an_mrc_whose_fee_leaves_the_foundation_a_share_is_eligible)
+{
+    LOCK(cs_main);
+
+    account.m_accrual = 72;
+
+    const GRC::Cpid other_cpid(InsecureRandBytes(16));
+    BOOST_REQUIRE(other_cpid != cpid);
+
+    // Two MRCs whose fee times the foundation's allocation is at least one Halford.
+    for (const GRC::MRC& mrc : {SignedMRC(2, 2), SignedMRC(72, 28)}) {
+        BOOST_REQUIRE(ValidateMRC(pindex, mrc));
+
+        BOOST_CHECK(GRC::MRCEligibleForClaim(other_cpid, mrc));
+        BOOST_CHECK(GRC::MRCEligibleForClaim(GRC::MiningId::ForNoncruncher().TryCpid(), mrc));
+    }
+}
+
+// A block pays MRCs of one version: version 2 from block version 15 and version 1 below it. The version is that of
+// the block after the MRC's last block.
+BOOST_AUTO_TEST_CASE(an_mrc_is_of_the_version_of_the_block_that_pays_it)
+{
+    LOCK(cs_main);
+
+    account.m_accrual = 72;
+
+    const auto signed_mrc = [&](const uint32_t version) {
+        GRC::MRC mrc(version);
+        mrc.m_mining_id = cpid;
+        mrc.m_client_version = "6.0.0.0";
+        mrc.m_last_block_hash = pindex->GetBlockHash();
+        mrc.m_research_subsidy = 72;
+        mrc.m_fee = 28;
+
+        BOOST_REQUIRE(mrc.Sign(key));
+        BOOST_REQUIRE(mrc.WellFormed());
+
+        return mrc;
+    };
+
+    BOOST_CHECK_EQUAL(GRC::MRC::VersionForBlock(pindex->nHeight + 1), 1U);
+    BOOST_CHECK(ValidateMRC(pindex, signed_mrc(1)));
+    BOOST_CHECK(!ValidateMRC(pindex, signed_mrc(2)));
+
+    {
+        // Block version 15 from the block that pays the MRC.
+        grc_test::V15HeightGuard v15(pindex->nHeight + 1);
+
+        BOOST_CHECK_EQUAL(GRC::MRC::VersionForBlock(pindex->nHeight + 1), 2U);
+        BOOST_CHECK(ValidateMRC(pindex, signed_mrc(2)));
+        BOOST_CHECK(!ValidateMRC(pindex, signed_mrc(1)));
+    }
+
+    {
+        // Block version 15 from the block after that: the block that pays the MRC is still below it.
+        grc_test::V15HeightGuard v15(pindex->nHeight + 2);
+
+        BOOST_CHECK(ValidateMRC(pindex, signed_mrc(1)));
+        BOOST_CHECK(!ValidateMRC(pindex, signed_mrc(2)));
+    }
+}
+
+// The signature of a version 2 MRC covers every field of the payload.
+BOOST_AUTO_TEST_CASE(a_version_2_mrc_s_signature_covers_every_field)
+{
+    LOCK(cs_main);
+
+    account.m_accrual = 72;
+
+    grc_test::V15HeightGuard v15(pindex->nHeight + 1);
+
+    const GRC::MRC mrc = SignedMRC(72, 28);
+    BOOST_REQUIRE_EQUAL(mrc.m_version, 2U);
+    BOOST_REQUIRE(ValidateMRC(pindex, mrc));
+
+    GRC::MRC less_subsidy = mrc;
+    less_subsidy.m_research_subsidy = mrc.m_fee;
+    BOOST_CHECK(!ValidateMRC(pindex, less_subsidy));
+
+    GRC::MRC other_client = mrc;
+    other_client.m_client_version = "6.0.0.1";
+    BOOST_CHECK(!ValidateMRC(pindex, other_client));
+
+    GRC::MRC other_organization = mrc;
+    other_organization.m_organization = "organization";
+    BOOST_CHECK(!ValidateMRC(pindex, other_organization));
+
+    GRC::MRC more_fee = mrc;
+    more_fee.m_fee = mrc.m_fee + 1;
+    BOOST_CHECK(!ValidateMRC(pindex, more_fee));
+}
+
+// The wallet makes an MRC of the version of the block that would pay it.
+BOOST_AUTO_TEST_CASE(createmrc_makes_the_version_of_the_block_that_pays)
+{
+    account.m_accrual = 72;
+
+    LOCK2(cs_main, wallet->cs_wallet);
+
+    {
+        GRC::MRC mrc;
+        CAmount reward{0}, fee{0};
+        GRC::CreateMRC(pindex->pprev, mrc, reward, fee, wallet);
+
+        BOOST_CHECK_EQUAL(mrc.m_version, 1U);
+        BOOST_CHECK(ValidateMRC(pindex->pprev, mrc));
+    }
+
+    {
+        grc_test::V15HeightGuard v15(pindex->pprev->nHeight + 1);
+
+        GRC::MRC mrc;
+        CAmount reward{0}, fee{0};
+        GRC::CreateMRC(pindex->pprev, mrc, reward, fee, wallet);
+
+        BOOST_CHECK_EQUAL(mrc.m_version, 2U);
+        BOOST_CHECK(ValidateMRC(pindex->pprev, mrc));
+    }
+}
+
+// Block validation judges a block that pays one MRC. The coinstake's outputs after the stake are named in each case.
+BOOST_AUTO_TEST_CASE(a_block_that_pays_an_mrc_with_a_foundation_share_is_accepted)
+{
+    LOCK(cs_main);
+
+    account.m_accrual = 72;
+
+    // Subsidy 72, fee 28: 44 to the researcher, 28 * 4 / 5 = 22 to the foundation, and 6 to the staker, who here
+    // does not take them.
+    const GRC::MRC mrc = SignedMRC(72, 28);
+    BOOST_REQUIRE(ValidateMRC(pindex, mrc));
+
+    for (const int block_version : {14, 15}) {
+        BOOST_CHECK_EQUAL(JudgeBlockPayingMRC(mrc, block_version, {FoundationOutput(22), BeaconOutput(44)}), "");
+    }
+}
+
+// From block version 15 a block may not pay an MRC whose fee leaves the foundation no share: validation applies the
+// rule the miner selects by.
+BOOST_AUTO_TEST_CASE(a_block_that_pays_an_mrc_with_no_foundation_share_is_refused_from_v15)
+{
+    LOCK(cs_main);
+
+    account.m_accrual = 72;
+
+    const std::string refusal = strprintf("MRC for CPID %s leaves the foundation no share of its fee", cpid.ToString());
+
+    const GRC::MRC no_fee = SignedMRC(2, 0);
+    BOOST_REQUIRE(ValidateMRC(pindex, no_fee));
+
+    BOOST_CHECK_EQUAL(JudgeBlockPayingMRC(no_fee, 15, {BeaconOutput(2)}), refusal);
+    BOOST_CHECK_EQUAL(JudgeBlockPayingMRC(no_fee, 15, {FoundationOutput(0), BeaconOutput(2)}), refusal);
+
+    const GRC::MRC all_fee = SignedMRC(1, 1);
+    BOOST_REQUIRE(ValidateMRC(pindex, all_fee));
+
+    BOOST_CHECK_EQUAL(JudgeBlockPayingMRC(all_fee, 15, {}), refusal);
+    BOOST_CHECK_EQUAL(JudgeBlockPayingMRC(all_fee, 15, {FoundationOutput(0)}), refusal);
+}
+
+
+// From block version 15 a block's MRCs are paid at different addresses, the rule the miner selects by.
+BOOST_AUTO_TEST_CASE(a_block_that_pays_two_mrcs_at_one_address_is_refused_from_v15)
+{
+    LOCK(cs_main);
+
+    account.m_accrual = 72;
+
+    const GRC::Cpid other_cpid = AddCpidWithFixtureKey();
+
+    // Two MRCs, one for each CPID. Each is due 44, and the foundation 22 of each fee of 28.
+    const GRC::MRC mrc = SignedMRC(72, 28);
+    const GRC::MRC other_mrc = SignedMRC(other_cpid, 72, 28);
+    BOOST_REQUIRE(ValidateMRC(pindex, mrc));
+    BOOST_REQUIRE(ValidateMRC(pindex, other_mrc));
+
+    // The coinstake carries the foundation's output and an output for each MRC.
+    const std::string error = JudgeBlockPayingMRCs(
+        {mrc, other_mrc}, 15, {FoundationOutput(44), BeaconOutput(22), BeaconOutput(22)});
+
+    GRC::Tally::RemoveAccount(other_cpid);
+
+    // The MRCs are judged in the order of the block's transactions, so the second is the one refused.
+    BOOST_CHECK_EQUAL(error, strprintf("MRC for CPID %s is paid at an address another MRC of the block is paid at",
+                                       other_cpid.ToString()));
+}
+
+// From block version 15 a block that carries a superblock pays no MRC, the rule the miner builds by.
+BOOST_AUTO_TEST_CASE(a_block_that_carries_a_superblock_and_pays_an_mrc_is_refused_from_v15)
+{
+    LOCK(cs_main);
+
+    account.m_accrual = 72;
+
+    const GRC::MRC mrc = SignedMRC(72, 28);
+    BOOST_REQUIRE(ValidateMRC(pindex, mrc));
+
+    const std::vector<CTxOut> outputs = {FoundationOutput(22), BeaconOutput(44)};
+
+    BOOST_CHECK_EQUAL(JudgeBlockPayingMRCs({mrc}, 15, outputs, /* with_superblock */ true),
+                      "A block that carries a superblock lists MRCs in its claim: 1");
+
+    // A block version 15 block that carries no superblock pays the same MRC.
+    BOOST_CHECK_EQUAL(JudgeBlockPayingMRCs({mrc}, 15, outputs), "");
 }
 
 BOOST_AUTO_TEST_SUITE_END()

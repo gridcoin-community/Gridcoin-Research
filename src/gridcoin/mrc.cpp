@@ -25,7 +25,8 @@ namespace {
 //! \param last_block_hash: Hash of the block at the head of the chain.
 //! \param mrc: mrc transaction of the block that contains the claim.
 //!
-//! \return Hash of the CPID, mrc fee, and last block hash contained in the claim.
+//! \return The hash that the MRC's signature covers. For a version 2 MRC it is the hash of every field but the
+//! signature, with the last block hash given.
 //!
 uint256 GetMRCHash(
     const MRC& mrc,
@@ -37,11 +38,21 @@ uint256 GetMRCHash(
         return uint256();
     }
 
-        CHashWriter hasher(SER_NETWORK, PROTOCOL_VERSION);
+    CHashWriter hasher(SER_NETWORK, PROTOCOL_VERSION);
 
+    if (mrc.m_version >= 2) {
+        hasher << mrc.m_version
+               << mrc.m_mining_id
+               << mrc.m_client_version
+               << mrc.m_organization
+               << mrc.m_research_subsidy
+               << mrc.m_fee
+               << last_block_hash;
+    } else {
         hasher << *cpid << mrc.m_fee << last_block_hash;
+    }
 
-        return hasher.GetHash();
+    return hasher.GetHash();
 }
 } // anonymous namespace
 
@@ -51,6 +62,11 @@ uint256 GetMRCHash(
 
 MRC::MRC() : MRC(CURRENT_VERSION)
 {
+}
+
+uint32_t MRC::VersionForBlock(const int height)
+{
+    return IsV15Enabled(height) ? 2 : 1;
 }
 
 MRC::MRC(uint32_t version)
@@ -285,6 +301,34 @@ bool GRC::MRCTermsHold(CAmount fee_now, CAmount reward_now, CAmount confirmed_fe
     return fee_now <= confirmed_fee && reward_now - fee_now >= confirmed_net;
 }
 
+bool GRC::MRCLeavesFoundationShare(const MRC& mrc)
+{
+    const Fraction allocation = FoundationSideStakeAllocation();
+
+    if (!allocation.IsNonZero()) {
+        return true;
+    }
+
+    return mrc.m_fee * allocation.GetNumerator() / allocation.GetDenominator() > 0;
+}
+
+bool GRC::MRCEligibleForClaim(const CpidOption& claim_cpid, const MRC& mrc)
+{
+    const CpidOption mrc_cpid = mrc.m_mining_id.TryCpid();
+
+    return mrc_cpid && (!claim_cpid || *mrc_cpid != *claim_cpid) && MRCLeavesFoundationShare(mrc);
+}
+
+bool GRC::MRCPaidAtNewAddress(std::set<CTxDestination>& paid_addresses, const CTxDestination& address)
+{
+    return paid_addresses.insert(address).second;
+}
+
+bool GRC::BlockMayPayMRCs(const bool carries_superblock)
+{
+    return !carries_superblock;
+}
+
 namespace {
 //!
 //! \brief Sign the mrc.
@@ -383,7 +427,19 @@ void GRC::CreateMRC(CBlockIndex* pindex,
 
     mrc.m_mining_id = researcher->Id();
 
+    // The MRC is of the version that the block after pindex pays.
+    mrc.m_version = MRC::VersionForBlock(pindex->nHeight + 1);
+
     if (const GRC::CpidOption cpid = mrc.m_mining_id.TryCpid()) {
+        // As in the miner: when the check of the CPID's reward blocks does not pass, ask for the accrual snapshot
+        // rebuild and form no MRC until it has run. The rebuild's log line carries what the check found.
+        if (const std::optional<GRC::Tally::RewardBlocks> found = GRC::Tally::VerifyRewardBlocks(*cpid, pindex)) {
+            GRC::Tally::RequestAccrualRebuild(strprintf("cpid=%s %s", cpid->ToString(), found->ToString()));
+
+            throw MRC_error(strprintf("%s: Research reward claims are paused; try again in a few minutes.",
+                                      __func__));
+        }
+
         mrc.m_research_subsidy = GRC::Tally::GetAccrual(*cpid, pindex->nTime, pindex);
 
         // If no pending research subsidy value exists, bail.

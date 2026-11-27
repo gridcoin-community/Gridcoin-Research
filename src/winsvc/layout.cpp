@@ -82,8 +82,11 @@ struct ConfSetting
 
 //! Every name \p conf_text sets, with its section, as ArgsManager reads the file
 //! (GetConfigOptions, then InterpretOption): a [section] header prefixes the names after it with
-//! "<section>.", the text up to the first '.' of a name is its section, and a leading "no" is a
-//! negation of the name after it. Also whether the text has a [section] header.
+//! "<section>.", the text up to the first '.' of a name is its section, and a leading "no" is
+//! taken off as a negation. InterpretOption leaves the "no" on a name that is itself an option
+//! (noncruncher, nonewprivs, nobuildwarn). None of those, with or without its "no", is a name the
+//! caller asks about, so the "no" is taken off every name here. Also whether the text has a
+//! [section] header.
 std::vector<ConfSetting> ConfSettings(const std::string& conf_text, bool& has_section_header)
 {
     has_section_header = false;

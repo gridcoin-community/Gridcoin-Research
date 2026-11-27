@@ -2,6 +2,8 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
+#include "chainparams.h"
+#include "chainparamsbase.h"
 #include "hash.h"
 #include "gridcoin/contract/contract.h"
 #include "gridcoin/project.h"
@@ -850,6 +852,23 @@ BOOST_AUTO_TEST_CASE(it_takes_payload_versions_from_the_stream_not_the_chain_tip
         CheckParsedVersion(GRC::ProtocolEntryPayload::Parse("key", "value"), 1);
         CheckParsedVersion(GRC::ScraperEntryPayload(scraper_address, "true"), 1);
     }
+}
+
+BOOST_AUTO_TEST_SUITE_END()
+
+// -----------------------------------------------------------------------------
+// Contract replay
+// -----------------------------------------------------------------------------
+
+BOOST_AUTO_TEST_SUITE(ContractReplay)
+
+BOOST_AUTO_TEST_CASE(the_replay_floor_is_set_per_network)
+{
+    // Mainnet and testnet keep the floors they always had; regtest replays from its genesis, so a regtest chain can
+    // check what a replay or a beacon registry rebuild produces.
+    BOOST_CHECK_EQUAL(CreateChainParams(CBaseChainParams::MAIN)->GetConsensus().ContractReplayFloorHeight, 164618);
+    BOOST_CHECK_EQUAL(CreateChainParams(CBaseChainParams::TESTNET)->GetConsensus().ContractReplayFloorHeight, 1);
+    BOOST_CHECK_EQUAL(CreateChainParams(CBaseChainParams::REGTEST)->GetConsensus().ContractReplayFloorHeight, 0);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

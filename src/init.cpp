@@ -1175,7 +1175,9 @@ void SetupServerArgs()
                                                      DEFAULT_MAX_SIG_CACHE_SIZE, MAX_SIG_CACHE_ENTRIES),
                    ArgsManager::ALLOW_ANY | ArgsManager::SETTING_FREE, OptionsCategory::WALLET);
     argsman.AddArg("-contractchangetoinputaddress", "Change from a contract transaction is returned to an input address "
-                                                    "rather than creating a new change address (default: 0)",
+                                                    "rather than creating a new change address (default: 0). Whatever "
+                                                    "this setting, a vote returns its change to the address of its "
+                                                    "largest single-key input, or to a new address if none has one.",
                    ArgsManager::ALLOW_ANY | ArgsManager::IMMEDIATE_EFFECT | ArgsManager::SETTING_FREE,
                    OptionsCategory::WALLET);
 
@@ -1361,16 +1363,17 @@ void SetupServerArgs()
     // Feature-specific consensus-height test overrides. Each entry pairs with a
     // gArgs.GetArg(...) call in the corresponding IsXxxEnabled helper in
     // chainparams.h. Registering them here suppresses the "argument not
-    // registered" startup warning when an isolated-testnet node sets the
-    // height via the override.
+    // registered" startup warning when a regtest node sets the height via the
+    // override.
     hidden_args.emplace_back("-pollmultiaddressheight");
     hidden_args.emplace_back("-autogreylistdeepcopyheight");
     hidden_args.emplace_back("-autogreylisttotalcreditfixheight");
     hidden_args.emplace_back("-autogreylistredesignheight");
 
     // This puts hidden options in the form of -clear<type>history, where <type> is the contract types that have a
-    // registry with a backing db. This is currently beacon, project, protocol, scraper, sidestake (starting at V13
-    // height), and the two pool types, which share the pool registry.
+    // registry with a backing db. This is currently beacon, project, protocol, scraper, sidestake (from V13),
+    // pool_register and pool_approve (one pool registry), and poll and vote (one poll registry, from V11; either
+    // -clearpollhistory or -clearvotehistory clears both of its dbs).
     for (const auto& contract_type : GRC::RegistryBookmarks::CONTRACT_TYPES_WITH_REG_DB) {
         std::string history_arg = "-clear" + GRC::Contract::Type::ToString(contract_type) + "history";
 
@@ -1379,6 +1382,11 @@ void SetupServerArgs()
 
     // Also allow the -clearallregistryhistory hidden argument to support clearing all of the registries.
     hidden_args.emplace_back("-clearallregistryhistory");
+
+    // The legacy poll store (polls below V11): -clearlegacypollhistory clears it at startup, and -legacypollfloor
+    // moves its floor from the research-age height.
+    hidden_args.emplace_back("-clearlegacypollhistory");
+    hidden_args.emplace_back("-legacypollfloor");
 
     // -boinckey should now be removed entirely. It is put here to prevent the executable erroring out on
     // an invalid parameter for old clients that may have left the argument in.
@@ -1410,7 +1418,7 @@ void SetupServerArgs()
 
     hidden_args.emplace_back("-upgradewallet");
 
-    // Isolated-testnet / regtest override for the V15 (on-chain pool
+    // Regtest override for the V15 (on-chain pool
     // registration, issue #1783) activation height. Default chainparams
     // value is std::numeric_limits<int>::max() until pinned by a follow-up
     // release; this arg lets dev runs activate POOL contracts early so the
@@ -1418,21 +1426,20 @@ void SetupServerArgs()
     // in chainparams.cpp.
     hidden_args.emplace_back("-blockv15height");
 
-    // Isolated-testnet / regtest override for the message contract disable height.
+    // Regtest override for the message contract disable height.
     // The default chainparams value is std::numeric_limits<int>::max() until
     // pinned by a follow-up release; the arg lets dev runs disable message contracts
     // early so the validation can be tested.
     hidden_args.emplace_back("-messagecontractdisableheight");
 
-    // Isolated-testnet / regtest override for the PENDING / OPEN expiration
+    // Regtest override for the PENDING / OPEN expiration
     // window on POOL contracts (issue #1783). Default chainparams value is
     // 28800 blocks (~30 days at mainnet ~90s spacing); this arg shortens
     // the window so dev runs can exercise expiration boundaries without
-    // waiting weeks. Ignored on mainnet, like every hidden consensus
-    // override (ConsensusOverridesAllowed()). On regtest and testnet it is
+    // waiting weeks. Ignored on mainnet and testnet, like every hidden
+    // consensus override (ConsensusOverridesAllowed()), because it is
     // CONSENSUS-AFFECTING — nodes with differing values disagree on
-    // POOL_REGISTER admission across expiration boundaries, so on the
-    // public testnet a node with a different value forks off.
+    // POOL_REGISTER admission across expiration boundaries and fork.
     // Read via GetPendingPoolRetention in chainparams.cpp.
     hidden_args.emplace_back("-pendingpoolretention");
 
@@ -2224,29 +2231,29 @@ bool AppInit2(ThreadHandlerPtr threads)
     LogPrintf("Block version 15 hard fork configured for block %d", GetBlockV15Height());
 
     // Same rationale as the heights above and the retention below: this value is
-    // consensus-affecting and carries a hidden isolated-testnet override, so a
+    // consensus-affecting and carries a hidden regtest override, so a
     // node running a different effective value from its peers would otherwise
     // have nothing in the log to show it during incident diagnosis.
     LogPrintf("MESSAGE contracts disabled from block %d", GetMessageContractDisableHeight());
 
-    // Surface the effective POOL PENDING/OPEN retention so an isolated-testnet
+    // Surface the effective POOL PENDING/OPEN retention so a regtest
     // -pendingpoolretention override is visible in the log and an accidental
     // mismatch across nodes is diagnosable (the value is consensus-affecting).
     LogPrintf("POOL pending/open retention configured at %d blocks", GetPendingPoolRetention());
 
-    // The hidden consensus overrides apply only on regtest and testnet, so on
-    // mainnet the heights logged here are the chainparams ones. Say why when an
+    // The hidden consensus overrides apply only on regtest, so on mainnet and
+    // testnet the heights logged here are the chainparams ones. Say why when an
     // override was set anyway.
     if (!ConsensusOverridesAllowed()) {
         for (const char* arg : CONSENSUS_OVERRIDE_ARGS) {
             if (gArgs.IsArgSet(arg)) {
-                LogPrintf("WARNING: %s is ignored on this network: consensus overrides apply only on regtest and testnet", arg);
+                LogPrintf("WARNING: %s is ignored on this network: consensus overrides apply only on regtest", arg);
             }
         }
     }
 
     // Same rationale for the AutoGreylist activation heights: all four are
-    // consensus-affecting, all four carry hidden isolated-testnet overrides, and
+    // consensus-affecting, all four carry hidden regtest overrides, and
     // none of them was previously surfaced -- so a node running a different
     // effective value from its peers had nothing in the log to show it.
     {

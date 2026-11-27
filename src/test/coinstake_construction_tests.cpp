@@ -258,9 +258,8 @@ BOOST_AUTO_TEST_CASE(mrc_outputs_appended)
     GRC::Claim claim;
     BOOST_CHECK(CreateGridcoinReward(coinbase, coinstake, block, pindex->pprev, nReward, claim));
 
-    // Add MRC researcher context and create an MRC
-    pindex->pprev->AddMRCResearcherContext(cpid, 72, 0.0);
-    BOOST_CHECK(CreateRestOfTheBlock(block, coinbase, coinstake, pindex->pprev, mrc_map));
+    // Create an MRC
+    BOOST_CHECK(CreateRestOfTheBlock(block, coinbase, coinstake, pindex->pprev, mrc_map, false));
 
     GRC::MRC mrc;
     CAmount mrc_reward{0}, mrc_fee{0};
@@ -483,8 +482,7 @@ BOOST_AUTO_TEST_CASE(full_pipeline_roundtrip)
     BOOST_CHECK(CreateGridcoinReward(coinbase, coinstake, block, pindex->pprev, nReward, claim));
 
     // Step 2: CreateMRCRewards
-    pindex->pprev->AddMRCResearcherContext(cpid, 72, 0.0);
-    BOOST_CHECK(CreateRestOfTheBlock(block, coinbase, coinstake, pindex->pprev, mrc_map));
+    BOOST_CHECK(CreateRestOfTheBlock(block, coinbase, coinstake, pindex->pprev, mrc_map, false));
 
     GRC::MRC mrc;
     CAmount mrc_reward{0}, mrc_fee{0};

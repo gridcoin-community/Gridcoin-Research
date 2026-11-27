@@ -745,6 +745,9 @@ BOOST_AUTO_TEST_CASE(missing_conf_lines)
                       "\nrpcuser=gridcoinrpc\nrpcpassword=NEW\nrpcserviceuser=NT SERVICE\\gridcointestnetd\n");
     BOOST_CHECK_EQUAL(MissingServiceConfLines(Network::Main, "", "NEW"),
                       "rpcuser=gridcoinrpc\nrpcpassword=NEW\nrpcserviceuser=NT SERVICE\\gridcoinresearchd\n");
+    // The options whose own names begin with "no" are none of the three, as written or with the "no" off.
+    BOOST_CHECK_EQUAL(MissingServiceConfLines(Network::Main, "noncruncher=1\nnonewprivs=0\nnobuildwarn=1\n", "NEW"),
+                      "rpcuser=gridcoinrpc\nrpcpassword=NEW\nrpcserviceuser=NT SERVICE\\gridcoinresearchd\n");
 
     // A name set at the top or in the network's section, with spaces or empty, is left as it is.
     // A "test." name under [main] is in the main section, as ArgsManager reads it.

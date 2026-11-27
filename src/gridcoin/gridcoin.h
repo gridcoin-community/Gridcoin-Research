@@ -55,13 +55,24 @@ void RunDBPassivation();
 void NotifyPoll();
 
 //!
-//! \brief Rebuild the beacon registry in-line during a runtime multi-SB reorg.
+//! \brief Why the beacon registry is rebuilt in-line.
+//!
+enum class BeaconRebuildReason
+{
+    SUPERBLOCK_DISCONNECT, //!< A superblock disconnect in a runtime reorg calls for the rebuild.
+    V15_ACTIVATION,        //!< The last block below block version 15 connected.
+};
+
+//!
+//! \brief Rebuild the beacon registry in-line during a runtime multi-SB reorg, or as the last block below block
+//! version 15 connects.
 //!
 //! Called by DisconnectBlocksBatch when a runtime reorg crosses two or more
-//! superblock boundaries -- the case where BeaconRegistry::Deactivate cannot
-//! resurrect expired pending beacons from prior SBs (m_expired_pending only
-//! carries the latest SB's set, per the limitation note in
-//! BeaconRegistry::Deactivate in beacon.cpp). Without a full
+//! superblock boundaries, or from block version 15 one superblock for which
+//! the registry's superblock state is not current -- the cases where
+//! BeaconRegistry::Deactivate cannot resurrect expired pending beacons from
+//! prior SBs (m_expired_pending only carries the latest SB's set, per the
+//! limitation note in BeaconRegistry::Deactivate in beacon.cpp). Without a full
 //! rebuild the in-memory registry would be left missing prior-SB
 //! expired-pending beacons, and any subsequent ConnectBlock that referenced
 //! one of those beacons (e.g., a research-reward claim) would
@@ -72,17 +83,31 @@ void NotifyPoll();
 //!      operator sees what is happening.
 //!   2. BeaconRegistry::Reset() -- wipes the in-memory and on-disk beacon
 //!      state.
-//!   3. InitializeContracts(pindexBest) -- re-initializes the registries
-//!      and walks ReplayContracts to re-apply beacon contracts from V11
-//!      forward (the other contract types' DB-backed Initialize is
-//!      idempotent and ReplayContracts skips already-covered contracts).
+//!   3. BeaconRegistry::Initialize() -- opens the emptied beacon db.
+//!   4. ReplayContracts(pindexBest, the V11 block, beacons_only) -- re-applies
+//!      the beacon contracts and superblock activations from V11 forward.
+//!      Nothing else: the disconnect already reverted every other registry
+//!      block by block, so none is reloaded or replayed (InitializeContracts,
+//!      the startup routine, is not run).
 //!
 //! Runs under cs_main (caller's lock) so no other thread observes the
 //! intermediate empty-registry state. On SSD the rebuild typically
 //! completes in a few seconds; the wallet is briefly unresponsive but
 //! consistent. Issue #2865 / PR #2941.
 //!
-void RebuildBeaconRegistry() EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+//! ReorganizeChain also calls it as the last block below block version 15 connects, so that the first block
+//! version 15 block is validated on the rebuilt registry. That rebuild shows no message: it is expected on every
+//! node at that block.
+//!
+//! \param reason Why the registry is rebuilt; it chooses the log line and whether the message is shown.
+//!
+void RebuildBeaconRegistry(BeaconRebuildReason reason) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+
+//!
+//! \brief Clear the legacy poll store when -clearlegacypollhistory or -clearallregistryhistory is set. Contract
+//! initialization calls it before the poll registry reads the store.
+//!
+void ClearLegacyStoreIfAsked();
 } // namespace GRC
 
 #endif // GRIDCOIN_GRIDCOIN_H

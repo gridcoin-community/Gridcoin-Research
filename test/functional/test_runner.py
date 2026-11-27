@@ -174,8 +174,9 @@ BASE_SCRIPTS = [
     # p2p_version_timedrift.py: the VERSION handshake's 480 s clock-drift gate,
     # including a crafted nTime that overflowed the old abs() check.
     'p2p_version_timedrift.py',
-    # p2p_version_floor.py: the VERSION handshake accepts the previous release's
-    # protocol version and drops anything older.
+    # p2p_version_floor.py: the VERSION handshake accepts the previous mandatory
+    # release's protocol version and drops anything older; past the v15 grace
+    # period it drops everything below the current version.
     'p2p_version_floor.py',
     # p2p_version_fields.py: getpeerinfo answers through a hundred handshakes
     # while three threads poll it; under ThreadSanitizer, the check that the
@@ -190,6 +191,7 @@ BASE_SCRIPTS = [
     'p2p_mempool_request.py',
     'p2p_block_tx_relay.py',
     'p2p_part_announcement.py',
+    'p2p_tx_after_its_block.py',
     # The PSGT multi-node tests run under deterministic mock-time lockstep
     # (sync_clocks/advance_to_next_stake_slot, #3165): no wall-clock sleeps on
     # their critical paths.
@@ -205,6 +207,11 @@ BASE_SCRIPTS = [
     'rpc_rawtransaction.py',
     'rpc_psgt.py',
     'rpc_psgtpool.py',
+    # rpc_pool_v15_gate.py: the POOL RPCs and the PSGT pool RPCs refuse before the v15 height, and not from it.
+    'rpc_pool_v15_gate.py',
+    # rpc_votewithclaim.py: the regtest-only RPC that builds a vote claim from an
+    # explicit output list, for the tally's tests.
+    'rpc_votewithclaim.py',
     'rpc_htlc.py',
     'rpc_txoutproof.py',
     'rpc_blockchain.py',
@@ -232,6 +239,9 @@ BASE_SCRIPTS = [
     # feature_settings_file_refused.py: refused keys in the settings file are ignored at
     # startup, logged, listed by listsettings, and still erasable with changesettings.
     'feature_settings_file_refused.py',
+    # feature_options_named_no.py: -noncruncher, -nonewprivs and -nobuildwarn are
+    # taken by their own names on the command line and in the config file.
+    'feature_options_named_no.py',
     # interface_cli_listener_check.py: the RPC client identifies the owner of the RPC
     # listener before it sends credentials; -rpcserviceuser and -rpcskiplistenercheck.
     'interface_cli_listener_check.py',
@@ -253,6 +263,22 @@ BASE_SCRIPTS = [
     'rpc_changesettings.py',
     'feature_sidestake.py',
     'feature_vote_results.py',
+    # feature_poll_registry.py: the poll registry keeps polls and votes across a reorg and a restart.
+    'feature_poll_registry.py',
+    # feature_poll_finish_by_block.py: a poll finishes at its first block past the end, not by the wall clock.
+    'feature_poll_finish_by_block.py',
+    # feature_poll_v15_window.py: from v15 a poll starts at its block and ends at its closing block.
+    'feature_poll_v15_window.py',
+    # feature_poll_title_rule.py: one poll per title key in the wallet, the mempool and, from v15, the registry.
+    'feature_poll_title_rule.py',
+    # feature_poll_pool_reorg.py: a reorg that un-confirms a claimed output's transaction keeps the pooled poll.
+    'feature_poll_pool_reorg.py',
+    # feature_poll_next_block_rules.py: the mempool judges a poll by the next block's poll rules.
+    'feature_poll_next_block_rules.py',
+    # feature_poll_title_lookup.py: every active poll is listed; a title lookup names every poll with its key.
+    'feature_poll_title_lookup.py',
+    # feature_poll_coherence_reset.py: startup coherence recovery resets the poll registry.
+    'feature_poll_coherence_reset.py',
     'feature_generatesuperblock.py',
     # feature_reorg_resurrect.py: a wallet transaction whose block is
     # disconnected returns to the mempool and stays unconfirmed, not
@@ -270,20 +296,50 @@ BASE_SCRIPTS = [
     # feature_v15_spacing.py: crosses v15 on regtest and checks both retarget rules, kernel easing,
     # the miner's stamp guard and the penalty-free future band.
     'feature_v15_spacing.py',
+    # feature_v15_six_heights.py: all six v15 heights at one block, the first superblocks past it, and a reorg back.
+    'feature_v15_six_heights.py',
     # feature_reorg_conflicted.py: a wallet transaction conflicted by a block
     # stops being conflicted when that block is disconnected, provided whatever
     # took its outpoint went with the block; also the refused, descendant and
     # abandoned cases, and that the re-pooled transaction is re-announced.
     'feature_reorg_conflicted.py',
     'feature_beacon_activation.py',
+    'feature_beacon_superblock_disconnects.py',
+    'feature_beacon_reorg_restart.py',
+    'feature_beacon_v15_rebuild.py',
+    # feature_beacon_v15_stamp.py: the time a beacon is stamped with from the
+    # block version 15 height.
+    'feature_beacon_v15_stamp.py',
     'feature_research_reward.py',
     'feature_mrc.py',
+    # feature_mrc.py --v15: the MRC test under the block version 15 rules.
+    'feature_mrc.py --v15',
+    # feature_mrc.py --v15-at-payment: the request is made on the last block
+    # below block version 15 and paid by the first block of it.
+    'feature_mrc.py --v15-at-payment',
     'feature_contract_replay.py',
     'feature_beacon_pending_proofs.py',
     # feature_own_boinc_dir.py: a test node reads the BOINC data directory the
     # framework gave it, not the host's, and a -boincdatadir on the command
     # line still decides the directory.
     'feature_own_boinc_dir.py',
+    # feature_vote_balance_weight.py: from v15 a vote whose own transaction
+    # spends a claimed coin keeps that coin's weight in the change it returns,
+    # and a re-vote replaces the earlier vote and takes the coin's weight.
+    'feature_vote_balance_weight.py',
+    # feature_vote_origin_claims.py: for polls that start at or after v15 the
+    # wallet claims its own recirculated change by the mature input it came
+    # from, so immediate re-votes, votes on two polls and a vote after a stake
+    # carry the coin; the trace stops at its limit, multisig outputs are never
+    # claimed, and older polls keep the confirmation rule.
+    'feature_vote_origin_claims.py',
+    # feature_vote_tally_oracle.py: seeded random voting, spending, staking,
+    # reorgs and restarts, with every poll's result compared to an independent
+    # Python tally. About 1-2 minutes per seed at the default steps. The second
+    # seed drives more re-votes than the default one. Longer local runs:
+    # --seed=N --steps=M.
+    'feature_vote_tally_oracle.py',
+    'feature_vote_tally_oracle.py --seed=5',
     # feature_blockindex_verification.py: LoadBlockIndex's startup
     # verification pass over a block whose payload was corrupted without
     # disturbing its header, the one corruption class that arms its

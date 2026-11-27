@@ -26,6 +26,10 @@ add_executable(test_gridcoin
     state_leak_detector.cpp
     state_guard_tests.cpp
     miner_block_assembly_tests.cpp
+    # Which MRCs in the pool the miner binds, on the fixture chain.
+    miner_mrc_selection_tests.cpp
+    # The misbehaviour score of the pool's refusals that depend on a rule's height.
+    mempool_refusal_score_tests.cpp
     # SetBestChain's trust-regression revert leg, driven on the fixture chain.
     chainman_reorg_tests.cpp
     # Which block a side-branch block's staked input comes from, on the fixture chain.
@@ -80,6 +84,7 @@ add_executable(test_gridcoin
     gridcoin/mrc_tests.cpp
     gridcoin/newbie_window_tests.cpp
     gridcoin/poll_result_cache_tests.cpp
+    gridcoin/poll_entry_tests.cpp
     gridcoin/poll_registry_tests.cpp
     gridcoin/poll_result_tests.cpp
     gridcoin/pool_chain_tests.cpp
@@ -237,6 +242,7 @@ add_executable(test_gridcoin
     util_fraction_tests.cpp
     util_tests.cpp
     util_threadnames_tests.cpp
+    validation_tests.cpp
     wallet_db_tests.cpp
     wallet_tests.cpp
     walletdump_tests.cpp

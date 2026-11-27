@@ -1105,6 +1105,43 @@ class GridcoinTestFramework(metaclass=GridcoinTestMetaClass):
             "no spendable consensus-unspent UTXO to seed the universe"
             + (" (last mining error: %s)" % (last_error,) if last_error else ""))
 
+    def fan_largest_outputs(self, node, sources, count):
+        """Fan `node`'s `sources` largest outputs into `count` equal outputs to
+        new addresses, confirmed in one block; return the per-output amount.
+
+        A coinstake spends one output, so at least `count` - B of the new
+        outputs survive any B later blocks however the kernels fall. Unlike
+        grow_utxo_universe, which needs a source 11 blocks deep -- one a node
+        whose coinstakes keep restaking its few large outputs may not have --
+        this takes its sources at one confirmation, which regtest allows (it
+        skips coinbase and coinstake maturity).
+
+        The clock first moves to the next stake slot, past the tip, so the
+        fan's time is not earlier than any input's (a coinstake input carries
+        its block's time) and the block mined at that slot takes the fan. The
+        wallet marks the fan's inputs spent once it is pooled, so that block's
+        coinstake cannot take one of them.
+
+        Args:
+          node: node whose outputs are fanned; the new outputs are its own.
+          sources: number of largest outputs spent.
+          count: number of equal outputs created.
+        """
+        largest = sorted(node.listunspent(1), key=lambda u: u["amount"], reverse=True)[:sources]
+        assert_equal(len(largest), sources)
+        self.advance_to_next_stake_slot()
+        # ROUND_DOWN to the satoshi so the outputs never exceed the inputs; ~1 GRC total fee.
+        per_out = ((sum(u["amount"] for u in largest) - Decimal("1.0")) / count).quantize(
+            Decimal("0.00000001"), rounding=ROUND_DOWN)
+        signed = node.signrawtransactionwithwallet(node.createrawtransaction(
+            [{"txid": u["txid"], "vout": u["vout"]} for u in largest],
+            {node.getnewaddress(): per_out for _ in range(count)}))
+        assert signed.get("complete"), "failed to sign the fan transaction"
+        txid = node.sendrawtransaction(signed["hex"])
+        node.generatetoaddress(1, node.getnewaddress())
+        assert_equal(node.gettransaction(txid)["confirmations"], 1)
+        return per_out
+
     # Private helper methods. These should not be accessed by the subclass test scripts.
 
     def _start_logging(self):

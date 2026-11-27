@@ -90,15 +90,15 @@ bool MagnitudeClaim::VerifySignature(
 }
 
 // -----------------------------------------------------------------------------
-// Class: PollEligibilityClaim
+// Class: BalanceClaim
 // -----------------------------------------------------------------------------
 
-bool PollEligibilityClaim::EntriesDistinct() const
+bool BalanceClaim::EntriesDistinct() const
 {
     std::set<CPubKey> keys;
     std::set<COutPoint> outpoints;
 
-    for (const auto& address_claim : m_balance_claim.m_address_claims) {
+    for (const auto& address_claim : m_address_claims) {
         if (!keys.insert(address_claim.m_public_key).second) {
             return false;
         }
@@ -111,6 +111,15 @@ bool PollEligibilityClaim::EntriesDistinct() const
     }
 
     return true;
+}
+
+// -----------------------------------------------------------------------------
+// Class: PollEligibilityClaim
+// -----------------------------------------------------------------------------
+
+bool PollEligibilityClaim::EntriesDistinct() const
+{
+    return m_balance_claim.EntriesDistinct();
 }
 
 void PollEligibilityClaim::ExpandDummySignatures()

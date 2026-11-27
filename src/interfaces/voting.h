@@ -213,20 +213,25 @@ public:
     //! each valid poll type, in enum order, excluding OUT_OF_BOUND.
     virtual std::vector<PollTypeMeta> getPollTypes() = 0;
 
-    //! Whether poll v3 is active at the current tip (replaces a GUI-side
-    //! IsPollV3Enabled(nBestHeight) read); gates the extra project poll fields.
+    //! Whether poll v3 is active at the next block, the block that can take a
+    //! poll built now (replaces a GUI-side IsPollV3Enabled(nBestHeight) read);
+    //! gates the extra project poll fields.
     virtual bool pollV3Enabled() = 0;
 
     //! Estimated fee to create a poll, in 1/COIN units.
     virtual CAmount estimatePollFee() = 0;
 
-    //! The title of the most recent poll, or "" if none. Used for the overview
-    //! "current poll" line.
+    //! The title of the newest open poll, judged by blocks on the tip, or the
+    //! translated "No current polls" if none. Used for the overview "current
+    //! poll" line. Non-blocking: while cs_main is held elsewhere, returns the
+    //! last title it read ("" before the first).
     virtual std::string currentPollTitle() = 0;
 
-    //! The timestamp (Unix seconds) of the most recent active poll, or 0 if
-    //! none. The GUI reads this once at construction so its new-poll
-    //! notifications skip polls that already existed at start-up.
+    //! The timestamp (Unix seconds) of the newest open poll, judged by blocks
+    //! on the tip, or 0 if none. The GUI reads this once at construction so
+    //! its new-poll notifications skip polls that already existed at start-up.
+    //! Non-blocking: while cs_main is held elsewhere, returns the last time it
+    //! read (0 before the first).
     virtual int64_t latestActivePollTime() = 0;
 
     //! Build, sign and broadcast a poll contract. The wallet must already be

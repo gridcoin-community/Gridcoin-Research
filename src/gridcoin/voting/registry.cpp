@@ -20,25 +20,12 @@
 #include "validation.h"
 #include <util/string.h>
 
+#include <set>
+
 using namespace GRC;
 using LogFlags = BCLog::LogFlags;
 
 namespace {
-//!
-//! \brief Extract a poll title from a legacy vote contract.
-//!
-//! \param key The value of the legacy contract key.
-//!
-//! \return Normalized title of the poll to associate the vote with.
-//!
-std::string ParseLegacyVoteTitle(const std::string& key)
-{
-    std::string title = key.substr(0, key.find(';'));
-    title = ToLower(title);
-
-    return title;
-}
-
 //!
 //! \brief Thrown when verifying an invalid poll contract.
 //!
@@ -172,6 +159,8 @@ public:
     //!
     bool Validate(const PollPayload& payload, const CTransaction& tx)
     {
+        m_failed_on_chain_state = false;
+
         const ClaimMessage message = PackPollMessage(payload.m_poll, tx);
 
         try {
@@ -193,8 +182,19 @@ public:
         }
     }
 
+    //!
+    //! \brief Whether the claim last validated failed on what this node's chain holds of a claimed output: the
+    //! node could not find the output's transaction, or found the output spent. That result depends on this node's
+    //! own state.
+    //!
+    bool FailedOnChainState() const
+    {
+        return m_failed_on_chain_state;
+    }
+
 private:
     CTxDB& m_txdb; //!< Used to resolve unspent amount claims.
+    bool m_failed_on_chain_state = false; //!< See FailedOnChainState().
 
     //!
     //! \brief Determine whether the balance claim (multiple addresses)
@@ -270,6 +270,7 @@ private:
 
         if (!m_txdb.ReadTxIndex(txo.hash, tx_index)) {
             LogPrint(LogFlags::VOTE, "%s: failed to read tx index", __func__);
+            m_failed_on_chain_state = true;
             throw InvalidPollError();
         }
 
@@ -280,6 +281,7 @@ private:
 
         if (!tx_index.vSpent[txo.n].IsNull()) {
             error("%s: found spent txo", __func__);
+            m_failed_on_chain_state = true;
             throw InvalidPollError();
         }
 
@@ -318,9 +320,78 @@ private:
 }; // PollClaimValidator
 
 //!
+//! \brief The block index entry for a block hash, or nullptr if the hash is not in the block index.
+//!
+const CBlockIndex* LookupBlockIndex(const uint256& hash) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+{
+    const auto iter = mapBlockIndex.find(hash);
+
+    return iter == mapBlockIndex.end() ? nullptr : iter->second;
+}
+
+//!
+//! \brief The db version stored in LevelDB under (key_type + "_db", "version"), or 0 when there is none.
+//!
+uint32_t StoredVersion(const std::string& key_type)
+{
+    uint32_t version = 0;
+    std::pair<std::string, std::string> key = std::make_pair(key_type + "_db", std::string("version"));
+
+    if (!CTxDB("r").ReadGenericSerializable(key, version)) {
+        version = 0;
+    }
+
+    return version;
+}
+
+//!
+//! \brief Whether LevelDB holds a db height under (key_type + "_db", "height_stored").
+//!
+bool HasStoredHeight(const std::string& key_type)
+{
+    int height = 0;
+    std::pair<std::string, std::string> key = std::make_pair(key_type + "_db", std::string("height_stored"));
+
+    return CTxDB("r").ReadGenericSerializable(key, height);
+}
+
+//!
+//! \brief Whether LevelDB holds the mark of a poll registry rebuild in progress (PollRegistry::SetRebuildInProgress).
+//!
+bool RebuildMarked()
+{
+    uint32_t mark = 0;
+    std::pair<std::string, std::string> key = std::make_pair(std::string("poll_db"), std::string("rebuild_in_progress"));
+
+    return CTxDB("r").ReadGenericSerializable(key, mark);
+}
+
+//!
 //! \brief Global poll registry instance.
 //!
 PollRegistry g_poll_registry;
+
+//! Walk the main chain forward from the block after \p pindex_searched, at most to \p pindex_bound's height, until the
+//! first block whose time exceeds \p end_time. Records the first block whose time is at or past \p end_time in
+//! \p pindex_at_or_past (if not yet found) and the first block past it in \p pindex_past_end, and leaves
+//! \p pindex_searched at the last block examined. Does nothing once \p pindex_past_end is set. The caller has checked
+//! that \p pindex_searched and \p pindex_bound are on the main chain.
+void SearchForEnd(const CBlockIndex*& pindex_searched, const CBlockIndex*& pindex_at_or_past,
+                  const CBlockIndex*& pindex_past_end, const int64_t end_time, const CBlockIndex* pindex_bound)
+    EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+{
+    while (!pindex_past_end && pindex_searched->pnext && pindex_searched->pnext->nHeight <= pindex_bound->nHeight) {
+        pindex_searched = pindex_searched->pnext;
+
+        if (!pindex_at_or_past && pindex_searched->nTime >= end_time) {
+            pindex_at_or_past = pindex_searched;
+        }
+
+        if (pindex_searched->nTime > end_time) {
+            pindex_past_end = pindex_searched;
+        }
+    }
+}
 } // Anonymous namespace
 
 // -----------------------------------------------------------------------------
@@ -363,10 +434,14 @@ std::optional<SuperblockPtr> GRC::LastWellFormedSuperblock(const CBlockIndex* pi
 
 std::string GRC::GetCurrentPollTitle()
 {
-    LOCK(PollRegistry::cs_poll_registry);
+    // cs_main before cs_poll_registry, the order block connection takes them: whether a poll is open is judged by
+    // blocks on the tip. Both are held across the whole judgment, so no reorg lands in between.
+    LOCK2(cs_main, PollRegistry::cs_poll_registry);
 
-    if (const PollReference* poll_ref = GetPollRegistry().TryLatestActive()) {
-        return poll_ref->Title();
+    if (pindexBest) {
+        if (const PollReference* poll_ref = GetPollRegistry().TryLatestActive(pindexBest)) {
+            return poll_ref->Title();
+        }
     }
 
     return _("No current polls");
@@ -395,20 +470,28 @@ PollReference::PollReference()
     , m_payload_version(0)
     , m_type(PollType::UNKNOWN)
     , m_weight_type(PollWeightType::UNKNOWN)
-    , m_ptitle(nullptr)
     , m_timestamp(0)
     , m_duration_days(0)
     , m_pindex(nullptr)
     , m_votes({})
+    , m_votes_head()
     , m_expiration_warn_notified(false)
+    , m_stored(false)
+    , m_deleted(false)
+    , m_registry(nullptr)
+    , m_end_search_from(nullptr)
+    , m_end_searched(nullptr)
+    , m_at_or_past_end(nullptr)
+    , m_past_end(nullptr)
+    , m_off_main_chain_logged(false)
 {
 }
 
-PollOption PollReference::TryReadFromDisk(CTxDB& txdb) const
+PollOption GRC::ReadPollFromDisk(CTxDB& txdb, const uint256& txid)
 {
     CTransaction tx;
 
-    if (!txdb.ReadDiskTx(m_txid, tx)) {
+    if (!txdb.ReadDiskTx(txid, tx)) {
         error("%s: failed to read poll tx from disk", __func__);
         return std::nullopt;
     }
@@ -419,19 +502,6 @@ PollOption PollReference::TryReadFromDisk(CTxDB& txdb) const
             // The time for the poll is the time of the containing transaction.
             payload.m_poll.m_timestamp = tx.nTime;
 
-            // Neither the timestamp nor the magnitude weight factor is serialized. Resolve the factor
-            // from the block AddPoll recorded, rather than looking the poll's block up again: that
-            // lookup read the chain index without cs_main, and took cs_main inside callers holding
-            // only cs_poll_registry. Nothing is written back to this reference, which callers share.
-            payload.m_poll.m_magnitude_weight_factor = GetMagnitudeWeightFactor();
-
-            LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: reference.m_timestamp = %" PRId64 " , poll.m_timestamp = %" PRId64 " , "
-                     "poll.m_magnitude_weight_factor = %s",
-                     __func__,
-                     m_timestamp,
-                     payload.m_poll.m_timestamp,
-                     payload.m_poll.m_magnitude_weight_factor.ToString());
-
             return std::move(payload.m_poll);
         }
     }
@@ -439,6 +509,30 @@ PollOption PollReference::TryReadFromDisk(CTxDB& txdb) const
     error("%s: transaction does not contain a poll contract", __func__);
 
     return std::nullopt;
+}
+
+PollOption PollReference::TryReadFromDisk(CTxDB& txdb) const
+{
+    PollOption poll = ReadPollFromDisk(txdb, m_txid);
+
+    if (poll) {
+        // Neither the timestamp nor the magnitude weight factor is serialized. Resolve the factor from the block
+        // AddPoll recorded, rather than looking the poll's block up again: that lookup read the chain index without
+        // cs_main, and took cs_main inside callers holding only cs_poll_registry. Nothing is written back to this
+        // reference, which callers share.
+        // The copy's timestamp is the poll's start, which from v15 is its block's time.
+        poll->m_timestamp = StartTime();
+        poll->m_magnitude_weight_factor = GetMagnitudeWeightFactor();
+
+        LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: reference.m_timestamp = %" PRId64 " , poll.m_timestamp = %" PRId64 " , "
+                 "poll.m_magnitude_weight_factor = %s",
+                 __func__,
+                 m_timestamp,
+                 poll->m_timestamp,
+                 poll->m_magnitude_weight_factor.ToString());
+    }
+
+    return poll;
 }
 
 PollOption PollReference::TryReadFromDisk() const
@@ -465,16 +559,30 @@ PollType PollReference::GetPollType() const
 
 const std::string& PollReference::Title() const
 {
-    if (!m_ptitle) {
-        static const std::string empty("");
-        return empty;
-    }
-
+    // m_title is the poll's own title, empty for a default-constructed reference.
     return m_title;
 }
 
-const std::vector<uint256>& PollReference::Votes() const
+std::vector<uint256> PollReference::Votes() const
 {
+    // The cache below is written here and the chain it reads changes on block connection, so both are read under
+    // the registry lock, and the caller gets a copy that stays valid after it is released.
+    LOCK(PollRegistry::cs_poll_registry);
+
+    // A poll the legacy store holds keeps the list the store linked.
+    if (!m_stored || m_registry == nullptr) {
+        return m_votes;
+    }
+
+    // A stored poll's votes are its vote link chain. The cached list stays valid while the chain's head is the one
+    // it was read at.
+    const uint256 head = m_registry->VoteHead(m_txid);
+
+    if (head != m_votes_head) {
+        m_votes = m_registry->WalkVotes(m_txid);
+        m_votes_head = head;
+    }
+
     return m_votes;
 }
 
@@ -483,9 +591,20 @@ int64_t PollReference::Time() const
     return m_timestamp;
 }
 
+int64_t PollReference::StartTime() const
+{
+    // From v15 a poll starts at the time of its block. Below the v15 height, and for a reference with no
+    // block, it starts at the time of its transaction (#3470).
+    if (m_pindex && IsV15Enabled(m_pindex->nHeight)) {
+        return m_pindex->nTime;
+    }
+
+    return m_timestamp;
+}
+
 int64_t PollReference::Age(const int64_t now) const
 {
-    return now - m_timestamp;
+    return now - StartTime();
 }
 
 bool PollReference::Expired(const int64_t now) const
@@ -499,7 +618,7 @@ int64_t PollReference::Expiration() const
 {
     // The casting is done to suppress the comparison of signed vs unsigned. The multiplication will not
     // overflow until 68 years, which is longer than the longest possible poll.
-    return m_timestamp + (int64_t) (m_duration_days * 86400);
+    return StartTime() + (int64_t) (m_duration_days * 86400);
 }
 
 CBlockIndex* PollReference::GetStartingBlockIndexPtr() const
@@ -507,26 +626,6 @@ CBlockIndex* PollReference::GetStartingBlockIndexPtr() const
     // The context exposes block indexes as const; the entries themselves are not,
     // and callers walk the chain from here (as in Tally's m_start_pindex).
     return const_cast<CBlockIndex*>(m_pindex);
-}
-
-CBlockIndex* PollReference::GetEndingBlockIndexPtr(CBlockIndex* pindex_start) const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
-{
-    if (!pindex_start) {
-        pindex_start = GetStartingBlockIndexPtr();
-
-        // If there is still no pindex_start, there cannot be an end either.
-        if (!pindex_start) {
-            return nullptr;
-        }
-    }
-
-    // Has poll ended?
-    if (Expired(GetAdjustedTime())) {
-        // Find and return the last block that contains valid votes for the poll.
-        return GRC::BlockFinder::FindByMinTimeFromGivenIndex(Expiration(), pindex_start);
-    }
-
-    return nullptr;
 }
 
 std::optional<int> PollReference::GetStartingHeight() const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
@@ -540,24 +639,13 @@ std::optional<int> PollReference::GetStartingHeight() const EXCLUSIVE_LOCKS_REQU
     return std::nullopt;
 }
 
-std::optional<int> PollReference::GetEndingHeight() const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
-{
-    CBlockIndex* pindex = GetEndingBlockIndexPtr();
-
-    if (pindex != nullptr) {
-        return pindex->nHeight;
-    }
-
-    return std::nullopt;
-}
-
 Fraction PollReference::GetMagnitudeWeightFactor() const
 {
-    return Poll::ResolveMagnitudeWeightFactor(m_pindex, m_timestamp);
+    // The factor in force at the poll's start, which from v15 is its block's time.
+    return Poll::ResolveMagnitudeWeightFactor(m_pindex, StartTime());
 }
 
-std::optional<CAmount> PollReference::GetActiveVoteWeight(const PollResult& result,
-                                                          const CBlockIndex* pindex_tip) const
+std::optional<CAmount> GRC::ActiveVoteWeight(const PollSnapshot& snapshot, const PollResult& result)
 {
     // Instrument this so we can log real time performance.
     g_timer.InitTimer(__func__, LogInstance().WillLogCategory(BCLog::LogFlags::VOTE));
@@ -565,24 +653,25 @@ std::optional<CAmount> PollReference::GetActiveVoteWeight(const PollResult& resu
     // Unfortunately, cs_main must be locked for the duration of this method, because it uses the chain index pointers.
     LOCK(cs_main);
 
-    // Get the start and end of the poll.
-    CBlockIndex* const pindex_start = GetStartingBlockIndexPtr();
+    // The range comes from the snapshot the tally ran on. The chain helpers below take non-const block index
+    // pointers; the entries are only read.
+    CBlockIndex* const pindex_start = const_cast<CBlockIndex*>(snapshot.m_pindex_start);
 
     // If pindex_start is a nullptr, this is a degenerate poll reference. Return std::nullopt.
     if (pindex_start == nullptr) return std::nullopt;
 
-    const CBlockIndex* pindex_end = GetEndingBlockIndexPtr(pindex_start);
+    const CBlockIndex* pindex_end = snapshot.m_pindex_end;
 
 
     LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: Poll start height = %i.",
              __func__, pindex_start->nHeight);
 
-    // If the poll is still active, then pindex_end will be nullptr, so then use the pinned chain tip
-    // supplied by the caller (captured once under cs_main) rather than re-reading the live pindexBest.
+    // If the poll is still active, then pindex_end will be nullptr, so then use the snapshot's pinned tip
+    // rather than re-reading the live pindexBest.
     // This keeps every active poll in a table build anchored to the same end height; on a genuine tip
     // change the poll-result cache re-tallies against the new tip.
     if (pindex_end == nullptr) {
-        pindex_end = pindex_tip;
+        pindex_end = snapshot.m_pindex_tip;
 
         LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: Poll is still active. Using head of the chain (%i) as end height.",
                  __func__, pindex_end->nHeight);
@@ -595,7 +684,7 @@ std::optional<CAmount> PollReference::GetActiveVoteWeight(const PollResult& resu
     unsigned int blocks = 0;
 
     // If poll weight type is balance only, then simply sum up the netweights over the block range of the poll.
-    if (m_weight_type == PollWeightType::BALANCE) {
+    if (snapshot.m_weight_type == PollWeightType::BALANCE) {
         for (CBlockIndex* pindex = pindex_start; pindex ; pindex = pindex->pnext) {
 
             arith_uint256 net_weight = GetAvgNetworkWeight(pindex);
@@ -617,7 +706,7 @@ std::optional<CAmount> PollReference::GetActiveVoteWeight(const PollResult& resu
         // If it is not balance only (handled by above), and is not BALANCE_AND_MAGNITUDE (everything else) then return nullopt.
         // In reality all weight types other than BALANCE and BALANCE_AND_MAGNITUDE are deprecated in Fern onwards, so this
         // only applies for legacy polls.
-    } else if (m_weight_type != PollWeightType::BALANCE_AND_MAGNITUDE) {
+    } else if (snapshot.m_weight_type != PollWeightType::BALANCE_AND_MAGNITUDE) {
         return std::nullopt;
     }
 
@@ -659,8 +748,8 @@ std::optional<CAmount> PollReference::GetActiveVoteWeight(const PollResult& resu
     arith_uint256 scaled_pool_magnitude = 0;
     arith_uint256 scaled_network_magnitude = 0;
 
-    // The factor the votes were weighed with: the one TryReadFromDisk put in the
-    // result's poll. Resolving it again here could pick up a protocol entry
+    // The factor the votes were weighed with: the one PollResult::BuildFor put in
+    // the result's poll. Resolving it again here could pick up a protocol entry
     // connected during the tally, and the vote percentage would mix two factors.
     const Fraction magnitude_weight_factor = result.m_poll.m_magnitude_weight_factor;
 
@@ -710,8 +799,8 @@ std::optional<CAmount> PollReference::GetActiveVoteWeight(const PollResult& resu
         LogPrintf("WARNING: %s: No valid superblock found prior to start of poll txid %s, title \"%s\", so no active vote "
                   "weight can be calculated.",
                  __func__,
-                 Txid().GetHex(),
-                 Title()
+                 snapshot.m_txid.GetHex(),
+                 snapshot.m_title
                  );
 
         return std::nullopt;
@@ -737,6 +826,19 @@ std::optional<CAmount> PollReference::GetActiveVoteWeight(const PollResult& resu
                 }
 
                 scaled_network_magnitude = superblock.m_cpids.TotalScaledMagnitude();
+            }
+
+            // There is no active vote weight when a superblock in the window cannot be read or has no network
+            // magnitude, as at the start of the poll above.
+            if (scaled_network_magnitude == 0) {
+                LogPrintf("WARNING: %s: No valid superblock at height %i in the window of poll txid %s, title \"%s\", "
+                          "so no active vote weight can be calculated.",
+                          __func__,
+                          pindex->nHeight,
+                          snapshot.m_txid.GetHex(),
+                          snapshot.m_title);
+
+                return std::nullopt;
             }
         }
 
@@ -789,14 +891,14 @@ std::optional<CAmount> PollReference::GetActiveVoteWeight(const PollResult& resu
 
     // Testing shows that the final 256 bit division below adds a negligible amount of execution time after this point, so
     // a single timer call to print out execution time is good enough.
-    g_timer.GetTimes("finished execution for poll id " + Txid().GetHex() + " title \"" + Title() + "\"", __func__);
+    g_timer.GetTimes("finished execution for poll id " + snapshot.m_txid.GetHex() + " title \"" + snapshot.m_title + "\"", __func__);
 
     if (!blocks) {
         LogPrintf("WARNING: %s: No blocks tallied for poll txid %s, title \"%s\", so no active vote weight can be "
                   "calculated.",
                  __func__,
-                 Txid().GetHex(),
-                 Title()
+                 snapshot.m_txid.GetHex(),
+                 snapshot.m_title
                  );
 
         return std::nullopt;
@@ -810,8 +912,8 @@ std::optional<CAmount> PollReference::GetActiveVoteWeight(const PollResult& resu
     } else {
         error("%s: Overflow in calculation for poll txid %s, title \"%s\", so no active vote weight can be calculated.",
                  __func__,
-                 Txid().GetHex(),
-                 Title()
+                 snapshot.m_txid.GetHex(),
+                 snapshot.m_title
                  );
 
         return std::nullopt;
@@ -841,6 +943,10 @@ std::string PollReference::Notify(const PollNotificationType& notify_type) const
 #if HAVE_SYSTEM
     // Support running an external command on poll creation. Do not notify for already expired polls. This is especially
     // important during a sync to avoid spamming poll notifications.
+    //
+    // Judged by the wall clock on purpose, not by blocks like every display of whether a poll is open:
+    // a notification is about the user's present. Judged by the block being connected, a node syncing through
+    // history would find every poll open at its own block and announce each one.
     if (!Expired(GetAdjustedTime())) {
         if (!strCmd.empty()) {
             // The placeholders %s1 and %s2 are replaced with the txid and the notification type.
@@ -867,24 +973,344 @@ bool PollReference::IsExpiringWarningNotified() const
     return m_expiration_warn_notified;
 }
 
-void PollReference::LinkVote(const uint256 txid)
+// -----------------------------------------------------------------------------
+// Class: PollRegistry
+// -----------------------------------------------------------------------------
+PollRegistry::PollRegistry()
+    : m_latest_poll(nullptr)
+    , m_poll_db(1)
+    , m_vote_db(1)
+    , m_initialized(false)
 {
-    m_votes.emplace_back(txid);
 }
 
-void PollReference::UnlinkVote(const uint256 txid)
+int PollRegistry::Initialize()
 {
-    for (auto it = m_votes.crbegin(), end = m_votes.crend(); it != end; ++it) {
-        if (*it == txid) {
-            m_votes.erase(std::next(it).base());
+    AssertLockHeld(cs_main);
+    LOCK(cs_poll_registry);
+
+    if (!m_initialized) {
+        // The two dbs depend on each other: a version change in either clears both, so neither holds records the
+        // other cannot explain. A clear empties the poll db, then the vote db, so a poll db with no stored height
+        // beside a vote db with one is a clear cut short between the two (a vote link is stored only for a poll the
+        // poll db holds); clear both again, or the vote db's height would skip every poll contract below it.
+        // A rebuild the startup replay did not finish (SetRebuildInProgress) is cleared the same way.
+        const bool rebuild_cut_short = RebuildMarked();
+
+        if (rebuild_cut_short) {
+            LogPrintf("INFO: %s: the last rebuild of the poll registry did not finish; rebuilding it.", __func__);
+        }
+
+        if (StoredVersion("poll") != m_poll_db.m_version || StoredVersion("vote") != m_vote_db.m_version
+            || (!HasStoredHeight("poll") && HasStoredHeight("vote")) || rebuild_cut_short) {
+            m_poll_db.clear();
+            m_vote_db.clear();
+        }
+
+        PollEntryMap unused_pending;
+        PollEntryMap unused_expired;
+        PollEntryMap unused_first;
+
+        // Records load in record order, which is chain order, so the newest poll comes back as AddPoll and a REMOVE
+        // left it on the running node: the title owner registered last, or none after a removal.
+        m_poll_db.m_load_observer = [this](const PollEntry& entry, const PollEntryMap&, const PollEntryMap&)
+            EXCLUSIVE_LOCKS_REQUIRED(cs_main, cs_poll_registry) {
+            IndexPollRecord(entry);
+
+            if (entry.m_status != PollEntryStatus::ACTIVE) {
+                m_latest_poll = nullptr;
+                return;
+            }
+
+            const PollReference& ref = m_polls_by_txid.at(entry.m_poll_txid);
+
+            if (TryByTitle(PollTitleKey(entry.m_title)) == &ref) {
+                m_latest_poll = &ref;
+            }
+        };
+        m_poll_db.Initialize(m_poll_entries, unused_pending, unused_expired, unused_first, false);
+        m_poll_db.m_load_observer = nullptr;
+
+        VoteLinkMap unused_vote_pending;
+        VoteLinkMap unused_vote_expired;
+        VoteLinkMap unused_vote_first;
+
+        m_vote_db.Initialize(m_vote_links, unused_vote_pending, unused_vote_expired, unused_vote_first, false);
+
+        m_initialized = true;
+    }
+
+    // The legacy store opens beside the dbs: read, never replayed.
+    InitializeLegacyStore(static_cast<int>(gArgs.GetIntArg("-legacypollfloor",
+                                                           Params().GetConsensus().ResearchAgeHeight)),
+                          Params().GetConsensus().BlockV11Height);
+
+    int poll_height = 0;
+    int vote_height = 0;
+    m_poll_db.LoadDBHeight(poll_height);
+    m_vote_db.LoadDBHeight(vote_height);
+
+    return std::max(poll_height, vote_height);
+}
+
+int PollRegistry::GetDBHeight()
+{
+    LOCK(cs_poll_registry);
+
+    // Every stored record advances its own db's height, so every POLL and VOTE contract below the higher of the two
+    // heights was processed.
+    int poll_height = 0;
+    int vote_height = 0;
+    m_poll_db.LoadDBHeight(poll_height);
+    m_vote_db.LoadDBHeight(vote_height);
+
+    return std::max(poll_height, vote_height);
+}
+
+void PollRegistry::SetDBHeight(int& height)
+{
+    LOCK(cs_poll_registry);
+
+    m_poll_db.StoreDBHeight(height);
+    m_vote_db.StoreDBHeight(height);
+}
+
+void PollRegistry::SetRebuildInProgress(const bool in_progress)
+{
+    LOCK(cs_poll_registry);
+
+    CTxDB txdb("rw");
+    std::pair<std::string, std::string> key = std::make_pair(std::string("poll_db"), std::string("rebuild_in_progress"));
+
+    // A clear erases every poll_db key, the mark too. LevelDB keeps the order of writes through a crash, so a mark
+    // written before the replay's first record is on disk whenever a record is.
+    const bool written = in_progress ? txdb.WriteGenericSerializable(key, uint32_t {1}) : txdb.EraseGenericSerializable(key);
+
+    if (!written) {
+        error("%s: could not %s the poll registry's rebuild mark", __func__, in_progress ? "write" : "erase");
+    }
+}
+
+uint64_t PollRegistry::PassivateDB()
+{
+    LOCK(cs_poll_registry);
+
+    return m_poll_db.passivate_db() + m_vote_db.passivate_db();
+}
+
+void PollRegistry::ResetInMemoryOnly()
+{
+    LOCK(cs_poll_registry);
+
+    ClearInMemory();
+}
+
+void PollRegistry::ClearInMemory()
+{
+    m_polls.clear();
+    m_polls_by_txid.clear();
+    // The legacy store's entries stay on disk; a restart reads them again.
+    m_legacy_polls.clear();
+    m_legacy_store = LegacyPollStore();
+    m_latest_poll = nullptr;
+    m_poll_entries.clear();
+    m_vote_links.clear();
+    m_title_index.clear();
+    m_poll_db.clear_in_memory_only();
+    m_vote_db.clear_in_memory_only();
+    m_initialized = false;
+    registry_traversal_in_progress = 0;
+    reorg_occurred_during_reg_traversal = false;
+}
+
+bool PollRegistry::IsStored(const uint256& hash)
+{
+    return m_poll_db.contains(hash) || m_vote_db.contains(hash);
+}
+
+uint256 PollRegistry::VoteHead(const uint256& poll_txid) const
+{
+    const auto iter = m_vote_links.find(poll_txid);
+
+    return iter == m_vote_links.end() ? uint256() : iter->second->m_hash;
+}
+
+std::optional<uint256> PollRegistry::TitleOwner(const std::string& title_key) const
+{
+    const auto iter = m_title_index.find(title_key);
+
+    if (iter == m_title_index.end()) {
+        return std::nullopt;
+    }
+
+    return iter->second;
+}
+
+bool PollRegistry::TitleTakenAt(const Contract& contract, const int height) const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+{
+    if (contract.m_type != ContractType::POLL || contract.m_version < 2 || contract.m_action != ContractAction::ADD
+        || !IsV15Enabled(height)) {
+        return false;
+    }
+
+    const std::string title_key = PollTitleKey(contract.SharePayloadAs<PollPayload>()->m_poll.m_title);
+
+    LOCK(cs_poll_registry);
+
+    return TitleOwner(title_key).has_value();
+}
+
+std::vector<uint256> PollRegistry::WalkVotes(const uint256& poll_txid) const
+{
+    std::vector<uint256> votes;
+    std::set<uint256> seen;
+
+    for (uint256 hash = VoteHead(poll_txid); !hash.IsNull();) {
+        // A link chain that loops back on itself is an error. Cut the walk and rebuild the registry from the chain
+        // at the next start.
+        if (!seen.insert(hash).second) {
+            error("%s: vote link chain of poll %s loops at %s; poll registry flagged for a rebuild",
+                  __func__, poll_txid.ToString(), hash.ToString());
+            FlagRebuild();
+            break;
+        }
+
+        const auto link = m_vote_db.peek(hash);
+
+        if (!link) {
+            error("%s: vote link %s of poll %s is missing", __func__, hash.ToString(), poll_txid.ToString());
+            break;
+        }
+
+        votes.push_back(link->m_hash);
+        hash = link->m_previous_hash;
+    }
+
+    std::reverse(votes.begin(), votes.end());
+
+    return votes;
+}
+
+bool PollRegistry::EraseVoteLink(const uint256& vote_txid)
+{
+    // A vote that was never linked (outside the window, or for a poll the registry does not hold) has no record.
+    if (!m_vote_db.contains(vote_txid)) {
+        return true;
+    }
+
+    const auto link = m_vote_db.peek(vote_txid);
+    const uint256 poll_txid = link->m_poll_txid;
+
+    // A disconnect pops a poll's links newest first, so the link must be the poll's newest.
+    if (VoteHead(poll_txid) != vote_txid) {
+        error("%s: vote %s is not the newest link of poll %s", __func__, vote_txid.ToString(), poll_txid.ToString());
+        return false;
+    }
+
+    m_vote_db.erase(vote_txid);
+
+    if (link->m_previous_hash.IsNull()) {
+        m_vote_links.erase(poll_txid);
+    } else {
+        m_vote_links[poll_txid] = m_vote_db.find(link->m_previous_hash)->second;
+    }
+
+    // Keep the poll's cached list in step when it was current.
+    if (const auto iter = m_polls_by_txid.find(poll_txid);
+        iter != m_polls_by_txid.end() && iter->second.m_votes_head == vote_txid && !iter->second.m_votes.empty()) {
+        iter->second.m_votes.pop_back();
+        iter->second.m_votes_head = link->m_previous_hash;
+    }
+
+    return true;
+}
+
+void PollRegistry::FlagRebuild() const
+{
+    uint32_t version = 0;
+    std::pair<std::string, std::string> key = std::make_pair(std::string("poll_db"), std::string("version"));
+
+    if (!CTxDB("rw").WriteGenericSerializable(key, version)) {
+        error("%s: could not flag the poll registry for a rebuild", __func__);
+    }
+}
+
+void PollRegistry::IndexPollRecord(const PollEntry& entry)
+{
+    const std::string title_key = PollTitleKey(entry.m_title);
+
+    if (entry.m_status == PollEntryStatus::ACTIVE) {
+        PollReference& ref = m_polls_by_txid[entry.m_poll_txid];
+        ref.m_txid = entry.m_poll_txid;
+        ref.m_title = entry.m_title;
+        ref.m_payload_version = entry.m_payload_version;
+        ref.m_type = static_cast<PollType>(entry.m_type);
+        ref.m_weight_type = static_cast<PollWeightType>(entry.m_weight_type);
+        ref.m_timestamp = entry.m_timestamp;
+        ref.m_duration_days = entry.m_duration_days;
+        if (const CBlockIndex* pindex = LookupBlockIndex(entry.m_block_hash)) {
+            ref.m_pindex = pindex;
+        }
+        ref.m_stored = true;
+        ref.m_deleted = false;
+        ref.m_registry = this;
+
+        // The first registration in chain order owns the title, deleted or not; only it is the poll a REMOVE
+        // by title names (below v15) and the poll announced as new. Every ACTIVE poll is shown: a later poll with the
+        // same title key (below v15 only) is listed and found by its title beside the owner. A poll's ACTIVE
+        // record is indexed once: a load meets it once, and a removal's revert follows the removal that took the
+        // poll out of the map.
+        m_title_index.emplace(title_key, entry.m_poll_txid);
+        Show(title_key, ref, entry.m_block_height);
+
+        return;
+    }
+
+    // DELETED: the poll leaves the display map; it keeps its txid entry and its title.
+    if (const auto iter = m_polls_by_txid.find(entry.m_poll_txid); iter != m_polls_by_txid.end()) {
+        iter->second.m_deleted = true;
+        EraseShown(title_key, &iter->second);
+    }
+}
+
+std::pair<int, uint256> PollRegistry::ShownOrder(const PollReference& ref) const
+{
+    // A stored poll's record holds its block's height; a poll the legacy store holds has its block index.
+    int height = ref.m_pindex ? ref.m_pindex->nHeight : -1;
+
+    if (const auto entry = m_poll_entries.find(ref.m_txid); entry != m_poll_entries.end()) {
+        height = entry->second->m_block_height;
+    }
+
+    return {height, ref.m_txid};
+}
+
+void PollRegistry::Show(const std::string& title_key, PollReference& ref, const int height)
+{
+    // Each title key's polls stay in block order, whatever order they arrive in: a load meets the records in record
+    // order, and a removal's revert puts its poll back. Every poll already shown has its record (or its block index).
+    const std::pair<int, uint256> order {height, ref.m_txid};
+    auto [pos, last] = m_polls.equal_range(title_key);
+
+    while (pos != last && ShownOrder(*pos->second) < order) {
+        ++pos;
+    }
+
+    m_polls.emplace_hint(pos, title_key, &ref);
+}
+
+void PollRegistry::EraseShown(const std::string& title_key, const PollReference* poll_ref)
+{
+    const auto [first, last] = m_polls.equal_range(title_key);
+
+    for (auto iter = first; iter != last; ++iter) {
+        if (iter->second == poll_ref) {
+            m_polls.erase(iter);
             return;
         }
     }
 }
 
-// -----------------------------------------------------------------------------
-// Class: PollRegistry
-// -----------------------------------------------------------------------------
 const PollRegistry::Sequence PollRegistry::Polls() const
 {
     // Deliberately does NOT take cs_poll_registry. It used to, which was
@@ -903,42 +1329,206 @@ const PollRegistry::Sequence PollRegistry::Polls() const
 
 }
 
-const PollReference* PollRegistry::TryLatestActive() const EXCLUSIVE_LOCKS_REQUIRED(PollRegistry::cs_poll_registry)
+const PollReference* PollRegistry::TryLatestActive(const CBlockIndex* pindex_tip) const
+    EXCLUSIVE_LOCKS_REQUIRED(cs_main, PollRegistry::cs_poll_registry)
 {
-    int64_t now = GetAdjustedTime();
-
-    if (m_latest_poll && !m_latest_poll->Expired(now)) {
+    // Whether a poll is open is judged by blocks on the tip, like the poll table and the result RPCs,
+    // never by the wall clock.
+    if (m_latest_poll && OpenAt(*m_latest_poll, pindex_tip)) {
         return m_latest_poll;
     }
 
-    if (m_polls.empty()) {
-        return nullptr;
-    }
+    const PollReference* latest_open = nullptr;
 
-    const PollReference* latest_not_expired = nullptr;
-    int64_t latest_not_expired_timestamp = 0;
-
-    // Go through m_polls finding the latest poll that is not expired.
+    // Maybe more than one poll has the same timestamp... therefore use >=.
     for (auto iter = m_polls.cbegin(); iter != m_polls.cend(); ++iter) {
-        // Maybe more than one poll has the same timestamp... therefore use >=.
-        if (!iter->second.Expired(now) && iter->second.m_timestamp >= latest_not_expired_timestamp) {
-            latest_not_expired = &iter->second;
-            latest_not_expired_timestamp = latest_not_expired->m_timestamp;
+        if ((!latest_open || iter->second->m_timestamp >= latest_open->m_timestamp)
+            && OpenAt(*iter->second, pindex_tip)) {
+            latest_open = iter->second;
         }
     }
 
-    return latest_not_expired;
+    return latest_open;
 }
 
 const PollReference* PollRegistry::TryByTxid(const uint256 txid) const EXCLUSIVE_LOCKS_REQUIRED(PollRegistry::cs_poll_registry)
 {
     const auto iter = m_polls_by_txid.find(txid);
 
-    if (iter == m_polls_by_txid.end()) {
+    // A poll a master-key REMOVE deleted stays registered by its txid and keeps its title, but is gone from lookups.
+    if (iter == m_polls_by_txid.end() || iter->second.m_deleted) {
         return nullptr;
     }
 
-    return iter->second;
+    return &iter->second;
+}
+
+PollSnapshot PollRegistry::Snapshot(const PollReference& ref, const CBlockIndex* pindex_tip) const
+    EXCLUSIVE_LOCKS_REQUIRED(cs_main, PollRegistry::cs_poll_registry)
+{
+    PollSnapshot snapshot = SnapshotWithoutVotes(ref, pindex_tip);
+    snapshot.m_votes = ref.Votes();
+
+    return snapshot;
+}
+
+bool PollRegistry::OpenAt(const PollReference& ref, const CBlockIndex* pindex_tip) const
+    EXCLUSIVE_LOCKS_REQUIRED(cs_main, PollRegistry::cs_poll_registry)
+{
+    return !SnapshotWithoutVotes(ref, pindex_tip).m_finished;
+}
+
+PollSnapshot PollRegistry::SnapshotWithoutVotes(const PollReference& ref, const CBlockIndex* pindex_tip) const
+    EXCLUSIVE_LOCKS_REQUIRED(cs_main, PollRegistry::cs_poll_registry)
+{
+    PollSnapshot snapshot;
+
+    snapshot.m_txid = ref.m_txid;
+    snapshot.m_payload_version = ref.m_payload_version;
+    snapshot.m_type = ref.m_type;
+    snapshot.m_weight_type = ref.m_weight_type;
+    snapshot.m_title = ref.m_title;
+    snapshot.m_start_time = ref.StartTime();
+    snapshot.m_end_time = ref.Expiration();
+    snapshot.m_pindex_tip = pindex_tip;
+
+    // Every judgment below is made on the chain that ends at the pinned tip, never on the wall clock.
+    // The walks below follow pnext, which describes only the current main chain, so the pinned tip must still be on
+    // it. It is checked here, under cs_main.
+    //
+    // This throw is the same signal as PollRegistry::reorg_occurred_during_reg_traversal, and the callers already
+    // retry on it: BuildPollTable starts over on a freshly pinned tip, and getpollresults and votedetails report a
+    // reorg in progress.
+    // A caller that holds cs_main from pinning the tip until its last snapshot (listpolls, the interface methods the
+    // GUI calls) cannot see a reorg in between and never gets this throw.
+    if (!pindex_tip->IsInMainChain()) {
+        throw InvalidDuetoReorgFork();
+    }
+
+    // The poll's block is on the main chain for every poll the registry holds, unless the poll's record is corrupt: a
+    // reorg that disconnects the block reverts the poll under the same cs_main, and every caller in the node looks the
+    // poll up and takes this snapshot under one hold of cs_main. The snapshot does not throw for such a poll: it
+    // reads the poll as one with no block, as it reads a skeleton reference, and logs it once per reference.
+    const CBlockIndex* pindex_poll = ref.m_pindex;
+
+    if (pindex_poll && !pindex_poll->IsInMainChain()) {
+        if (!ref.m_off_main_chain_logged) {
+            LogPrintf("WARNING: %s: Block %s of poll %s is not on the main chain. Reading the poll as one with no "
+                      "block; start with -clearpollhistory to rebuild the poll registry.",
+                      __func__, pindex_poll->GetBlockHash().ToString(), ref.m_txid.ToString());
+            ref.m_off_main_chain_logged = true;
+        }
+
+        pindex_poll = nullptr;
+    }
+
+    snapshot.m_pindex_start = pindex_poll;
+    snapshot.m_v15 = pindex_poll && IsV15Enabled(pindex_poll->nHeight);
+
+    if (pindex_poll) {
+        AdvanceEndSearch(ref, pindexBest);
+
+        // The pinned tip's chain is the main chain up to the tip's height.
+        if (ref.m_past_end && ref.m_past_end->nHeight <= pindex_tip->nHeight) {
+            snapshot.m_pindex_past_end = ref.m_past_end;
+        }
+    }
+
+    // A poll whose first block past the end is at or above the v15 height closes there: it is finished at
+    // that block, and a later block does not reopen it. A poll whose own block is below the height
+    // closes this way too when its first block past the end is at or above it; only its end follows v15. A poll
+    // that closes below the height keeps the rule its tally used: finished when the tip's time exceeds the end. (A tip
+    // past the end puts the first block past the end on the tip's chain, so the else branch also covers an open poll.)
+    snapshot.m_v15_end = snapshot.m_pindex_past_end && IsV15Enabled(snapshot.m_pindex_past_end->nHeight);
+
+    if (snapshot.m_v15_end) {
+        snapshot.m_finished = true;
+    } else {
+        snapshot.m_finished = pindex_tip->nTime > snapshot.m_end_time;
+    }
+
+    // A finished poll's active vote weight range ends at its closing block, the block before its first block past the
+    // end, when it has closed by block (m_v15_end), and otherwise at its first block at or past the end; an open
+    // poll's ends at the pinned tip (m_pindex_end stays nullptr). Either end is on the tip's chain
+    // at or below the tip: for a poll with m_v15_end the closing block is the parent of the first block past the end,
+    // which is; and a poll finished by the tip's time has its first block at or past the end at the tip or before it
+    // (or at the poll's own block, when that is the tip). A poll read with no block has no range, so it keeps nullptr
+    // too, not an end its search cached before its block left the main chain.
+    if (snapshot.m_finished && pindex_poll) {
+        snapshot.m_pindex_end = snapshot.m_v15_end ? snapshot.m_pindex_past_end->pprev : ref.m_at_or_past_end;
+    }
+
+    // The block that bounds the tally by blocks: the closing block once the poll has closed by block, and
+    // the pinned tip while a poll whose block is at or above the v15 height is open. Every other poll keeps the time
+    // rules of #3470 in its tally. A poll whose block is below the height has no bound while it is open: until its
+    // first block past the end exists, every block after the poll's block on the tip's chain is stamped at or before
+    // the end, so the two rules agree on all of them.
+    if (snapshot.m_v15_end) {
+        snapshot.m_pindex_bound = snapshot.m_pindex_end;
+    } else if (snapshot.m_v15 && !snapshot.m_finished) {
+        snapshot.m_pindex_bound = pindex_tip;
+    }
+
+    return snapshot;
+}
+
+void PollRegistry::AdvanceEndSearch(const PollReference& ref, const CBlockIndex* pindex_bound) const
+    EXCLUSIVE_LOCKS_REQUIRED(cs_main, PollRegistry::cs_poll_registry)
+{
+    const int64_t end_time = ref.Expiration();
+
+    // The search for the poll's end runs once per poll and stops at the first block past the end; an open poll's
+    // resumes after the last block it examined. Everything it found stays valid exactly while that block stays on the
+    // main chain (the blocks before it are then unchanged). A reorg that disconnects it, or a reference re-created with
+    // another block, starts the search again from the poll's block, which counts toward the first block at or past the
+    // end but not toward the first block past it.
+    if (ref.m_end_search_from != ref.m_pindex || ref.m_end_searched == nullptr
+        || !ref.m_end_searched->IsInMainChain()) {
+        ref.m_end_search_from = ref.m_pindex;
+        ref.m_end_searched = ref.m_pindex;
+        ref.m_at_or_past_end = ref.m_pindex->nTime >= end_time ? ref.m_pindex : nullptr;
+        ref.m_past_end = nullptr;
+    }
+
+    SearchForEnd(ref.m_end_searched, ref.m_at_or_past_end, ref.m_past_end, end_time, pindex_bound);
+}
+
+bool PollRegistry::VoteInWindow(const PollReference& poll_ref, const CBlockIndex* pindex_vote) const
+    EXCLUSIVE_LOCKS_REQUIRED(cs_main, PollRegistry::cs_poll_registry)
+{
+    const CBlockIndex* const pindex_poll = poll_ref.m_pindex;
+
+    // From v15 a vote is linked only from a block after the poll's block.
+    if (pindex_poll && IsV15Enabled(pindex_poll->nHeight) && pindex_vote->nHeight <= pindex_poll->nHeight) {
+        return false;
+    }
+
+    // The poll's first block past the end on the vote's chain, if it is the vote's block or a block before it. The
+    // search runs no further than the block before the vote's, and only for a vote whose block is at or above the v15
+    // height: below it, no first block past the end at or before the vote's block can be at or above the height, and
+    // the #3470 rule below decides alone.
+    const CBlockIndex* past_end = nullptr;
+
+    if (pindex_poll && pindex_vote->nHeight > pindex_poll->nHeight && IsV15Enabled(pindex_vote->nHeight)) {
+        AdvanceEndSearch(poll_ref, pindex_vote->pprev);
+
+        if (poll_ref.m_past_end && poll_ref.m_past_end->nHeight < pindex_vote->nHeight) {
+            past_end = poll_ref.m_past_end;
+        }
+    }
+
+    if (!past_end && pindex_vote->nTime > poll_ref.Expiration()) {
+        past_end = pindex_vote;
+    }
+
+    // A poll whose first block past the end is at or above the v15 height has closed by block: no vote after its
+    // closing block is linked.
+    if (past_end && IsV15Enabled(past_end->nHeight)) {
+        return false;
+    }
+
+    // Otherwise the #3470 rule: a vote is linked when its block's time does not exceed the end.
+    return !poll_ref.Expired(pindex_vote->nTime);
 }
 
 PollReference* PollRegistry::TryBy(const uint256 txid) EXCLUSIVE_LOCKS_REQUIRED(PollRegistry::cs_poll_registry)
@@ -946,15 +1536,35 @@ PollReference* PollRegistry::TryBy(const uint256 txid) EXCLUSIVE_LOCKS_REQUIRED(
     return const_cast<PollReference*>(TryByTxid(txid));
 }
 
-const PollReference* PollRegistry::TryByTitle(const std::string& title) const EXCLUSIVE_LOCKS_REQUIRED(PollRegistry::cs_poll_registry)
+const PollReference* PollRegistry::TryByTitle(const std::string& title_key) const EXCLUSIVE_LOCKS_REQUIRED(PollRegistry::cs_poll_registry)
 {
-    const auto iter = m_polls.find(title);
+    const auto owner = m_title_index.find(title_key);
 
-    if (iter == m_polls.end()) {
+    if (owner == m_title_index.end()) {
+        return nullptr;
+    }
+
+    const auto iter = m_polls_by_txid.find(owner->second);
+
+    if (iter == m_polls_by_txid.end() || iter->second.m_deleted) {
         return nullptr;
     }
 
     return &iter->second;
+}
+
+std::vector<const PollReference*> PollRegistry::FindByTitle(const std::string& title_key) const
+    EXCLUSIVE_LOCKS_REQUIRED(PollRegistry::cs_poll_registry)
+{
+    // The display map holds each title key's polls in block order (Show).
+    std::vector<const PollReference*> polls;
+    const auto [first, last] = m_polls.equal_range(title_key);
+
+    for (auto iter = first; iter != last; ++iter) {
+        polls.push_back(iter->second);
+    }
+
+    return polls;
 }
 
 PollReference* PollRegistry::TryBy(const std::string& title) EXCLUSIVE_LOCKS_REQUIRED(PollRegistry::cs_poll_registry)
@@ -962,128 +1572,275 @@ PollReference* PollRegistry::TryBy(const std::string& title) EXCLUSIVE_LOCKS_REQ
     return const_cast<PollReference*>(TryByTitle(title));
 }
 
-const PollReference* PollRegistry::TryByTxidWithAddHistoricalPollAndVotes(const uint256 txid)
-EXCLUSIVE_LOCKS_REQUIRED(cs_main, PollRegistry::cs_poll_registry)
+const PollReference* PollRegistry::TryByTxidOrLegacy(const uint256& txid, LegacyPollStore::Lookup& legacy_lookup)
+    EXCLUSIVE_LOCKS_REQUIRED(cs_main, PollRegistry::cs_poll_registry)
 {
-    // Check and see if it is already in the registry and return the existing ref immediately if found. (This is
-    // the equivalent of the plain TryByTxid() functionality.)
-    if (const PollReference* existing_ref = TryByTxid(txid)) {
-        return existing_ref;
+    legacy_lookup = LegacyPollStore::Lookup::NOT_LEGACY;
+
+    if (const PollReference* ref = TryListedByTxid(txid)) {
+        return ref;
     }
 
-    CTransaction tx;
-    uint256 block_hash;
-    CBlockIndex* pindex_poll = nullptr;
+    // A poll the registry does not hold: from V11, one whose title was taken from v15, which the store refuses
+    // with every poll at or above V11; below V11, a poll the legacy store serves.
+    const LegacyPollEntry* entry = nullptr;
 
-    if (GetTransaction(txid, tx, block_hash) && !block_hash.IsNull()) {
-        const auto iter = mapBlockIndex.find(block_hash);
+    legacy_lookup = m_legacy_store.Fetch(txid, entry);
 
-        if (iter != mapBlockIndex.end() && iter->second->IsInMainChain()) {
-            pindex_poll = iter->second;
-        }
+    if (legacy_lookup == LegacyPollStore::Lookup::FOUND) {
+        return ShowLegacyPoll(*entry);
     }
 
-    // Only a poll in a main-chain block is loaded. One still in the mempool has no
-    // block, and AddPoll refuses it: registered now, it would stay pinned to no
-    // block after it confirms.
-    if (pindex_poll == nullptr) {
+    return nullptr;
+}
+
+const PollReference* PollRegistry::TryListedByTxid(const uint256& txid) const
+    EXCLUSIVE_LOCKS_REQUIRED(PollRegistry::cs_poll_registry)
+{
+    if (const PollReference* ref = TryByTxid(txid)) {
+        return ref;
+    }
+
+    const auto iter = m_legacy_polls.find(txid);
+
+    return iter == m_legacy_polls.end() ? nullptr : &iter->second;
+}
+
+void PollRegistry::InitializeLegacyStore(const int floor, const int ceiling)
+    EXCLUSIVE_LOCKS_REQUIRED(cs_main, PollRegistry::cs_poll_registry)
+{
+    m_legacy_store.Initialize(floor, ceiling);
+
+    for (const LegacyPollEntry* entry : m_legacy_store.Entries()) {
+        ShowLegacyPoll(*entry);
+    }
+}
+
+void PollRegistry::ClearLegacyStore()
+{
+    LOCK(cs_poll_registry);
+
+    for (const auto& [txid, ref] : m_legacy_polls) {
+        EraseShown(PollTitleKey(ref.m_title), &ref);
+    }
+
+    m_legacy_polls.clear();
+    m_legacy_store.Clear();
+}
+
+const PollReference* PollRegistry::ShowLegacyPoll(const LegacyPollEntry& entry)
+    EXCLUSIVE_LOCKS_REQUIRED(cs_main, PollRegistry::cs_poll_registry)
+{
+    if (const auto iter = m_legacy_polls.find(entry.m_txid); iter != m_legacy_polls.end()) {
+        return &iter->second;
+    }
+
+    const auto block = mapBlockIndex.find(entry.m_block_hash);
+
+    if (block == mapBlockIndex.end() || block->second == nullptr) {
+        LogPrintf("WARN: %s: the block of legacy poll %s is not indexed; the poll is not shown.",
+                  __func__, entry.m_txid.ToString());
         return nullptr;
     }
 
-    for (const auto& contract : tx.GetContracts()) {
-        if (contract.m_type == ContractType::POLL && contract.m_action == ContractAction::ADD) {
-            Add({contract, tx, pindex_poll});
-        }
+    // Shown and found like any poll, but held here, outside the registry's polls, records and title index.
+    PollReference& ref = m_legacy_polls[entry.m_txid];
+    ref.m_txid = entry.m_txid;
+    ref.m_payload_version = entry.m_payload_version;
+    ref.m_type = static_cast<PollType>(entry.m_type);
+    ref.m_weight_type = static_cast<PollWeightType>(entry.m_weight_type);
+    ref.m_title = entry.m_title;
+    ref.m_timestamp = entry.m_timestamp;
+    ref.m_duration_days = entry.m_duration_days;
+    ref.m_pindex = block->second;
+    ref.m_registry = this;
+
+    for (const auto& [vote_txid, height] : entry.m_votes) {
+        ref.m_votes.push_back(vote_txid);
     }
 
-    // Get the poll reference now that the poll contract(s) (if any) in the provided transaction hash have been validated
-    // and loaded in the registry.
-    PollReference* ref = TryBy(txid);
+    Show(PollTitleKey(entry.m_title), ref, entry.m_height);
 
-    // If the poll "contract" is loaded successfully into the registry, walk the contracts in the chain for
-    // the duration of the poll to populate the votes. We can't use the general GRC::ReplayContracts here
-    // because it is too broad.
-    if (ref != nullptr) {
-        CBlock block;
-
-        // Link the poll's votes by the rule AddVote applies as each block
-        // connects: a vote is linked only from the transaction after the poll's
-        // own, a version 2+ vote only if its block is not stamped after the
-        // poll ends, and a legacy vote by the poll's title in lower case. A
-        // block may carry an earlier time than its parent, so the walk runs to
-        // the tip. No block from version 11 on carries a legacy vote, so there
-        // a block stamped after the poll ends is passed over unread.
-        for (CBlockIndex* pindex = pindex_poll; pindex; pindex = pindex->pnext) {
-            if (IsV11Enabled(pindex->nHeight) && ref->Expired(pindex->nTime)) continue;
-
-            // If the block doesn't contain contract(s) or can't read, skip.
-            if (!pindex->IsContract() || !ReadBlockFromDisk(block, pindex, Params().GetConsensus())) continue;
-
-            // In the poll's own block, the votes ahead of the poll are not its.
-            bool after_poll = pindex != pindex_poll;
-
-            // Skip coinbase and coinstake transactions:
-            for (unsigned int i = 2; i < block.vtx.size(); ++i) {
-                if (!after_poll) {
-                    after_poll = block.vtx[i].GetHash() == ref->Txid();
-                    continue;
-                }
-
-                for (auto contract : block.vtx[i].GetContracts()) {
-
-                    // Only process votes, and only a contract that adds one, as
-                    // when a block connects (a REMOVE links no vote).
-                    if (contract.m_type != ContractType::VOTE || contract.m_action != ContractAction::ADD) continue;
-
-                    // Post fern poll votes
-                    if (contract.m_version >= 2) {
-                        const auto vote = contract.SharePayloadAs<Vote>();
-
-                        if (vote->m_poll_txid == ref->Txid() && !ref->Expired(pindex->nTime)) {
-                            ref->LinkVote(block.vtx[i].GetHash());
-                        }
-
-                        continue;
-                    }
-
-                    // Legacy poll votes: as when a block connects, a contract
-                    // that is not well-formed is passed over, and a vote is
-                    // matched to the poll by its title in lower case.
-                    if (!contract.WellFormed()) continue;
-
-                    const ContractPayload vote = contract.m_body.AssumeLegacy();
-                    const std::string title = ParseLegacyVoteTitle(vote->LegacyKeyString());
-
-                    if (title.empty()) continue;
-
-                    if (title == ToLower(ref->Title())) {
-                        ref->LinkVote(block.vtx[i].GetHash());
-                    }
-                } // for contract
-            } // for vtx
-        } // for pindex
-    }
-
-    return ref;
+    return &ref;
 }
 
 void PollRegistry::Reset() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     LOCK(cs_poll_registry);
 
-    m_polls.clear();
-    m_polls_by_txid.clear();
-    m_latest_poll = nullptr;
-    registry_traversal_in_progress = 0;
-    reorg_occurred_during_reg_traversal = false;
+    ClearInMemory();
+
+    // -clearpollhistory and -clearvotehistory each clear both dbs: one registry backs both contract types, and
+    // neither db can be explained without the other.
+    m_poll_db.clear();
+    m_vote_db.clear();
 }
+
+namespace {
+//!
+//! \brief Whether a poll contract meets the poll rules that depend on the height of the block that carries it: the
+//! payload version 3 floor, the REMOVE rule, the claim version against multi-address activation, and from v15
+//! distinct claim entries and text that is valid UTF-8. BlockValidate judges them at the block's height. Validate,
+//! for the memory pool and the wallet, judges them at the next block's height, so neither admits a poll that block
+//! would refuse.
+//!
+//! \param DoS Set as the block rules set it; Validate replaces it.
+//!
+bool PollFitsHeight(const Contract& contract, const PollPayload& payload, const int height, int& DoS)
+{
+    // Enforce v3 polls at PollV3Height
+    if (IsPollV3Enabled(height) && payload.m_version < 3) {
+        LogPrint(LogFlags::CONTRACT, "%s: rejected poll contract of payload version %u below 3 at height %d",
+                 __func__, payload.m_version, height);
+        return false;
+    }
+
+    // The REMOVE rule: from v15 a REMOVE names its poll by txid (payload version 4), and only a REMOVE from v15
+    // is version 4. A version 4 REMOVE carries no poll and no claim, so nothing below applies to it.
+    const bool remove_by_txid = payload.m_version == PollPayload::REMOVE_BY_TXID_VERSION;
+
+    if (remove_by_txid != (IsV15Enabled(height) && contract.m_action == ContractAction::REMOVE)) {
+        DoS = 25;
+        LogPrint(LogFlags::CONTRACT, "%s: rejected poll contract of payload version %u at height %d",
+                 __func__, payload.m_version, height);
+        return false;
+    }
+
+    if (remove_by_txid) {
+        return true;
+    }
+
+    // Reject v2+ claims before multi-address activation (bidirectional enforcement)
+    if (!IsPollMultiAddressEnabled(height) && payload.m_claim.m_version >= 2) {
+        DoS = 25;
+        LogPrint(LogFlags::CONTRACT,
+            "%s: rejected v2 poll claim before multi-address activation at height %d",
+            __func__,
+            height);
+        return false;
+    }
+
+    // Enforce multi-address claims at PollMultiAddressHeight
+    if (IsPollMultiAddressEnabled(height) && payload.m_claim.m_version < 2) {
+        DoS = 25;
+        LogPrint(LogFlags::CONTRACT,
+            "%s: rejected v1 poll claim after multi-address activation at height %d",
+            __func__,
+            height);
+        return false;
+    }
+
+    // From block version 15, a poll claim names each address key and each
+    // output once.
+    if (IsV15Enabled(height) && !payload.m_claim.EntriesDistinct()) {
+        DoS = 25;
+        LogPrint(LogFlags::CONTRACT,
+            "%s: rejected poll claim whose address keys or outputs are not distinct at height %d",
+            __func__,
+            height);
+        return false;
+    }
+
+    // From block version 15, a poll's text is valid UTF-8.
+    if (IsV15Enabled(height) && !payload.m_poll.TextIsValidUTF8()) {
+        DoS = 25;
+        LogPrint(LogFlags::CONTRACT, "%s: rejected poll whose text is not valid UTF-8 at height %d", __func__, height);
+        return false;
+    }
+
+    return true;
+}
+
+//!
+//! \brief Whether a version 2+ poll ADD or title REMOVE meets the poll rules that do not depend on a height: the
+//! poll's own checks and its claim against the chain.
+//!
+//! \param claim_failed_on_chain_state Set when the claim failed on what this node's chain holds of a claimed
+//! output (PollClaimValidator::FailedOnChainState).
+//!
+bool PollAndClaimValid(const PollPayload& payload, const CTransaction& tx, int& DoS, bool& claim_failed_on_chain_state)
+    EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+{
+    claim_failed_on_chain_state = false;
+
+    if (!PollValidator(payload, tx).Validate(DoS)) return false;
+
+    CTxDB txdb("r");
+    PollClaimValidator claim_validator(txdb);
+
+    if (!claim_validator.Validate(payload, tx)) {
+        claim_failed_on_chain_state = claim_validator.FailedOnChainState();
+        DoS = 25;
+        return false;
+    }
+
+    return true;
+}
+
+//!
+//! \brief Whether a vote transaction has the shape the wallet builds, which blocks require from v15: one burn output
+//! and at most one change output, and a balance claim that names each address key and each output once.
+//!
+bool VoteTxWellShaped(const Contract& contract, const CTransaction& tx)
+{
+    if (tx.vout.size() > 2) return false;
+
+    return contract.m_version < 2 || contract.SharePayloadAs<Vote>()->m_claim.m_balance_claim.EntriesDistinct();
+}
+} // anonymous namespace
 
 bool PollRegistry::Validate(const Contract& contract, const CTransaction& tx, int& DoS) const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
-    // Vote contract claims do not affect consensus. Vote claim validation
-    // occurs on-demand while computing the results of the poll:
-    //
+    return ValidateAt(contract, tx, nBestHeight + 1, DoS);
+}
+
+bool PollRegistry::ValidateAt(const Contract& contract, const CTransaction& tx, const int height, int& DoS) const
+    EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+{
+    // A vote's claim is weighed when its poll is tallied. From v15 the memory pool takes only a vote that a block would
+    // take (VoteTxWellShaped) and that its poll would count: one that names a registered poll that has not finished,
+    // by the rule the wallet builds a vote by (VoteBuilder::ForPoll), with responses that are choices of that poll. A
+    // refusal carries no penalty: a node a block behind or ahead of this one holds a different registry.
     if (contract.m_type == ContractType::VOTE) {
+        if (!IsV15Enabled(height)) {
+            return true;
+        }
+
+        DoS = 0;
+
+        if (!VoteTxWellShaped(contract, tx)) {
+            return false;
+        }
+
+        if (contract.m_version < 2) {
+            return true;
+        }
+
+        const auto vote = contract.SharePayloadAs<Vote>();
+        PollOption poll;
+
+        {
+            LOCK(cs_poll_registry);
+
+            const PollReference* const poll_ref = TryByTxid(vote->m_poll_txid);
+
+            if (poll_ref == nullptr || poll_ref->Expired(GetAdjustedTime())) {
+                return false;
+            }
+
+            poll = poll_ref->TryReadFromDisk();
+        }
+
+        if (!poll) {
+            return false;
+        }
+
+        for (const auto offset : vote->m_responses) {
+            if (!poll->Choices().OffsetInRange(offset)) {
+                return false;
+            }
+        }
+
         return true;
     }
 
@@ -1096,12 +1853,26 @@ bool PollRegistry::Validate(const Contract& contract, const CTransaction& tx, in
     // V2+ validations
     const auto payload = contract.SharePayloadAs<PollPayload>();
 
-    if (!PollValidator(*payload, tx).Validate(DoS)) return false;
+    // The height rules, at the height of the block judged for (the next block, from Validate) as that block will judge
+    // them. A refusal carries no penalty: a node a block behind or ahead of this one judges a different height.
+    if (!PollFitsHeight(contract, *payload, height, DoS)) {
+        DoS = 0;
+        return false;
+    }
 
-    CTxDB txdb("r");
+    if (payload->m_version == PollPayload::REMOVE_BY_TXID_VERSION) {
+        return true;
+    }
 
-    if (!PollClaimValidator(txdb).Validate(*payload, tx)) {
-        DoS = 25;
+    bool claim_failed_on_chain_state = false;
+
+    if (!PollAndClaimValid(*payload, tx, DoS, claim_failed_on_chain_state)) {
+        // A claim that fails on what this node's chain holds of a claimed output carries no penalty here: a refusal
+        // that depends on the node's own state carries no misbehavior score.
+        if (claim_failed_on_chain_state) {
+            DoS = 0;
+        }
+
         return false;
     }
 
@@ -1110,54 +1881,37 @@ bool PollRegistry::Validate(const Contract& contract, const CTransaction& tx, in
 
 bool PollRegistry::BlockValidate(const ContractContext& ctx, int& DoS) const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
-    // Vote contract claims do not affect consensus. Vote claim validation
-    // occurs on-demand while computing the results of the poll:
-    //
+    // A vote's claim is weighed when its poll is tallied. From v15 a block takes a vote only in the shape the wallet
+    // builds (VoteTxWellShaped).
     if (ctx.m_contract.m_type == ContractType::VOTE) {
+        if (IsV15Enabled(ctx.m_pindex->nHeight) && !VoteTxWellShaped(ctx.m_contract, ctx.m_tx)) {
+            DoS = 25;
+            LogPrint(LogFlags::CONTRACT,
+                "%s: rejected vote transaction %s that is not in the shape the wallet builds at height %d",
+                __func__,
+                ctx.m_tx.GetHash().ToString(),
+                ctx.m_pindex->nHeight);
+            return false;
+        }
+
         return true;
     }
 
     const auto payload = ctx->SharePayloadAs<PollPayload>();
 
-    // Enforce v3 polls at PollV3Height
-    if (IsPollV3Enabled(ctx.m_pindex->nHeight) && payload->m_version < 3) {
+    if (!PollFitsHeight(ctx.m_contract, *payload, ctx.m_pindex->nHeight, DoS)) {
         return false;
     }
 
-    // Reject v2+ claims before multi-address activation (bidirectional enforcement)
-    if (!IsPollMultiAddressEnabled(ctx.m_pindex->nHeight)
-        && payload->m_claim.m_version >= 2) {
-        DoS = 25;
-        LogPrint(LogFlags::CONTRACT,
-            "%s: rejected v2 poll claim before multi-address activation at height %d",
-            __func__,
-            ctx.m_pindex->nHeight);
-        return false;
+    // Legacy poll contracts do not invoke any contextual validation, and a version 4 REMOVE carries no poll and no
+    // claim.
+    if (ctx.m_contract.m_version == 1 || payload->m_version == PollPayload::REMOVE_BY_TXID_VERSION) {
+        return true;
     }
 
-    // Enforce multi-address claims at PollMultiAddressHeight
-    if (IsPollMultiAddressEnabled(ctx.m_pindex->nHeight)
-        && payload->m_claim.m_version < 2) {
-        DoS = 25;
-        LogPrint(LogFlags::CONTRACT,
-            "%s: rejected v1 poll claim after multi-address activation at height %d",
-            __func__,
-            ctx.m_pindex->nHeight);
-        return false;
-    }
+    bool claim_failed_on_chain_state = false;
 
-    // From block version 15, a poll claim names each address key and each
-    // output once.
-    if (IsV15Enabled(ctx.m_pindex->nHeight) && !payload->m_claim.EntriesDistinct()) {
-        DoS = 25;
-        LogPrint(LogFlags::CONTRACT,
-            "%s: rejected poll claim whose address keys or outputs are not distinct at height %d",
-            __func__,
-            ctx.m_pindex->nHeight);
-        return false;
-    }
-
-    return Validate(ctx.m_contract, ctx.m_tx, DoS);
+    return PollAndClaimValid(*payload, ctx.m_tx, DoS, claim_failed_on_chain_state);
 }
 
 void PollRegistry::Add(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
@@ -1165,6 +1919,15 @@ void PollRegistry::Add(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIRED(cs_m
     LOCK(cs_poll_registry);
 
     DetectReorg();
+
+    // The poll registry's floor is V11 on every node. Below V11 it applies and reverts nothing, live, in the startup
+    // replay or in a rebuild, although ConnectBlock applies contracts from the research-age height (364,501 on
+    // mainnet), and a cleared registry replays only from V11. The floor is deliberate: the poll registry's scope is
+    // what the poll history shows, and from v15 its title index is consensus, so both must be the same on every
+    // node. Pre-V11 polls are served by the legacy store, outside the registry.
+    if (ctx.m_pindex && ctx.m_pindex->nHeight < Params().GetConsensus().BlockV11Height) {
+        return;
+    }
 
     if (ctx->m_type == ContractType::VOTE) {
         AddVote(ctx);
@@ -1179,11 +1942,112 @@ void PollRegistry::Delete(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIRED(c
 
     DetectReorg();
 
+    // V11 floor: see the comment in Add.
+    if (ctx.m_pindex && ctx.m_pindex->nHeight < Params().GetConsensus().BlockV11Height) {
+        return;
+    }
+
     if (ctx->m_type == ContractType::VOTE) {
         DeleteVote(ctx);
     } else {
         DeletePoll(ctx);
     }
+}
+
+void PollRegistry::Revert(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+{
+    LOCK(cs_poll_registry);
+
+    DetectReorg();
+
+    // V11 floor: see the comment in Add.
+    if (ctx.m_pindex && ctx.m_pindex->nHeight < Params().GetConsensus().BlockV11Height) {
+        return;
+    }
+
+    const uint256 hash = ctx.m_tx.GetHash();
+
+    if (ctx->m_type == ContractType::VOTE) {
+        // A VOTE REMOVE linked nothing, so its revert erases nothing.
+        if (ctx->m_action != ContractAction::ADD) {
+            return;
+        }
+
+        if (m_vote_db.contains(hash)) {
+            const uint256 poll_txid = m_vote_db.peek(hash)->m_poll_txid;
+
+            // A disconnect pops a poll's links newest first. For a link that is not its poll's newest, nothing is
+            // erased: the error is logged and the registry is rebuilt from the chain at the next start. No assert:
+            // asserts are live in release builds.
+            if (!EraseVoteLink(hash)) {
+                error("%s: poll registry flagged for a rebuild at the next start", __func__);
+                FlagRebuild();
+
+                return;
+            }
+
+            // The GUI hears of the unlinked vote as it heard of the link (DeleteVote). Judged by the wall clock on
+            // purpose; see PollReference::Notify.
+            const PollReference* poll_ref = TryBy(poll_txid);
+
+            if (poll_ref && !m_replay_in_progress && !poll_ref->Expired(GetAdjustedTime())) {
+                uiInterface.NewVoteReceived(poll_txid);
+            }
+
+            return;
+        }
+
+        // A vote its block did not link (from v15 a vote in its poll's own block, or a vote for a poll the
+        // registry does not hold): there is no link to erase.
+        return;
+    }
+
+    if (!m_poll_db.contains(hash)) {
+        // Not stored: a REMOVE that resolved to nothing, or an ADD that registered no poll. There is nothing to
+        // erase.
+        return;
+    }
+
+    const std::shared_ptr<PollEntry> record = m_poll_db.peek(hash);
+    const uint256 poll_txid = record->m_poll_txid;
+
+    if (record->m_status == PollEntryStatus::DELETED) {
+        // Reverting a REMOVE: its DELETED record goes, the poll's ADD record is current again, and the poll returns to
+        // the display map.
+        m_poll_db.erase(hash);
+
+        const auto add_record = m_poll_db.find(record->m_previous_hash);
+
+        if (add_record == m_poll_db.end()) {
+            error("%s: poll %s has no ADD record behind its DELETED record; poll registry flagged for a rebuild",
+                  __func__, poll_txid.ToString());
+            FlagRebuild();
+            return;
+        }
+
+        m_poll_entries[poll_txid] = add_record->second;
+        IndexPollRecord(*add_record->second);
+
+        if (const auto iter = m_polls_by_txid.find(poll_txid); iter != m_polls_by_txid.end() && !m_replay_in_progress) {
+            iter->second.Notify(PollReference::PollNotificationType::POLL_ADD);
+        }
+
+        if (!m_replay_in_progress) {
+            uiInterface.NewPollReceived(record->m_timestamp);
+        }
+
+        return;
+    }
+
+    // Reverting a poll's ADD. Its votes were in its own block after it or in later blocks, all popped already.
+    if (m_vote_links.count(poll_txid)) {
+        error("%s: poll %s still has vote links when its ADD is reverted; poll registry flagged for a rebuild",
+              __func__, poll_txid.ToString());
+        FlagRebuild();
+        return;
+    }
+
+    DeletePoll(ctx);
 }
 
 void PollRegistry::AddPoll(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIRED(cs_main, PollRegistry::cs_poll_registry)
@@ -1207,107 +2071,139 @@ void PollRegistry::AddPoll(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIRED(
         return;
     }
 
+    const uint256 txid = ctx.m_tx.GetHash();
+
     // In a contract replay inserts may overlap what was already inserted. Check to see if poll already exists, and
     // if so skip this add.
-    if (m_polls_by_txid.find(ctx.m_tx.GetHash()) != m_polls_by_txid.end()) {
+    if (m_polls_by_txid.find(txid) != m_polls_by_txid.end()) {
         return;
     }
-    std::string poll_title = payload->m_poll.m_title;
 
-    // The title used as the key for the m_poll map keyed by title, and also checked for duplicates, should
-    // not be case-sensitive, regardless of whether v1 or v2+. We should not be allowing the insertion of two v2 polls
-    // with the same title except for a difference in case.
-    auto result_pair = m_polls.emplace(ToLower(poll_title), PollReference());
+    const std::string& poll_title = payload->m_poll.m_title;
 
-    if (result_pair.second) {
-        const std::string& title = result_pair.first->first;
+    // From v15 a poll whose title key is taken registers nothing: by a poll the title index holds -- every poll
+    // registered since V11, active or deleted -- including one earlier in this block, which applied first. The
+    // transaction stays valid and its burn is spent; no block is refused over a title.
+    if (IsV15Enabled(ctx.m_pindex->nHeight) && TitleOwner(PollTitleKey(poll_title))) {
+        LogPrint(BCLog::LogFlags::VOTE, "%s: poll %s not registered: its title is taken.",
+                 __func__, txid.ToString());
+        return;
+    }
 
-        PollReference& poll_ref = result_pair.first->second;
-        poll_ref.m_ptitle = &title;
-        poll_ref.m_title = poll_title;
-        poll_ref.m_payload_version = payload->m_version;
-        poll_ref.m_type = payload->m_poll.m_type.Value();
-        poll_ref.m_weight_type = payload->m_poll.m_weight_type.Value();
-        poll_ref.m_timestamp = ctx.m_tx.nTime;
-        poll_ref.m_duration_days = payload->m_poll.m_duration_days;
-        poll_ref.m_pindex = ctx.m_pindex;
+    PollEntry entry;
+    entry.m_poll_txid = txid;
+    entry.m_title = poll_title;
+    entry.m_payload_version = payload->m_version;
+    entry.m_type = static_cast<uint32_t>(payload->m_poll.m_type.Value());
+    entry.m_weight_type = static_cast<uint32_t>(payload->m_poll.m_weight_type.Value());
+    entry.m_timestamp = ctx.m_tx.nTime;
+    entry.m_duration_days = payload->m_poll.m_duration_days;
+    entry.m_block_hash = ctx.m_pindex->GetBlockHash();
+    entry.m_block_height = ctx.m_pindex->nHeight;
+    entry.m_hash = txid;
+    entry.m_previous_hash = uint256();
+    entry.m_status = PollEntryStatus::ACTIVE;
 
+    if (!m_poll_db.insert(txid, ctx.m_pindex->nHeight, entry)) {
+        error("%s: poll record %s was not stored", __func__, txid.ToString());
+        return;
+    }
+
+    m_poll_entries[txid] = m_poll_db.find(txid)->second; // just inserted: in memory, nothing loaded
+    IndexPollRecord(entry);
+
+    PollReference& poll_ref = m_polls_by_txid.at(txid);
+    poll_ref.m_pindex = ctx.m_pindex; // the connecting block, whose index the load would find by hash
+
+    // A later poll with a title key already taken (below v15 only) is listed and found by its title, so the GUI
+    // hears of it as of any new poll; only the title's owner is announced and becomes the latest poll.
+    const bool owner = TryByTitle(PollTitleKey(poll_title)) == &poll_ref;
+
+    if (owner) {
         m_latest_poll = &poll_ref;
+    }
 
-        auto result_pair = m_polls_by_txid.emplace(ctx.m_tx.GetHash(), &poll_ref);
-        poll_ref.m_txid = result_pair.first->first;
+    if (!m_replay_in_progress) {
+        if (owner) {
+            poll_ref.Notify(PollReference::PollNotificationType::POLL_ADD);
+        }
 
-        poll_ref.Notify(PollReference::PollNotificationType::POLL_ADD);
-
+        // Judged by the wall clock on purpose; see PollReference::Notify.
         if (!poll_ref.Expired(GetAdjustedTime())) {
             uiInterface.NewPollReceived(poll_ref.Time());
         }
-
-        LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: Added poll %s to the registry, m_polls.size() = %u.",
-                 __func__,
-                 *poll_ref.m_ptitle,
-                 m_polls.size());
     }
+
+    LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: Added poll %s to the registry, m_polls.size() = %u.",
+             __func__,
+             PollTitleKey(poll_title),
+             m_polls.size());
 }
 
 void PollRegistry::AddVote(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIRED(cs_main, PollRegistry::cs_poll_registry)
 {
+    // Only a vote's ADD links a vote. A master-key VOTE REMOVE reaches Add only when it is reverted, and it links
+    // nothing, so its revert stores nothing either.
+    if (ctx->m_action != ContractAction::ADD) {
+        return;
+    }
+
+    const uint256 vote_txid = ctx.m_tx.GetHash();
+    PollReference* poll_ref = nullptr;
+
+    // A legacy (version 1) vote never reaches the registry: none is mined from V11, and below V11 Add returns. The
+    // legacy store links legacy votes.
     if (ctx->m_version >= 2) {
-        const auto vote = ctx->SharePayloadAs<Vote>();
+        poll_ref = TryBy(ctx->SharePayloadAs<Vote>()->m_poll_txid);
+    }
 
-        if (PollReference* poll_ref = TryBy(vote->m_poll_txid)) {
-            if (poll_ref->Expired(ctx.m_pindex->nTime)) {
-                LogPrint(LogFlags::VOTE,
-                    "%s: ignored vote %s for finished poll %s",
-                    __func__,
-                    ctx.m_tx.GetHash().ToString(),
-                    poll_ref->Txid().ToString());
-            } else {
-                // In a contract replay inserts may overlap what was already inserted. Check to see if vote already exists, and
-                // if so skip this add. This gets expensive as the number of votes increases.
-                // TODO: consider changing Votes to a map.
-                auto existing_vote = std::find(poll_ref->Votes().begin(), poll_ref->Votes().end(), ctx.m_tx.GetHash());
-                if (existing_vote != poll_ref->Votes().end()) {
-                    return;
-                }
+    if (poll_ref == nullptr) {
+        return;
+    }
 
-                poll_ref->LinkVote(ctx.m_tx.GetHash());
-
-                LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: Added vote %s to poll %s, poll_ref->Votes().size() = %u.",
-                         __func__,
-                         ctx.m_tx.GetHash().GetHex(),
-                         *poll_ref->m_ptitle,
-                         poll_ref->Votes().size());
-
-                if (!poll_ref->Expired(GetAdjustedTime())) {
-                    uiInterface.NewVoteReceived(poll_ref->Txid());
-                }
-            }
-        }
+    if (!VoteInWindow(*poll_ref, ctx.m_pindex)) {
+        LogPrint(LogFlags::VOTE,
+            "%s: ignored vote %s outside the window of poll %s",
+            __func__,
+            vote_txid.ToString(),
+            poll_ref->Txid().ToString());
 
         return;
     }
 
-    const ContractPayload vote = ctx->m_body.AssumeLegacy();
-    const std::string title = ParseLegacyVoteTitle(vote->LegacyKeyString());
-
-    if (title.empty()) {
+    // Already linked: the startup replay of the db-height block, or a duplicate apply. contains() leaves a
+    // passivated link passivated (find() would load it and make a later insert refuse it).
+    if (m_vote_db.contains(vote_txid)) {
         return;
     }
 
-    if (PollReference* poll_ref = TryBy(title)) {
-        // In a contract replay inserts may overlap what was already inserted. Check to see if vote already exists, and
-        // if so skip this add. This gets expensive as the number of votes increases.
-        // TODO: consider changing Votes to a map.
-        auto existing_vote = std::find(poll_ref->Votes().begin(), poll_ref->Votes().end(), ctx.m_tx.GetHash());
-        if (existing_vote != poll_ref->Votes().end()) {
-            return;
-        }
-        poll_ref->LinkVote(ctx.m_tx.GetHash());
+    VoteLinkEntry link;
+    link.m_poll_txid = poll_ref->m_txid;
+    link.m_timestamp = ctx.m_tx.nTime;
+    link.m_hash = vote_txid;
+    link.m_previous_hash = VoteHead(poll_ref->m_txid);
+    link.m_block_hash = ctx.m_pindex->GetBlockHash();
+    link.m_block_height = ctx.m_pindex->nHeight;
+    link.m_status = VoteLinkStatus::ACTIVE;
 
-        if (!poll_ref->Expired(GetAdjustedTime())) {
-            uiInterface.NewVoteReceived(poll_ref->Txid());
-        }
+    if (!m_vote_db.insert(vote_txid, ctx.m_pindex->nHeight, link)) {
+        error("%s: vote link %s was not stored", __func__, vote_txid.ToString());
+        return;
+    }
+
+    // Keep the poll's cached list in step when it is current; otherwise it is read again on next use.
+    if (poll_ref->m_votes_head == link.m_previous_hash) {
+        poll_ref->m_votes.push_back(vote_txid);
+        poll_ref->m_votes_head = vote_txid;
+    }
+
+    m_vote_links[poll_ref->m_txid] = m_vote_db.find(vote_txid)->second; // just inserted: nothing loaded
+
+    LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: Added vote %s to poll %s.", __func__, vote_txid.GetHex(), poll_ref->m_title);
+
+    // Judged by the wall clock on purpose; see PollReference::Notify.
+    if (!m_replay_in_progress && !poll_ref->Expired(GetAdjustedTime())) {
+        uiInterface.NewVoteReceived(poll_ref->Txid());
     }
 }
 
@@ -1320,41 +2216,86 @@ void PollRegistry::DeletePoll(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIR
     PollReference* poll_ref = nullptr;
 
     if (ctx->m_action == ContractAction::REMOVE) {
-        // A master-key REMOVE names the poll by title.
-        poll_ref = TryBy(ToLower(payload->m_poll.m_title));
+        if (payload->m_version == PollPayload::REMOVE_BY_TXID_VERSION) {
+            // From v15 a master-key REMOVE names its poll by txid. It resolves only to an ACTIVE poll the registry
+            // stores (registered since V11); a pre-V11 poll, which the legacy store holds outside the registry, is
+            // never removed.
+            const auto iter = m_polls_by_txid.find(payload->m_poll_txid);
+
+            if (iter != m_polls_by_txid.end() && !iter->second.m_deleted) {
+                poll_ref = &iter->second;
+            }
+        } else {
+            // Below v15 it names the poll by title: the ACTIVE poll that owns the title.
+            poll_ref = TryBy(PollTitleKey(payload->m_poll.m_title));
+        }
     } else {
         // The poll's own ADD, reverted: a revert removes only the poll its own
         // contract added, which it finds by its transaction.
         const auto iter = m_polls_by_txid.find(ctx.m_tx.GetHash());
 
         if (iter != m_polls_by_txid.end()) {
-            poll_ref = iter->second;
+            poll_ref = &iter->second;
         }
     }
 
     if (!poll_ref) {
-        LogPrint(BCLog::LogFlags::VOTE, "%s: poll \"%s\" (%s) not found in registry.",
-                 __func__, payload->m_poll.m_title, ctx.m_tx.GetHash().ToString());
+        LogPrint(BCLog::LogFlags::VOTE, "%s: the poll named by %s is not in the registry.",
+                 __func__, ctx.m_tx.GetHash().ToString());
         return;
     }
 
-    // Note this reference will effectively disappear once this function exits, but this is ok, because there will
-    // be no need to further reference it after this point for purposes of notification.
-    poll_ref->Notify(PollReference::PollNotificationType::POLL_DELETE);
+    if (!m_replay_in_progress) {
+        poll_ref->Notify(PollReference::PollNotificationType::POLL_DELETE);
+    }
 
-    // Erase both of the poll's entries.
-    const std::string title_key = *poll_ref->m_ptitle;
+    const uint256 txid = poll_ref->Txid();
+    const std::string title_key = PollTitleKey(poll_ref->m_title);
 
-    m_polls_by_txid.erase(poll_ref->Txid());
-    m_polls.erase(title_key);
+    // Either way the poll leaves the display map.
+    EraseShown(title_key, poll_ref);
+
     m_latest_poll = nullptr;
 
-    LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: Deleted poll %s to the registry, m_polls.size() = %u.",
+    if (ctx->m_action == ContractAction::REMOVE) {
+        // A master-key REMOVE: the poll stays registered by its txid and keeps its title. The REMOVE stores a
+        // DELETED record that links back to the poll's current record, so a restart rebuilds the same state.
+        poll_ref->m_deleted = true;
+
+        if (!m_poll_db.contains(ctx.m_tx.GetHash())) {
+            PollEntry entry = *m_poll_entries.at(txid);
+            entry.m_previous_hash = entry.m_hash;
+            entry.m_hash = ctx.m_tx.GetHash();
+            entry.m_block_hash = ctx.m_pindex->GetBlockHash();
+            entry.m_block_height = ctx.m_pindex->nHeight;
+            entry.m_status = PollEntryStatus::DELETED;
+
+            if (m_poll_db.insert(entry.m_hash, ctx.m_pindex->nHeight, entry)) {
+                m_poll_entries[txid] = m_poll_db.find(entry.m_hash)->second; // just inserted: nothing loaded
+            } else {
+                error("%s: deletion record %s was not stored", __func__, entry.m_hash.ToString());
+            }
+        }
+    } else {
+        // The poll's own ADD, reverted: its record, its title (if it owned it) and its entry go.
+        m_poll_db.erase(txid);
+        m_poll_entries.erase(txid);
+
+        if (const auto owner = m_title_index.find(title_key); owner != m_title_index.end() && owner->second == txid) {
+            m_title_index.erase(owner);
+        }
+
+        m_polls_by_txid.erase(txid);
+    }
+
+    LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: Deleted poll %s from the registry, m_polls.size() = %u.",
              __func__,
-             payload->m_poll.m_title,
+             txid.ToString(),
              m_polls.size());
 
-    uiInterface.NewPollReceived(poll_time);
+    if (!m_replay_in_progress) {
+        uiInterface.NewPollReceived(poll_time);
+    }
 }
 
 void PollRegistry::DeleteVote(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIRED(cs_main, PollRegistry::cs_poll_registry)
@@ -1363,36 +2304,22 @@ void PollRegistry::DeleteVote(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIR
         const auto vote = ctx->SharePayloadAs<Vote>();
 
         if (PollReference* poll_ref = TryBy(vote->m_poll_txid)) {
-            poll_ref->UnlinkVote(ctx.m_tx.GetHash());
+            EraseVoteLink(ctx.m_tx.GetHash());
 
             LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: Deleted vote %s from poll %s, poll_ref->Votes().size() = %u.",
                      __func__,
                      ctx.m_tx.GetHash().GetHex(),
-                     *poll_ref->m_ptitle,
+                     poll_ref->m_title,
                      poll_ref->Votes().size());
 
-            if (!poll_ref->Expired(GetAdjustedTime())) {
+            // Judged by the wall clock on purpose; see PollReference::Notify.
+            if (!m_replay_in_progress && !poll_ref->Expired(GetAdjustedTime())) {
                 uiInterface.NewVoteReceived(poll_ref->Txid());
             }
         }
-
-        return;
     }
 
-    const auto vote = ctx->SharePayload();
-    const std::string title = ParseLegacyVoteTitle(vote->LegacyKeyString());
-
-    if (title.empty()) {
-        return;
-    }
-
-    if (PollReference* poll_ref = TryBy(title)) {
-        poll_ref->UnlinkVote(ctx.m_tx.GetHash());
-
-        if (!poll_ref->Expired(GetAdjustedTime())) {
-            uiInterface.NewVoteReceived(poll_ref->Txid());
-        }
-    }
+    // A legacy (version 1) vote never reaches the registry: none is mined from V11, and below V11 Delete returns.
 }
 
 void PollRegistry::DetectReorg()
@@ -1401,6 +2328,8 @@ void PollRegistry::DetectReorg()
     // Note that doing the reorg detection here, in the contract handler, means that we only flag a reorg IF
     // a transaction happened to occur that involves a poll or vote contract in the scope of the reorg, because
     // these handlers are only triggered by those two contract types.
+    // PollRegistry::Snapshot throws the same InvalidDuetoReorgFork when the pinned tip is off the main chain, and
+    // callers retry exactly as they do on this flag.
     LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: registry_traversal_in_progress = %d, reorg_occurred_during_reg_traversal = %d, ",
              __func__,
              registry_traversal_in_progress.load(),
@@ -1421,36 +2350,14 @@ void PollRegistry::DetectReorg()
 
 using Sequence = PollRegistry::Sequence;
 
-Sequence::Sequence(const PollMapByTitle& polls, const FilterFlag flags) EXCLUSIVE_LOCKS_REQUIRED(PollRegistry::cs_poll_registry)
-    : m_polls(polls), m_flags(flags)
+Sequence::Sequence(const PollMapByTitle& polls) EXCLUSIVE_LOCKS_REQUIRED(PollRegistry::cs_poll_registry)
+    : m_polls(polls)
 {
-}
-
-Sequence Sequence::Where(const FilterFlag flags) const EXCLUSIVE_LOCKS_REQUIRED(PollRegistry::cs_poll_registry)
-{
-    return Sequence(m_polls, flags);
-}
-
-Sequence Sequence::OnlyActive(const bool active_only) const EXCLUSIVE_LOCKS_REQUIRED(PollRegistry::cs_poll_registry)
-{
-    int flags = m_flags;
-
-    if (active_only) {
-        flags = (flags & ~FINISHED) | ACTIVE;
-    }
-
-    return Sequence(m_polls, static_cast<FilterFlag>(flags));
 }
 
 Sequence::Iterator Sequence::begin() const EXCLUSIVE_LOCKS_REQUIRED(PollRegistry::cs_poll_registry)
 {
-    int64_t now = 0;
-
-    if (!((m_flags & ACTIVE) && (m_flags & FINISHED))) {
-        now = GetAdjustedTime();
-    }
-
-    return Iterator(m_polls.begin(), m_polls.end(), m_flags, now);
+    return Iterator(m_polls.begin(), m_polls.end());
 }
 
 Sequence::Iterator Sequence::end() const EXCLUSIVE_LOCKS_REQUIRED(PollRegistry::cs_poll_registry)
@@ -1464,17 +2371,8 @@ Sequence::Iterator Sequence::end() const EXCLUSIVE_LOCKS_REQUIRED(PollRegistry::
 
 using Iterator = PollRegistry::Sequence::Iterator;
 
-Iterator::Iterator(
-    BaseIterator iter,
-    BaseIterator end,
-    const FilterFlag flags,
-    const int64_t now)
-    : m_iter(iter)
-    , m_end(end)
-    , m_flags(flags)
-    , m_now(now)
+Iterator::Iterator(BaseIterator iter, BaseIterator end) : m_iter(iter), m_end(end)
 {
-    SeekNextMatch();
 }
 
 Iterator::Iterator(BaseIterator end) : m_iter(end), m_end(end)
@@ -1483,12 +2381,12 @@ Iterator::Iterator(BaseIterator end) : m_iter(end), m_end(end)
 
 const PollReference& Iterator::Ref() const EXCLUSIVE_LOCKS_REQUIRED(PollRegistry::cs_poll_registry)
 {
-    return m_iter->second;
+    return *m_iter->second;
 }
 
 PollOption Iterator::TryPollFromDisk() const EXCLUSIVE_LOCKS_REQUIRED(PollRegistry::cs_poll_registry)
 {
-    return m_iter->second.TryReadFromDisk();
+    return m_iter->second->TryReadFromDisk();
 }
 
 Iterator::reference Iterator::operator*() const
@@ -1504,7 +2402,6 @@ Iterator::pointer Iterator::operator->() const
 Iterator& Iterator::operator++() EXCLUSIVE_LOCKS_REQUIRED(PollRegistry::cs_poll_registry)
 {
     ++m_iter;
-    SeekNextMatch();
 
     return *this;
 }
@@ -1525,27 +2422,4 @@ bool Iterator::operator==(const Iterator& other) const EXCLUSIVE_LOCKS_REQUIRED(
 bool Iterator::operator!=(const Iterator& other) const EXCLUSIVE_LOCKS_REQUIRED(PollRegistry::cs_poll_registry)
 {
     return m_iter != other.m_iter;
-}
-
-void Iterator::SeekNextMatch() EXCLUSIVE_LOCKS_REQUIRED(PollRegistry::cs_poll_registry)
-{
-    if (m_flags == FilterFlag::NO_FILTER) {
-        return;
-    }
-
-    while (m_iter != m_end) {
-        if (m_now > 0) {
-            if (m_flags & ACTIVE) {
-                if (!m_iter->second.Expired(m_now)) {
-                    break;
-                }
-            } else {
-                if (m_iter->second.Expired(m_now)) {
-                    break;
-                }
-            }
-        }
-
-        ++m_iter;
-    }
 }

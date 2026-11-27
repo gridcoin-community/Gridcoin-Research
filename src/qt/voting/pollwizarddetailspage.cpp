@@ -302,8 +302,8 @@ void PollWizardDetailsPage::initializePage()
         ui->responseTypeList->setDisabled(true);
 
         // Only populate poll additional field entries if version >= 3. The node
-        // resolves the v3 activation against its own tip (the former GUI-side
-        // LOCK(cs_main) + IsPollV3Enabled(nBestHeight) read).
+        // resolves the v3 activation for its next block (replacing the former
+        // GUI-side LOCK(cs_main) + IsPollV3Enabled(nBestHeight) read).
         if (m_voting_model->pollV3Enabled()) {
             poll_item.m_additional_field_entries.push_back(
                         AdditionalFieldEntry("project_name", field("projectName").toString(), true));

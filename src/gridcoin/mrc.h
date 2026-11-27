@@ -10,11 +10,13 @@
 #include "gridcoin/contract/handler.h"
 #include "gridcoin/cpid.h"
 #include "gridcoin/superblock.h"
+#include "script/standard.h"
 #include "serialize.h"
 #include "sync.h"
 #include "uint256.h"
 
 #include <optional>
+#include <set>
 #include <stdexcept>
 
 class CPubKey;
@@ -55,7 +57,19 @@ public:
     //! ensure that the serialization/deserialization routines also handle all
     //! of the previous versions.
     //!
-    static constexpr uint32_t CURRENT_VERSION = 1;
+    //! Version 2 is signed over every field but the signature. A block pays MRCs of one version: version 2 from
+    //! block version 15, version 1 below it (VersionForBlock).
+    //!
+    static constexpr uint32_t CURRENT_VERSION = 2;
+
+    //!
+    //! \brief Get the version of the MRCs that a block at a height pays.
+    //!
+    //! \param height The height of the block that pays the MRC, which is the block after the MRC's last block.
+    //!
+    //! \return 2 from the height of block version 15, 1 below it.
+    //!
+    static uint32_t VersionForBlock(int height);
 
     //!
     //! \brief The maximum length of a serialized client version in a claim.
@@ -360,6 +374,60 @@ public:
     // Delete is a noop here, because this is handled at the block level by the staker (in the miner) as with the claim.
     void Delete(const ContractContext& ctx) override {}
 };
+
+//!
+//! \brief Determine whether an MRC's fee leaves the foundation a share.
+//!
+//! The foundation's share of an MRC's fee is the fee times the foundation's allocation of MRC fees, in whole
+//! Halfords, as the miner adds the shares up (CreateMRCRewards).
+//!
+//! \param mrc The MRC to check.
+//!
+//! \return \c true if the share is more than zero, or if the foundation has no allocation of MRC fees.
+//!
+bool MRCLeavesFoundationShare(const MRC& mrc);
+
+//!
+//! \brief Determine whether an MRC is eligible beside a block's claim.
+//!
+//! A block's MRCs may not include its claim's CPID, and each must leave the foundation a share of its fee
+//! (MRCLeavesFoundationShare). The rule lives here alone: the miner selects the MRCs it binds by it, and from block
+//! version 15 block validation (BlockRewardRules::CheckMRCRewards) refuses a block whose MRCs break it.
+//!
+//! \param claim_cpid The CPID of the block's claim, or none for a non-cruncher claim.
+//! \param mrc        The MRC to check.
+//!
+//! \return \c true if the MRC names a CPID, that CPID is not the claim's, and the MRC's fee leaves the foundation a
+//! share.
+//!
+bool MRCEligibleForClaim(const CpidOption& claim_cpid, const MRC& mrc);
+
+//!
+//! \brief Record the address an MRC of a block is paid at, unless another MRC of the block is paid at it.
+//!
+//! A block's MRCs are paid at different addresses. An MRC is paid at the address of its CPID's beacon. The rule lives
+//! here alone: the miner selects the MRCs it binds by it, and from block version 15 block validation
+//! (BlockRewardRules::CheckMRCRewards) refuses a block whose MRCs break it.
+//!
+//! \param paid_addresses The addresses the block's MRCs so far are paid at. The address is added if it is new.
+//! \param address        The address the MRC to check is paid at.
+//!
+//! \return \c true if no other MRC of the block is paid at the address.
+//!
+bool MRCPaidAtNewAddress(std::set<CTxDestination>& paid_addresses, const CTxDestination& address);
+
+//!
+//! \brief Determine whether a block may pay MRCs.
+//!
+//! A block that carries a superblock pays no MRC. The rule lives here alone: the miner, which decides whether its
+//! block carries a superblock before it chooses the block's transactions, binds no MRC to one that does, and from
+//! block version 15 block validation (BlockRewardRules::CheckMRCRewards) refuses a block that breaks it.
+//!
+//! \param carries_superblock Whether the block carries a superblock.
+//!
+//! \return \c true if the block may pay MRCs.
+//!
+bool BlockMayPayMRCs(bool carries_superblock);
 
 //!
 //! \brief

@@ -28,7 +28,7 @@ all prior rules unless explicitly changed.
 8. [Block Version 12 — Manual Research Claims](#8-block-version-12)
 9. [Block Version 13 — Mandatory Sidestakes and Configurable Parameters](#9-block-version-13)
 10. [Block Version 14 — Script Timelocks and V3 Beacons](#10-block-version-14)
-11. [Block Version 15 — On-Chain Pool Registration](#11-block-version-15)
+11. [Block Version 15 — Block Spacing, Stricter Validation and On-Chain Pool Registration](#11-block-version-15)
 12. [Cross-Cutting Consensus Rules](#12-cross-cutting-consensus-rules)
 13. [Coinstake Output Structure Summary](#13-coinstake-output-structure-summary)
 14. [Contract Payload Version Matrix](#14-contract-payload-version-matrix)
@@ -65,12 +65,20 @@ in `src/chainparams.h`.
 | `AutoGreylistDeepCopyHeight` | _not yet activated_ | _not yet activated_ | `IsAutoGreylistDeepCopyEnabled()` (>= height) |
 | `AutoGreylistTotalCreditFixHeight` | _not yet activated_ | _not yet activated_ | `IsAutoGreylistTotalCreditFixEnabled()` (>= height) |
 | `AutoGreylistRedesignHeight` | _not yet activated_ | _not yet activated_ | `IsAutoGreylistRedesignEnabled()` (>= height) |
+| `PollMultiAddressHeight` | _not yet activated_ | _not yet activated_ | `IsPollMultiAddressEnabled()` (>= height) |
+| `MessageContractDisableHeight` | _not yet activated_ | _not yet activated_ | `IsMessageContractEnabled()` (< height) |
 
 > **Note:** "not yet activated" means that network's chain parameters set the
 > height to `std::numeric_limits<int>::max()`, so the gate never opens there.
 > Every row currently marked that way is inactive on **both** mainnet and
-> testnet. The feature is present in code; where a hidden height override
-> exists it can be activated ahead of schedule on an isolated testnet.
+> testnet. The feature is present in code. Where a hidden height override
+> exists, regtest can set the height with it. The overrides are ignored on
+> mainnet and testnet.
+>
+> `BlockV15Height`, `PollMultiAddressHeight`, `MessageContractDisableHeight`
+> and the three `AutoGreylist...Height` rows marked that way are set together,
+> to one height, by the release that schedules block version 15 (see
+> [Section 11](#11-block-version-15)).
 
 ### Non-Height Parameters
 
@@ -92,7 +100,7 @@ consensus-critical at a specific block version activation height. The
 | `DefaultMagnitudeWeightFactor` | 100/567 (~0.1764) | `BlockV11Height` | Voting weight conversion factor; configurable from `BlockV13Height` |
 | `MaxMagnitudeWeightFactor` | 1 | `BlockV13Height` | Upper clamp for voting magnitude weight factor |
 | `StandardContractReplayLookback` | 180 days | `BlockV11Height` | Contract validity window for types without registry DB (not applicable v13+ for protocol entries) |
-| `PendingPoolRetention` | 28,800 blocks (~30 days at ~90s spacing) | `BlockV15Height` | PENDING pool registrations and POOL_APPROVE OPEN authorizations are query-time expired after this many blocks (issue #1783). Overridable on regtest and testnet (ignored on mainnet) via hidden `-pendingpoolretention`; consensus-affecting. See §11.3.1. |
+| `PendingPoolRetention` | 28,800 blocks (~30 days at ~90s spacing) | `BlockV15Height` | PENDING pool registrations and POOL_APPROVE OPEN authorizations are query-time expired after this many blocks (issue #1783). Overridable on regtest (ignored on mainnet and testnet) via hidden `-pendingpoolretention`; consensus-affecting. See §11.3.1. |
 
 > **Source:** `CMainParams` (mainnet), `CTestNetParams`
 > (testnet) in `src/chainparams.cpp`
@@ -605,11 +613,10 @@ Via protocol entry `"magnitudeweightfactor"`:
   refuses to start on that combination. The release sets all of these
   coincident with `BlockV15Height`
 
-> These four heights are separate fields so they can be driven independently
-> during testing (`-autogreylist{audit,deepcopy,totalcreditfix,redesign}height`).
-> On the isolated mesh the first three are overridden low and already crossed,
-> which is **not** the mainnet sequencing -- mainnet activates all of them in the
-> same block as v15.
+> The last three heights are separate fields so that regtest can drive them
+> independently (`-autogreylist{deepcopy,totalcreditfix,redesign}height`).
+> `AutoGreylistAuditHeight` has no override. Mainnet and testnet activate the
+> last three in the same block as v15.
 
 ### 9.7 Project v4
 
@@ -699,9 +706,80 @@ for trustless atomic operations.
 
 ---
 
-## 11. Block Version 15 — On-Chain Pool Registration
+## 11. Block Version 15 — Block Spacing, Stricter Validation and On-Chain Pool Registration
 
 **Activation:** Mainnet _not yet activated_, Testnet _not yet activated_
+
+Block version 15 carries the rules in the table below. All of them are in the
+code and inactive: `BlockV15Height` and the five heights set with it are
+`std::numeric_limits<int>::max()` on mainnet and testnet until a mandatory
+release sets them.
+
+| Rule from the activation height | Gate | Section |
+|---|---|---|
+| A block at or above the height is version 15, and a block below it is not | `BlockV15Height` | §12.2 |
+| The pool registration contracts `POOL_REGISTER` and `POOL_APPROVE` are valid | `BlockV15Height` | §11.1 to §11.5 |
+| Staked input from the block's own history | `BlockV15Height` | §11.6 |
+| Script verification adds six flags | `BlockV15Height` | §11.7 |
+| A claim contract is in the coinbase and nowhere else | block version 15 | §11.8 |
+| Block and transaction size are measured without the superblock | block version 15 | §11.9 |
+| A block's timestamp is at most 48 seconds before its parent's | `BlockV15Height` | §11.10 |
+| The retarget is log-linear in the parent spacing, and the kernel target eases after a long gap | `BlockV15Height` | §11.10 |
+| A new mandatory sidestake allocation is positive and in basis points, and the total is judged on what the contract would leave | `BlockV15Height` | §11.11 |
+| A new `magnitudeunit` or `magnitudeweightfactor` protocol entry is validated on entry | `BlockV15Height` | §11.11 |
+| A transaction that carries a MESSAGE contract is invalid | `MessageContractDisableHeight` | §11.12 |
+| A poll's eligibility claim is version 2 | `PollMultiAddressHeight` | §11.13 |
+| A poll's eligibility claim names each address key and each output once | `BlockV15Height` | §11.13 |
+| AutoGreylist deep copy, total credit and project status record | the three `AutoGreylist...Height` gates | §9.6 |
+| The scraper manifest project limit allows for the pseudo-projects (a network rule) | `BlockV15Height` | §11.14 |
+| A beacon removal carries the key of the CPID's current beacon, in validation and again when it is applied | `BlockV15Height` | §11.16 |
+| A disconnected block is reverted in the inverse order of its connection, and each revert takes only the records its own contract created | `BlockV15Height` | §11.16 |
+| The beacon registry is rebuilt from the chain's beacon contracts as the last block below the height connects | `BlockV15Height` | §11.16 |
+| A poll removal names its poll by transaction id (poll payload version 4), and only a removal carries that version | `BlockV15Height` | §11.17 |
+| A transaction that carries a vote has at most two outputs, and the vote's balance claim names each address key and each output once | `BlockV15Height` | §11.17 |
+| A block's MRCs do not include the CPID of the block's own claim | block version 15 | §11.18 |
+| A claim lists each MRC under the MRC's own CPID | block version 15 | §11.18 |
+| A new poll whose title is already taken registers nothing | `BlockV15Height`, at the poll's block | §11.17 |
+| A poll starts at its block's time, and a vote is linked only from a later block | `BlockV15Height`, at the poll's block | §11.17 |
+| A poll closes at a block, and every bound of its tally is that block | `BlockV15Height`, at the first block past the poll's end | §11.17 |
+| A vote transaction in the poll's block or a later one passes a claimed output through to its outputs at the same address, as a coinstake does | `BlockV15Height`, at the poll's block | §11.17 |
+| A beacon contract carries beacon payload version 4, whose signature covers the contract's action and the record the contract acts on | `BlockV15Height` | §11.19 |
+| A beacon advertisement is refused when its key is pending, or active and unexpired, under another CPID | `BlockV15Height` | §11.19 |
+| A beacon is stamped with its block's time, and a beacon contract is judged at its block's time | `BlockV15Height` | §11.19 |
+| An MRC carries MRC payload version 2, whose signature covers every field of the payload | `BlockV15Height`, at the height after the MRC's last block | §11.20 |
+| A block that carries a superblock pays no MRC | block version 15 | §11.20 |
+| Each MRC a block pays leaves the foundation a share of its fee | block version 15 | §11.20 |
+| The MRCs of one block are paid at different addresses | block version 15 | §11.20 |
+| A poll's text is valid UTF-8 | `BlockV15Height` | §11.17 |
+| A research reward, in a block's claim or in an MRC, is checked against the CPID's accrual | block version 15 for a claim; `BlockV15Height` at the height after the MRC's last block for an MRC | §11.21 |
+| A convergence at the manifest level, and the validation of a superblock by manifest, go by the agreement of scraper manifests | `BlockV15Height` | §11.22 |
+| The scraper and superblock code treats the node as in sync until the block before the tip is one hour old | `BlockV15Height` | §11.23 |
+| The values in the statistics that make a superblock are finite and not negative | `BlockV15Height` | §11.24 |
+| A received scraper manifest's signature has the form that `CKey::Sign()` writes (a network rule) | `BlockV15Height`, at the receiver's tip | §11.25 |
+
+A rule gated on "block version 15" reads the version of the block being
+checked. A block's version follows from its height (§12.2), so on an accepted
+chain this is the same gate.
+
+### Heights Set With `BlockV15Height`
+
+| Parameter | Regtest default | Hidden override (regtest only) |
+|---|---|---|
+| `BlockV15Height` | not set | `-blockv15height` |
+| `MessageContractDisableHeight` | not set | `-messagecontractdisableheight` |
+| `PollMultiAddressHeight` | 0 | `-pollmultiaddressheight` |
+| `AutoGreylistDeepCopyHeight` | 0 | `-autogreylistdeepcopyheight` |
+| `AutoGreylistTotalCreditFixHeight` | 0 | `-autogreylisttotalcreditfixheight` |
+| `AutoGreylistRedesignHeight` | 0 | `-autogreylistredesignheight` |
+
+On mainnet and testnet the release that schedules block version 15 sets the six
+to one height. They are separate fields so that regtest can drive them one at a
+time. "Not set" is `std::numeric_limits<int>::max()`: regtest mines version 14
+blocks unless `-blockv15height` is given.
+
+> **Source:** `CMainParams`, `CTestNetParams` and `CRegTestParams` in `src/chainparams.cpp`; the predicates and `ConsensusOverridesAllowed()` in `src/chainparams.h`.
+
+### On-Chain Pool Registration (§11.1 to §11.5)
 
 Issue [#1783](https://github.com/gridcoin-community/Gridcoin-Research/issues/1783) replaces the hardcoded `MiningPools` list with an on-chain registry so pool operators can self-register without a binary release. The V15 hard-fork machinery is present in code from the time of this PR; the activation height itself is a follow-up consensus decision and defaults to `std::numeric_limits<int>::max()` in `CMainParams` / `CTestNetParams` until pinned.
 
@@ -785,7 +863,7 @@ Both checks are pure functions of stored fields — no state mutation at the exp
 
 #### Hidden `-pendingpoolretention` override
 
-For isolated-testnet / regtest runs that need to exercise expiration boundaries without waiting ~30 days of mainnet-paced blocks, the hidden `-pendingpoolretention=N` arg (registered in `init.cpp`) shortens the window. Like every hidden consensus override, it is **ignored on mainnet** and honoured only on regtest and testnet (`ConsensusOverridesAllowed()` in `src/chainparams.h`). **CONSENSUS-AFFECTING where honoured:** nodes with differing values disagree on POOL_REGISTER admission across expiration boundaries, so a node on the public testnet with a different value **will fork off the network**. Mirrors the existing `-blockv15height` pattern in scope and warning.
+For regtest runs that need to exercise expiration boundaries without waiting ~30 days of mainnet-paced blocks, the hidden `-pendingpoolretention=N` arg (registered in `init.cpp`) shortens the window. Like every hidden consensus override, it is **ignored on mainnet and testnet** and honoured only on regtest (`ConsensusOverridesAllowed()` in `src/chainparams.h`). The value is **consensus-affecting:** nodes with differing values disagree on POOL_REGISTER admission across expiration boundaries, so a node on a shared network with a different value would fork off it. Mirrors the existing `-blockv15height` pattern in scope.
 
 > **Source:** `src/gridcoin/pool.cpp` `IsPendingExpired` / `IsAuthorizationExpired`; `src/chainparams.cpp` `GetPendingPoolRetention`; `src/init.cpp` hidden_args registration.
 
@@ -833,6 +911,529 @@ At every height (ungated), when the transaction index has no entry for the stake
 
 > **Source:** `src/gridcoin/staking/kernel.cpp` `ReadStakedInput`, `TakeStakedInputFromOwnHistory`.
 
+### 11.7 Script Verification Flags
+
+From `BlockV15Height`, `GetBlockScriptFlags()` adds `V15_SCRIPT_VERIFY_FLAGS` to
+the consensus script flags:
+
+| Flag | Requirement |
+|---|---|
+| `SCRIPT_VERIFY_DERSIG` | A signature is strictly DER encoded |
+| `SCRIPT_VERIFY_LOW_S` | A signature's S value is in the lower half of the curve order |
+| `SCRIPT_VERIFY_STRICTENC` | A signature carries a defined hash type, and a public key is in compressed or uncompressed encoding |
+| `SCRIPT_VERIFY_NULLDUMMY` | The extra element that `OP_CHECKMULTISIG` removes from the stack is empty |
+| `SCRIPT_VERIFY_MINIMALDATA` | A data push uses the shortest push operator, and the operands of `OP_CHECKLOCKTIMEVERIFY` and `OP_CHECKSEQUENCEVERIFY` are minimally encoded. Other numeric operands are not checked for minimal encoding |
+| `SCRIPT_VERIFY_CLEANSTACK` | Exactly one element is left on the stack after evaluation. For a pay-to-script-hash spend the stack judged is the redeem script's |
+
+A block is judged with the flags of its own height. A transaction entering the
+mempool, and a transaction the miner selects, is judged with the flags of the
+tip's next height, the first height at which it can be mined. Relay and block
+validity therefore change at the same height.
+
+> **Source:** `GetBlockScriptFlags()` and `ConnectInputs()` in `src/validation.cpp`; `V15_SCRIPT_VERIFY_FLAGS` in `src/policy/policy.h`; `VerifyScript()` and `EvalScript()` in `src/script/interpreter.cpp`. See also §12.1.
+
+### 11.8 Claim Contract Placement
+
+Since block version 11 the coinbase, a block's first transaction, carries
+exactly one contract, the block's claim (§7.5). In a version 15 block no other
+transaction may carry a `CLAIM` contract. `CheckBlock()` rejects a block that
+has one (DoS 100, "claim contract outside the coinbase").
+
+The mempool applies the rule at the height the transaction could be mined at.
+When the tip's next height is at or above `BlockV15Height`,
+`AcceptToMemoryPool()` refuses a transaction that carries a `CLAIM` contract
+(DoS 100, `claim-outside-coinbase`). The wallet's revalidation of its own
+transactions follows the mempool rule. The miner leaves out a pooled
+transaction that carries one, because a transaction accepted before the height
+can still be in the pool after it.
+
+> **Source:** `CheckBlock()` and `AcceptToMemoryPool()` in `src/validation.cpp`; `CWalletTx::RevalidateTransaction()` in `src/wallet/wallet.cpp`; `CreateRestOfTheBlock()` in `src/miner.cpp`.
+
+### 11.9 Size Accounting Without the Superblock
+
+Below block version 15 the serialized block, its superblock included, must not
+exceed `MAX_BLOCK_SIZE` (1,000,000 bytes).
+
+In a version 15 block:
+
+- When the block's superblock is well formed, the block's size is measured
+  without the superblock (`SER_SKIPSUPERBLOCK`). That size must not exceed
+  `MAX_BLOCK_SIZE`.
+- Each transaction's size is measured without the superblock in the same way,
+  against the same limit.
+
+At every block version the superblock alone must not exceed
+`Superblock::MAX_SIZE` (4,000,000 bytes). Violations are rejected with DoS 100
+("size limits failed").
+
+> **Source:** `CheckBlock()` and `CheckTransaction()` in `src/validation.cpp`; `Superblock::MAX_SIZE` in `src/gridcoin/superblock.h`.
+
+### 11.10 Block Spacing
+
+Four changes act together from `BlockV15Height`. The first three are validity
+rules. The fourth is how the miner stamps a block.
+
+| Constant | Value | Meaning |
+|---|---|---|
+| `V15_TARGET_SPACING` | 90 s | Target block spacing |
+| `V15_RETARGET_TIME_CONSTANT` | 990 s | Time constant of the retarget |
+| `V15_SPACING_CAP` | 2,500 s | Largest spacing, of either sign, that the retarget reads |
+| `V15_EASING_THRESHOLD` | 300 s | Time since the parent after which the kernel target eases |
+| `V15_EASING_DOUBLING` | 256 s | Time over which the eased target doubles |
+| `V15_EASING_MAX_DOUBLINGS` | 64 | Limit on the easing |
+| `V15_PAST_TIME_BOUND` | 48 s | How far a block's timestamp may be before its parent's |
+| `V15_FUTURE_TIME_BOUND` | 48 s | How far a block's timestamp may be ahead of the receiver's adjusted time |
+
+#### Timestamp window
+
+`CheckBlockTime()` applies to blocks of version 12 and above.
+
+| | Below `BlockV15Height` | From `BlockV15Height` |
+|---|---|---|
+| Earliest timestamp | 128 s before the parent's | 48 s before the parent's |
+| Latest timestamp | 128 s ahead of the receiver's adjusted time | 48 s ahead of the receiver's adjusted time |
+
+The earliest timestamp depends only on the parent, so every node gives the same
+answer; a block before it is rejected with DoS 50. The latest timestamp depends
+on the receiver's clock. From the height, a block more than 48 s and up to
+128 s ahead is rejected without a misbehavior score (`REJECT_TIME_TOO_NEW`)
+and is acceptable once the receiver's clock reaches the window. A block more
+than 128 s ahead is rejected with DoS 25 at every height.
+
+Timestamps of version 12 and later blocks are on the 16 second grid (§12.5), and
+48 seconds is three steps of it.
+
+#### Retarget
+
+From the height the next block's base target is
+
+```
+next_target = parent_target * exp(2 * (spacing - 90) / 990)
+```
+
+- `spacing` is the parent's time minus the time of the block before it. It is
+  signed, and is limited to the range -2,500 to 2,500 seconds.
+- The arithmetic is fixed point. The exponent of two is
+  `floor((spacing - 90) * 2 * 65536 * 1000000 / (990 * 693147))` in units of
+  1/65536, and the fractional power of two uses the cubic approximation of
+  aserti3-2d.
+- The result is limited to the range 1 to `PROOF_OF_STAKE_LIMIT`.
+
+A spacing of 90 seconds leaves the target unchanged.
+
+The rule of §12.3, its difficulty resets included, does not apply from the
+height.
+
+#### Kernel target easing
+
+The target that a block's kernel hash is checked against is eased by the time
+since the parent:
+
+```
+elapsed       = block_time - parent_time
+kernel_target = base_target * 2^((elapsed - 300) / 256)    if elapsed > 300
+kernel_target = base_target                                otherwise
+```
+
+`base_target` is the target in the block's `nBits`. `elapsed` is signed, so a
+timestamp before the parent's gets no easing. `elapsed` is read up to
+300 + 256 * 64 = 16,684 seconds, and the eased target is limited to
+`PROOF_OF_STAKE_LIMIT`. The miner's kernel search and `CheckProofOfStakeV8()`
+use the same function.
+
+#### Stake time (miner)
+
+The miner stamps a block with
+`max(parent_time - 48, MaskStakeTime(adjusted_now))`. A node whose clock is
+behind the parent therefore stamps the earliest valid time. When its clock is
+more than 96 seconds behind the parent, that timestamp is outside the node's
+own acceptance window; the miner skips the attempt and raises the clock
+warning.
+
+> **Source:** the constants, `RetargetLogLinear()`, `EaseTarget()`, `ScaleTargetExp2()` and `GetNextTargetRequired()` in `src/gridcoin/staking/difficulty.h` and `difficulty.cpp`; `GetKernelTarget()`, `GetStakeTime()` and `CheckProofOfStakeV8()` in `src/gridcoin/staking/kernel.cpp`; `CheckBlockTime()` and `AcceptBlock()` in `src/validation.cpp`; `StakeMiner()` in `src/miner.cpp`.
+
+### 11.11 Sidestake and Protocol Entry Values
+
+Both rules are judged at the tip's next height for the mempool and at the
+block's height in a block. A contract that fails either is refused with DoS 25.
+Entries accepted before the height are not judged again.
+
+**Mandatory sidestake contracts.** From `BlockV15Height`:
+
+- An ADD's allocation, reduced to lowest terms, must be positive, and its
+  denominator must divide 10,000. That is a whole number of basis points.
+- An ADD is refused when the total of the active mandatory allocations, with
+  the destination's current allocation left out, plus the new allocation
+  exceeds `MaxMandatorySideStakeTotalAlloc` (25%). A REMOVE is not judged on the
+  total.
+
+Below the height the contract's allocation is added to the active total
+whatever its action or destination, and the sum is compared with the same
+maximum.
+
+**Protocol entries.** From `BlockV15Height` an ADD of a `magnitudeunit` or
+`magnitudeweightfactor` entry must carry a value that:
+
+- parses as a fraction, written `n/d` or `n`;
+- is positive;
+- has a reduced numerator and denominator of at most 1,000,000 each
+  (`MAX_MAGNITUDE_ENTRY_TERM`).
+
+A value outside the clamp ranges of §9.3 and §9.4 passes this check and is
+clamped where it is used.
+
+> **Source:** `SideStakeRegistry::ValidateAtHeight()` in `src/gridcoin/sidestake.cpp`; `ProtocolRegistry::ValidateAtHeight()`, `IsMagnitudeProtocolKey()` and `CheckMagnitudeEntryValue()` in `src/gridcoin/protocol.cpp`; `MAX_MAGNITUDE_ENTRY_TERM` in `src/gridcoin/protocol.h`.
+
+### 11.12 MESSAGE Contracts Disabled
+
+`IsMessageContractEnabled(height)` is true below `MessageContractDisableHeight`.
+
+- **Validity.** `CheckContracts()` rejects a transaction that carries a contract
+  of type `MESSAGE`, whatever the contract's action, when the height it is
+  judged at is at or above the gate (DoS 100). A transaction in a block is
+  judged at the block's height. A transaction entering the mempool is judged at
+  the tip's next height.
+- **Mempool.** When the block before the gate height connects, the pooled
+  transactions that carry a MESSAGE contract are removed with their
+  descendants. The wallet abandons its own among them, which releases their
+  inputs. A reorganization back across the height does not restore them.
+- **Not consensus.** The miner leaves such a transaction out of a block at or
+  above the height. From the same height `sendtoaddress`, `sendfrom`,
+  `rainbymagnitude` and the GUI send no longer attach a message.
+
+> **Source:** `IsMessageContractEnabled()` in `src/chainparams.h`; `CheckContracts()` in `src/validation.cpp`; the mempool sweep in `src/node/chainman.cpp`; `CreateRestOfTheBlock()` in `src/miner.cpp`.
+
+### 11.13 Poll Eligibility Claims
+
+A poll contract carries a `PollEligibilityClaim`, by which the poll's creator
+shows ownership of a balance. Version 1 of the claim covers one address.
+Version 2 carries a balance claim over one or more addresses.
+
+- From `PollMultiAddressHeight` a poll's claim must be version 2. Below the
+  height a version 2 claim is refused. Both are block rules (DoS 25).
+- From `BlockV15Height` a poll's claim names each address key and each output
+  once (`PollEligibilityClaim::EntriesDistinct()`). A block with a poll that
+  does not is rejected (DoS 25). The mempool applies the rule when the tip's
+  next height is at or above the gate (DoS 25, `bad-poll-claim`).
+
+> **Source:** `PollRegistry::BlockValidate()` in `src/gridcoin/voting/registry.cpp`; `PollEligibilityClaim` in `src/gridcoin/voting/claims.h`; `AcceptToMemoryPool()` in `src/validation.cpp`.
+
+### 11.14 Scraper Manifest Project Limit
+
+This is a rule of the scraper network, not of block validity.
+
+A received scraper manifest may list at most
+
+```
+nMaxProjects = ceil(W / max(0.5, CONVERGENCE_BY_PROJECT_RATIO)) + 2
+```
+
+project entries, where `W` is the number of whitelist entries that are not
+deleted. A manifest also lists three pseudo-projects (`VerifiedBeacons`,
+`ProjectsAllCpidTotalCredits`, `ProjectPublicKeys`), which are not whitelist
+entries. Below `BlockV15Height` they count against `nMaxProjects`. When the
+receiver's tip is at or above the height the limit is `nMaxProjects + 3`.
+
+A node that is in sync refuses a manifest over the limit.
+
+A scraper publishes a manifest in one layout: the beacon list is part 0 alone,
+each project is the next part alone, in the order of the projects, and there is
+no other part. A received manifest must be in that layout.
+
+> **Source:** `CScraperManifest::UnserializeCheck()` and `RecvManifest()` in `src/gridcoin/scraper/scraper_net.cpp`; `MANIFEST_PSEUDO_PROJECTS` in `src/gridcoin/scraper/scraper_net.h`; `ScraperSendFileManifestContents()` in `src/gridcoin/scraper/scraper.cpp`.
+
+### 11.15 Not Consensus, Switched at the Same Height
+
+- **Peer protocol version.** The release that sets `BlockV15Height` uses
+  `PROTOCOL_VERSION` 180331. `MIN_PEER_PROTO_VERSION` is 180329, the protocol
+  version of the block version 14 mandatory release. 180330 is the version of
+  the releases that carry the version 15 code with its height unset. A peer
+  below 180329 is disconnected at the handshake. A peer below 180331 is
+  disconnected once the node's tip is more than `ProtocolVersionGracePeriod`
+  blocks above `BlockV15Height`. The grace period is set per network in
+  `src/chainparams.cpp`.
+- **PSGT pool.** When the tip is at or above the height and the node is in
+  sync, `psgt` messages are processed, and pooled PSGTs are announced to peers
+  at `PSGT_PROTO_VERSION` (180330) or above.
+- **Pool RPCs.** The RPCs of §11.1 that send pool contracts refuse below the
+  height.
+
+> **Source:** `src/version.h`; the version handshake and the PSGT handlers in `src/net_processing.cpp`; `EnsurePoolRegistrationActive()` in `src/rpc/blockchain.cpp`.
+
+### 11.16 Beacon Registry: Removals, Disconnects and the Rebuild
+
+Block validation reads the beacon registry to judge beacon contracts, research
+rewards and MRCs, so the registry is consensus state. The rules below take
+effect at `BlockV15Height`.
+
+#### Removal
+
+A beacon removal (a `REMOVE` beacon contract, contract version 2 or later) is
+valid only when the CPID has a current beacon and the removal's payload carries
+that beacon's public key. Block validation and the memory pool apply the same
+check; the memory pool judges at the height the transaction would be mined at.
+
+The key is judged again when the removal is applied. A removal that does not
+carry the key of the CPID's active beacon then changes nothing and stores no
+record.
+
+#### Disconnect
+
+A block is reverted in the inverse order of its connection: its contracts
+first, last transaction first, and then its superblock's beacon activations.
+Below the height the earlier order applies.
+
+- Reverting an advertisement removes only the records that advertisement's own
+  transaction created.
+- Reverting a removal restores every record the removal took, a pending beacon
+  included, and erases the removal's own record.
+- Reverting a superblock returns the beacons it activated to pending and makes
+  the beacons those activations replaced active again. It restores the pending
+  beacons that superblock expired, and only those, and erases their expiration
+  records. Below the height the earlier rule applies.
+- When the superblock being disconnected is not the one whose expired set the
+  registry holds, the node rebuilds the beacon registry from the chain after
+  the disconnect.
+
+#### Replay
+
+A registry replay at startup follows block connection at every height: the
+superblock's beacon activations, then the block's contracts.
+
+#### Rebuild at activation
+
+As the last block below `BlockV15Height` connects, each node rebuilds its
+beacon registry from the beacon contracts in the chain, and does so again if a
+block at that height connects after a disconnect. The first version 15 block is
+validated on the rebuilt registry.
+
+> **Source:** `BeaconRegistry::BlockValidate()`, `RemoveCarriesCurrentKey()`, `Delete()`, `Revert()` and `Deactivate()` in `src/gridcoin/beacon.cpp`; `AcceptToMemoryPool()` in `src/validation.cpp`; `RevertContracts()` and `ReplayBlock()` in `src/gridcoin/contract/contract.cpp`; `DisconnectBlocksBatch()` and `ReorganizeChain()` in `src/node/chainman.cpp`; `RebuildBeaconRegistry()` in `src/gridcoin/gridcoin.cpp`.
+
+### 11.17 Polls and Votes
+
+#### Contract validation
+
+From `BlockV15Height` block validation refuses:
+
+- a poll contract with payload version 4 that is not a removal, and a removal
+  with any other payload version. A version 4 removal carries only the
+  transaction id of the poll it removes. Below the height a removal names its
+  poll by title and version 4 is refused;
+- a transaction that carries a vote and has more than two outputs (the wallet
+  builds one burn output and at most one change output);
+- a vote whose balance claim does not name each address key and each output
+  once;
+- a poll whose text is not valid UTF-8: its title, URL and question, each
+  choice's label, and each additional field's name and value.
+
+The memory pool applies the same rules at the height of the next block. From
+the height it also refuses, without a misbehavior score, a vote for a poll that
+is not registered or has finished, and a vote whose responses are not choices
+of its poll. A vote's claim is weighed when the poll is tallied, not when the
+vote is validated.
+
+#### Titles
+
+A poll's title key is its title with ASCII white space trimmed from both ends
+and ASCII letters lowered. From `BlockV15Height` a new poll whose title key is
+held by any poll registered since block version 11, active or removed, or by an
+earlier poll of the same block, registers nothing: its transaction is valid,
+its burn is spent, and a vote that names it is linked to nothing. No block is
+refused over a title. Below the height the earlier rules apply.
+
+A removal from the height resolves only to an active poll registered since
+block version 11. One that names anything else stores nothing. A removed poll
+keeps its title.
+
+#### The poll's window
+
+For a poll whose block is at or above `BlockV15Height`:
+
+- the poll starts at the time of its block and ends at that time plus its
+  duration;
+- the closing block is the block before the first block, after the poll's
+  block, whose time exceeds the end. A later block does not reopen the poll;
+- a vote is linked when its block is after the poll's block and at or before
+  the closing block. A vote in the poll's own block is never linked, and
+  transaction times are not read.
+
+The tally of such a poll is bounded by the closing block, or by the tip while
+the poll is open:
+
+- a claimed output is confirmed, and a spend of it is mined, at or before that
+  block;
+- a beacon confirmed after it supplies no magnitude;
+- magnitude comes from the latest superblock at or before it, and the money
+  supply is read at it;
+- the active vote weight averages from the poll's block through it.
+
+A poll whose block is below the height and whose first block past the end is at
+or above it takes the closing block for its end only: a vote in a later block
+is not linked, and the tally bounds above use the closing block. Its start, its
+end time and the votes in its own block keep the earlier rules. A poll whose
+first block past the end is below the height keeps the earlier rules
+throughout.
+
+#### Claimed outputs that a vote spends
+
+A claimed output that is spent supplies no weight, except that a coinstake
+passes it through to its outputs at the same address. For a poll whose block is
+at or above `BlockV15Height`, a transaction that carries a vote, for any poll,
+passes the output through in the same way when its block is the poll's block or
+a later one. One vote's resolution passes outputs through at most 512 vote
+transactions; past that count a vote transaction spends the output like any
+other.
+
+#### Disconnects
+
+The poll and vote contracts of a disconnected block are reverted last to first,
+at every height. Reverting a poll erases its record and its title; reverting a
+removal makes the poll current again; reverting a vote erases its link.
+
+> **Source:** `PollFitsHeight()`, `VoteTxWellShaped()`, `PollRegistry::ValidateAt()`, `BlockValidate()`, `AddPoll()` and the snapshot and vote link functions in `src/gridcoin/voting/registry.cpp`; `VoteResolver::ResolveAmount()` and `VoteCounter` in `src/gridcoin/voting/result.cpp`; `RevertContracts()` in `src/gridcoin/contract/contract.cpp`.
+
+### 11.18 MRCs and the Block's Claim
+
+In a block of version 15:
+
+- no MRC the block pays is for the CPID of the block's own claim;
+- the claim lists each MRC under the MRC's own CPID.
+
+The miner selects MRCs by the same check (`MRCEligibleForClaim()`), at every
+height.
+
+> **Source:** `BlockRewardRules` in `src/gridcoin/consensus/block_rewards.cpp`; `MRCEligibleForClaim()` in `src/gridcoin/mrc.cpp`; `CreateRestOfTheBlock()` in `src/miner.cpp`.
+
+### 11.19 Beacon Contracts: Payload Version 4, Keys and Times
+
+#### Payload version
+
+From `BlockV15Height` a beacon contract carries beacon payload version 4. A
+lower payload version is invalid from the height, and version 4 is invalid
+below it. The memory pool judges at the height of the next block.
+
+The signature of a version 4 payload covers the contract's action and the hash
+of the record the contract acts on: the CPID's current beacon; for a CPID with
+no beacon, its latest removal; and zero for a CPID with neither. The signature
+is verified against the record the registry holds when the contract is
+validated. The ownership proof is optional in version 4.
+
+#### Keys
+
+From the height a beacon advertisement is refused when its public key is
+pending under another CPID, or is the key of another CPID's active beacon that
+has not expired at the block's time.
+
+#### Times
+
+From the height a beacon is stamped with the time of its block, and a beacon
+contract is judged at the time of its block. Below the height the transaction's
+time is used. A beacon recorded below the height keeps its stamp.
+
+> **Source:** `BeaconRegistry::PayloadVersionFitsHeight()`, `SignatureVerifies()`, `CurrentRecordHash()`, `KeyHeldByAnotherCpid()`, `BlockValidate()` and `Add()` in `src/gridcoin/beacon.cpp`.
+
+### 11.20 MRC Payload Version 2 and the MRCs of a Block
+
+An MRC carries the payload version of the block after its last block: version 2
+when that height is at or above `BlockV15Height`, and version 1 below. An MRC
+of the other version is invalid. The signature of a version 2 payload covers
+every field of the payload.
+
+In a block of version 15:
+
+- a block that carries a superblock pays no MRC;
+- each MRC leaves the foundation a share of its fee: the fee times the
+  foundation's allocation is above zero;
+- the MRCs are paid at different addresses.
+
+The miner follows the three rules at every height, by the functions block
+validation uses.
+
+> **Source:** `MRC::VersionForBlock()`, `MRCLeavesFoundationShare()`, `MRCPaidAtNewAddress()` and `BlockMayPayMRCs()` in `src/gridcoin/mrc.cpp`; `ValidateMRC()` in `src/validation.cpp`; `BlockRewardRules` in `src/gridcoin/consensus/block_rewards.cpp`; `CreateRestOfTheBlock()` in `src/miner.cpp`.
+
+### 11.21 Research Rewards Against the Accrual
+
+From block version 15 the research reward that a block's claim states, and the
+research reward of an MRC, are checked against the CPID's accrual (§7.3).
+
+A block's claim goes by the version of the block. An MRC is checked for the
+block after the MRC's last block: block validation passes the block's parent,
+the miner the block it builds on, and the mempool the tip. The rule applies to
+an MRC when that next height is at or above `BlockV15Height`, which is the
+height at which a block has version 15 (§12.2).
+
+> **Source:** `BlockRewardRules::CheckResearchReward()` in `src/gridcoin/consensus/block_rewards.cpp`; `ValidateMRC()` in `src/validation.cpp`.
+
+### 11.22 Agreement of Scraper Manifests
+
+From `BlockV15Height` the construction of a convergence at the manifest level
+and the validation of a superblock by manifest go by the agreements that
+`ManifestsAgreedBySupermajority()` gives:
+
+- Manifests agree when they have the same part hashes in the same order, the
+  same consensus block and the same project names in the same order.
+- The content hash of a manifest in an agreement is the hash of its part hashes
+  and its consensus block, as the node computes it from the manifest.
+- An agreement is of a supermajority (`NumScrapersForSupermajority()`) of the
+  scrapers that hold manifests: that many scrapers each hold a manifest in it.
+- The agreements are ordered by the time of their latest manifest, latest
+  first.
+
+The construction builds the convergence from the latest agreement. The
+validation rebuilds the superblock from each agreement that has the
+superblock's convergence hint.
+
+The construction goes by the height after the best block, the height of the
+block that a superblock made from the convergence is staked in. The validation
+goes by the height of the block that carries the superblock. The convergence by
+project and its validation are not changed.
+
+> **Source:** `ManifestsAgreedBySupermajority()` and `ScraperConstructConvergedManifest()` in `src/gridcoin/scraper/scraper.cpp`; `SuperblockValidator::TryByManifest()` in `src/gridcoin/quorum.cpp`.
+
+### 11.23 Sync State of the Scraper and Superblock Code
+
+From `BlockV15Height` the scraper and superblock code treats the node as in
+sync until the block before the tip is one hour old.
+
+Code that works on a block goes by that block's height. Code with no block in
+hand goes by the height after the best block.
+
+> **Source:** `EvaluateScraperSync()` and `ScraperOutOfSync()` in `src/validation.cpp`.
+
+### 11.24 Statistics Values
+
+From `BlockV15Height` the statistics that make a superblock follow four rules
+for the values in them:
+
+- A record of a project part is one CPID's total credit, RAC time and RAC for
+  that project. A record is passed over when one of the three is not finite or
+  is negative.
+- A record's magnitude is its share of the project's RAC total only when that
+  total is above zero. A project without such a total gives no magnitude.
+- A project's total credit across all CPIDs that is not finite or is negative
+  is taken as zero.
+- A value that a superblock stores as an integer is rounded. A value that is
+  not a number or is below zero is stored as zero, and a value at or above 2^64
+  as the largest 64-bit unsigned integer.
+
+The statistics carry which rules they were made under, and a superblock built
+or hashed from them converts under the same rules. Superblock validation goes
+by the height of the block that carries the superblock. The scraper, which has
+no block to go by when it computes statistics, goes by the chain height it
+sees, as it does for the superblock version.
+
+> **Source:** `ProcessProjectStatsFromStreamByCPID()` and the `GetScraperStats...()` functions in `src/gridcoin/scraper/scraper.cpp`; `RoundStatsValue()` in `src/gridcoin/superblock.cpp`; `SuperblockValidator` in `src/gridcoin/quorum.cpp`.
+
+### 11.25 Scraper Manifest Signature Form
+
+This is a rule of the scraper network, not of block validity.
+
+A scraper signs a manifest with `CKey::Sign()`. When the receiver's tip is at
+or above `BlockV15Height`, a received manifest's signature must have the form
+that `CKey::Sign()` writes.
+
+> **Source:** `CScraperManifest::UnserializeCheck()` and `RecvManifest()` in `src/gridcoin/scraper/scraper_net.cpp`.
+
 ---
 
 ## 12. Cross-Cutting Consensus Rules
@@ -860,8 +1461,18 @@ Blocks must meet the minimum version required at their height. Blocks below
 the mandatory version for their height are rejected:
 - Version 8 mandatory after `BlockV8Height`
 - Each subsequent version mandatory after its activation height
+- A block below the version its height requires is rejected with DoS 20
+  ("reject too old")
+- A block below a version's activation height must not carry that version or
+  a later one (DoS 100, "reject too new")
+- The miner stamps the version that its block's height requires
+
+> **Source:** `AcceptBlock()` in `src/validation.cpp`; `ComputeBlockVersion()` in `src/miner.cpp`
 
 ### 12.3 Difficulty Retargeting
+
+The rule in this section applies below `BlockV15Height`. From that height the
+retarget is log-linear in the parent spacing (§11.10).
 
 - Target block spacing: **90 seconds** (post-protocol v2), **60 seconds**
   (pre-protocol v2)
@@ -1005,6 +1616,8 @@ and when each version was introduced:
 | **Superblock** | Legacy string | v11+ (SHA256 hash) | v13+ (SuperblockV3Height) | — |
 | **MRC** | v12+ | — | — | — |
 | **Sidestake** | v13+ | — | — | — |
+| **Pool register** | v15+ | — | — | — |
+| **Pool approve** | v15+ | — | — | — |
 
 For most payloads, v1 is the pre-binary legacy form (string or appcache K-V)
 that gets parsed into a v1 instance, and v2 is the first native-binary format.
@@ -1027,6 +1640,9 @@ Notes:
   miner unconditionally emits v3 for pre-v12 blocks (`CreateGridcoinReward()` in `src/miner.cpp`),
   and there is no consensus rule keying claim version to height; v2 remains
   only as a serialization branch retained for completeness.
+- The pool payloads are native binary at v1, like MRC and Sidestake.
+- The poll payload's eligibility claim has its own version, 1 or 2, set by
+  `PollMultiAddressHeight` (§11.13).
 - ‡ Vote v1 is native binary, introduced at v11 alongside the binary contract
   system. Unlike the other "v1 is the legacy form" payloads, pre-v11 votes
   are represented by a separate `LegacyVote` class (`src/gridcoin/voting/vote.h`)
@@ -1047,6 +1663,8 @@ Current `CURRENT_VERSION` constants:
 | Superblock | 3 | `Superblock::CURRENT_VERSION` (`src/gridcoin/superblock.h`) |
 | MRC | 1 | `MRC::CURRENT_VERSION` (`src/gridcoin/mrc.h`) |
 | Sidestake (SideStakePayload) | 1 | `SideStakePayload::CURRENT_VERSION` (`src/gridcoin/sidestake.h`) |
+| Pool register (PoolRegisterPayload) | 1 | `PoolRegisterPayload::CURRENT_VERSION` (`src/gridcoin/pool.h`) |
+| Pool approve (PoolApprovePayload) | 1 | `PoolApprovePayload::CURRENT_VERSION` (`src/gridcoin/pool.h`) |
 
 ---
 
@@ -1132,6 +1750,10 @@ When a researcher submits an MRC:
 | `src/gridcoin/staking/kernel.cpp` | `CalculateStakeHashV8`, `CalculateStakeWeightV8`, stake modifier computation |
 | `src/gridcoin/staking/reward.cpp` | `GetConstantBlockReward`, `GetProofOfStakeReward`, coin-year schedule |
 | `src/gridcoin/staking/difficulty.cpp` | `GetNextTargetRequired`, retargeting algorithm |
+| `src/gridcoin/staking/difficulty.h` | Block version 15 spacing constants, `RetargetLogLinear`, `EaseTarget` |
+| `src/policy/policy.h` | `V15_SCRIPT_VERIFY_FLAGS` |
+| `src/gridcoin/pool.h` | `PoolRegisterPayload`, `PoolApprovePayload`, `PoolRegistry` |
+| `src/gridcoin/voting/claims.h` | `PollEligibilityClaim` |
 | `src/gridcoin/accrual/research_age.h` | `GetMaxResearchSubsidy`, `ResearchAgeComputer` |
 | `src/gridcoin/accrual/snapshot.h` | `SnapshotCalculator`, magnitude unit computation |
 | `src/gridcoin/claim.h` | `Claim` class, version history |

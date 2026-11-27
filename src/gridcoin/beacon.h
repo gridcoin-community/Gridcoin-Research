@@ -339,7 +339,7 @@ public:
     //! ensure that the serialization/deserialization routines also handle all
     //! of the previous versions.
     //!
-    static constexpr uint32_t CURRENT_VERSION = 3;
+    static constexpr uint32_t CURRENT_VERSION = 4;
 
     //!
     //! \brief Version number of the serialized beacon format.
@@ -353,6 +353,16 @@ public:
     //!
     //! Version 2: Beacon data serializable in binary format. Stored in a
     //! contract's value field as bytes.
+    //!
+    //! Version 3: As version 2, with a BOINC proof of account ownership, which
+    //! an advertisement must carry.
+    //!
+    //! Version 4: As version 3, but the proof is optional: an advertisement
+    //! with none is verified as a version 2 advertisement is. The signature
+    //! covers the contract's action and the hash of the record the
+    //! contract acts on (BeaconRegistry::CurrentRecordHash). A block carries
+    //! version 4 from block version 15 and the lower versions below it
+    //! (BeaconRegistry::PayloadVersionFitsHeight).
     //!
     uint32_t m_version = CURRENT_VERSION;
 
@@ -449,9 +459,16 @@ public:
             return false;
         }
 
+        // A version 4 ADD payload may carry no ownership proof: the beacon is
+        // then verified as a version 2 beacon is.
+        if (m_version >= 4 && action == ContractAction::ADD && m_ownership_proof.Empty()) {
+            return true;
+        }
+
         if (m_version >= 3 && action == ContractAction::ADD) {
             // v3 ADD payloads must contain a non-empty ownership proof with
-            // plausible field values:
+            // plausible field values, and so must a v4 ADD payload that
+            // carries one:
             if (m_ownership_proof.Empty()) return false;
             if (m_ownership_proof.m_master_url.empty()) return false;
             if (m_ownership_proof.m_account_id == 0) return false;
@@ -501,12 +518,37 @@ public:
     bool Sign(CKey& private_key);
 
     //!
+    //! \brief Sign the beacon with its private key, for a contract of an action that acts on a record.
+    //!
+    //! The signature of a version 4 payload covers the action and the record's hash. For a lower version this is
+    //! Sign(private_key).
+    //!
+    //! \param private_key Corresponds to the beacon's public key.
+    //! \param action      The action of the contract that carries the payload.
+    //! \param record_hash The hash of the record the contract acts on (BeaconRegistry::CurrentRecordHash).
+    //!
+    //! \return \c false if signing fails.
+    //!
+    bool Sign(CKey& private_key, const ContractAction action, const uint256& record_hash);
+
+    //!
     //! \brief Validate the authenticity of a beacon by verifying the digital
     //! signature.
     //!
     //! \return \c true if the beacon's signature matches the its public key.
     //!
     bool VerifySignature() const;
+
+    //!
+    //! \brief Validate the authenticity of a beacon contract by verifying the digital signature, which for a
+    //! version 4 payload covers the contract's action and the hash of the record it acts on.
+    //!
+    //! \param action      The action of the contract that carries the payload.
+    //! \param record_hash The hash of the record the contract acts on (BeaconRegistry::CurrentRecordHash).
+    //!
+    //! \return \c true if the signature matches the beacon's public key.
+    //!
+    bool VerifySignature(const ContractAction action, const uint256& record_hash) const;
 
     ADD_CONTRACT_PAYLOAD_SERIALIZE_METHODS;
 
@@ -636,9 +678,11 @@ public:
     //! Version 2: 5.2.1.0 with hotfix and > 5.2.1.0
     //! Version 3: 5.4.5.5+
     //! Version 4: 5.5.2.1+ (no format change: rebuilds the stored history from the beacon contracts once)
+    //! Version 5: the block version 15 release (no format change: rebuilds the stored history from the beacon
+    //! contracts once)
     //!
     BeaconRegistry()
-        : m_beacon_db(4)
+        : m_beacon_db(5)
     {
     };
 
@@ -737,6 +781,14 @@ public:
     const BeaconOption FindHistorical(const uint256& hash) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
+    //! \brief Get a CPID's beacon deletion records, in chain order.
+    //!
+    //! \return Each DELETED record. Its m_hash is the deletion's transaction hash and its m_previous_hash the
+    //! active record it removed (null when it removed none).
+    //!
+    std::vector<Beacon_ptr> DeletedEntries(const Cpid& cpid) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+
+    //!
     //! \brief Determine whether a beacon is active for the specified CPID.
     //!
     //! \param cpid The CPID to check for an active beacon.
@@ -746,6 +798,91 @@ public:
     //! specified CPID.
     //!
     bool ContainsActive(const Cpid& cpid, const int64_t now) const EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+
+    //!
+    //! \brief Determine whether another CPID holds a key: whether the key is pending for another CPID, or is the key
+    //! of another CPID's beacon.
+    //!
+    //! From block version 15 an advertisement may not take a key that another CPID holds (BlockValidate). A wallet
+    //! asks before it advertises a key for a CPID.
+    //!
+    //! The pending beacons are kept by key, so that half is a lookup. The beacons are kept by CPID, so that half is
+    //! a pass over them, which ends at the first that carries the key.
+    //!
+    //! \param cpid         The CPID that would advertise the key.
+    //! \param key          The key.
+    //! \param unexpired_at A beacon that is expired at this time holds its key no longer. With no time, an expired
+    //! beacon counts as well.
+    //!
+    //! \return \c true if another CPID holds the key.
+    //!
+    bool KeyHeldByAnotherCpid(
+        const Cpid& cpid,
+        const CPubKey& key,
+        const std::optional<int64_t>& unexpired_at) const EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+
+    //!
+    //! \brief Determine whether the key an advertisement carries is free for its CPID: no other CPID holds it at the
+    //! given time (KeyHeldByAnotherCpid). A contract that is not a beacon advertisement passes.
+    //!
+    //! Block validation requires this from block version 15, and the memory pool from the same height.
+    //!
+    //! \param contract The contract to check.
+    //! \param time     The time at which another CPID's beacon must be unexpired to hold the key.
+    //!
+    bool AdvertisedKeyIsFree(const Contract& contract, const int64_t time) const EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+
+    //!
+    //! \brief Get the hash of the record that a version 4 beacon contract for a CPID acts on, which its signature
+    //! covers: the CPID's beacon, expired or not; for a CPID with none, its latest removal; and zero for a CPID
+    //! with neither.
+    //!
+    //! A version 4 contract is valid only against the record it was signed over.
+    //!
+    //! \param cpid The CPID the contract is for.
+    //!
+    uint256 CurrentRecordHash(const Cpid& cpid) const EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+
+    //!
+    //! \brief Determine whether a beacon contract's payload is of a version that a block at a height carries:
+    //! version 4 from block version 15, and a lower version below it.
+    //!
+    //! \param contract The contract to check. A contract that is not a version 2+ beacon contract passes.
+    //! \param height   The height of the block.
+    //!
+    static bool PayloadVersionFitsHeight(const Contract& contract, const int height);
+
+    //!
+    //! \brief Determine whether a beacon contract the memory pool holds can no longer be mined: the block at a
+    //! height of block version 15 does not carry its payload's version, or its signature does not verify against
+    //! the record the CPID has now.
+    //!
+    //! For the sweep in SetBestChain, as PoolRegistry::IsStrandedAtHeight is for its contracts. Both tests are the
+    //! ones a block's validation applies (PayloadVersionFitsHeight, and the signature check of ValidateAt), so the
+    //! sweep retires what no block can carry and nothing else: a contract that fails for another reason, such as
+    //! a renewal that comes too early, can be valid later and stays.
+    //!
+    //! A record changes forward as blocks connect. A reorganization can bring an earlier record back and with it
+    //! the validity of a retired contract; retirement is not undone for that, as for the other sweeps. The sender
+    //! sends again.
+    //!
+    //! \param contract The contract to check. One that is not a version 2+ beacon contract is never stranded.
+    //! \param height   The height of the next block. Below block version 15 nothing is stranded.
+    //!
+    bool IsStrandedAtHeight(const Contract& contract, const int height) const EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+
+    //!
+    //! \brief Determine whether a beacon payload's signature verifies for its contract: for a version 4 payload,
+    //! over the contract's action and the record the CPID has now (CurrentRecordHash).
+    //!
+    //! The one signature check of a beacon contract, for its validation (ValidateAt) and for the sweep of pooled
+    //! contracts (IsStrandedAtHeight).
+    //!
+    //! \param contract The contract that carries the payload.
+    //! \param payload  The contract's payload.
+    //!
+    bool SignatureVerifies(const Contract& contract, const BeaconPayload& payload) const
+        EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
     //! \brief Determine whether a beacon is active for the specified CPID at
@@ -790,6 +927,33 @@ public:
     bool BlockValidate(const ContractContext& ctx, int& DoS) const override EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
+    //! \brief Determine whether a beacon contract is valid at a time. From block version 15 that is the time of the
+    //! block that carries the contract (BlockValidate), or for the memory pool the time of the tip (Validate). Below
+    //! block version 15 it is the time of the contract's transaction.
+    //!
+    //! \param contract Contains the beacon data to validate.
+    //! \param tx       Transaction that contains the contract.
+    //! \param time     The time at which the CPID's beacon is judged to be expired or renewable.
+    //! \param DoS      Misbehavior score out.
+    //!
+    //! \return \c true if the contract contains a valid beacon.
+    //!
+    bool ValidateAt(const Contract& contract, const CTransaction& tx, const int64_t time, int& DoS) const
+        EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+
+    //!
+    //! \brief Determine whether a beacon removal carries the key of the CPID's
+    //! current beacon. From v15, block validation and the mempool require this
+    //! of a beacon removal.
+    //!
+    //! \param contract The beacon contract to check.
+    //!
+    //! \return \c false only if the contract is a beacon removal and the CPID
+    //! has no current beacon, or the removal does not carry that beacon's key.
+    //!
+    bool RemoveCarriesCurrentKey(const Contract& contract) const EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+
+    //!
     //! \brief Register a beacon from contract data.
     //!
     //! \param ctx References the beacon contract and associated context.
@@ -830,8 +994,18 @@ public:
     //! ActivatePending that was applied for that superblock, i.e. it is the inverse of ActivatePending.
     //!
     //! \param hash of the superblock.
+    //! \param height Height of the superblock being disconnected.
     //!
-    void Deactivate(const uint256 superblock_hash) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+    void Deactivate(const uint256 superblock_hash, const int height) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+
+    //!
+    //! \brief Whether the expired-pending set and the replaced-beacon map describe the given superblock, the
+    //! most recently connected one. ActivatePending makes them current for the superblock it connects, and
+    //! Deactivate consumes them. A beacon db with no marker counts as current.
+    //!
+    //! \param superblock_hash Block hash of the superblock about to be disconnected.
+    //!
+    bool SuperblockStateCurrent(const uint256& superblock_hash) const EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
     //! \brief Initialize the BeaconRegistry, which now includes restoring the state of the BeaconRegistry from
@@ -949,6 +1123,45 @@ private:
     //! beacon registry and is only accessible by beacon registry functions.
     //!
     BeaconDB m_beacon_db GUARDED_BY(cs_main);
+
+    //!
+    //! \brief Block hash of the superblock whose expired-pending set and replaced-beacon map are current; a null
+    //! hash once a disconnect consumed them; nullopt when the beacon db holds no marker. Persisted under the beacon
+    //! db key ("beacon_db", "last_superblock_hash") so a restarted node has the same view.
+    //!
+    std::optional<uint256> m_last_superblock_hash GUARDED_BY(cs_main);
+
+    //!
+    //! \brief Beacons the most recently connected superblock replaced: activation record hash -> hash of the
+    //! record it displaced from m_beacons. Cleared by the next ActivatePending and by Deactivate, like
+    //! m_expired_pending, and rebuilt by the load from m_last_superblock_hash. Hashes only.
+    //!
+    std::map<uint256, uint256> m_replaced_by_last_superblock GUARDED_BY(cs_main);
+
+    //!
+    //! \brief Pending beacons a same-key advertisement displaced from m_pending: advertisement tx hash -> hash of
+    //! the displaced pending record. Kept while the advertisement's record exists; rebuilt by the load. Hashes
+    //! only, so it never keeps a record in memory.
+    //!
+    std::map<uint256, uint256> m_displaced_pending GUARDED_BY(cs_main);
+
+    //!
+    //! \brief Pending beacons a deletion removed: deletion tx hash -> hash of the removed pending record. Kept
+    //! while the deletion's record exists; rebuilt by the load.
+    //!
+    std::map<uint256, uint256> m_deletion_removed_pending GUARDED_BY(cs_main);
+
+    //!
+    //! \brief Each CPID's deletion records (deletion tx hashes), in chain order. Rebuilt by the load.
+    //!
+    std::unordered_map<Cpid, std::vector<uint256>> m_deleted_by_cpid GUARDED_BY(cs_main);
+
+    //!
+    //! \brief Derive the registry's side state from one stored record during Initialize. Called before the
+    //! record updates \p entries and \p pending_entries, in record-number order.
+    //!
+    void ObserveLoadedRecord(const Beacon& entry, const BeaconMap& entries, const PendingBeaconMap& pending_entries)
+        EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
     //! \brief The function that is used in Add() to try to renew a beacon by matching the incoming beacon's

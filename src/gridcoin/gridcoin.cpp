@@ -16,6 +16,7 @@
 #include "gridcoin/support/block_finder.h"
 #include "gridcoin/tally.h"
 #include "gridcoin/upgrade.h"
+#include "gridcoin/voting/poll_result_cache.h"
 #include "gridcoin/beacon.h"
 #include "init.h"
 #include "util/fsmodes.h"
@@ -219,6 +220,9 @@ bool InitializeResearchRewardAccounting(CBlockIndex* pindexBest) EXCLUSIVE_LOCKS
 
 void InitializeContracts(CBlockIndex* pindexBest) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
+    // Before the poll registry's Initialize reads the legacy poll store.
+    ClearLegacyStoreIfAsked();
+
     // This loop initializes the registry for each contract type in CONTRACT_TYPES_WITH_REG_DB.
     for (const auto& contract_type : RegistryBookmarks::CONTRACT_TYPES_WITH_REG_DB) {
         Registry& registry = RegistryBookmarks::GetRegistryWithDB(contract_type);
@@ -284,12 +288,15 @@ void InitializeContracts(CBlockIndex* pindexBest) EXCLUSIVE_LOCKS_REQUIRED(cs_ma
     // by the following remaining contract types which have no registry (backing) db:
     //
     // CONTRACT type                      Wallet startup replay requirement           Block reorg replay requirement
-    // POLL/VOTE (polls and voting)               V11 or std lookback                             false
+    // POLL/VOTE (polls and voting)       from the poll registry's db height          false
     //
-    // Note that the handler reset and contract replay forwards from lookback_window_low_height no longer is required
-    // for polls and votes. The reason for this is quite simple. Polls and votes are UNIQUE. The reversion of an add
-    // is simply to delete them. The wallet startup replay requirement is still required for polls and votes, because
-    // the Poll/Vote classes do not have a backing registry db yet.
+    // Polls and votes now have backing dbs: a poll db and a vote link db in the poll registry, loaded like the
+    // other registries' dbs, with the block at the db height replayed and its stored contracts skipped. Unlike every
+    // other registry, the poll registry's floor is V11 on every node: its handler stores nothing below V11, although
+    // block connection applies contracts from the research-age height (364,501 on mainnet), and the max() with
+    // V11_height below keeps its 0 bookmark (before its first record) from pulling the replay under V11. The poll
+    // registry's scope is what the poll history shows and, from v15, its title index is consensus, so both must be
+    // the same on every node.
     int start_height = std::min(std::max(db_heights.GetLowestRegistryBlockHeight(), V11_height),
                                 lookback_window_low_height);
 
@@ -305,9 +312,18 @@ void InitializeContracts(CBlockIndex* pindexBest) EXCLUSIVE_LOCKS_REQUIRED(cs_ma
     // Reset pindex_start to the index for the block at start_height
     pindex_start = pblock_index;
 
+    // A poll registry this replay fills from empty (the first start of this code, a clear flag, coherence recovery's
+    // Reset) is whole only once the replay reaches the tip: it stores each record and its db height as it goes.
+    PollRegistry& polls = GetPollRegistry();
+    const bool rebuilding_polls = polls.GetDBHeight() == 0;
+
+    if (rebuilding_polls) polls.SetRebuildInProgress(true);
+
     // The replay contract window here may overlap with the registry db coverage for the various registries. Logic
     // is now included in the ApplyContracts to ignore contracts that have already been covered by the registry dbs.
     ReplayContracts(pindexBest, pindex_start);
+
+    if (rebuilding_polls) polls.SetRebuildInProgress(false);
 }
 
 //!
@@ -668,6 +684,24 @@ void SchedulePollNotifications(CScheduler& scheduler)
     scheduler.scheduleEvery(NotifyPoll, std::chrono::minutes{5});
 }
 
+void ScheduleAccrualRebuild(CScheduler& scheduler)
+{
+    // Every minute, run the accrual snapshot rebuild that the miner or MRC creation asked for. A very thin call while
+    // none is pending. A rebuild that fails stops the node. Please see Tally::VerifyRewardBlocks() and
+    // Tally::RunRequestedAccrualRebuild().
+
+    scheduler.scheduleEvery([]{
+        if (!Tally::AccrualRebuildRequested()) {
+            return;
+        }
+
+        const CpidOption cpid = Researcher::Get()->Id().TryCpid();
+
+        LOCK(cs_main);
+        Tally::RunRequestedAccrualRebuild(cpid);
+    }, std::chrono::minutes{1});
+}
+
 } // Anonymous namespace
 
 // -----------------------------------------------------------------------------
@@ -684,11 +718,27 @@ bool fResetBlockchainRequest = false;
 // Functions
 // -----------------------------------------------------------------------------
 
-void GRC::RebuildBeaconRegistry() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+void GRC::ClearLegacyStoreIfAsked()
+{
+    if (gArgs.GetBoolArg("-clearlegacypollhistory", false) || gArgs.GetBoolArg("-clearallregistryhistory", false)) {
+        LogPrintf("INFO: %s: Clearing the legacy poll store.", __func__);
+
+        GetPollRegistry().ClearLegacyStore();
+    }
+}
+
+void GRC::RebuildBeaconRegistry(const BeaconRebuildReason reason) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     AssertLockHeld(cs_main);
 
-    LogPrintf("INFO: %s: starting in-line beacon registry rebuild after multi-SB runtime reorg.", __func__);
+    if (reason == BeaconRebuildReason::V15_ACTIVATION) {
+        LogPrintf("INFO: %s: starting in-line beacon registry rebuild at the last block below block version 15, "
+                  "height %d.",
+                  __func__, pindexBest->nHeight);
+    } else {
+        LogPrintf("INFO: %s: starting in-line beacon registry rebuild after a runtime reorg that disconnected "
+                  "superblocks.", __func__);
+    }
 
     // Non-blocking informational popup in the GUI ONLY. In daemon mode the
     // log line above is the entire notification -- no stderr spam, no popup
@@ -703,7 +753,7 @@ void GRC::RebuildBeaconRegistry() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     // "rebuilding beacon registry" notice while the wallet is unresponsive;
     // they dismiss the popup at their convenience (it does NOT auto-dismiss).
     // The rebuild itself only takes seconds on SSD.
-    if (fQtActive) {
+    if (fQtActive && reason == BeaconRebuildReason::SUPERBLOCK_DISCONNECT) {
         uiInterface.ThreadSafeMessageBox(
             _("Gridcoin detected a multi-superblock chain reorganization and is "
               "rebuilding the beacon registry to maintain consensus with the "
@@ -715,20 +765,23 @@ void GRC::RebuildBeaconRegistry() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 
     const int64_t start_ms = GetTimeMillis();
 
-    // Wipe the beacon registry (in-memory and LevelDB beacon db). The
-    // subsequent InitializeContracts will re-Initialize the now-empty
-    // beacon db and ReplayContracts will walk forward from V11_height
-    // applying beacon contracts to rebuild the registry from scratch.
-    GetBeaconRegistry().Reset();
+    // Only the beacon registry is rebuilt. Every other registry is already at the tip: a disconnect that called for
+    // the rebuild reverted them block by block and moved their db heights down to the new tip, and the last block
+    // below block version 15 applied its contracts to them as it connected. So they are left as they are: the
+    // startup routine (InitializeContracts) is not run, so no other registry is reloaded or replayed and no
+    // -clear<type>history flag acts. Wipe the beacon registry (in memory and its LevelDB beacon db), open the empty
+    // db, and replay the beacon contracts and the superblock activations from V11 to the tip.
+    BeaconRegistry& beacons = GetBeaconRegistry();
 
-    // InitializeContracts re-Initializes every contract-type registry and
-    // runs ReplayContracts. Other registries (scrapers, projects, polls,
-    // votes) are already initialized in memory; their Initialize calls are
-    // idempotent and the replay's "already covered" logic (see comments in
-    // InitializeContracts) skips contracts that fall within their existing
-    // DB coverage. Only the wiped beacon registry receives a full
-    // V11_height-forward replay.
-    InitializeContracts(pindexBest);
+    beacons.Reset();
+    beacons.Initialize();
+
+    CBlockIndex* pindex_start = BlockFinder::FindByHeight(Params().GetConsensus().BlockV11Height);
+
+    ReplayContracts(pindexBest, pindex_start, /* beacons_only */ true);
+
+    // A tally reads the beacon history this rebuild replaced, so no cached poll result can be served after it.
+    GetPollResultCache().Clear();
 
     LogPrintf("INFO: %s: beacon registry rebuild complete in %dms.", __func__, GetTimeMillis() - start_ms);
 }
@@ -788,6 +841,7 @@ void GRC::ScheduleBackgroundJobs(CScheduler& scheduler)
     ScheduleBackups(scheduler);
     ScheduleUpdateChecks(scheduler);
     ScheduleRegistriesPassivation(scheduler);
+    ScheduleAccrualRebuild(scheduler);
 
 #if HAVE_SYSTEM
     SchedulePollNotifications(scheduler);

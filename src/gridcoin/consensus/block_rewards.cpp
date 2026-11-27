@@ -20,6 +20,7 @@
 
 #include <algorithm>
 #include <cassert>
+#include <set>
 
 using namespace GRC;
 
@@ -437,9 +438,23 @@ bool BlockRewardRules::CheckReward(
             // For a "full" coinstake, consisting of eight staker outputs (reward + sidestakes), the foundation
             // sidestake, and the 4 MRC sidestakes (currently 14 total), this would be
             // coinstake.vout.size() = 14 - 4 - 1 = 9, which correctly points to the foundation sidestake index.
+            //
+            // The outputs CheckMRCRewards counted for the MRCs, with the foundation's, cannot be more than the
+            // coinstake has.
+            const unsigned int foundation_outputs = foundation_mrc_sidestake_present ? 1 : 0;
+
+            if (mrc_non_zero_outputs + foundation_outputs > coinstake.vout.size()) {
+                error_out = strprintf(
+                    "MRC outputs counted (%u) and foundation output (%u) exceed the coinstake's outputs (%u)",
+                    mrc_non_zero_outputs,
+                    foundation_outputs,
+                    (unsigned int) coinstake.vout.size());
+                return false;
+            }
+
             unsigned int mrc_start_index = coinstake.vout.size()
                 - mrc_non_zero_outputs
-                - (unsigned int) foundation_mrc_sidestake_present;
+                - foundation_outputs;
 
             // Start with the coinstake input value as a negative (because we want the net).
             CAmount total_owed_to_staker = -m_stake_value_in;
@@ -557,8 +572,18 @@ bool BlockRewardRules::CheckMRCRewards(
         return false;
     }
 
+    // From block version 15 a block that carries a superblock pays no MRC, the rule the miner builds by
+    // (BlockMayPayMRCs).
+    if (m_block_version >= 15 && mrc_claimed_outputs > 0 && !BlockMayPayMRCs(claim.ContainsSuperblock())) {
+        error_out = strprintf("A block that carries a superblock lists MRCs in its claim: %u", mrc_claimed_outputs);
+        return false;
+    }
+
     if (mrc_output_limit > 0) {
         Fraction foundation_fee_fraction = FoundationSideStakeAllocation();
+
+        // The addresses the block's MRCs are paid at (MRCPaidAtNewAddress).
+        std::set<CTxDestination> mrc_addresses;
 
         for (const auto& tx : m_block->vtx) {
             for (const auto& mrc_entry : claim.m_mrc_tx_map) {
@@ -569,6 +594,27 @@ bool BlockRewardRules::CheckMRCRewards(
                         MRC mrc = contract.CopyPayloadAs<MRC>();
 
                         if (const CpidOption cpid = mrc.m_mining_id.TryCpid()) {
+                            // From block version 15 a block's MRCs may not include its claim's CPID, and each
+                            // must leave the foundation a share of its fee, the rule the miner selects by
+                            // (MRCEligibleForClaim).
+                            if (m_block_version >= 15 && !MRCEligibleForClaim(claim.m_mining_id.TryCpid(), mrc)) {
+                                error_out = MRCLeavesFoundationShare(mrc)
+                                    ? strprintf("block's MRCs include its claim's CPID %s", cpid->ToString())
+                                    : strprintf("MRC for CPID %s leaves the foundation no share of its fee",
+                                                cpid->ToString());
+                                return false;
+                            }
+
+                            // From block version 15 a claim lists each MRC under the MRC's own CPID, as the miner
+                            // builds it. That a listed transaction carries one MRC and no other contract is
+                            // ValidateMRC()'s rule, which ConnectBlock applies to every transaction of the block
+                            // before it checks the rewards.
+                            if (m_block_version >= 15 && mrc_entry.first != *cpid) {
+                                error_out = strprintf("MRC for CPID %s listed in the claim under CPID %s",
+                                                      cpid->ToString(), mrc_entry.first.ToString());
+                                return false;
+                            }
+
                             const auto mrc_it = mapBlockIndex.find(mrc.m_last_block_hash);
                             if (mrc_it == mapBlockIndex.end() || mrc_it->second == nullptr) {
                                 error_out = "MRC refers to unknown last-block hash";
@@ -583,6 +629,16 @@ bool BlockRewardRules::CheckMRCRewards(
                             if (beacon) {
                                 if (!ValidateMRC(m_pindex->pprev, mrc)) {
                                     error_out = "An MRC in the claim failed to validate";
+                                    return false;
+                                }
+
+                                // From block version 15 a block's MRCs are paid at different addresses, the rule
+                                // the miner selects by (MRCPaidAtNewAddress).
+                                if (m_block_version >= 15
+                                    && !MRCPaidAtNewAddress(mrc_addresses, beacon->GetAddress())) {
+                                    error_out = strprintf(
+                                        "MRC for CPID %s is paid at an address another MRC of the block is paid at",
+                                        cpid->ToString());
                                     return false;
                                 }
 
@@ -679,8 +735,9 @@ bool BlockRewardRules::CheckResearchReward(std::string& error_out) const EXCLUSI
 
     // The below is required to deal with a conditional application in historical rewards for research newbies
     // after the original newbie fix height that already made it into the chain. Please see the extensive
-    // commentary in GetNewbieSuperblockAccrualCorrection().
-    if (m_pindex->nHeight >= GetOrigNewbieSnapshotFixHeight() && cpid) {
+    // commentary in GetNewbieSuperblockAccrualCorrection(). From block version 15 the claim is checked against the
+    // CPID's accrual.
+    if (m_block_version < 15 && m_pindex->nHeight >= GetOrigNewbieSnapshotFixHeight() && cpid) {
         CAmount newbie_correction = Tally::GetNewbieSuperblockAccrualCorrection(
             *cpid, Quorum::CurrentSuperblock());
 

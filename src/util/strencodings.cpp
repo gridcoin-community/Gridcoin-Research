@@ -611,3 +611,62 @@ std::string WideToUtf8(std::wstring_view wide)
     return utf8;
 }
 #endif // WIN32
+
+bool IsValidUTF8(const std::string& str)
+{
+    const size_t size = str.size();
+    size_t i = 0;
+
+    while (i < size) {
+        const unsigned char lead = static_cast<unsigned char>(str[i]);
+
+        if (lead < 0x80) {
+            ++i;
+            continue;
+        }
+
+        // The number of bytes that follow the first, the bits of the code point the first byte holds, and the lowest
+        // code point that needs a sequence of this length.
+        size_t following;
+        uint32_t code_point;
+        uint32_t lowest;
+
+        if ((lead & 0xE0) == 0xC0) {
+            following = 1;
+            code_point = lead & 0x1F;
+            lowest = 0x80;
+        } else if ((lead & 0xF0) == 0xE0) {
+            following = 2;
+            code_point = lead & 0x0F;
+            lowest = 0x800;
+        } else if ((lead & 0xF8) == 0xF0) {
+            following = 3;
+            code_point = lead & 0x07;
+            lowest = 0x10000;
+        } else {
+            return false;
+        }
+
+        if (size - i <= following) {
+            return false;
+        }
+
+        for (size_t k = 1; k <= following; ++k) {
+            const unsigned char byte = static_cast<unsigned char>(str[i + k]);
+
+            if ((byte & 0xC0) != 0x80) {
+                return false;
+            }
+
+            code_point = (code_point << 6) | (byte & 0x3F);
+        }
+
+        if (code_point < lowest || code_point > 0x10FFFF || (code_point >= 0xD800 && code_point <= 0xDFFF)) {
+            return false;
+        }
+
+        i += following + 1;
+    }
+
+    return true;
+}

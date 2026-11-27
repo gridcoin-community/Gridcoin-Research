@@ -83,6 +83,13 @@ const Poll::ChoiceList g_yes_no_abstain_choices(std::vector<Poll::Choice> {
 });
 } // Anonymous namespace
 
+std::string GRC::PollTitleKey(const std::string& title)
+{
+    // ASCII only and locale-independent: ToLower changes A-Z alone, and TrimString's default pattern is ASCII white
+    // space.
+    return ToLower(TrimString(title));
+}
+
 // -----------------------------------------------------------------------------
 // Class: Poll
 // -----------------------------------------------------------------------------
@@ -154,6 +161,27 @@ bool Poll::WellFormed() const
         && !m_title.empty()
         && !m_url.empty()
         && m_choices.WellFormed(m_response_type.Value());
+}
+
+bool Poll::TextIsValidUTF8() const
+{
+    if (!IsValidUTF8(m_title) || !IsValidUTF8(m_url) || !IsValidUTF8(m_question)) {
+        return false;
+    }
+
+    for (const Choice& choice : m_choices) {
+        if (!IsValidUTF8(choice.m_label)) {
+            return false;
+        }
+    }
+
+    for (const AdditionalField& field : m_additional_fields) {
+        if (!IsValidUTF8(field.m_name) || !IsValidUTF8(field.m_value)) {
+            return false;
+        }
+    }
+
+    return true;
 }
 
 bool Poll::WellFormed(const uint32_t version) const

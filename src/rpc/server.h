@@ -546,6 +546,8 @@ extern UniValue listpolls(const UniValue& params);
 extern UniValue testpollnotification(const UniValue& params);
 extern UniValue vote(const UniValue& params);
 extern UniValue votebyid(const UniValue& params);
+extern UniValue removepoll(const UniValue& params);
+extern UniValue votewithclaim(const UniValue& params);
 extern UniValue votedetails(const UniValue& params);
 
 int GetDefaultRPCPort();
@@ -774,6 +776,8 @@ extern const RPCHelpMan& verifymessage_helpman();
 extern const RPCHelpMan& versionreport_helpman();
 extern const RPCHelpMan& vote_helpman();
 extern const RPCHelpMan& votebyid_helpman();
+extern const RPCHelpMan& removepoll_helpman();
+extern const RPCHelpMan& votewithclaim_helpman();
 extern const RPCHelpMan& votedetails_helpman();
 extern const RPCHelpMan& walletdiagnose_helpman();
 extern const RPCHelpMan& walletlock_helpman();

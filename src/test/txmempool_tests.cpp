@@ -30,6 +30,7 @@
 #include <gridcoin/pool.h>
 #include <gridcoin/sidestake.h>
 #include <gridcoin/tx_message.h>
+#include <gridcoin/voting/payloads.h>
 #include <gridcoin/contract/contract.h>
 #include <rpc/server.h>
 #include <test/test_gridcoin.h>
@@ -76,6 +77,23 @@ CTransaction MakeMessageTx(const std::string& message,
                            const std::vector<CTxOut>& vout = {})
 {
     return MakeTx({GRC::MakeContract<GRC::TxMessage>(GRC::ContractAction::ADD, message)}, vin, vout);
+}
+
+//! Build a v2 transaction carrying one poll contract titled \p title.
+CTransaction MakePollTx(const std::string& title, const GRC::ContractAction action = GRC::ContractAction::ADD)
+{
+    GRC::Poll poll(GRC::PollType::SURVEY, GRC::PollWeightType::BALANCE, GRC::PollResponseType::YES_NO_ABSTAIN, 7,
+                   title, "https://gridcoin.us", "Question?", GRC::Poll::ChoiceList(), 0, Fraction());
+
+    return MakeTx({GRC::MakeContract<GRC::PollPayload>(uint32_t {2}, action, uint32_t {2}, std::move(poll),
+                                                       GRC::PollEligibilityClaim())});
+}
+
+//! Build a v2 transaction carrying a master-key REMOVE that names the poll \p poll_txid (payload version 4).
+CTransaction MakeRemoveByTxidTx(const uint256& poll_txid)
+{
+    return MakeTx({GRC::MakeContract<GRC::PollPayload>(
+        uint32_t {3}, GRC::ContractAction::REMOVE, GRC::PollPayload::REMOVE_BY_TXID_VERSION, poll_txid)});
 }
 
 CTxMemPoolEntry MakeEntry(const CTransaction& tx)
@@ -1238,6 +1256,96 @@ BOOST_AUTO_TEST_CASE(entry_tags_message_contract)
     // A transaction with no contracts must not be tagged, or the sweep would
     // remove the entire pool at the disable height.
     BOOST_CHECK(!MakeEntry(MakeTx()).HasMessageContract());
+}
+
+//! A POLL ADD is tagged with its title key. A master-key REMOVE, which names a poll's title, is not.
+BOOST_AUTO_TEST_CASE(entry_tags_a_poll_add_with_its_title_key)
+{
+    const CTxMemPoolEntry add = MakeEntry(MakePollTx(" Title\t"));
+    BOOST_CHECK(add.HasPollAdd());
+    BOOST_CHECK_EQUAL(add.GetPollTitleKey(), "title");
+    BOOST_CHECK(add.GetContractTypes().count(GRC::ContractType::POLL) == 1);
+
+    const CTxMemPoolEntry remove = MakeEntry(MakePollTx("Title", GRC::ContractAction::REMOVE));
+    BOOST_CHECK(!remove.HasPollAdd());
+    BOOST_CHECK(remove.GetPollTitleKey().empty());
+}
+
+//! The pool tells removepoll whether it holds a master-key REMOVE of a poll already, so that a second is not sent
+//! before the first is mined. A REMOVE by title and an ADD name no poll by its id.
+BOOST_AUTO_TEST_CASE(the_pool_knows_a_pooled_removal_of_a_poll)
+{
+    const uint256 poll_txid = uint256S("0x1234");
+    const CTransaction remove = MakeRemoveByTxidTx(poll_txid);
+    const CTransaction by_title = MakePollTx("Title", GRC::ContractAction::REMOVE);
+    const CTransaction add = MakePollTx("Title");
+
+    CTxMemPool pool;
+    pool.addUnchecked(by_title.GetHash(), MakeEntry(by_title));
+    pool.addUnchecked(add.GetHash(), MakeEntry(add));
+    BOOST_CHECK(!pool.HasPollRemoveFor(poll_txid));
+    BOOST_CHECK(!pool.HasPollRemoveFor(add.GetHash()));
+
+    pool.addUnchecked(remove.GetHash(), MakeEntry(remove));
+    BOOST_CHECK(pool.HasPollRemoveFor(poll_txid));
+    BOOST_CHECK(!pool.HasPollRemoveFor(uint256S("0x5678")));
+
+    pool.remove(remove);
+    BOOST_CHECK(!pool.HasPollRemoveFor(poll_txid));
+}
+
+//! The title index holds each pooled poll's title key until the poll leaves the pool, by a removal or a clear.
+BOOST_AUTO_TEST_CASE(the_poll_title_index_follows_the_pool)
+{
+    const CTransaction poll = MakePollTx("Title");
+    const CTransaction remove = MakePollTx("Other", GRC::ContractAction::REMOVE);
+
+    CTxMemPool pool;
+    pool.addUnchecked(poll.GetHash(), MakeEntry(poll));
+    pool.addUnchecked(remove.GetHash(), MakeEntry(remove));
+
+    uint256 existing;
+    BOOST_CHECK(pool.HasPollForTitle("title", &existing));
+    BOOST_CHECK(existing == poll.GetHash());
+    BOOST_CHECK(!pool.HasPollForTitle("other"));
+    BOOST_CHECK_EQUAL(pool.m_poll_by_title_key.size(), 1U);
+
+    pool.remove(poll);
+    BOOST_CHECK(!pool.HasPollForTitle("title"));
+
+    pool.addUnchecked(poll.GetHash(), MakeEntry(poll));
+    pool.clear();
+    BOOST_CHECK(!pool.HasPollForTitle("title"));
+}
+
+//! GetBeaconTxs() names the pooled transactions that carry a beacon contract, for
+//! the sweep of the ones the next block cannot carry, and no others.
+BOOST_AUTO_TEST_CASE(beacon_txs_are_listed_while_pooled)
+{
+    CKey key;
+    key.MakeNewKey(true);
+
+    const CTransaction beacon_tx = MakeTx(
+        {GRC::MakeContract<GRC::BeaconPayload>(GRC::ContractAction::ADD, GRC::Cpid(), key.GetPubKey())});
+    const CTransaction plain_tx = MakePlainTx(1000);
+
+    CTxMemPool pool;
+    pool.addUnchecked(plain_tx.GetHash(), MakeEntry(plain_tx));
+    BOOST_CHECK(pool.GetBeaconTxs().empty());
+
+    pool.addUnchecked(beacon_tx.GetHash(), MakeEntry(beacon_tx));
+
+    const std::vector<uint256> found = pool.GetBeaconTxs();
+    BOOST_REQUIRE_EQUAL(found.size(), 1U);
+    BOOST_CHECK(found[0] == beacon_tx.GetHash());
+
+    pool.remove(beacon_tx);
+    BOOST_CHECK(pool.GetBeaconTxs().empty());
+    BOOST_CHECK_EQUAL(pool.size(), 1UL);
+
+    pool.addUnchecked(beacon_tx.GetHash(), MakeEntry(beacon_tx));
+    pool.clear();
+    BOOST_CHECK(pool.GetBeaconTxs().empty());
 }
 
 //! The counter is what keeps GetMessageContractTxs() O(1) for a pool holding no

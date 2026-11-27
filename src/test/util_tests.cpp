@@ -365,6 +365,254 @@ BOOST_AUTO_TEST_CASE(config_file_arg_only_from_conf)
     BOOST_CHECK(negated.GetConfigFileArg("-rpcserviceuser") == std::nullopt);
 }
 
+// An option whose own name begins with "no" (-noncruncher, -nonewprivs, -nobuildwarn)
+// is that option. A leading "no" is read as a negation only when the whole name is
+// not a registered option.
+namespace {
+const std::vector<std::pair<std::string, unsigned int>> NO_NAMED_ARGS{
+    {"-noncruncher", ArgsManager::ALLOW_ANY},
+    {"-nonewprivs", ArgsManager::ALLOW_ANY},
+    {"-nobuildwarn", ArgsManager::ALLOW_ANY},
+    {"-listen", ArgsManager::ALLOW_ANY},
+    {"-debuglogfile", ArgsManager::ALLOW_ANY},
+    {"-addnode", ArgsManager::ALLOW_ANY},
+};
+
+//! Parse a command line into \p args. The program name is added here.
+bool ParseCommandLine(TestArgsManager& args, std::vector<const char*> argv, std::string* error_out = nullptr)
+{
+    argv.insert(argv.begin(), "testgridcoin");
+    std::string error;
+    const bool parsed = args.ParseParameters(static_cast<int>(argv.size()), argv.data(), error);
+    if (error_out) *error_out = error;
+    return parsed;
+}
+
+//! Read \p text as a configuration file into \p args, with unknown keys refused or ignored.
+bool ReadConfigText(TestArgsManager& args, const std::string& text, bool ignore_invalid_keys, std::string* error_out = nullptr)
+{
+    std::istringstream stream(text);
+    std::string error;
+    const bool read = args.ReadConfigStream(stream, "", error, ignore_invalid_keys);
+    if (error_out) *error_out = error;
+    return read;
+}
+} // namespace
+
+BOOST_AUTO_TEST_CASE(args_an_option_named_with_a_leading_no_is_itself_on_the_command_line)
+{
+    for (const char* name : {"-noncruncher", "-nonewprivs", "-nobuildwarn"}) {
+        const std::string bare{name};
+        const std::string one = bare + "=1";
+        const std::string zero = bare + "=0";
+
+        TestArgsManager given;
+        given.SetupArgs(NO_NAMED_ARGS);
+        BOOST_CHECK_MESSAGE(ParseCommandLine(given, {bare.c_str()}), bare);
+        BOOST_CHECK_MESSAGE(given.IsArgSet(bare), bare);
+        BOOST_CHECK_MESSAGE(given.GetBoolArg(bare, false), bare);
+        BOOST_CHECK_MESSAGE(!given.IsArgNegated(bare), bare);
+
+        TestArgsManager given_one;
+        given_one.SetupArgs(NO_NAMED_ARGS);
+        BOOST_CHECK_MESSAGE(ParseCommandLine(given_one, {one.c_str()}), one);
+        BOOST_CHECK_MESSAGE(given_one.GetBoolArg(bare, false), one);
+
+        // "=0" turns it off, as it does for any other boolean option.
+        TestArgsManager given_zero;
+        given_zero.SetupArgs(NO_NAMED_ARGS);
+        BOOST_CHECK_MESSAGE(ParseCommandLine(given_zero, {zero.c_str()}), zero);
+        BOOST_CHECK_MESSAGE(given_zero.IsArgSet(bare), zero);
+        BOOST_CHECK_MESSAGE(!given_zero.GetBoolArg(bare, true), zero);
+
+        // Two dashes are one dash.
+        const std::string two_dashes = "-" + bare;
+        TestArgsManager given_two_dashes;
+        given_two_dashes.SetupArgs(NO_NAMED_ARGS);
+        BOOST_CHECK_MESSAGE(ParseCommandLine(given_two_dashes, {two_dashes.c_str()}), two_dashes);
+        BOOST_CHECK_MESSAGE(given_two_dashes.GetBoolArg(bare, false), two_dashes);
+    }
+
+    // The option left out keeps its default.
+    TestArgsManager absent;
+    absent.SetupArgs(NO_NAMED_ARGS);
+    BOOST_CHECK(ParseCommandLine(absent, {"-noncruncher"}));
+    BOOST_CHECK(!absent.IsArgSet("-nonewprivs"));
+    BOOST_CHECK(absent.GetBoolArg("-nonewprivs", true));
+    BOOST_CHECK(!absent.GetBoolArg("-nonewprivs", false));
+}
+
+BOOST_AUTO_TEST_CASE(args_an_option_named_with_a_leading_no_can_be_negated)
+{
+    TestArgsManager negated;
+    negated.SetupArgs(NO_NAMED_ARGS);
+    BOOST_CHECK(ParseCommandLine(negated, {"-nononcruncher"}));
+    BOOST_CHECK(negated.IsArgNegated("-noncruncher"));
+    BOOST_CHECK(!negated.GetBoolArg("-noncruncher", true));
+
+    // The double negative gives the option itself.
+    TestArgsManager twice;
+    twice.SetupArgs(NO_NAMED_ARGS);
+    BOOST_CHECK(ParseCommandLine(twice, {"-nononcruncher=0"}));
+    BOOST_CHECK(!twice.IsArgNegated("-noncruncher"));
+    BOOST_CHECK(twice.GetBoolArg("-noncruncher", false));
+}
+
+BOOST_AUTO_TEST_CASE(args_the_negation_of_other_options_is_unchanged)
+{
+    TestArgsManager flag;
+    flag.SetupArgs(NO_NAMED_ARGS);
+    BOOST_CHECK(ParseCommandLine(flag, {"-nolisten"}));
+    BOOST_CHECK(flag.IsArgNegated("-listen"));
+    BOOST_CHECK(!flag.GetBoolArg("-listen", true));
+    BOOST_CHECK(!flag.IsArgSet("-nolisten"));
+
+    TestArgsManager flag_one;
+    flag_one.SetupArgs(NO_NAMED_ARGS);
+    BOOST_CHECK(ParseCommandLine(flag_one, {"-nolisten=1"}));
+    BOOST_CHECK(flag_one.IsArgNegated("-listen"));
+
+    TestArgsManager double_negative;
+    double_negative.SetupArgs(NO_NAMED_ARGS);
+    BOOST_CHECK(ParseCommandLine(double_negative, {"-nolisten=0"}));
+    BOOST_CHECK(!double_negative.IsArgNegated("-listen"));
+    BOOST_CHECK(double_negative.GetBoolArg("-listen", false));
+
+    TestArgsManager two_dashes;
+    two_dashes.SetupArgs(NO_NAMED_ARGS);
+    BOOST_CHECK(ParseCommandLine(two_dashes, {"--nolisten"}));
+    BOOST_CHECK(two_dashes.IsArgNegated("-listen"));
+
+    // An option that takes a string.
+    TestArgsManager text;
+    text.SetupArgs(NO_NAMED_ARGS);
+    BOOST_CHECK(ParseCommandLine(text, {"-nodebuglogfile"}));
+    BOOST_CHECK(text.IsArgNegated("-debuglogfile"));
+    BOOST_CHECK_EQUAL(text.GetArg("-debuglogfile", "debug.log"), "0");
+
+    // An option that takes a list: the negation clears what came before it.
+    TestArgsManager list;
+    list.SetupArgs(NO_NAMED_ARGS);
+    BOOST_CHECK(ParseCommandLine(list, {"-addnode=a", "-addnode=b", "-noaddnode"}));
+    BOOST_CHECK(list.GetArgs("-addnode").empty());
+
+    TestArgsManager list_after;
+    list_after.SetupArgs(NO_NAMED_ARGS);
+    BOOST_CHECK(ParseCommandLine(list_after, {"-addnode=a", "-noaddnode", "-addnode=c"}));
+    BOOST_CHECK(list_after.GetArgs("-addnode") == std::vector<std::string>{"c"});
+
+    // The last one given wins.
+    TestArgsManager last;
+    last.SetupArgs(NO_NAMED_ARGS);
+    BOOST_CHECK(ParseCommandLine(last, {"-nolisten", "-listen"}));
+    BOOST_CHECK(last.GetBoolArg("-listen", false));
+}
+
+BOOST_AUTO_TEST_CASE(args_a_name_that_is_no_option_is_still_invalid)
+{
+    for (const char* arg : {"-nofoo", "-nofoo=1", "-noncrunche", "-nononewprivsx", "-no", "-nono"}) {
+        TestArgsManager args;
+        args.SetupArgs(NO_NAMED_ARGS);
+        std::string error;
+        BOOST_CHECK_MESSAGE(!ParseCommandLine(args, {arg}, &error), arg);
+        BOOST_CHECK_EQUAL(error, std::string{"Invalid parameter "} + arg);
+    }
+}
+
+BOOST_AUTO_TEST_CASE(args_the_whole_name_is_looked_up_before_a_leading_no_is_taken_off)
+{
+    // With both -foo and -nofoo registered, -nofoo is the option of that name.
+    const std::vector<std::pair<std::string, unsigned int>> both{
+        {"-foo", ArgsManager::ALLOW_ANY},
+        {"-nofoo", ArgsManager::ALLOW_ANY},
+    };
+
+    TestArgsManager args;
+    args.SetupArgs(both);
+    BOOST_CHECK(ParseCommandLine(args, {"-nofoo"}));
+    BOOST_CHECK(args.GetBoolArg("-nofoo", false));
+    BOOST_CHECK(!args.IsArgSet("-foo"));
+    BOOST_CHECK(!args.IsArgNegated("-foo"));
+    BOOST_CHECK(args.GetBoolArg("-foo", true));
+
+    TestArgsManager other;
+    other.SetupArgs(both);
+    BOOST_CHECK(ParseCommandLine(other, {"-foo=0"}));
+    BOOST_CHECK(!other.GetBoolArg("-foo", true));
+    BOOST_CHECK(!other.IsArgSet("-nofoo"));
+}
+
+BOOST_AUTO_TEST_CASE(args_an_option_named_with_a_leading_no_is_itself_in_the_config_file)
+{
+    TestArgsManager args;
+    args.SetupArgs(NO_NAMED_ARGS);
+    BOOST_CHECK(ReadConfigText(args, "noncruncher=1\nnonewprivs=0\n", /* ignore_invalid_keys */ false));
+    BOOST_CHECK(args.GetBoolArg("-noncruncher", false));
+    BOOST_CHECK(!args.IsArgNegated("-noncruncher"));
+    BOOST_CHECK(args.IsArgSet("-nonewprivs"));
+    BOOST_CHECK(!args.GetBoolArg("-nonewprivs", true));
+
+    // The same line is not dropped where unknown keys are ignored.
+    TestArgsManager lenient;
+    lenient.SetupArgs(NO_NAMED_ARGS);
+    BOOST_CHECK(ReadConfigText(lenient, "noncruncher=1\n", /* ignore_invalid_keys */ true));
+    BOOST_CHECK(lenient.GetBoolArg("-noncruncher", false));
+
+    // In a section, by a [section] line and by a prefix.
+    for (const char* text : {"[test]\nnoncruncher=1\n", "test.noncruncher=1\n"}) {
+        TestArgsManager section;
+        section.SetupArgs(NO_NAMED_ARGS);
+        BOOST_CHECK_MESSAGE(ReadConfigText(section, text, false), text);
+        section.SelectConfigNetwork("test");
+        BOOST_CHECK_MESSAGE(section.GetBoolArg("-noncruncher", false), text);
+
+        TestArgsManager elsewhere;
+        elsewhere.SetupArgs(NO_NAMED_ARGS);
+        BOOST_CHECK_MESSAGE(ReadConfigText(elsewhere, text, false), text);
+        elsewhere.SelectConfigNetwork("main");
+        BOOST_CHECK_MESSAGE(!elsewhere.GetBoolArg("-noncruncher", false), text);
+    }
+
+    // Its negation.
+    TestArgsManager negated;
+    negated.SetupArgs(NO_NAMED_ARGS);
+    BOOST_CHECK(ReadConfigText(negated, "nononcruncher=1\n", false));
+    BOOST_CHECK(negated.IsArgNegated("-noncruncher"));
+
+    // The command line is ahead of the config file, as for any option.
+    TestArgsManager command_line_first;
+    command_line_first.SetupArgs(NO_NAMED_ARGS);
+    BOOST_CHECK(ParseCommandLine(command_line_first, {"-noncruncher=0"}));
+    BOOST_CHECK(ReadConfigText(command_line_first, "noncruncher=1\n", false));
+    BOOST_CHECK(!command_line_first.GetBoolArg("-noncruncher", true));
+}
+
+BOOST_AUTO_TEST_CASE(args_the_config_file_reads_other_names_as_before)
+{
+    TestArgsManager negated;
+    negated.SetupArgs(NO_NAMED_ARGS);
+    BOOST_CHECK(ReadConfigText(negated, "nolisten=1\n", false));
+    BOOST_CHECK(negated.IsArgNegated("-listen"));
+    BOOST_CHECK(!negated.GetBoolArg("-listen", true));
+
+    TestArgsManager double_negative;
+    double_negative.SetupArgs(NO_NAMED_ARGS);
+    BOOST_CHECK(ReadConfigText(double_negative, "nolisten=0\n", false));
+    BOOST_CHECK(double_negative.GetBoolArg("-listen", false));
+
+    // A name that is no option is refused, or ignored where unknown keys are ignored.
+    TestArgsManager unknown;
+    unknown.SetupArgs(NO_NAMED_ARGS);
+    std::string error;
+    BOOST_CHECK(!ReadConfigText(unknown, "nofoo=1\n", /* ignore_invalid_keys */ false, &error));
+    BOOST_CHECK_EQUAL(error, "Invalid configuration value nofoo");
+
+    TestArgsManager unknown_ignored;
+    unknown_ignored.SetupArgs(NO_NAMED_ARGS);
+    BOOST_CHECK(ReadConfigText(unknown_ignored, "nofoo=1\nlisten=1\n", /* ignore_invalid_keys */ true));
+    BOOST_CHECK(unknown_ignored.GetBoolArg("-listen", false));
+}
+
 BOOST_AUTO_TEST_CASE(config_file_used_includes)
 {
     const std::vector<std::pair<std::string, unsigned int>> args{
@@ -1277,6 +1525,41 @@ BOOST_AUTO_TEST_CASE(util_mapArgsComparator)
 BOOST_AUTO_TEST_CASE(gettime)
 {
     BOOST_CHECK((GetTime() & ~0xFFFFFFFFLL) == 0);
+}
+
+BOOST_AUTO_TEST_CASE(util_IsValidUTF8)
+{
+    // ASCII, and the empty string.
+    BOOST_CHECK(IsValidUTF8(""));
+    BOOST_CHECK(IsValidUTF8("Renaming the Halford"));
+    BOOST_CHECK(IsValidUTF8(std::string("a\0b", 3)));
+
+    // Sequences of two, three and four bytes, and the last code point.
+    BOOST_CHECK(IsValidUTF8("Renaming the Half\xc3\xb6rd"));
+    BOOST_CHECK(IsValidUTF8("\xe2\x82\xac"));
+    BOOST_CHECK(IsValidUTF8("\xf0\x9f\x98\x80"));
+    BOOST_CHECK(IsValidUTF8("\xf4\x8f\xbf\xbf"));
+
+    // A byte that begins no sequence, and a continuation byte with nothing to continue.
+    BOOST_CHECK(!IsValidUTF8("Title \xff"));
+    BOOST_CHECK(!IsValidUTF8("\xf8\x88\x80\x80\x80"));
+    BOOST_CHECK(!IsValidUTF8("\x80"));
+
+    // A sequence cut short, by the end of the string or by another character.
+    BOOST_CHECK(!IsValidUTF8("\xc3"));
+    BOOST_CHECK(!IsValidUTF8("\xe2\x82"));
+    BOOST_CHECK(!IsValidUTF8("\xc3rd"));
+
+    // A code point written with more bytes than it needs.
+    BOOST_CHECK(!IsValidUTF8("\xc0\x80"));
+    BOOST_CHECK(!IsValidUTF8("\xc1\xbf"));
+    BOOST_CHECK(!IsValidUTF8("\xe0\x80\x80"));
+    BOOST_CHECK(!IsValidUTF8("\xf0\x80\x80\x80"));
+
+    // The surrogate range, and a code point past the last.
+    BOOST_CHECK(!IsValidUTF8("\xed\xa0\x80"));
+    BOOST_CHECK(IsValidUTF8("\xed\x9f\xbf"));
+    BOOST_CHECK(!IsValidUTF8("\xf4\x90\x80\x80"));
 }
 
 BOOST_AUTO_TEST_CASE(util_TrimString)
@@ -2319,6 +2602,48 @@ BOOST_AUTO_TEST_CASE(refused_settings_are_ignored_at_load_and_kept_in_the_file)
     BOOST_CHECK_EQUAL(raw.at("blocknotify").get_str(), "echo b");
     BOOST_CHECK_EQUAL(raw.at("command_line_only_probe").get_str(), "c");
     BOOST_CHECK_EQUAL(raw.at("unknown_key").get_str(), "d");
+}
+
+// The settings file looks an option up by its whole name too. A key that begins with "no" and is a
+// registered option is known, so it is not logged as unknown, and its flags apply: a command-line-only
+// one is ignored at load. Production change that would fail this: looking the key up with a leading
+// "no" taken off.
+BOOST_AUTO_TEST_CASE(the_settings_file_knows_an_option_named_with_a_leading_no)
+{
+    SettingsFileScope scope;
+    for (const auto& [name, flags] : std::vector<std::pair<std::string, unsigned int>>{
+             {"noprobe_free", ArgsManager::ALLOW_ANY | ArgsManager::SETTING_FREE},
+             {"noprobe_command_line_only", ArgsManager::ALLOW_ANY | ArgsManager::COMMAND_LINE_ONLY}}) {
+        if (!gArgs.GetArgFlags("-" + name)) {
+            gArgs.AddArg("-" + name, "unit-test probe", flags, OptionsCategory::HIDDEN);
+        }
+    }
+    scope.Write({{"noprobe_free", "a"}, {"noprobe_command_line_only", "c"}, {"nounknown_key", "d"}});
+
+    std::vector<std::string> lines;
+    {
+        const auto callback = LogInstance().PushBackCallback([&lines](const std::string& s) { lines.push_back(s); });
+        BOOST_REQUIRE(gArgs.ReadSettingsFile());
+        LogInstance().DeleteCallback(callback);
+    }
+
+    BOOST_CHECK_EQUAL(gArgs.GetArg("-noprobe_free", ""), "a");
+    BOOST_CHECK(!gArgs.IsArgSet("-noprobe_command_line_only"));
+
+    BOOST_CHECK_EQUAL(CountLines(lines, "Ignoring unknown rw_settings value noprobe_free\n"), 0u);
+    BOOST_CHECK_EQUAL(CountLines(lines, "Ignoring unknown rw_settings value noprobe_command_line_only\n"), 0u);
+    BOOST_CHECK_EQUAL(CountLines(lines, "ignored noprobe_command_line_only from " + FILE_NAME_FOR_LOG
+                                        + "; it is accepted only on the command line\n"), 1u);
+    // A key that is no option, with or without a leading "no", is still logged as unknown.
+    BOOST_CHECK_EQUAL(CountLines(lines, "Ignoring unknown rw_settings value nounknown_key\n"), 1u);
+
+    // The file keeps all three.
+    BOOST_REQUIRE(gArgs.WriteSettingsFile());
+    const auto raw = scope.ReadRaw();
+    BOOST_CHECK_EQUAL(raw.size(), 3u);
+    BOOST_CHECK_EQUAL(raw.at("noprobe_free").get_str(), "a");
+    BOOST_CHECK_EQUAL(raw.at("noprobe_command_line_only").get_str(), "c");
+    BOOST_CHECK_EQUAL(raw.at("nounknown_key").get_str(), "d");
 }
 
 BOOST_AUTO_TEST_CASE(an_unregistered_refused_key_is_logged_once_at_load)

@@ -840,8 +840,10 @@ def is_refused_key(key, patterns):
 
 
 def refused_as_read(name, patterns):
-    """Whether the core refuses name, or the name it reads it as: the section up to the first
-    '.' and then a leading "no" removed, as InterpretOption removes them."""
+    """Whether the core refuses name under either reading InterpretOption can give it, the section
+    up to the first '.' dropped: as written (a key that is itself an option, "nonewprivs"), or with
+    a leading "no" removed (a negation). The tool has no option table to tell the two apart, so it
+    tests both."""
     key = name[name.find(".") + 1:]
     return is_refused_key(name, patterns) or (key.startswith("no") and matches_any(key[2:], patterns))
 
@@ -867,9 +869,10 @@ def json_depth(value):
 def sanitize_settings(text, patterns):
     """Drop from a gridcoinsettings.json text the keys the core refuses. ReadSettingsFile in
     src/util/system.cpp refuses a key when IsRefusedSettingKey holds for it as written, or when
-    the key, read through InterpretOption (section and a leading "no" removed), is a
-    COMMAND_LINE_ONLY option. The tool has no flags, so for that second arm it tests the patterns,
-    which cover every COMMAND_LINE_ONLY option (init_tests.cpp checks it). That also drops the
+    the key, read through InterpretOption (section removed, and a leading "no" unless the whole
+    key is itself an option), is a COMMAND_LINE_ONLY option. The tool has no flags, so for that
+    second arm it tests the patterns, which cover every COMMAND_LINE_ONLY option (init_tests.cpp
+    checks it). That also drops the
     "no" form of a refused key that is not COMMAND_LINE_ONLY, which the core would keep and never
     use. Raises ValueError, or RecursionError, where the core's ReadSettings fails (not JSON, not
     an object, a duplicate key, nesting deeper than MAX_JSON_DEPTH) and for a number Python reads
@@ -900,9 +903,10 @@ def sanitize_conf(text, patterns):
     """Drop from a gridcoinresearch.conf text the lines that set a refused key. Lines are read as
     GetConfigOptions in src/util/system.cpp reads them (cut at '#', trimmed, "<section>." put in
     front after a [section] line) and names as InterpretOption reads them (a section up to the
-    first '.', then a leading "no" negates): a line goes when the name as written or the name it
-    negates is refused. A line the core rejects (no '=', or a leading '-') goes too, reported by
-    its number only, as it may hold a secret. Returns (text, removed keys)."""
+    first '.', then a leading "no" negates unless the name is itself an option): a line goes when
+    the name as written or the name with its "no" removed is refused. A line the core rejects
+    (no '=', or a leading '-') goes too, reported by its number only, as it may hold a secret.
+    Returns (text, removed keys)."""
     kept = []
     removed = []
     prefix = ""

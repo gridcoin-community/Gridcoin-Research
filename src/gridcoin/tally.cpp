@@ -21,6 +21,9 @@
 #include "util.h"
 #include "node/ui_interface.h"
 
+#include <algorithm>
+#include <atomic>
+#include <cstdlib>
 #include <optional>
 #include <unordered_map>
 
@@ -451,12 +454,10 @@ public:
 
         while (pindex)
         {
-            // If it is a stake with this cpid, then stop
-            if (pindex->ResearchSubsidy() > 0 && pindex->GetMiningId() == cpid) break;
-
             // If it is an MRC with this cpid and non-zero reward, then stop at pprev, because the MRC reward is recorded
             // on pindex, but for accrual purposes, the reward is based on pprev, and the tally must be based on the
-            // accrual point.
+            // accrual point. A block's MRCs are looked at before its stake: the tally records the stake first and the
+            // MRCs second (Tally::RecordRewardBlock()), and this walk takes them in the inverse order.
             bool mrc_last_block_found = false;
 
             for (const auto& mrc_researcher : pindex->m_mrc_researchers) {
@@ -470,6 +471,9 @@ public:
             }
 
             if (mrc_last_block_found) break;
+
+            // If it is a stake with this cpid, then stop
+            if (pindex->ResearchSubsidy() > 0 && pindex->GetMiningId() == cpid) break;
 
             // A prior reward hasn't been found yet... keeep going...
             pindex = pindex->pprev;
@@ -507,6 +511,25 @@ public:
         //
         assert(account.m_first_block_ptr != nullptr);
 
+        // The tally records a block's stake before its MRCs, and records an
+        // MRC at the block's parent, the MRC's accrual point.
+        // ForgetMRCRewardBlock() forgets the block's MRCs after this:
+        //
+        const bool block_mrc_names_cpid = std::any_of(
+            pindex->m_mrc_researchers.begin(),
+            pindex->m_mrc_researchers.end(),
+            [&](const ResearcherContext* const mrc_researcher) { return mrc_researcher->m_cpid == cpid; });
+
+        if (block_mrc_names_cpid && pindex->pprev == account.m_last_block_ptr) {
+            account.m_last_block_ptr = pindex;
+        }
+
+        // RecordRewardBlock() pointed m_last_block_ptr at this block when it
+        // connected. Blocks disconnect from the tip, so a later reward that
+        // moved the pointer was forgotten first, and the step above covers
+        // this block's own MRCs. The assert protects against a change to the
+        // order of the disconnects or to what moves the pointer:
+        //
         assert(pindex == account.m_last_block_ptr);
 
         // When disconnecting a CPID's first block, reset the account, but
@@ -549,9 +572,23 @@ public:
 
             ResearchAccount& account = iter->second;
 
+            // ForgetRewardBlock() runs first, for the block's stake:
+            //
+            const bool block_stake_is_cpid = pindex->ResearchSubsidy() > 0 && pindex->GetMiningId() == cpid;
+
+            if (block_stake_is_cpid && account.m_first_block_ptr == nullptr) {
+                continue;
+            }
+
+            // m_first_block_ptr is cleared only when a disconnect forgets the
+            // CPID's first reward. Past the check above, that reward is at or
+            // below this MRC's accrual point, and blocks disconnect from the
+            // tip, so nothing has cleared it yet. The assert protects against a
+            // change to the order of the disconnects or of the forgets:
+            //
             assert(account.m_first_block_ptr != nullptr);
 
-            if (pindex->pprev != account.m_last_block_ptr) {
+            if (!block_stake_is_cpid && pindex->pprev != account.m_last_block_ptr) {
                 error("%s: pindex->pprev != account.m_last_block_ptr: pindex->pprev->nHeight = %u, "
                       "account.m_last_block_ptr->nHeight = %u",
                       __func__,
@@ -1528,7 +1565,9 @@ CAmount Tally::GetNewbieSuperblockAccrualCorrection(
     //    correction if the claimed value by the block fails the original CheckReward. If the original computed reward
     //    plus the correction equals the claimed reward, then the block is passed with a warning. This enables any
     //    node to conditionally validate a block that was staked with the accrual correction active, even if the
-    //    receiving node does not have the NEW correction active.
+    //    receiving node does not have the NEW correction active. ValidateMRC() adds the correction to the accrual it
+    //    checks an MRC's research reward against. Both apply below block version 15. From block version 15 a research
+    //    reward is checked against the CPID's accrual.
 
     // This function computes the accrual that should have been recorded in the periods between the first superblock that
     // posted that validated the original verified beacon in a chain of renewals and the current superblock. This uses a
@@ -1888,4 +1927,138 @@ bool Tally::RemoveAccount(const Cpid& cpid) {
     g_researcher_tally.m_researchers.erase(cpid);
 
     return true;
+}
+
+// -----------------------------------------------------------------------------
+// Class: Tally -- reward block check and accrual snapshot rebuild
+// -----------------------------------------------------------------------------
+
+namespace {
+//! Set when the miner or MRC creation asks for a rebuild; the scheduled job
+//! clears it when it runs the rebuild.
+std::atomic<bool> g_accrual_rebuild_requested{false};
+
+//! Requests are taken while this is set. It is cleared at most once in a run of
+//! the process.
+std::atomic<bool> g_accrual_rebuild_armed{true};
+
+//! What the check found when the rebuild was asked for, for its log line.
+std::string g_accrual_rebuild_details GUARDED_BY(cs_main);
+
+std::string DescribeBlock(const CBlockIndex* const pindex)
+{
+    if (!pindex) {
+        return "none";
+    }
+
+    return strprintf("%d:%s", pindex->nHeight, pindex->phashBlock ? pindex->GetBlockHash().ToString() : "-");
+}
+} // Anonymous namespace
+
+std::string Tally::RewardBlocks::ToString() const
+{
+    return strprintf("recorded=%s found=%s paid_in=%s amount=%s kind=%s",
+                     DescribeBlock(m_recorded),
+                     DescribeBlock(m_expected),
+                     DescribeBlock(m_paid_in),
+                     FormatMoney(m_amount),
+                     m_paid_in ? (m_mrc ? "mrc" : "stake") : "none");
+}
+
+std::optional<Tally::RewardBlocks> Tally::VerifyRewardBlocks(const Cpid& cpid, const CBlockIndex* const tip)
+{
+    if (!tip) {
+        return std::nullopt;
+    }
+
+    const CBlockIndex* const recorded = GetAccount(cpid).m_last_block_ptr;
+    const int64_t floor = recorded ? recorded->nHeight : Quorum::CurrentSuperblock().m_height;
+
+    const CBlockIndex* pindex = tip;
+
+    for (; pindex && pindex->nHeight > floor; pindex = pindex->pprev) {
+        // The tally records an MRC after the block's own reward, so an MRC for
+        // the CPID decides the last reward block of the block that pays it:
+        for (const auto& mrc_researcher : pindex->m_mrc_researchers) {
+            if (mrc_researcher->m_cpid == cpid) {
+                if (pindex->pprev == recorded) {
+                    return std::nullopt;
+                }
+
+                return RewardBlocks {recorded, pindex->pprev, pindex, mrc_researcher->m_research_subsidy, true};
+            }
+        }
+
+        if (pindex->ResearchSubsidy() > 0) {
+            const CpidOption claim_cpid = pindex->GetMiningId().TryCpid();
+
+            if (claim_cpid && *claim_cpid == cpid) {
+                return RewardBlocks {recorded, pindex, pindex, pindex->ResearchSubsidy(), false};
+            }
+        }
+    }
+
+    // No reward block above the account's last one. That block must be the
+    // chain's block at its height:
+    if (recorded && pindex != recorded) {
+        return RewardBlocks {recorded, nullptr, nullptr, 0, false};
+    }
+
+    return std::nullopt;
+}
+
+void Tally::RequestAccrualRebuild(const std::string& details)
+{
+    if (g_accrual_rebuild_armed && !g_accrual_rebuild_requested) {
+        g_accrual_rebuild_details = details;
+        g_accrual_rebuild_requested = true;
+    }
+}
+
+bool Tally::AccrualRebuildRequested()
+{
+    return g_accrual_rebuild_requested;
+}
+
+void Tally::RunRequestedAccrualRebuild(const CpidOption& cpid)
+{
+    if (!g_accrual_rebuild_requested.exchange(false)) {
+        return;
+    }
+
+    LogPrintf("INFO: %s: rebuilding the accrual snapshots (accrual check: %s).", __func__, g_accrual_rebuild_details);
+
+    bool rebuilt = false;
+
+    try {
+        rebuilt = g_researcher_tally.RebuildAccrualSnapshots();
+    } catch (const std::exception& e) {
+        error("%s: %s", __func__, e.what());
+    }
+
+    if (!rebuilt) {
+        error("%s: the accrual snapshot rebuild failed. This is a fatal error. Aborting. See debug.log for the "
+              "operation that failed, correct the cause, and restart.", __func__);
+
+        // Stop at once, as after a failed batch disconnect in
+        // ReorganizeChain(): the process ends here, with no orderly shutdown
+        // and no stack unwinding. The exit writes nothing more.
+        std::_Exit(EXIT_FAILURE);
+    }
+
+    if (!cpid) {
+        return;
+    }
+
+    if (const std::optional<RewardBlocks> found = VerifyRewardBlocks(*cpid, pindexBest)) {
+        g_accrual_rebuild_armed = false;
+        strMiscWarning = _("Research reward claims are paused for this run of the wallet.");
+
+        LogPrintf("INFO: %s: accrual check: cpid=%s %s. Research reward claims are paused for this run.",
+                  __func__, cpid->ToString(), found->ToString());
+
+        return;
+    }
+
+    LogPrintf("INFO: %s: accrual check passes: cpid=%s.", __func__, cpid->ToString());
 }

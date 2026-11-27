@@ -196,6 +196,8 @@ StateSnapshot CaptureState(CaptureScope scope)
     s.max_outbound = MAX_OUTBOUND_CONNECTIONS;
 
     s.previous_block_time = g_previous_block_time.load();
+    s.scraper_sync_latched = g_scraper_sync_latched.load();
+    s.scraper_sync_in_force = g_scraper_sync_in_force.load();
     s.mock_time = GetMockTime().count();
     s.mock_deterministic = g_mock_deterministic_tests;
 
@@ -287,6 +289,8 @@ std::vector<StateDiff> DiffState(const StateSnapshot& before, const StateSnapsho
     Plain(out, "MAX_OUTBOUND_CONNECTIONS", before.max_outbound, after.max_outbound);
 
     Plain(out, "g_previous_block_time", before.previous_block_time, after.previous_block_time);
+    Plain(out, "g_scraper_sync_latched", before.scraper_sync_latched, after.scraper_sync_latched);
+    Plain(out, "g_scraper_sync_in_force", before.scraper_sync_in_force, after.scraper_sync_in_force);
     Plain(out, "GetMockTime()", before.mock_time, after.mock_time);
     Plain(out, "g_mock_deterministic_tests", before.mock_deterministic, after.mock_deterministic);
 
@@ -346,6 +350,8 @@ StateGuard::StateGuard(unsigned reset)
         m_hash_best_chain = hashBestChain;
         m_n_best_height = nBestHeight;
         m_previous_block_time = g_previous_block_time.load();
+        m_scraper_sync_latched = g_scraper_sync_latched.load();
+        m_scraper_sync_in_force = g_scraper_sync_in_force.load();
 
         if (m_reset & CHAIN) {
             // Moved, not copied: each CBlockIndex::phashBlock aliases its map key.
@@ -412,6 +418,8 @@ StateGuard::~StateGuard()
         hashBestChain = m_hash_best_chain;
         nBestHeight = m_n_best_height;
         g_previous_block_time.store(m_previous_block_time);
+        g_scraper_sync_latched.store(m_scraper_sync_latched);
+        g_scraper_sync_in_force.store(m_scraper_sync_in_force);
     }
 
     fUseFastIndex = m_use_fast_index;

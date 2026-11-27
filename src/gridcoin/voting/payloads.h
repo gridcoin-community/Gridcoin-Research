@@ -29,6 +29,12 @@ public:
     static constexpr uint32_t CURRENT_VERSION = 3;
 
     //!
+    //! \brief Payload version of a master-key REMOVE that names its poll by txid and carries nothing else (from
+    //! v15). Only a REMOVE is this version; an ADD stays at CURRENT_VERSION.
+    //!
+    static constexpr uint32_t REMOVE_BY_TXID_VERSION = 4;
+
+    //!
     //! \brief Version number of the serialized poll format.
     //!
     //! Defaults to the most recent version for a new poll instance.
@@ -41,6 +47,7 @@ public:
 
     Poll m_poll;                  //!< The body of the poll.
     PollEligibilityClaim m_claim; //!< Used to verify the poll author's balance.
+    uint256 m_poll_txid;          //!< The poll a version 4 REMOVE removes; empty in every other payload.
 
     //!
     //! \brief Initialize an empty, invalid poll payload.
@@ -83,6 +90,15 @@ public:
     }
 
     //!
+    //! \brief Initialize a version 4 REMOVE that names its poll by txid (from v15).
+    //!
+    PollPayload(const uint32_t version, const uint256& poll_txid)
+        : m_version(version)
+        , m_poll_txid(poll_txid)
+    {
+    }
+
+    //!
     //! \brief Get the type of contract that this payload contains data for.
     //!
     GRC::ContractType ContractType() const override
@@ -107,6 +123,11 @@ public:
     //!
     bool WellFormed(const ContractAction action) const override
     {
+        // Version 4 is a REMOVE that names its poll by txid (from v15) and carries nothing else.
+        if (m_version == REMOVE_BY_TXID_VERSION) {
+            return action == ContractAction::REMOVE && !m_poll_txid.IsNull();
+        }
+
         return m_version > 0 && m_version <= CURRENT_VERSION
             && m_poll.WellFormed(m_version)
             && m_claim.WellFormed();
@@ -117,7 +138,7 @@ public:
     //!
     std::string LegacyKeyString() const override
     {
-        return m_poll.m_title;
+        return m_version == REMOVE_BY_TXID_VERSION ? m_poll_txid.ToString() : m_poll.m_title;
     }
 
     //!
@@ -168,6 +189,13 @@ public:
         const ContractAction contract_action)
     {
         READWRITE(m_version);
+
+        // A version 4 REMOVE (from v15) carries only the txid of the poll it removes.
+        if (m_version == REMOVE_BY_TXID_VERSION && contract_action == ContractAction::REMOVE) {
+            READWRITE(m_poll_txid);
+            return;
+        }
+
         READWRITE(m_poll);
 
         // The poll m_additional_fields is serialized here rather than in the poll class, because it depends on the

@@ -10,6 +10,9 @@
 #include "gridcoin/accrual/computer.h"
 #include "sync.h"
 
+#include <optional>
+#include <string>
+
 class CBlockIndex;
 extern CCriticalSection cs_main;
 
@@ -312,6 +315,70 @@ public:
     //! \return \c false if the cpid does not have an account.
     //!
     static bool RemoveAccount(const Cpid& cpid);
+
+    //!
+    //! \brief The reward blocks that a VerifyRewardBlocks() check that does not
+    //! pass found.
+    //!
+    struct RewardBlocks
+    {
+        const CBlockIndex* m_recorded; //!< The account's last reward block, or null.
+        const CBlockIndex* m_expected; //!< The last reward block the chain implies, or null.
+        const CBlockIndex* m_paid_in;  //!< The block that pays that reward, or null.
+        CAmount m_amount;              //!< The research reward m_paid_in pays the CPID.
+        bool m_mrc;                    //!< Whether m_paid_in pays it through an MRC.
+
+        //!
+        //! \brief Terse key=value form for the log.
+        //!
+        std::string ToString() const;
+    };
+
+    //!
+    //! \brief Check a CPID's last reward block in the tally against its reward
+    //! blocks on the chain that ends at the tip.
+    //!
+    //! The tally records a research reward at the block that pays it, and an
+    //! MRC at the parent of the block that pays it, the MRC's accrual point,
+    //! after that block's own reward. The chain therefore implies a last reward
+    //! block: the highest of these. This walks back from the tip through the
+    //! block index, down to the account's last reward block, or to the current
+    //! superblock for an account that holds none.
+    //!
+    //! \param cpid The CPID to check.
+    //! \param tip  The chain tip, whose state the tally holds.
+    //!
+    //! \return Nothing when the check passes, otherwise the reward blocks found.
+    //!
+    static std::optional<RewardBlocks> VerifyRewardBlocks(const Cpid& cpid, const CBlockIndex* const tip)
+        EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+
+    //!
+    //! \brief Ask for a rebuild of the accrual snapshots, which the scheduled
+    //! job runs through RunRequestedAccrualRebuild().
+    //!
+    //! \param details What the check found, for the log line of the rebuild.
+    //!
+    static void RequestAccrualRebuild(const std::string& details) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+
+    //!
+    //! \brief Whether a rebuild of the accrual snapshots is waiting to run.
+    //!
+    static bool AccrualRebuildRequested();
+
+    //!
+    //! \brief Rebuild the accrual snapshots if a rebuild was asked for, then
+    //! run the check again for the CPID.
+    //!
+    //! If that check does not pass, research reward claims stay paused until
+    //! the process restarts: a request is honored once per run.
+    //!
+    //! A rebuild that fails, by its result or by an exception, stops the node
+    //! at once.
+    //!
+    //! \param cpid The wallet's CPID, if any, to check after the rebuild.
+    //!
+    static void RunRequestedAccrualRebuild(const CpidOption& cpid) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 };
 }
 

@@ -1711,6 +1711,10 @@
       "class": "elevate",
       "effect": "keys"
     },
+    "removepoll": {
+      "class": "elevate",
+      "effect": "keys"
+    },
     "removepool": {
       "class": "elevate",
       "effect": "keys"
@@ -1927,6 +1931,10 @@
     "votedetails": {
       "class": "read_only",
       "effect": "read_only"
+    },
+    "votewithclaim": {
+      "class": "elevate",
+      "effect": "keys"
     },
     "walletcreatefundedpsgt": {
       "class": "elevate",

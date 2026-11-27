@@ -3,8 +3,10 @@
 #include <string>
 #include <vector>
 
+#include "hash.h"
 #include "key.h"
 #include <key_io.h>
+#include "test/signature_encodings.h"
 #include "uint256.h"
 #include "util.h"
 
@@ -103,6 +105,70 @@ BOOST_AUTO_TEST_CASE(key_test1)
         BOOST_CHECK(rkey1C == pubkey1C);
         BOOST_CHECK(rkey2C == pubkey2C);
     }
+}
+
+//! Every signature that CKey::Sign() writes passes CPubKey::CheckSignatureForm(). Among the signatures are a
+//! first integer of 33 bytes and, in each place, an integer of under 32 bytes.
+BOOST_AUTO_TEST_CASE(a_signature_as_signed_has_the_form_that_sign_writes)
+{
+    bool first_integer_of_33_bytes_seen = false;
+    bool first_integer_under_32_bytes_seen = false;
+    bool second_integer_under_32_bytes_seen = false;
+
+    for (const std::string& secret : {strSecret1, strSecret2, strSecret1C, strSecret2C}) {
+        const CKey key = DecodeSecret(secret);
+
+        BOOST_REQUIRE(key.IsValid());
+
+        for (unsigned int n = 0; n < 256; ++n) {
+            const uint256 hash = Hash(strprintf("signature encoding %u", n));
+
+            for (const bool grind : {true, false}) {
+                std::vector<unsigned char> signature;
+
+                BOOST_REQUIRE(key.Sign(hash, signature, grind));
+                BOOST_REQUIRE(key.GetPubKey().Verify(hash, signature));
+                BOOST_CHECK(CPubKey::CheckSignatureForm(signature));
+
+                if (signature[3] == 33) first_integer_of_33_bytes_seen = true;
+                if (signature[3] < 32) first_integer_under_32_bytes_seen = true;
+                if (signature[5 + signature[3]] < 32) second_integer_under_32_bytes_seen = true;
+            }
+        }
+    }
+
+    BOOST_CHECK(first_integer_of_33_bytes_seen);
+    BOOST_CHECK(first_integer_under_32_bytes_seen);
+    BOOST_CHECK(second_integer_under_32_bytes_seen);
+}
+
+//! A byte string that does not have the form CKey::Sign() writes does not pass CPubKey::CheckSignatureForm().
+BOOST_AUTO_TEST_CASE(only_the_form_that_sign_writes_passes_the_signature_form_check)
+{
+    const CKey key = DecodeSecret(strSecret1C);
+
+    BOOST_REQUIRE(key.IsValid());
+
+    for (unsigned int n = 0; n < 8; ++n) {
+        const uint256 hash = Hash(strprintf("signature encoding %u", n));
+
+        for (const bool grind : {true, false}) {
+            std::vector<unsigned char> signature;
+
+            BOOST_REQUIRE(key.Sign(hash, signature, grind));
+            BOOST_REQUIRE(CPubKey::CheckSignatureForm(signature));
+
+            for (const auto& [name, encoding] : grc_test::OtherEncodingsOf(signature)) {
+                BOOST_CHECK_MESSAGE(!CPubKey::CheckSignatureForm(encoding), name);
+            }
+
+            const std::vector<unsigned char> short_by_a_byte(signature.begin(), signature.end() - 1);
+
+            BOOST_CHECK(!CPubKey::CheckSignatureForm(short_by_a_byte));
+        }
+    }
+
+    BOOST_CHECK(!CPubKey::CheckSignatureForm({}));
 }
 
 BOOST_AUTO_TEST_SUITE_END()

@@ -90,6 +90,45 @@ bool OutOfSyncByAge()
     return GetAdjustedTime() - g_previous_block_time >= maxAge;
 }
 
+bool EvaluateScraperSync()
+{
+    // The age at which OutOfSyncByAge() changes.
+    constexpr int64_t enter_age = 90 * 10;
+
+    constexpr int64_t leave_age = 60 * 60;
+
+    const int64_t age = GetAdjustedTime() - g_previous_block_time;
+
+    if (age >= leave_age) {
+        g_scraper_sync_latched = true;
+
+        return true;
+    }
+
+    if (age < enter_age) {
+        g_scraper_sync_latched = false;
+
+        return false;
+    }
+
+    return g_scraper_sync_latched;
+}
+
+bool ScraperOutOfSync(const int height)
+{
+    // The state is kept on both sides of block version 15. Only its use begins there.
+    const bool out_of_sync = EvaluateScraperSync();
+
+    return IsV15Enabled(height) ? out_of_sync : OutOfSyncByAge();
+}
+
+bool ScraperOutOfSync()
+{
+    const bool out_of_sync = EvaluateScraperSync();
+
+    return g_scraper_sync_in_force ? out_of_sync : OutOfSyncByAge();
+}
+
 static constexpr CAmount nGenesisSupply = 340569880;
 bool fColdBoot = true;
 
@@ -2110,6 +2149,16 @@ bool ValidateMRC(const CBlockIndex* mrc_last_pindex, const GRC::MRC &mrc) EXCLUS
     // No Cpid, the MRC must be invalid.
     if (!cpid) return error("%s: Validation failed: MRC has no CPID.");
 
+    // A block pays MRCs of one version, which fixes what the MRC's signature covers: version 2 from block version 15
+    // and version 1 below it. Every caller checks the MRC for the block after mrc_last_pindex.
+    if (mrc.m_version != GRC::MRC::VersionForBlock(mrc_last_pindex->nHeight + 1)) {
+        return error("%s: Validation failed: MRC version %u for CPID %s is not the version for a block at height %i.",
+                     __func__,
+                     mrc.m_version,
+                     cpid->ToString(),
+                     mrc_last_pindex->nHeight + 1);
+    }
+
     // Check to ensure the beacon was active at the mrc_last_pindex time of the MRC and the MRC signature. This also
     // via the signature checks whether the supplied last block pindex hash matches that recorded in the MRC contract.
     // Note that the TryActive for the beacon at the mrc_time specified using the mrc_last_index is actually slightly
@@ -2138,7 +2187,10 @@ bool ValidateMRC(const CBlockIndex* mrc_last_pindex, const GRC::MRC &mrc) EXCLUS
     // one block lower than the head).
     research_owed = GRC::Tally::GetAccrual(*cpid, mrc_time, mrc_last_pindex);
 
-    if (mrc_last_pindex->nHeight >= GetOrigNewbieSnapshotFixHeight()) {
+    // Every caller checks the MRC for the block after mrc_last_pindex. Block validation passes the block's parent, the
+    // miner the block it builds on, and the mempool the tip. From block version 15, which that block has when v15 is
+    // enabled at its height, the MRC's research reward is checked against the CPID's accrual.
+    if (!IsV15Enabled(mrc_last_pindex->nHeight + 1) && mrc_last_pindex->nHeight >= GetOrigNewbieSnapshotFixHeight()) {
         // The below is required to deal with a conditional application in historical rewards for
         // research newbies after the original newbie fix height that already made it into the chain.
         // Please see the extensive commentary in the below function.
@@ -2241,6 +2293,16 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, CValidationState& st
         }
     }
 
+    // A beacon payload is of the version that the block it would be mined in carries: version 4 from block version
+    // 15, a lower version below it. BeaconRegistry::BlockValidate requires this of a block. The refusal depends on
+    // this node's height and carries no misbehaviour score.
+    for (const auto& contract : tx.GetContracts()) {
+        if (!GRC::BeaconRegistry::PayloadVersionFitsHeight(contract, nBestHeight + 1)) {
+            return state.Invalid(error("%s: beacon payload of a version the next block does not carry", __func__),
+                                 "bad-beacon-version");
+        }
+    }
+
     // A claim belongs in a coinbase, so it can never belong in a loose one.
     //
     // Contract dispatch will not catch this: CLAIM has no handler and falls to
@@ -2253,18 +2315,50 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, CValidationState& st
     // RELAYING these and stops ACCEPTING blocks containing them at the same
     // height. Judged at the height the transaction would be mined at, which is
     // the next one, for the same reason the script flags are.
+    //
+    // The three refusals here depend on this node's height, and carry no
+    // misbehaviour score.
     if (IsV15Enabled(nBestHeight + 1)) {
         for (const auto& contract : tx.GetContracts()) {
             if (contract.m_type == GRC::ContractType::CLAIM) {
-                return state.DoS(100, error("%s: claim contract in a non-coinbase transaction", __func__),
-                                 "claim-outside-coinbase");
+                return state.Invalid(error("%s: claim contract in a non-coinbase transaction", __func__),
+                                     "claim-outside-coinbase");
             }
 
             // PollRegistry::BlockValidate requires this from the same height.
             if (contract.m_type == GRC::ContractType::POLL && contract.m_version >= 2
                 && !contract.SharePayloadAs<GRC::PollPayload>()->m_claim.EntriesDistinct()) {
-                return state.DoS(25, error("%s: poll claim keys or outputs are not distinct", __func__),
-                                 "bad-poll-claim");
+                return state.Invalid(error("%s: poll claim keys or outputs are not distinct", __func__),
+                                     "bad-poll-claim");
+            }
+
+            // BeaconRegistry::BlockValidate requires this from the same height.
+            if (contract.m_type == GRC::ContractType::BEACON
+                && !GRC::GetBeaconRegistry().RemoveCarriesCurrentKey(contract)) {
+                return state.Invalid(error("%s: beacon removal without the current beacon's key", __func__),
+                                     "bad-beacon-remove");
+            }
+        }
+    }
+
+    // Refuse a second MRC for a CPID that already has one in the mempool. This
+    // is an O(log n) lookup against the m_mrc_by_cpid index (it replaced a full
+    // mempool scan + bloom filter). It comes before the contracts are
+    // validated. The refusal depends on what this node's pool holds, and
+    // carries no misbehaviour score. The transaction the pool already holds is
+    // not a second one; it is dealt with below as any transaction offered again.
+    for (const auto& contract : tx.GetContracts()) {
+        if (contract.m_type == GRC::ContractType::MRC) {
+            const GRC::CpidOption cpid = contract.SharePayloadAs<GRC::MRC>()->m_mining_id.TryCpid();
+
+            uint256 existing;
+            if (cpid && pool.HasMRCForCpid(*cpid, &existing) && existing != tx.GetHash()) {
+                return state.Invalid(error("%s: MRC contract in tx %s has the same CPID as an existing transaction "
+                                           "in the memory pool, %s.",
+                                           __func__,
+                                           tx.GetHash().ToString(),
+                                           existing.ToString()),
+                                     "mrc-duplicate-cpid");
             }
         }
     }
@@ -2280,33 +2374,62 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, CValidationState& st
                          "invalid-contract");
     }
 
+    // From v15 an advertisement may not take a key that another CPID holds; BeaconRegistry::BlockValidate requires
+    // this from the same height. It comes after the contracts are validated, so the advertisement's signature is
+    // verified before the registry's beacons are walked, and it carries no misbehaviour score: it depends on what
+    // this node's registry holds.
+    if (IsV15Enabled(nBestHeight + 1)) {
+        for (const auto& contract : tx.GetContracts()) {
+            // Judged at the time of the tip, as BeaconRegistry::Validate judges a beacon contract from this height.
+            if (!GRC::GetBeaconRegistry().AdvertisedKeyIsFree(contract, pindexBest->nTime)) {
+                return state.Invalid(error("%s: beacon advertisement of a key that another CPID holds", __func__),
+                                     "bad-beacon-key");
+            }
+        }
+    }
+
     // is it already in the memory pool?
     uint256 hash = tx.GetHash();
     if (pool.exists(hash))
         return false;
 
-    // Reject a second MRC for a CPID that already has one in the mempool. This
-    // is an O(log n) lookup against the m_mrc_by_cpid index (it replaced a full
-    // mempool scan + bloom filter). MRC DoS protection: a duplicate earns a
-    // stiff penalty.
+    // A second MRC for a CPID that already has one in the mempool was refused
+    // above, before the contracts were validated.
     bool tx_contains_valid_mrc = false;
 
     for (const auto& contract : tx.GetContracts()) {
         if (contract.m_type == GRC::ContractType::MRC) {
-            GRC::MRC mrc = contract.CopyPayloadAs<GRC::MRC>();
-            GRC::Cpid cpid = *(mrc.m_mining_id.TryCpid());
+            tx_contains_valid_mrc = true;
+        }
+    }
+
+    // One poll per title key in the pool. A second is refused without a penalty: two users can choose one title
+    // within seconds, and a peer that relays the other poll is not at fault. From v15 a poll whose title the registry
+    // holds is refused too, without a penalty: the next block would mine it, spend its burn and register nothing,
+    // and a peer that has not yet connected the block that took the title holds and relays it. Below v15 such
+    // a poll registers by its txid, and the pool admits it. A legacy contract never reaches here; it is
+    // refused above.
+    for (const auto& contract : tx.GetContracts()) {
+        if (contract.m_type == GRC::ContractType::POLL && contract.m_version >= 2
+            && contract.m_action == GRC::ContractAction::ADD) {
+            const std::string title_key =
+                GRC::PollTitleKey(contract.SharePayloadAs<GRC::PollPayload>()->m_poll.m_title);
 
             uint256 existing;
-            if (pool.HasMRCForCpid(cpid, &existing)) {
-                return state.DoS(25, error("%s: MRC contract in tx %s has the same CPID as an existing transaction "
-                                           "in the memory pool, %s.",
-                                           __func__,
-                                           tx.GetHash().ToString(),
-                                           existing.ToString()),
-                                 "mrc-duplicate-cpid");
+            if (pool.HasPollForTitle(title_key, &existing)) {
+                return state.DoS(0, error("%s: poll in tx %s has the title of poll %s in the memory pool",
+                                          __func__,
+                                          tx.GetHash().ToString(),
+                                          existing.ToString()),
+                                 "poll-duplicate-title");
             }
 
-            tx_contains_valid_mrc = true;
+            if (GRC::GetPollRegistry().TitleTakenAt(contract, nBestHeight + 1)) {
+                return state.DoS(0, error("%s: poll in tx %s has a title the poll registry holds",
+                                          __func__,
+                                          tx.GetHash().ToString()),
+                                 "poll-title-taken");
+            }
         }
     }
 

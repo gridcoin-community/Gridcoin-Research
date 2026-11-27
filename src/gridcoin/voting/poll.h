@@ -462,6 +462,14 @@ public:
     bool WellFormed(const uint32_t version) const;
 
     //!
+    //! \brief Determine whether the poll's text is valid UTF-8: its title, URL and question, the label of each
+    //! choice, and the name and value of each additional field.
+    //!
+    //! \return \c true if every part is valid UTF-8.
+    //!
+    bool TextIsValidUTF8() const;
+
+    //!
     //! \brief Determine whether a poll factors in magnitude for voting weight.
     //!
     //! \return \c true if the poll weight type includes magnitude.
@@ -582,6 +590,14 @@ public:
         // is because it depends on the poll payload version, which is not available here.
     }
 }; // Poll
+
+//!
+//! \brief Get the key a poll's title is registered, looked up and compared under.
+//!
+//! \return The title in ASCII lower case, with leading and trailing ASCII white space removed. Titles that differ in
+//! any other way -- inner white space, invisible characters, non-ASCII case -- are different titles.
+//!
+std::string PollTitleKey(const std::string& title);
 } // namespace GRC
 
 #endif // GRIDCOIN_VOTING_POLL_H

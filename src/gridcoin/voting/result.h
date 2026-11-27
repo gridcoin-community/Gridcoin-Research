@@ -11,13 +11,19 @@
 #include "gridcoin/magnitude.h"
 #include "gridcoin/voting/fwd.h"
 #include "gridcoin/voting/poll.h"
+#include "sync.h"
 
 #include <optional>
 #include <vector>
 
 class CBlockIndex;
 
+extern CCriticalSection cs_main;
+
 namespace GRC {
+struct PollSnapshot;
+class SuperblockPtr;
+
 //!
 //! \brief Contains the results of a poll.
 //!
@@ -101,7 +107,9 @@ public:
     std::optional<CAmount> m_active_vote_weight;  //!< Active vote weight of poll.
     std::optional<double> m_vote_percent_avw;     //!< Vote weight percent of AVW.
     std::optional<bool> m_poll_results_validated; //!< Whether the poll's AVW is >= the minimum AVW for the poll.
-    bool m_finished;                              //!< Whether the poll finished as of this result.
+    //! Whether the poll had finished at the tip the result was tallied on. Set by BuildFor from the snapshot; false in
+    //! a result built any other way.
+    bool m_finished;
     bool m_self_voted;                            //!< Whether the wallet holder voted.
     VoteDetail m_self_vote_detail;                //!< The wallet holder's counted votes, combined
 
@@ -139,10 +147,23 @@ public:
     //! immutable once connected). Block-index chain walks still take a tight
     //! per-operation cs_main; the poll-result cache re-tallies on a tip change.
     //!
+    //! Takes the poll's snapshot under cs_main and cs_poll_registry and builds from it; a caller holding neither
+    //! builds without blocking block connection for the tally.
+    //!
     //! \return An object that contains the calculated result for the poll or
     //! no result if an error occurred.
     //!
     static PollResultOption BuildFor(const PollReference& poll_ref, const CBlockIndex* pindex_tip);
+
+    //!
+    //! \brief Generate the result for the poll in \p snapshot, on the snapshot's pinned tip.
+    //!
+    //! Reads only the snapshot and the chain up to its pinned tip, never the live registry.
+    //!
+    //! \return An object that contains the calculated result for the poll or no result if the poll could not be read
+    //! from disk.
+    //!
+    static PollResultOption BuildFor(const PollSnapshot& snapshot);
 
     //!
     //! \brief Get the offset of the poll choice with the most votes.
@@ -199,6 +220,13 @@ bool MeetsMinimumVotePercentAVW(
 //! tally's overflow checks handle the totals.
 //!
 std::optional<PollResult::Weight> LegacyVoteAmount(const double amount);
+
+//!
+//! \brief Get the superblock that weighs magnitude for a poll tallied on \p pindex_tip: the live current superblock
+//! when it is on the pinned tip's own chain and not stamped after the poll's end, otherwise the latest superblock on
+//! the pinned tip's chain stamped at or before the end. Exposed for tests.
+//!
+SuperblockPtr ResolveSuperblockForPoll(const Poll& poll, const CBlockIndex* pindex_tip) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 }
 
 #endif // GRIDCOIN_VOTING_RESULT_H

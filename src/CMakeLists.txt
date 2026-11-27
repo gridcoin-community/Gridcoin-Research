@@ -236,8 +236,10 @@ add_library(gridcoin_util STATIC
     gridcoin/upgrade.cpp
     gridcoin/voting/builders.cpp
     gridcoin/voting/claims.cpp
+    gridcoin/voting/legacy_store.cpp
     gridcoin/voting/poll.cpp
     gridcoin/voting/poll_result_cache.cpp
+    gridcoin/voting/poll_entry.cpp
     gridcoin/voting/registry.cpp
     gridcoin/voting/result.cpp
     gridcoin/voting/vote.cpp

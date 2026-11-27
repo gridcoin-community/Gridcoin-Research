@@ -106,9 +106,11 @@ LevelDB index commit and the blk*.dat fsync:
 ```
 INFO: RunStartupCoherenceRecovery: detected inconsistency past height N.
 INFO: RunStartupCoherenceRecovery: last consistent block is at height M (K superblocks crossed in the abandoned range).
-INFO: AbandonChainTo: abandoning chain tip <hash> @ N down to <hash> @ M.
 INFO: RunStartupCoherenceRecovery: rewind crossed K superblock(s); resetting beacon registry for full replay.  (if K > 0)
-INFO: RunStartupCoherenceRecovery: registry bookmarks reconciled to height M. Phase 2 recovery complete; P2P sync will re-supply blocks past the rewound tip.
+INFO: RunStartupCoherenceRecovery: resetting the poll registry for full replay.
+INFO: RunStartupCoherenceRecovery: registry bookmarks reconciled to height M.
+INFO: AbandonChainTo: abandoning chain tip <hash> @ N down to <hash> @ M.
+INFO: RunStartupCoherenceRecovery: Phase 2 recovery complete at height M; P2P sync will re-supply blocks past the rewound tip.
 ```
 
 Followed by normal `AcceptBlock` activity as P2P re-supplies the

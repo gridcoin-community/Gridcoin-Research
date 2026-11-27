@@ -127,6 +127,10 @@ jobs:
           # On a slow runner this build's node has taken longer than 120 s
           # over a single consolidateunspent of 600 inputs.
           #
+          # FUNCTIONAL_TEST_CTEST_TIMEOUT=7200: the functional_tests case lasts
+          # as long as the whole suite, which takes this build's node about two
+          # and a half times as long as the ThreadSanitizer job's.
+          #
           # The Debug build type defines DEBUG_LOCKORDER (and
           # ABORT_ON_FAILED_ASSUME); ENABLE_DEBUG_LOCKORDER is spelled out
           # because this is the only job whose tests run with it. It turns on
@@ -161,6 +165,7 @@ jobs:
             -DCMAKE_SHARED_LINKER_FLAGS="-fsanitize=address,float-divide-by-zero,integer,undefined" \
             -DFUNCTIONAL_TEST_ATTEMPTS=1 \
             -DFUNCTIONAL_TEST_TIMEOUT_FACTOR=8 \
+            -DFUNCTIONAL_TEST_CTEST_TIMEOUT=7200 \
             -DCMAKE_C_COMPILER_LAUNCHER=ccache \
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
 

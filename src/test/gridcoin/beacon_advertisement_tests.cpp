@@ -21,12 +21,14 @@
 #include "gridcoin/contract/contract.h"
 #include "gridcoin/contract/message.h"
 #include "gridcoin/cpid.h"
+#include "gridcoin/mrc.h"
 #include "gridcoin/researcher.h"
 #include "gridcoin/sidestake.h"
 #include "gridcoin/tx_message.h"
 #include "init.h"
 #include "interfaces/researcher.h"
 #include "key.h"
+#include "miner.h"
 #include "policy/fees.h"
 #include "primitives/block.h"
 #include "random.h"
@@ -47,6 +49,7 @@
 
 #include <boost/test/unit_test.hpp>
 
+#include <map>
 #include <optional>
 #include <set>
 #include <string>
@@ -2002,6 +2005,313 @@ BOOST_FIXTURE_TEST_CASE(renewal_change_goes_back_to_a_pay_to_pubkey_coin, grc_te
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
     BOOST_CHECK(GRC::IsRenewalShape(CMutableTransaction(renewal), cpid, COIN / 2, fee, *pwalletMain));
+}
+
+//! From block version 15 a beacon contract is judged at the time of its block. The miner judges the contracts it
+//! chooses at the time of the block it builds, so a renewal that is due at that time goes into the block.
+BOOST_FIXTURE_TEST_CASE(the_miner_judges_a_renewal_at_the_time_of_its_block_from_v15, grc_test::WalletTxScope)
+{
+    const SyncTimeReset reset_sync;
+    const PoolCleared pool;
+    MineUntilReadyToAdvertise();
+
+    const grc_test::V15HeightGuard v15(0);
+
+    const std::string cpid_hex = "fee4fee4fee4fee4fee4fee4fee4fee4";
+    const GRC::Cpid cpid = GRC::Cpid::Parse(cpid_hex);
+
+    CKey beacon_key;
+    beacon_key.MakeNewKey(true);
+    {
+        LOCK(pwalletMain->cs_wallet);
+        BOOST_REQUIRE(pwalletMain->AddKey(beacon_key));
+    }
+
+    const RenewableBeacon beacon(cpid, beacon_key.GetPubKey());
+    ForcedResearcher forced(cpid_hex);
+
+    const GRC::AdvertiseBeaconResult result = GRC::Researcher::Get()->AdvertiseBeacon();
+    BOOST_REQUIRE_MESSAGE(result.TryPublicKey(), "renewal failed: " << static_cast<int>(result.Error()));
+    BOOST_REQUIRE(*result.TryPublicKey() == beacon_key.GetPubKey());
+
+    const std::vector<uint256> pooled = PooledBeacons(cpid);
+    BOOST_REQUIRE_EQUAL(pooled.size(), 1U);
+
+    CBlock block;
+    CMutableTransaction coinbase;
+    CMutableTransaction coinstake;
+    grc_test::MakeBlockAndCoinstake(block, coinbase, coinstake);
+
+    // The block is stamped now, when the beacon is in its renewal window.
+    block.nTime = GetAdjustedTime();
+
+    std::map<GRC::Cpid, std::pair<uint256, GRC::MRC>> mrc_map;
+    {
+        LOCK(cs_main);
+        BOOST_REQUIRE(CreateRestOfTheBlock(block, coinbase, coinstake, pindexBest, mrc_map, false));
+    }
+
+    bool taken = false;
+    for (const CTransaction& tx : block.vtx) {
+        taken |= tx.GetHash() == pooled.front();
+    }
+
+    BOOST_CHECK(taken);
+}
+
+namespace {
+//! The beacon contract of the one transaction the pool holds for \p cpid.
+GRC::Contract PooledBeaconContract(const GRC::Cpid& cpid)
+{
+    const std::vector<uint256> pooled = PooledBeacons(cpid);
+    BOOST_REQUIRE_EQUAL(pooled.size(), 1U);
+
+    LOCK(mempool.cs);
+
+    return mempool.mapTx.at(pooled.front()).GetTx().GetContracts().front();
+}
+} // anonymous namespace
+
+//! The wallet sends a beacon contract with a payload of the version the next block carries. Below block version 15
+//! that is version 2 for an advertisement with no ownership proof, signed as before.
+BOOST_FIXTURE_TEST_CASE(the_wallet_sends_payload_version_2_below_v15, grc_test::WalletTxScope)
+{
+    const SyncTimeReset reset_sync;
+    const PoolCleared pool;
+    MineUntilReadyToAdvertise();
+
+    const std::string cpid_hex = "fee5fee5fee5fee5fee5fee5fee5fee5";
+    const GRC::Cpid cpid = GRC::Cpid::Parse(cpid_hex);
+    ForcedResearcher forced(cpid_hex);
+
+    const GRC::AdvertiseBeaconResult result = GRC::Researcher::Get()->AdvertiseBeacon();
+    BOOST_REQUIRE_MESSAGE(result.TryPublicKey(), "advertisement failed: " << static_cast<int>(result.Error()));
+
+    const GRC::Contract contract = PooledBeaconContract(cpid);
+    const auto payload = contract.SharePayloadAs<GRC::BeaconPayload>();
+
+    BOOST_CHECK(contract.m_action == GRC::ContractAction::ADD);
+    BOOST_CHECK_EQUAL(payload->m_version, 2U);
+    BOOST_CHECK(payload->VerifySignature());
+}
+
+//! From block version 15 it is version 4, signed over the contract's action and the CPID's record in the beacon
+//! registry: none for a CPID's first advertisement.
+BOOST_FIXTURE_TEST_CASE(the_wallet_sends_a_version_4_advertisement_from_v15, grc_test::WalletTxScope)
+{
+    const SyncTimeReset reset_sync;
+    const PoolCleared pool;
+    MineUntilReadyToAdvertise();
+
+    const grc_test::V15HeightGuard v15(0);
+
+    const std::string cpid_hex = "fee6fee6fee6fee6fee6fee6fee6fee6";
+    const GRC::Cpid cpid = GRC::Cpid::Parse(cpid_hex);
+    ForcedResearcher forced(cpid_hex);
+
+    const GRC::AdvertiseBeaconResult result = GRC::Researcher::Get()->AdvertiseBeacon();
+    BOOST_REQUIRE_MESSAGE(result.TryPublicKey(), "advertisement failed: " << static_cast<int>(result.Error()));
+
+    const GRC::Contract contract = PooledBeaconContract(cpid);
+    const auto payload = contract.SharePayloadAs<GRC::BeaconPayload>();
+
+    BOOST_CHECK(contract.m_action == GRC::ContractAction::ADD);
+    BOOST_CHECK_EQUAL(payload->m_version, 4U);
+    BOOST_CHECK(payload->VerifySignature(GRC::ContractAction::ADD, uint256()));
+    BOOST_CHECK(!payload->VerifySignature(GRC::ContractAction::REMOVE, uint256()));
+}
+
+//! A renewal and a removal are signed over the beacon they act on, and the memory pool takes each.
+BOOST_FIXTURE_TEST_CASE(the_wallet_sends_a_version_4_renewal_and_removal_from_v15, grc_test::WalletTxScope)
+{
+    const SyncTimeReset reset_sync;
+    MineUntilReadyToAdvertise();
+
+    const grc_test::V15HeightGuard v15(0);
+
+    const std::string cpid_hex = "fee7fee7fee7fee7fee7fee7fee7fee7";
+    const GRC::Cpid cpid = GRC::Cpid::Parse(cpid_hex);
+
+    CKey beacon_key;
+    beacon_key.MakeNewKey(true);
+    {
+        LOCK(pwalletMain->cs_wallet);
+        BOOST_REQUIRE(pwalletMain->AddKey(beacon_key));
+    }
+
+    const RenewableBeacon beacon(cpid, beacon_key.GetPubKey());
+    ForcedResearcher forced(cpid_hex);
+
+    uint256 record;
+    {
+        LOCK(cs_main);
+        record = GRC::GetBeaconRegistry().CurrentRecordHash(cpid);
+    }
+    BOOST_REQUIRE(!record.IsNull());
+
+    {
+        const PoolCleared pool;
+
+        const GRC::AdvertiseBeaconResult renewed = GRC::Researcher::Get()->AdvertiseBeacon();
+        BOOST_REQUIRE_MESSAGE(renewed.TryPublicKey(), "renewal failed: " << static_cast<int>(renewed.Error()));
+
+        const GRC::Contract contract = PooledBeaconContract(cpid);
+        const auto payload = contract.SharePayloadAs<GRC::BeaconPayload>();
+
+        BOOST_CHECK(contract.m_action == GRC::ContractAction::ADD);
+        BOOST_CHECK_EQUAL(payload->m_version, 4U);
+        BOOST_CHECK(payload->VerifySignature(GRC::ContractAction::ADD, record));
+        BOOST_CHECK(!payload->VerifySignature(GRC::ContractAction::REMOVE, record));
+        BOOST_CHECK(!payload->VerifySignature(GRC::ContractAction::ADD, uint256()));
+    }
+
+    {
+        const PoolCleared pool;
+
+        const GRC::AdvertiseBeaconResult revoked = GRC::Researcher::Get()->RevokeBeacon(cpid);
+        BOOST_REQUIRE_MESSAGE(revoked.TryPublicKey(), "removal failed: " << static_cast<int>(revoked.Error()));
+
+        const GRC::Contract contract = PooledBeaconContract(cpid);
+        const auto payload = contract.SharePayloadAs<GRC::BeaconPayload>();
+
+        BOOST_CHECK(contract.m_action == GRC::ContractAction::REMOVE);
+        BOOST_CHECK_EQUAL(payload->m_version, 4U);
+        BOOST_CHECK(payload->VerifySignature(GRC::ContractAction::REMOVE, record));
+        BOOST_CHECK(!payload->VerifySignature(GRC::ContractAction::ADD, record));
+    }
+}
+
+namespace {
+//! The key the wallet's pool hands out next. It is put back.
+CPubKey NextPoolKey()
+{
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+
+    pwalletMain->TopUpKeyPool();
+
+    CReserveKey reservation(pwalletMain);
+    CPubKey key;
+    BOOST_REQUIRE(reservation.GetReservedKeyWithoutTopUp(key));
+    reservation.ReturnKey();
+
+    return key;
+}
+
+//! Leave an advertisement of \p key for \p cpid pending in the beacon registry.
+void LeavePending(const GRC::Cpid& cpid, const CPubKey& key)
+{
+    LOCK(cs_main);
+
+    const GRC::BeaconPayload payload {2, cpid, GRC::Beacon(key)};
+    const GRC::Contract contract = GRC::MakeContract<GRC::BeaconPayload>(GRC::ContractAction::ADD, payload);
+
+    CMutableTransaction tx;
+    tx.nTime = pindexBest->nTime;
+    tx.vContracts.push_back(contract);
+
+    GRC::GetBeaconRegistry().Add({contract, CTransaction(tx), nullptr});
+}
+} // anonymous namespace
+
+//! A wallet does not advertise a key the beacon registry knows under another CPID: it passes the key over, which
+//! takes it out of the pool, and advertises the next.
+BOOST_FIXTURE_TEST_CASE(a_new_advertisement_passes_over_a_key_the_registry_knows_under_another_cpid,
+                        grc_test::WalletTxScope)
+{
+    const SyncTimeReset reset_sync;
+    const PoolCleared pool;
+    MineUntilReadyToAdvertise();
+
+    const std::string cpid_hex = "d1ce0002d1ce0002d1ce0002d1ce0002";
+    const GRC::Cpid other_cpid = GRC::Cpid::Parse("0ddba110ddba110ddba110ddba110dd0");
+    ForcedResearcher forced(cpid_hex);
+
+    const GRC::ResearcherPtr researcher = GRC::Researcher::Get();
+    BOOST_REQUIRE(researcher->Id().Which() == GRC::MiningId::Kind::CPID);
+
+    const CPubKey known_key = NextPoolKey();
+    LeavePending(other_cpid, known_key);
+
+    const GRC::AdvertiseBeaconResult result = researcher->AdvertiseBeacon();
+    BOOST_REQUIRE_MESSAGE(result.TryPublicKey(), "advertisement failed: " << static_cast<int>(result.Error()));
+
+    BOOST_CHECK(*result.TryPublicKey() != known_key);
+
+    // The key that was passed over is not handed out again.
+    BOOST_CHECK(NextPoolKey() != known_key);
+}
+
+//! The key of an advertisement with an ownership proof is the one the project signed, so the wallet cannot take
+//! another. It refuses to advertise a key the beacon registry knows under another CPID.
+BOOST_FIXTURE_TEST_CASE(an_advertisement_with_a_proof_refuses_a_key_the_registry_knows_under_another_cpid,
+                        grc_test::WalletTxScope)
+{
+    const SyncTimeReset reset_sync;
+    const PoolCleared pool;
+    MineUntilReadyToAdvertise();
+
+    const std::string cpid_hex = "d1ce0003d1ce0003d1ce0003d1ce0003";
+    const GRC::Cpid cpid = GRC::Cpid::Parse(cpid_hex);
+    const GRC::Cpid other_cpid = GRC::Cpid::Parse("0ddba110ddba110ddba110ddba110dd1");
+    ForcedResearcher forced(cpid_hex);
+
+    CPubKey known_key;
+    {
+        LOCK2(cs_main, pwalletMain->cs_wallet);
+
+        const GRC::AdvertiseBeaconResult generated = GRC::GenerateBeaconKey(cpid);
+        BOOST_REQUIRE(generated.TryPublicKey());
+        known_key = *generated.TryPublicKey();
+    }
+
+    LeavePending(other_cpid, known_key);
+
+    GRC::OwnershipProof proof;
+    proof.m_master_url = "https://project.example/";
+    proof.m_account_id = 1;
+    proof.m_rsa_signature = std::vector<uint8_t>(64, 0x01);
+
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+
+    const GRC::AdvertiseBeaconResult result = GRC::SendBeaconContractV3(cpid, GRC::Beacon(known_key), proof, false);
+
+    BOOST_CHECK(result.Error() == GRC::BeaconError::KEY_HELD_BY_ANOTHER_CPID);
+    BOOST_CHECK(PooledBeacons(cpid).empty());
+}
+
+//! The GUI is told so with a status of its own.
+BOOST_FIXTURE_TEST_CASE(the_gui_is_told_that_the_registry_knows_the_key_under_another_cpid, grc_test::WalletTxScope)
+{
+    const SyncTimeReset reset_sync;
+    const PoolCleared pool;
+    MineUntilReadyToAdvertise();
+
+    const std::string cpid_hex = "d1ce0004d1ce0004d1ce0004d1ce0004";
+    const GRC::Cpid cpid = GRC::Cpid::Parse(cpid_hex);
+    const GRC::Cpid other_cpid = GRC::Cpid::Parse("0ddba110ddba110ddba110ddba110dd2");
+    ForcedResearcher forced(cpid_hex);
+
+    CPubKey known_key;
+    {
+        LOCK2(cs_main, pwalletMain->cs_wallet);
+
+        const GRC::AdvertiseBeaconResult generated = GRC::GenerateBeaconKey(cpid);
+        BOOST_REQUIRE(generated.TryPublicKey());
+        known_key = *generated.TryPublicKey();
+    }
+
+    LeavePending(other_cpid, known_key);
+
+    // The proof as a project hands it out: the account, the beacon key, and the project's signature over both.
+    const std::string proof_xml = "<master_url>https://project.example/</master_url>"
+        "<msg>1 " + HexStr(known_key) + "</msg>"
+        "<signature>" + EncodeBase64(std::string(64, '\x01')) + "</signature>";
+
+    const interfaces::BeaconAdvertiseResult result =
+        interfaces::MakeResearcherContext(pwalletMain)->advertiseBeaconV3(proof_xml);
+
+    BOOST_CHECK(result.status == interfaces::BeaconStatus::ERROR_KEY_HELD_BY_ANOTHER_CPID);
+    BOOST_CHECK(PooledBeacons(cpid).empty());
 }
 
 BOOST_AUTO_TEST_SUITE_END()

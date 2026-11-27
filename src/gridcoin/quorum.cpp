@@ -23,10 +23,13 @@ using namespace GRC;
 
 // TODO: use a header
 ScraperStatsVerifiedBeaconsTotalCredits  GetScraperStatsByConvergedManifest(const GRC::WhitelistSnapshot& greylist,
-                                                                            const ConvergedManifest& StructConvergedManifest);
+                                                                            const ConvergedManifest& StructConvergedManifest,
+                                                                            const bool checked_values);
 ScraperStatsVerifiedBeaconsTotalCredits  GetScraperStatsFromSingleManifest(const GRC::WhitelistSnapshot& greylist,
-                                                                           CScraperManifest_shared_ptr& manifest);
+                                                                           CScraperManifest_shared_ptr& manifest,
+                                                                           const bool checked_values);
 unsigned int NumScrapersForSupermajority(unsigned int nScraperCount);
+std::vector<ManifestAgreement> ManifestsAgreedBySupermajority(const mmCSManifestsBinnedByScraper& manifests_by_scraper);
 mmCSManifestsBinnedByScraper ScraperCullAndBinCScraperManifests();
 Superblock ScraperGetSuperblockContract(
     bool bStoreConvergedStats = false,
@@ -659,7 +662,7 @@ public:
         {
             LOCK(cs_ConvergedScraperStatsCache);
 
-            if (OutOfSyncByAge() || !ConvergedScraperStatsCache.bMinHousekeepingComplete) {
+            if (ScraperOutOfSync(m_height) || !ConvergedScraperStatsCache.bMinHousekeepingComplete) {
                 LogPrintf("ValidateSuperblock(): No validation achieved, but node is"
                           "not in sync or minimum housekeeping is not complete"
                           " - skipping validation.");
@@ -875,16 +878,20 @@ private: // SuperblockValidator classes
         //! \brief Calculate a superblock hash from the supplied manifest data
         //! that matches the set of resolved project parts.
         //!
+        //! \param checked_values Whether the rules for statistics values that
+        //! begin with block version 15 apply to the superblock under validation.
+        //!
         //! \return A superblock hash generated from the convergence to compare
         //! to the superblock under validation.
         //!
-        QuorumHash ComputeQuorumHash() const
+        QuorumHash ComputeQuorumHash(const bool checked_values) const
         {
             // Validator recompute over convergence-derived data: the pending greylist is the
             // one that matches it (the data-source rule).
             const ScraperStatsVerifiedBeaconsTotalCredits stats_and_verified_beacons = GetScraperStatsByConvergedManifest(
                 GetWhitelist().Snapshot(GreylistState::PENDING, GRC::ProjectEntry::ProjectFilterFlag::GREYLISTED),
-                m_convergence);
+                m_convergence,
+                checked_values);
 
             return QuorumHash::Hash(stats_and_verified_beacons);
         }
@@ -1498,12 +1505,20 @@ private: // SuperblockValidator methods
     //! scrapers agree on. This routine only selects the manifests that have a
     //! content hash corresponding to the convergence hint in the superblock.
     //!
+    //! From v15 the count of the scrapers is that of the construction of a
+    //! convergence. See TryByManifestV15().
+    //!
     //! \return \c true when the hinted manifest's superblock hash matches the
     //! hash of the validated superblock.
     //!
     bool TryByManifest() const
     {
         const mmCSManifestsBinnedByScraper manifests_by_scraper = ScraperCullAndBinCScraperManifests();
+
+        if (IsV15Enabled(m_height)) {
+            return TryByManifestV15(manifests_by_scraper);
+        }
+
         const size_t supermajority = NumScrapersForSupermajority(manifests_by_scraper.size());
 
         std::map<uint256, size_t> content_hash_tally;
@@ -1547,6 +1562,75 @@ private: // SuperblockValidator methods
     }
 
     //!
+    //! \brief Validate the superblock by the manifests that a supermajority of
+    //! the scrapers agree on, as it is done from v15.
+    //!
+    //! ManifestsAgreedBySupermajority() gives the agreements. The construction
+    //! of a convergence takes the latest of them. A node that validates can
+    //! hold later manifests than the node that staked the superblock, so the
+    //! validation takes each agreement that has the hint of the superblock.
+    //!
+    //! \param manifests_by_scraper The manifests binned by scraper.
+    //!
+    //! \return \c true when the superblock rebuilt from an agreement has the
+    //! hash of the validated superblock.
+    //!
+    bool TryByManifestV15(const mmCSManifestsBinnedByScraper& manifests_by_scraper) const
+    {
+        for (const ManifestAgreement& agreement : ManifestsAgreedBySupermajority(manifests_by_scraper)) {
+            if (agreement.m_content_hash.GetUint64(0) >> 32 != m_superblock->m_manifest_content_hint) {
+                continue;
+            }
+
+            LogPrint(BCLog::LogFlags::VERBOSE,
+                     "ValidateSuperblock(): %" PRIszu " scrapers agree on a "
+                     "manifest with content hash %s, which matched convergence "
+                     "hint. Trying validation.",
+                     agreement.m_manifests.size(),
+                     agreement.m_content_hash.ToString());
+
+            if (TryAgreement(agreement)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    //!
+    //! \brief Validate the superblock by comparing the manifests of an
+    //! agreement.
+    //!
+    //! Each manifest of an agreement builds the same superblock, so the first
+    //! of them that the node still holds gives the answer for all of them.
+    //!
+    //! \return \c true if the manifests of the agreement build a superblock
+    //! that matches the validated superblock.
+    //!
+    bool TryAgreement(const ManifestAgreement& agreement) const
+    {
+        LOCK(CScraperManifest::cs_mapManifest);
+
+        for (const auto& manifest_by_scraper : agreement.m_manifests) {
+            const auto iter = CScraperManifest::mapManifest.find(manifest_by_scraper.second);
+
+            // Another thread can have deleted the manifest since the
+            // agreements were counted.
+            if (iter == CScraperManifest::mapManifest.end()) {
+                continue;
+            }
+
+            CScraperManifest_shared_ptr manifest = iter->second;
+
+            return TryManifest(manifest);
+        }
+
+        LogPrintf("ValidateSuperblock(): no manifest of the agreement found");
+
+        return false;
+    }
+
+    //!
     //! \brief Validate the superblock by comparing the specified manifest.
     //!
     //! \return \c true if the specified manifest builds a superblock that
@@ -1580,7 +1664,8 @@ private: // SuperblockValidator methods
     {
         const ScraperStatsVerifiedBeaconsTotalCredits stats_and_verified_beacons = GetScraperStatsFromSingleManifest(
             GetWhitelist().Snapshot(GreylistState::PENDING, GRC::ProjectEntry::ProjectFilterFlag::GREYLISTED),
-            manifest);
+            manifest,
+            IsV15Enabled(m_height));
 
         return QuorumHash::Hash(stats_and_verified_beacons) == m_quorum_hash;
     }
@@ -1626,7 +1711,7 @@ private: // SuperblockValidator methods
                  combiner.TotalCombinations());
 
         while (const auto combination_option = combiner.GetNextConvergence()) {
-            if (combination_option->ComputeQuorumHash() == m_quorum_hash) {
+            if (combination_option->ComputeQuorumHash(IsV15Enabled(m_height)) == m_quorum_hash) {
                 return true;
             }
         }

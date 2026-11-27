@@ -445,6 +445,8 @@ static const CRPCConvertParam vRPCConvertParams[] =
     { "votebyid"               , 19 },
     { "votebyid"               , 20 },
     { "votebyid"               , 21 },
+    { "votewithclaim"          , 1 },
+    { "votewithclaim"          , 2 },
 };
 
 std::vector<std::pair<std::string, int>> ListConvertedParams()

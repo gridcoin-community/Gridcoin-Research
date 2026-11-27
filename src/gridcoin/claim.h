@@ -194,7 +194,9 @@ public:
 
     //!
     //! \brief A map of mrc transactions keyed by CPID. There can be only one MRC per CPID
-    //! in the claim.
+    //! in the claim. The key is the CPID of the MRC in the transaction: the miner builds the
+    //! map that way, and from block version 15 block validation requires it
+    //! (BlockRewardRules::CheckMRCRewards).
     //!
     std::map<Cpid, uint256> m_mrc_tx_map;
 

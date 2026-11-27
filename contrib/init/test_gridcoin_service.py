@@ -1466,7 +1466,8 @@ class RefusedKeyTests(unittest.TestCase):
 
     def test_sanitize_conf_follows_the_config_reader(self):
         # GetConfigOptions (src/util/system.cpp) cuts at '#', trims, prefixes "<section>." after a
-        # [section] line; InterpretOption splits at the first '.' and reads a leading "no" as negation.
+        # [section] line; InterpretOption splits at the first '.' and reads a leading "no" as negation
+        # unless the name is itself an option.
         text = ("# rpcpassword=commented\n"
                 "rpcuser=u\n"
                 "staking=1\n"
@@ -1487,6 +1488,29 @@ class RefusedKeyTests(unittest.TestCase):
         self.assertEqual(out, "# rpcpassword=commented\nstaking=1\nnoncruncher=1\n[test]\naddnode=1.2.3.4\n")
         self.assertNotIn("hunter2", " ".join(removed))
         self.assertNotIn("Secret", " ".join(removed))
+
+    def test_refused_as_read_covers_both_readings_of_a_leading_no(self):
+        # InterpretOption (src/util/system.cpp) reads a key that is itself an option as that option and
+        # takes a leading "no" off any other. The tool has no option table, so it refuses under both.
+        vectors = [
+            ("nonewprivs", True), ("test.nonewprivs", True), ("nononewprivs", True),
+            ("nobuildwarn", True), ("nonobuildwarn", True),
+            ("noncruncher", False), ("nononcruncher", False),
+            ("norpcpassword", True), ("nonorpcpassword", False),
+        ]
+        for name, expected in vectors:
+            self.assertEqual(svc.refused_as_read(name, self.patterns), expected, name)
+
+        out, removed = svc.sanitize_conf(
+            "nonewprivs=0\nnononewprivs=1\n[test]\nnonewprivs=0\nnononcruncher=1\n", self.patterns)
+        self.assertEqual(out, "[test]\nnononcruncher=1\n")
+        self.assertEqual(removed, ["nonewprivs", "nononewprivs", "test.nonewprivs"])
+
+        out, removed = svc.sanitize_settings(
+            '{"nonewprivs": false, "nononewprivs": true, "noncruncher": true, "nononcruncher": true}',
+            self.patterns)
+        self.assertEqual(sorted(json.loads(out)), ["noncruncher", "nononcruncher"])
+        self.assertEqual(sorted(removed), ["nonewprivs", "nononewprivs"])
 
     def test_conf_selects_testnet_as_the_core_reads_it(self):
         # Top-level testnet= / notestnet= lines, the last one winning, each value read as

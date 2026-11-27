@@ -890,16 +890,21 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         }
 
         // Disconnect peers older than MIN_PEER_PROTO_VERSION, the previous
-        // release's protocol version, at once. Peers on that previous version
-        // satisfy every fork before the one this PROTOCOL_VERSION carries, so
-        // they are disconnected only once the grace period past that fork's
-        // activation height has elapsed. The next fork's PROTOCOL_VERSION bump
-        // moves both bounds up by one, and fork_height below must move to that
-        // fork in the same change.
+        // mandatory release's protocol version, at once. Peers from that
+        // version up to PROTOCOL_VERSION - 1 satisfy every fork before the one
+        // this PROTOCOL_VERSION carries, so they are disconnected only once the
+        // grace period past that fork's activation height has elapsed. The next
+        // fork's PROTOCOL_VERSION bump must set the floor to the version of the
+        // mandatory release before it and move fork_height below to that fork
+        // in the same change. A change to either constant stops the build at
+        // the static_assert below, which is the reminder to do both.
+        static_assert(PROTOCOL_VERSION == 180331 && MIN_PEER_PROTO_VERSION == 180329,
+                      "PROTOCOL_VERSION or MIN_PEER_PROTO_VERSION changed: point fork_height at the fork the new "
+                      "PROTOCOL_VERSION carries and set the floor to the previous mandatory release's version");
         const int nLocalBestHeight = WITH_LOCK(cs_main, return pindexBest ? pindexBest->nHeight : 0);
         // GetBlockV15Height() rather than the raw consensus field, so the
-        // -blockv15height override that activates v15 early on
-        // isolated-testnet/regtest also drives this disconnect.
+        // -blockv15height override that activates v15 early on regtest also
+        // drives this disconnect.
         const int fork_height = GetBlockV15Height();
         // Skipped while the fork is unscheduled (height == INT_MAX). int64_t
         // arithmetic: fork_height can come from a user-supplied -blockv15height
@@ -1358,6 +1363,18 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         pfrom->AddInventoryKnown(inv);
 
         LOCK(cs_main);
+
+        // A transaction can arrive after the block that holds it. Such a transaction is not a candidate for
+        // the pool. Drop it, as sendrawtransaction refuses one.
+        {
+            CTxDB txdb("r");
+
+            if (txdb.ContainsTx(inv.hash)) {
+                LogPrint(BCLog::LogFlags::NET, "ignored tx %s from %s: already in a block",
+                         inv.hash.ToString(), pfrom->addr.ToString());
+                return true;
+            }
+        }
 
         CValidationState state;
         bool fMissingInputs = false;

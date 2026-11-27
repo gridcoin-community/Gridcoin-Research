@@ -322,7 +322,8 @@ enum class BeaconError
     V14_NOT_ENABLED,    //!< v3 beacons require block version 14 or higher.
     WALLET_LOCKED,      //!< Wallet not fully unlocked.
     ALEADY_IN_MEMPOOL,  //!< A beacon contract for this CPID is already in the mempool.
-    OUT_OF_SYNC         //!< The node is not in sync with the network.
+    OUT_OF_SYNC,        //!< The node is not in sync with the network.
+    KEY_HELD_BY_ANOTHER_CPID //!< The beacon registry knows the key under another CPID.
 };
 
 //!
@@ -533,6 +534,22 @@ public:
     //! to input a valid email address.
     //!
     static bool ConfiguredForNoncruncherMode(bool log = false);
+
+    //!
+    //! \brief Determine whether a -noncruncher that the settings file does not
+    //! hold switches off an email address that is also set.
+    //!
+    //! Releases from 5.3.2.0 until the one that reads -noncruncher by its name
+    //! did not read a noncruncher line in the configuration file. A node with
+    //! that line and an email was a researcher there and is a non-cruncher
+    //! here. Initialize() logs a warning for it. A mode chosen in the researcher
+    //! wizard or with changesettings is held in the settings file, was read all
+    //! along, and is not reported.
+    //!
+    //! \return \c true if non-cruncher mode comes from -noncruncher outside the
+    //! settings file while an email address is set.
+    //!
+    static bool NoncruncherSwitchesOffAnEmail();
 
     //!
     //! \brief Get the current global researcher context.

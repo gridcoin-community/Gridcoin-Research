@@ -718,6 +718,7 @@ static const CRPCCommand vRPCCommands[] =
     { "sendblock",               &sendblock,               cat_developer, &sendblock_helpman, heritage_pure_gridcoin, "", access_free },
     { "superblockaverage",       &superblockaverage,       cat_developer, &superblockaverage_helpman, heritage_pure_gridcoin, "", access_read_only },
     { "versionreport",           &versionreport,           cat_developer, &versionreport_helpman, heritage_pure_gridcoin, "", access_read_only },
+    { "votewithclaim",           &votewithclaim,           cat_developer, &votewithclaim_helpman, heritage_pure_gridcoin, "", access_elevate },
     { "writedata",               &writedata,               cat_developer, &writedata_helpman, heritage_pure_gridcoin, "", access_elevate },
 
     { "listmanifests",           &listmanifests,           cat_developer, &listmanifests_helpman, heritage_pure_gridcoin, "", access_read_only },
@@ -775,6 +776,7 @@ static const CRPCCommand vRPCCommands[] =
     { "testpollnotification",    &testpollnotification,    cat_voting, &testpollnotification_helpman, heritage_pure_gridcoin, "", access_free },
     { "vote",                    &vote,                    cat_voting, &vote_helpman, heritage_pure_gridcoin, "", access_elevate },
     { "votebyid",                &votebyid,                cat_voting, &votebyid_helpman, heritage_pure_gridcoin, "", access_elevate },
+    { "removepoll",              &removepoll,              cat_voting, &removepoll_helpman, heritage_pure_gridcoin, "", access_elevate },
     { "votedetails",             &votedetails,             cat_voting, &votedetails_helpman, heritage_pure_gridcoin, "", access_read_only },
 };
 

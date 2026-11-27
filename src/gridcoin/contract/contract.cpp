@@ -26,6 +26,9 @@
 #include "util.h"
 #include "wallet/wallet.h"
 
+#include <algorithm>
+#include <functional>
+
 using namespace GRC;
 
 // -----------------------------------------------------------------------------
@@ -376,20 +379,21 @@ Contract GRC::MakeLegacyContract(
     return contract;
 }
 
-void GRC::ReplayContracts(CBlockIndex* pindex_end, CBlockIndex* pindex_start) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+void GRC::ReplayContracts(CBlockIndex* pindex_end, CBlockIndex* pindex_start, const bool beacons_only)
+    EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     CBlockIndex*& pindex = pindex_start;
 
-    // If there is no pindex_start (i.e. default value of nullptr), then set standard lookback. A Non-standard lookback
-    // where there is a specific pindex_start argument supplied, is only used in the GRC InitializeContracts call for
-    // when the corresponding RegistryDB instantiations and initialization in LevelDB has not already been populated
-    // for the registry types that use the RegistryDB.
+    // If there is no pindex_start (i.e. default value of nullptr), then set standard lookback. A specific
+    // pindex_start is supplied by the GRC InitializeContracts call, for when the corresponding RegistryDB
+    // instantiations and initialization in LevelDB have not already been populated for the registry types that use
+    // the RegistryDB, and by the beacon registry rebuild, which replays from V11.
     if (!pindex)
     {
         pindex = GRC::BlockFinder::FindByMinTime(pindexBest->nTime - Params().GetConsensus().StandardContractReplayLookback);
     }
 
-    if (pindex->nHeight < (OnTestnet() ? 1 : 164618)) {
+    if (pindex->nHeight < Params().GetConsensus().ContractReplayFloorHeight) {
         return;
     }
 
@@ -435,15 +439,16 @@ void GRC::ReplayContracts(CBlockIndex* pindex_end, CBlockIndex* pindex_start) EX
         // If the NeedsIsContractCorrection flag is set which means all blocks within the scan range
         // have to be checked, OR the block index entry is already marked to contain contract(s),
         // then apply the contracts found in the block.
-        if (beacons.NeedsIsContractCorrection() || pindex->IsContract()) {
+        const bool apply_contracts = beacons.NeedsIsContractCorrection() || pindex->IsContract();
+        const bool superblock = pindex->IsSuperblock() && pindex->nVersion >= 11;
+
+        if (apply_contracts || superblock) {
             if (!ReadBlockFromDisk(block, pindex, Params().GetConsensus())) {
                 continue;
             }
 
-            // The ApplyContracts below handles all of the contract types. The rest of this is special
-            // processing required for beacons.
-            bool found_contract;
-            ApplyContracts(block, pindex, db_heights, found_contract);
+            bool found_contract = false;
+            ReplayBlock(block, pindex, db_heights, apply_contracts, found_contract, beacons_only);
 
             // If a contract was found and the NeedsIsContractCorrection flag is set, then
             // record that a contract was found in the block index. This corrects the block index
@@ -469,36 +474,6 @@ void GRC::ReplayContracts(CBlockIndex* pindex_end, CBlockIndex* pindex_start) EX
             }
         }
 
-        if (pindex->IsSuperblock() && pindex->nVersion >= 11) {
-            if (block.hashPrevBlock != pindex->pprev->GetBlockHash()
-                && !ReadBlockFromDisk(block, pindex, Params().GetConsensus()))
-            {
-                continue;
-            }
-
-            // Only apply activations that have not already been stored/loaded into
-            // the beacon DB. This is at the block level, so we have to be careful here.
-            // If the pindex->nHeight is equal to the beacon db height, then the ActivatePending
-            // has already been replayed for this block and we do not need to call it again for that block.
-            // BECAUSE ActivatePending is called at the block level. We do not need to worry about multiple
-            // calls within the same block like below in ApplyContracts.
-            std::optional<int> beacon_db_height = db_heights.GetRegistryBlockHeight(ContractType::BEACON);
-
-            if (beacon_db_height) {
-                if (pindex->nHeight > *beacon_db_height) {
-                    beacons.ActivatePending(
-                                block.GetSuperblock()->m_verified_beacons.m_verified,
-                                block.GetBlockTime(),
-                                block.GetHash(),
-                                pindex->nHeight);
-                } else {
-                    LogPrint(BCLog::LogFlags::BEACON, "INFO: %s: GetBeaconRegistry().ActivatePending() "
-                              "skipped for superblock: pindex->height = %i <= beacon_db_height = %i.",
-                             __func__, pindex->nHeight, *beacon_db_height);
-                }
-            }
-        }
-
         if (pindex == pindex_end)
         {
             // Finished the rescan. If the NeedsIsContractCorrection was set to true, then reset
@@ -515,7 +490,8 @@ void GRC::ReplayContracts(CBlockIndex* pindex_end, CBlockIndex* pindex_start) EX
 void GRC::ApplyContracts(
     const CBlock& block,
     const CBlockIndex* const pindex, const RegistryBookmarks& db_heights,
-    bool& out_found_contract) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+    bool& out_found_contract, const bool skip_stored_registry_contracts, const bool beacons_only)
+    EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     out_found_contract = false;
 
@@ -524,16 +500,23 @@ void GRC::ApplyContracts(
         iter != end;
         ++iter)
     {
-        ApplyContracts(*iter, pindex, db_heights, out_found_contract);
+        ApplyContracts(*iter, pindex, db_heights, out_found_contract, skip_stored_registry_contracts, beacons_only);
     }
 }
 
 void GRC::ApplyContracts(
     const CTransaction& tx,
     const CBlockIndex* const pindex, const RegistryBookmarks& db_heights,
-    bool& out_found_contract) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+    bool& out_found_contract, const bool skip_stored_registry_contracts, const bool beacons_only)
+    EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     for (const auto& contract : tx.GetContracts()) {
+        // A beacon registry rebuild replays beacon contracts alone: every other registry is as the disconnect that
+        // called for it left it.
+        if (beacons_only && contract.m_type != ContractType::BEACON) {
+            continue;
+        }
+
         // Do not (re)apply contracts that have already been stored/loaded into
         // the relevant entry dbs up to the block BEFORE the relevant db height. Because
         // these db heights are at the block level, and are updated on each relevant entry
@@ -559,6 +542,29 @@ void GRC::ApplyContracts(
         }
 
         if (skip_apply_contract) continue;
+
+        // The startup replay applies the contracts of the block at a registry's db height again, on top of the state
+        // loaded from the db. A beacon contract of that block whose record is already stored is in that state, and is
+        // skipped. Above the db height the contract is applied.
+        if (skip_stored_registry_contracts && contract.m_type == ContractType::BEACON
+            && db_heights.GetRegistryBlockHeight(ContractType::BEACON) == pindex->nHeight
+            && GetBeaconRegistry().GetBeaconDB().contains(tx.GetHash())) {
+            out_found_contract = true;
+            continue;
+        }
+
+        // Likewise for the poll registry, but for every POLL or VOTE contract of the block AT the poll registry's
+        // db height, stored or not. That block was applied in full before it was committed (a block that never
+        // committed is never replayed), so the loaded state is the state after it, and the replay applies none of
+        // the block's POLL or VOTE contracts again. Poll reverts erase their records at every height, so no poll or
+        // vote record is stored above the db height. Below V11 the poll registry stores nothing (its floor), so
+        // nothing is skipped.
+        if (skip_stored_registry_contracts
+            && (contract.m_type == ContractType::POLL || contract.m_type == ContractType::VOTE)
+            && db_heights.GetRegistryBlockHeight(contract.m_type.Value()) == pindex->nHeight) {
+            out_found_contract = true;
+            continue;
+        }
 
         // V2 contracts are checked upon receipt:
         if (contract.m_version == 1 && !CheckLegacyContract(contract, tx, pindex->nHeight)) {
@@ -622,6 +628,103 @@ void GRC::RevertContracts(const CTransaction& tx, const CBlockIndex* const pinde
         }
 
         g_dispatcher.Revert({ contract, tx, pindex });
+    }
+}
+
+void GRC::RevertContracts(const CBlock& block, const CBlockIndex* const pindex) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+{
+    // The coinbase and coinstake carry no registry contracts.
+    if (block.vtx.size() <= 2) {
+        return;
+    }
+
+    // From block version 15 every registry's contracts are reverted newest first. Below it the other registries keep
+    // block order, but POLL and VOTE contracts are reverted newest first at every height: the poll and vote dbs are
+    // record chains that stay sound only if a block's records are popped in reverse. Below v15 the poll registry
+    // feeds no validation, so this changes nothing an older node could disagree with, and the registries never read
+    // each other while reverting, so separating them is safe.
+    const bool reverse_all = IsV15Enabled(pindex->nHeight);
+
+    const auto is_poll_type = [](const Contract& contract) {
+        return contract.m_type == ContractType::POLL || contract.m_type == ContractType::VOTE;
+    };
+
+    const auto revert_pass = [&](const bool reverse, const std::function<bool(const Contract&)>& include)
+        EXCLUSIVE_LOCKS_REQUIRED(cs_main) {
+        std::vector<const CTransaction*> txs;
+
+        for (auto tx = std::next(block.vtx.begin(), 2); tx != block.vtx.end(); ++tx) {
+            txs.push_back(&*tx);
+        }
+
+        if (reverse) {
+            std::reverse(txs.begin(), txs.end());
+        }
+
+        for (const CTransaction* tx : txs) {
+            std::vector<const Contract*> contracts;
+
+            for (const auto& contract : tx->GetContracts()) {
+                contracts.push_back(&contract);
+            }
+
+            if (reverse) {
+                std::reverse(contracts.begin(), contracts.end());
+            }
+
+            for (const Contract* contract : contracts) {
+                if (include(*contract) && RegistryBookmarks::IsRegistryRevertCapable(contract->m_type.Value())) {
+                    const ContractContext contract_context(*contract, *tx, pindex);
+
+                    RegistryBookmarks::GetRegistryWithRevert(contract->m_type.Value()).Revert(contract_context);
+                }
+            }
+        }
+    };
+
+    if (reverse_all) {
+        revert_pass(true, [](const Contract&) { return true; });
+    } else {
+        revert_pass(false, [&](const Contract& contract) { return !is_poll_type(contract); });
+        revert_pass(true, is_poll_type);
+    }
+}
+
+void GRC::ReplayBlock(const CBlock& block, const CBlockIndex* const pindex, const RegistryBookmarks& db_heights,
+                      const bool apply_contracts, bool& out_found_contract, const bool beacons_only)
+    EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+{
+    out_found_contract = false;
+
+    // Contracts the startup replay or a rebuild applies are not announced (no -pollnotify command, no GUI signal);
+    // only a block that connects live announces its polls and votes.
+    const PollRegistry::ReplayScope replaying(GetPollRegistry());
+
+    // The replay follows block connection at every height: a superblock's activations, then the block's contracts.
+    if (pindex->IsSuperblock() && pindex->nVersion >= 11) {
+        // Only apply activations that have not already been stored/loaded into the beacon DB. ActivatePending is
+        // called at the block level, so if the block's height equals the beacon db height it has already been
+        // replayed for this block.
+        std::optional<int> beacon_db_height = db_heights.GetRegistryBlockHeight(ContractType::BEACON);
+
+        if (beacon_db_height) {
+            if (pindex->nHeight > *beacon_db_height) {
+                GetBeaconRegistry().ActivatePending(
+                            block.GetSuperblock()->m_verified_beacons.m_verified,
+                            block.GetBlockTime(),
+                            block.GetHash(),
+                            pindex->nHeight);
+            } else {
+                LogPrint(BCLog::LogFlags::BEACON, "INFO: %s: GetBeaconRegistry().ActivatePending() "
+                          "skipped for superblock: pindex->height = %i <= beacon_db_height = %i.",
+                         __func__, pindex->nHeight, *beacon_db_height);
+            }
+        }
+    }
+
+    if (apply_contracts) {
+        ApplyContracts(block, pindex, db_heights, out_found_contract, /* skip_stored_registry_contracts */ true,
+                       beacons_only);
     }
 }
 

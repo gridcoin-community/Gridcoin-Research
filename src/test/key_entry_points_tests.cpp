@@ -202,7 +202,7 @@ const std::vector<std::string> INVENTORY_RPCS{
     "advertisebeacon", "advertisebeaconv3", "beaconauth", "createmrcrequest", "revokebeacon",
     "registerpool", "withdrawpool", "approvepool", "authorizepool", "removepool", "addkey",
     "sendalert", "sendalert2", "sendscraperfilemanifest",
-    "addpoll", "vote", "votebyid",
+    "addpoll", "removepoll", "vote", "votebyid", "votewithclaim",
 };
 
 //! The same for the IPC methods, as interface.method.

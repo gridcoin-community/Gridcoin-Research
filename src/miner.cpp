@@ -21,6 +21,7 @@
 #include "gridcoin/researcher.h"
 #include "gridcoin/staking/difficulty.h"
 #include "gridcoin/staking/kernel.h"
+#include "gridcoin/voting/vote.h"
 #include "gridcoin/consensus/block_rewards.h"
 #include "gridcoin/staking/reward.h"
 #include "gridcoin/staking/status.h"
@@ -346,14 +347,18 @@ bool CreateMRCRewards(CMutableTransaction& mtxCoinbase, CMutableTransaction& mtx
 // CreateRestOfTheBlock: collect transactions into block and fill in header
 bool CreateRestOfTheBlock(CBlock &block, CMutableTransaction& mtxCoinbase,
                           const CMutableTransaction& mtxCoinstake, CBlockIndex* pindexPrev,
-                          std::map<GRC::Cpid, std::pair<uint256, GRC::MRC>>& mrc_map)
+                          std::map<GRC::Cpid, std::pair<uint256, GRC::MRC>>& mrc_map,
+                          const bool carries_superblock)
 {
 
     int nHeight = pindexPrev->nHeight + 1;
 
-    // This is specifically for BlockValidateContracts, and only the nHeight is filled in.
+    // This is specifically for BlockValidateContracts. Only the height and the time of the block are filled in:
+    // the block rules for contracts depend on the height, and from block version 15 a beacon contract is judged at
+    // the time of its block.
     CBlockIndex pindex_contract_validate;
     pindex_contract_validate.nHeight = nHeight;
+    pindex_contract_validate.nTime = block.nTime;
 
     // Create coinbase tx
     mtxCoinbase.nTime = block.nTime;
@@ -392,6 +397,9 @@ bool CreateRestOfTheBlock(CBlock &block, CMutableTransaction& mtxCoinbase,
     // This boolean will be used to ensure that there is only one mandatory sidestake transaction bound into a block. This
     // in combination with the transaction level validation for the maximum mandatory allocation perfects that rule.
     bool mandatory_sidestake_bound = false;
+
+    // The addresses the MRCs bound so far are paid at (GRC::MRCPaidAtNewAddress).
+    std::set<CTxDestination> mrc_addresses;
 
     // Largest block you're willing to create:
     unsigned int nBlockMaxSize = gArgs.GetArg("-blockmaxsize", MAX_BLOCK_SIZE_GEN/2);
@@ -440,9 +448,9 @@ bool CreateRestOfTheBlock(CBlock &block, CMutableTransaction& mtxCoinbase,
             // that we don't include a transaction that disrupts validation of
             // the block. Note that this is especially important now that there
             // are block level rules that cannot be checked for transactions
-            // that are just in the mempool. Note that the only block level rules
-            // currently implemented depend on block height only, so the
-            // pindex_contract_validate only has the block height filled out.
+            // that are just in the mempool. Note that the block level rules
+            // currently implemented depend on the block's height and time only,
+            // so the pindex_contract_validate has only those filled out.
             //
             int DoS = 0; // Unused here.
             if (!tx.GetContracts().empty() && !GRC::BlockValidateContracts(&pindex_contract_validate, tx, DoS)) {
@@ -476,6 +484,29 @@ bool CreateRestOfTheBlock(CBlock &block, CMutableTransaction& mtxCoinbase,
                 if (claim_outside_coinbase) {
                     LogPrint(BCLog::LogFlags::MINER,
                         "%s: claim contract outside the coinbase. Skipped tx %s",
+                        __func__,
+                        tx.GetHash().ToString());
+
+                    continue;
+                }
+
+                // From v15 a vote is linked only from a block after its poll's block. A vote spends none of its
+                // poll's outputs, so nothing else orders it after its poll. A vote whose poll is still pooled waits
+                // for a block after the poll's. One whose poll the pool does not hold is mined as before, so
+                // nothing is stranded in the pool.
+                bool vote_for_pooled_poll = false;
+
+                for (const auto& contract : tx.GetContracts()) {
+                    if (contract.m_type == GRC::ContractType::VOTE && contract.m_version >= 2
+                        && mempool.mapTx.count(contract.SharePayloadAs<GRC::Vote>()->m_poll_txid)) {
+                        vote_for_pooled_poll = true;
+                        break;
+                    }
+                }
+
+                if (vote_for_pooled_poll) {
+                    LogPrint(BCLog::LogFlags::MINER,
+                        "%s: vote for a poll still in the memory pool. Skipped tx %s",
                         __func__,
                         tx.GetHash().ToString());
 
@@ -766,7 +797,11 @@ bool CreateRestOfTheBlock(CBlock &block, CMutableTransaction& mtxCoinbase,
                     // mrc_map. The intended foundation sidestake (if active) is excluded from the output limit here,
                     // because that slot will be used in a sidestake of the fees to the foundation rather than an MRC
                     // transaction output.
-                    if (mrc_map.size() < GetMRCOutputLimit(block.nVersion, false)) {
+                    //
+                    // A block that carries a superblock pays no MRC (GRC::BlockMayPayMRCs), a rule block validation
+                    // also applies from block version 15, so none is bound to one.
+                    if (GRC::BlockMayPayMRCs(carries_superblock)
+                        && mrc_map.size() < GetMRCOutputLimit(block.nVersion, false)) {
 
                         GRC::MRC mrc = contract.CopyPayloadAs<GRC::MRC>();
 
@@ -778,16 +813,29 @@ bool CreateRestOfTheBlock(CBlock &block, CMutableTransaction& mtxCoinbase,
                             // not be the same as the stakers cpid, the cpid must be unique (i.e. the same cpid cannot
                             // have more than one MRC per block), and the MRC must validate. This prevents the situation
                             // where a researcher is staking and trying to process an MRC sent from themselves just before.
+                            // The first two are GRC::MRCEligibleForClaim, which block validation also applies from block
+                            // version 15. The staker's cpid stands for the claim's here: the claim names it, or names no
+                            // CPID if the staker falls back to a non-cruncher claim, and then this is only stricter.
+                            // MRCEligibleForClaim also passes over an MRC whose fee leaves the foundation no share.
                             // The below also ensures that only the highest priority mrc in the mempool get processed
                             // for unique cpids, although the one MRC per cpid is also enforced in the AcceptToMemoryPool.
                             // Overflow mrc transactions beyond the output limit will also be ignored.
-                            if ((!cpid || (mrc_cpid && cpid && *mrc_cpid != *cpid))
-                                    && ValidateMRC(pindexPrev, mrc)) {
+                            if (GRC::MRCEligibleForClaim(cpid, mrc) && ValidateMRC(pindexPrev, mrc)) {
+                                // A block's MRCs are paid at different addresses, a rule block validation also
+                                // applies from block version 15. ValidateMRC() found the beacon active at this time.
+                                // The address is recorded only for an MRC that is bound, so the first mrc
+                                // transaction for the cpid is looked for before the address is.
+                                const GRC::BeaconOption mrc_beacon = GRC::GetBeaconRegistry().TryActive(
+                                    *mrc_cpid, pindexPrev->nTime);
+
                                 // Here the insert form instead of [] is used, because we want to use the first
                                 // mrc transaction in the mempool for a given cpid in mrc fee order, not the last
                                 // for the available slots for mrc. Note that AcceptToMemoryBlock now also enforces
                                 // uniqueness of transactions in the mempool for each CPID.
-                                if (mrc_map.insert(make_pair(*mrc_cpid, make_pair(tx.GetHash(), mrc))).second) {
+                                if (mrc_beacon
+                                    && mrc_map.find(*mrc_cpid) == mrc_map.end()
+                                    && GRC::MRCPaidAtNewAddress(mrc_addresses, mrc_beacon->GetAddress())
+                                    && mrc_map.insert(make_pair(*mrc_cpid, make_pair(tx.GetHash(), mrc))).second) {
                                     // If an entry was successfully inserted into the mrc_map, adjust the block size upward
                                     // by the size of one coinstake output, because there will be one output added per
                                     // mrc entry in this map later in CreateMRCRewards.
@@ -1477,7 +1525,7 @@ bool SignStakeBlock(CBlock &block, CKey &key,
 }
 
 //! Explicit superblock staged by the regtest-only generatesuperblock RPC.
-//! Consumed exactly once by the next AddSuperblockContractOrVote call.
+//! Carried by the next block built, and consumed exactly once, by AttachSuperblock.
 static std::optional<GRC::Superblock> g_regtest_staged_superblock GUARDED_BY(cs_main);
 
 void StageRegtestSuperblock(GRC::Superblock superblock) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
@@ -1486,39 +1534,73 @@ void StageRegtestSuperblock(GRC::Superblock superblock) EXCLUSIVE_LOCKS_REQUIRED
     g_regtest_staged_superblock = std::move(superblock);
 }
 
-void AddSuperblockContractOrVote(CMutableTransaction& mtxCoinbase, int64_t nBlockTime) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+//!
+//! \brief Decide whether the block being built carries a superblock, and build it.
+//!
+//! The miner decides this once the block's time is set and before it chooses the block's transactions: a block that
+//! carries a superblock pays no MRC. AttachSuperblock() puts the superblock returned here into the block's claim.
+//!
+//! \param nBlockTime The time of the block being built.
+//!
+//! \return The superblock the block carries, or none.
+//!
+std::optional<GRC::Superblock> SuperblockForNewBlock(int64_t nBlockTime) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     GRC::Superblock superblock;
 
     if (Params().IsMockableChain()) {
         // Under -regtest, the only path to a superblock is the explicit
         // `generatesuperblock` RPC. Scrapers are disabled, so auto-attach has
-        // nothing to attach: consume a staged superblock if the RPC left one,
+        // nothing to attach: take a staged superblock if the RPC left one,
         // and otherwise stay silent exactly as before, so blocks produced by
-        // the deterministic staker carry no synthetic quorum payloads.
+        // the deterministic staker carry no synthetic quorum payloads. The
+        // staged superblock is consumed when it is attached.
         if (!g_regtest_staged_superblock) {
-            return;
+            return std::nullopt;
         }
 
-        superblock = std::move(*g_regtest_staged_superblock);
-        g_regtest_staged_superblock.reset();
+        superblock = *g_regtest_staged_superblock;
     } else {
-        if (OutOfSyncByAge()) {
-            LogPrintf("AddSuperblockContractOrVote: Out of sync.");
-            return;
+        if (ScraperOutOfSync(nBestHeight + 1)) {
+            LogPrintf("%s: Out of sync.", __func__);
+            return std::nullopt;
         }
 
         if (!GRC::Quorum::SuperblockNeeded(nBlockTime)) {
-            LogPrintf("AddSuperblockContractOrVote: Not needed.");
-            return;
+            LogPrintf("%s: Not needed.", __func__);
+            return std::nullopt;
         }
 
         superblock = GRC::Quorum::CreateSuperblock();
     }
 
     if (!superblock.WellFormed()) {
-        LogPrintf("AddSuperblockContractOrVote: Local contract empty.");
-        return;
+        LogPrintf("%s: Local contract empty.", __func__);
+
+        // A staged superblock that is not well formed is consumed here, as no block will carry it.
+        if (Params().IsMockableChain()) {
+            g_regtest_staged_superblock.reset();
+        }
+
+        return std::nullopt;
+    }
+
+    return superblock;
+}
+
+//!
+//! \brief Put the superblock that SuperblockForNewBlock() returned into the claim of the block being built.
+//!
+//! \param mtxCoinbase The block's coinbase, which holds the claim.
+//! \param superblock  The superblock.
+//! \param nBlockTime  The time of the block being built.
+//!
+void AttachSuperblock(CMutableTransaction& mtxCoinbase, GRC::Superblock superblock, int64_t nBlockTime)
+    EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+{
+    // The staged regtest superblock is consumed exactly once, here.
+    if (Params().IsMockableChain()) {
+        g_regtest_staged_superblock.reset();
     }
 
     // Re-stamp the greylist record anchored at the block being created (no-op below the
@@ -1535,7 +1617,8 @@ void AddSuperblockContractOrVote(CMutableTransaction& mtxCoinbase, int64_t nBloc
     claim.m_superblock.Replace(std::move(superblock));
 
     LogPrintf(
-        "AddSuperblockContractOrVote: Added our Superblock (size %" PRIszu ").",
+        "%s: Added our Superblock (size %" PRIszu ").",
+        __func__,
         GetSerializeSize(claim.m_superblock, SER_NETWORK, 1));
 
     mtxCoinbase.vContracts[0] = GRC::MakeContract<GRC::Claim>(
@@ -1585,22 +1668,38 @@ bool CreateGridcoinReward(
     nReward += nFees;
 
     if (const GRC::CpidOption cpid = claim.m_mining_id.TryCpid()) {
-        claim.m_research_subsidy = GRC::Tally::GetAccrual(*cpid, blocknew.nTime, pindexPrev);
+        // The claim is formed from the tally. Check the CPID's reward blocks in
+        // the tally against the chain first (Tally::VerifyRewardBlocks()). When
+        // the check does not pass, stake as a non-cruncher and ask for the
+        // accrual snapshot rebuild. The accrual stays pending for a later stake.
+        if (const std::optional<GRC::Tally::RewardBlocks> found =
+                GRC::Tally::VerifyRewardBlocks(*cpid, pindexPrev))
+        {
+            const std::string details = strprintf("cpid=%s %s", cpid->ToString(), found->ToString());
 
-        // If no pending research subsidy value exists, build a non-cruncher claim.
-        // This avoids polluting the block index with non-research reward blocks
-        // that contain CPIDs which increases the effort needed to load research
-        // age context at start-up:
-        //
-        if (claim.m_research_subsidy <= 0) {
-            LogPrintf(
-                "CreateGridcoinReward: No positive research reward pending at "
-                "time of stake. Staking as non-cruncher.");
+            LogPrintf("INFO: CreateGridcoinReward: accrual check: %s. Staking as non-cruncher while research reward "
+                      "claims are paused.", details);
 
+            GRC::Tally::RequestAccrualRebuild(details);
             claim.m_mining_id = GRC::MiningId::ForNoncruncher();
         } else {
-            nReward += claim.m_research_subsidy;
-            claim.m_magnitude = GRC::Quorum::GetMagnitude(*cpid).Floating();
+            claim.m_research_subsidy = GRC::Tally::GetAccrual(*cpid, blocknew.nTime, pindexPrev);
+
+            // If no pending research subsidy value exists, build a non-cruncher claim.
+            // This avoids polluting the block index with non-research reward blocks
+            // that contain CPIDs which increases the effort needed to load research
+            // age context at start-up:
+            //
+            if (claim.m_research_subsidy <= 0) {
+                LogPrintf(
+                    "CreateGridcoinReward: No positive research reward pending at "
+                    "time of stake. Staking as non-cruncher.");
+
+                claim.m_mining_id = GRC::MiningId::ForNoncruncher();
+            } else {
+                nReward += claim.m_research_subsidy;
+                claim.m_magnitude = GRC::Quorum::GetMagnitude(*cpid).Floating();
+            }
         }
     }
 
@@ -1816,8 +1915,16 @@ void StakeMiner(CWallet *pwallet)
         // current order of this is fine, because we are using MAX_BLOCK_SIZE_GEN/2 as default, and in any case we clamp
         // to MAX_BLOCK_SIZE - 1000, which covers the little extra space taken by the up to six additional outputs allowed
         // for sidestaking/stakesplitting and 5 for MRC payments.
+        //
+        // Whether the block carries a superblock is decided first, because a block that carries one pays no MRC.
+        std::optional<GRC::Superblock> superblock = SuperblockForNewBlock(StakeBlock.nTime);
+
+        g_timer.GetTimes(function + "SuperblockForNewBlock", "miner");
+
         CMutableTransaction mtxCoinbase;
-        if (!CreateRestOfTheBlock(StakeBlock, mtxCoinbase, mtxCoinstake, pindexPrev, mrc_map)) continue;
+        if (!CreateRestOfTheBlock(StakeBlock, mtxCoinbase, mtxCoinstake, pindexPrev, mrc_map, superblock.has_value())) {
+            continue;
+        }
 
         LogPrintf("INFO: %s: created rest of the block", __func__);
 
@@ -1841,11 +1948,13 @@ void StakeMiner(CWallet *pwallet)
 
         LogPrintf("INFO: %s: added MRC reward outputs to coinstake", __func__);
 
-        AddSuperblockContractOrVote(mtxCoinbase, StakeBlock.nTime);
+        if (superblock) {
+            AttachSuperblock(mtxCoinbase, std::move(*superblock), StakeBlock.nTime);
+        }
 
-        g_timer.GetTimes(function + "AddSuperblockContractOrVote", "miner");
+        g_timer.GetTimes(function + "AttachSuperblock", "miner");
 
-        // Copy back coinbase AFTER CreateMRCRewards and AddSuperblockContractOrVote
+        // Copy back coinbase AFTER CreateMRCRewards and AttachSuperblock
         StakeBlock.vtx[0] = CTransaction(mtxCoinbase);
 
         // * If argument is supplied desiring stake output splitting or side staking, then call SplitCoinStakeOutput.
@@ -1982,8 +2091,12 @@ bool TryMineRegtestBlock(CWallet* pwallet,
     }
     StakeBlock.nTime = mtxCoinstake.nTime;
 
+    // As in StakeMiner: whether the block carries a superblock is decided before its transactions are chosen. A
+    // staged superblock stays staged until it is attached, so the failure exits before that leave it in place.
+    std::optional<GRC::Superblock> superblock = SuperblockForNewBlock(StakeBlock.nTime);
+
     CMutableTransaction mtxCoinbase;
-    if (!CreateRestOfTheBlock(StakeBlock, mtxCoinbase, mtxCoinstake, pindexPrev, mrc_map)) {
+    if (!CreateRestOfTheBlock(StakeBlock, mtxCoinbase, mtxCoinstake, pindexPrev, mrc_map, superblock.has_value())) {
         err = "CreateRestOfTheBlock failed";
         return false;
     }
@@ -2010,9 +2123,11 @@ bool TryMineRegtestBlock(CWallet* pwallet,
     // superblock while the RPC still reported success.
     std::optional<GRC::Superblock> staged_backup = g_regtest_staged_superblock;
 
-    AddSuperblockContractOrVote(mtxCoinbase, StakeBlock.nTime);
+    if (superblock) {
+        AttachSuperblock(mtxCoinbase, std::move(*superblock), StakeBlock.nTime);
+    }
 
-    // Copy back coinbase AFTER CreateMRCRewards and AddSuperblockContractOrVote
+    // Copy back coinbase AFTER CreateMRCRewards and AttachSuperblock
     StakeBlock.vtx[0] = CTransaction(mtxCoinbase);
 
     // Mirror StakeMiner's split/sidestake step so regtest blocks carry the same coinstake output

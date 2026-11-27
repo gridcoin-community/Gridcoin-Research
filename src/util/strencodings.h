@@ -40,6 +40,16 @@ enum SafeChars
 * @return           A new string without unsafe chars
 */
 std::string SanitizeString(const std::string& str, int rule = SAFE_CHARS_DEFAULT);
+
+/**
+ * Determine whether a string is valid UTF-8: every character is a well-formed
+ * sequence of one to four bytes, written with no more bytes than it needs, for
+ * a code point up to U+10FFFF that is not in the surrogate range.
+ *
+ * @param[in] str   the string to check
+ * @returns         true if the string is valid UTF-8
+ */
+bool IsValidUTF8(const std::string& str);
 std::vector<unsigned char> ParseHex(const char* psz);
 std::vector<unsigned char> ParseHex(const std::string& str);
 signed char HexDigit(char c);

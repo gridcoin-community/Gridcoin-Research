@@ -25,7 +25,12 @@ const std::vector<GRC::ContractType> RegistryBookmarks::CONTRACT_TYPES_WITH_REG_
     // safe (the walk is deterministic and the maps are overwritten with
     // identical state), just not free.
     ContractType::POOL_REGISTER,
-    ContractType::POOL_APPROVE
+    ContractType::POOL_APPROVE,
+    // POLL and VOTE likewise share one PollRegistry, which holds a poll db and a vote link db, and
+    // PollRegistry::Initialize() is idempotent until the next reset. Unlike every other registry here, the poll
+    // registry stores nothing below V11 on any node; see the floor comment in PollRegistry::Add.
+    ContractType::POLL,
+    ContractType::VOTE
 };
 
 const std::vector<GRC::ContractType> RegistryBookmarks::CONTRACT_TYPES_SUPPORTING_REVERT = {

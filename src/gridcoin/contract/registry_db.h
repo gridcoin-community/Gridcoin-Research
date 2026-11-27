@@ -10,6 +10,7 @@
 #include "gridcoin/contract/payload.h"
 #include "gridcoin/support/enumbytes.h"
 
+#include <functional>
 #include <type_traits>
 
 using LogFlags = BCLog::LogFlags;
@@ -58,6 +59,14 @@ public:
     typedef const std::shared_ptr<E> entry_ptr;
 
     typedef const entry_ptr entry_option;
+
+    //!
+    //! \brief Optional callback that Initialize runs for each stored record, in record-number order, BEFORE the
+    //! record updates the current-entry maps. It sees those maps as they were just before the record, so a
+    //! registry can derive state of its own from the same ordered pass that rebuilds the maps. Empty by default; a
+    //! registry sets it around its call to Initialize and clears it afterwards.
+    //!
+    std::function<void(const E& entry, const M& entries, const P& pending_entries)> m_load_observer;
 
     //!
     //! \brief Initializes the template registry entry map structures from the replay of the entry states stored
@@ -178,6 +187,10 @@ public:
             // Insert the entry into the historical map.
             m_historical[iter.second.m_hash] = std::make_shared<E>(entry);
             entry_ptr& historical_entry_ptr = m_historical[iter.second.m_hash];
+
+            if (m_load_observer) {
+                m_load_observer(entry, entries, pending_entries);
+            }
 
             HandleCurrentHistoricalEntries(entries, pending_entries, expired_entries, first_entries, entry,
                                                 historical_entry_ptr, recnum, key_type, populate_first_entries);
@@ -693,6 +706,49 @@ public:
         // Note that if there is no entry in m_historical, and also there is no K-V in LevelDB, then an
         // iterator at end() will be returned.
         return iter;
+    }
+
+    //!
+    //! \brief Whether a record with this key is stored, read without loading it into the historical map.
+    //!
+    //! find() loads a passivated record into the historical map, and insert() then refuses to store that key again;
+    //! this test leaves the map as it was.
+    //!
+    //! \param hash The hash value with which to match on the key.
+    //!
+    //! \return true if the record is in the historical map or in LevelDB.
+    //!
+    bool contains(const uint256& hash)
+    {
+        if (m_historical.find(hash) != m_historical.end()) {
+            return true;
+        }
+
+        SE entry;
+
+        return Load(hash, entry);
+    }
+
+    //!
+    //! \brief Get a record, read without loading it into the historical map (see contains()).
+    //!
+    //! \param hash The hash value with which to match on the key.
+    //!
+    //! \return The record, or nullptr if no record with this key is stored.
+    //!
+    std::shared_ptr<E> peek(const uint256& hash)
+    {
+        if (const auto iter = m_historical.find(hash); iter != m_historical.end()) {
+            return iter->second;
+        }
+
+        SE entry;
+
+        if (Load(hash, entry)) {
+            return std::make_shared<E>(entry);
+        }
+
+        return nullptr;
     }
 
     //!

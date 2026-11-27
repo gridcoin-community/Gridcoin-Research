@@ -56,15 +56,13 @@ public:
         case ContractType::SIDESTAKE:      return GetSideStakeRegistry();
         case ContractType::POOL_REGISTER:  return GetPoolRegistry();
         case ContractType::POOL_APPROVE:   return GetPoolRegistry();
+        case ContractType::POLL:           return GetPollRegistry();
+        case ContractType::VOTE:           return GetPollRegistry();
         case ContractType::UNKNOWN:
             [[fallthrough]];
         case ContractType::CLAIM:
             [[fallthrough]];
         case ContractType::MESSAGE:
-            [[fallthrough]];
-        case ContractType::POLL:
-            [[fallthrough]];
-        case ContractType::VOTE:
             [[fallthrough]];
         case ContractType::MRC:
             [[fallthrough]];
@@ -176,6 +174,11 @@ public:
                 db_height = Params().GetConsensus().BlockV13Height;
             }
 
+            //! POLL and VOTE need no clamp here, although their bookmark is 0 until the poll registry stores its first
+            //! record: the poll registry's floor is V11 on every node (see PollRegistry::Add), and
+            //! InitializeContracts already takes max(GetLowestRegistryBlockHeight(), V11) for the replay's start, so a
+            //! 0 here can never pull the replay below V11. This is the one registry whose floor is V11 by design.
+
             //! Analogous treatment for POOL contracts (issue #1783) gated behind V15. Both contract
             //! types share the same PoolRegistry/RegistryDB instance, so both bookmark entries get
             //! the clamp. This is a conditional MAX — exactly the shape of the SIDESTAKE/V13 line
@@ -195,7 +198,7 @@ public:
             //! full V15->tip contract replay on every startup — the very regression this clamp
             //! exists to prevent.
             //!
-            //! Uses GetBlockV15Height() so the `-blockv15height` isolated-testnet override is
+            //! Uses GetBlockV15Height() so the `-blockv15height` regtest override is
             //! honored consistently with IsV15Enabled and the startup log line.
             if ((iter.first == GRC::ContractType::POOL_REGISTER || iter.first == GRC::ContractType::POOL_APPROVE)
                 and db_height < GetBlockV15Height()) {

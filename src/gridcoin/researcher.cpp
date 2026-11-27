@@ -649,31 +649,65 @@ void LabelBeaconKey(const Cpid& cpid, const CPubKey& public_key) EXCLUSIVE_LOCKS
     }
 }
 
+//!
+//! \brief Determine whether the beacon registry knows a key under another CPID, in any state: pending, or the key
+//! of a beacon, expired or not.
+//!
+//! A wallet does not advertise a key for a CPID when the beacon registry knows the key under another CPID.
+//!
+//! \param cpid The CPID the key would be advertised for.
+//! \param key  The key.
+//!
+bool KeyKnownForAnotherCpid(const Cpid& cpid, const CPubKey& key) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+{
+    if (!GetBeaconRegistry().KeyHeldByAnotherCpid(cpid, key, std::nullopt)) {
+        return false;
+    }
+
+    LogPrintf("WARNING: %s: The beacon registry knows the key with address %s under another CPID than %s. It is not "
+              "used for a new beacon.",
+              __func__,
+              EncodeDestination(CTxDestination(key.GetID())),
+              cpid.ToString());
+
+    return true;
+}
+
 } // anonymous namespace
 
 AdvertiseBeaconResult GRC::GenerateBeaconKey(const Cpid& cpid) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     LogPrintf("%s: Generating new keys for %s...", __func__, cpid.ToString());
 
-    // Returns the key to the pool when it goes out of scope, unless it is kept.
-    CReserveKey reservation(pwalletMain);
     CPubKey public_key;
 
     // The pool is topped up first only where keys may be created, as drawing
     // from it used to; under staking only this makes nothing.
     pwalletMain->TopUpKeyPool();
 
-    if (!reservation.GetReservedKeyWithoutTopUp(public_key)) {
-        LogPrintf("ERROR: %s: Failed to get new key from wallet", __func__);
-        return BeaconError::MISSING_KEY;
+    // A key that the beacon registry knows under another CPID is passed over,
+    // which takes it out of the pool, and the next is drawn (KeyKnownForAnotherCpid()).
+    for (;;) {
+        // Returns the key to the pool when it goes out of scope, unless it is kept.
+        CReserveKey reservation(pwalletMain);
+
+        if (!reservation.GetReservedKeyWithoutTopUp(public_key)) {
+            LogPrintf("ERROR: %s: Failed to get new key from wallet", __func__);
+            return BeaconError::MISSING_KEY;
+        }
+
+        if (!CheckBeaconPrivateKey(pwalletMain, public_key, nullptr)) {
+            LogPrintf("ERROR: %s: Failed to verify new beacon key", __func__);
+            return BeaconError::MISSING_KEY;
+        }
+
+        reservation.KeepKey();
+
+        if (!KeyKnownForAnotherCpid(cpid, public_key)) {
+            break;
+        }
     }
 
-    if (!CheckBeaconPrivateKey(pwalletMain, public_key, nullptr)) {
-        LogPrintf("ERROR: %s: Failed to verify new beacon key", __func__);
-        return BeaconError::MISSING_KEY;
-    }
-
-    reservation.KeepKey();
     LabelBeaconKey(cpid, public_key);
 
     if (!BackupWallet(*pwalletMain, GetBackupFilename("wallet.dat"))) {
@@ -686,16 +720,38 @@ AdvertiseBeaconResult GRC::GenerateBeaconKey(const Cpid& cpid) EXCLUSIVE_LOCKS_R
 namespace {
 
 //!
+//! \brief Get the version of the payload of a beacon contract that the wallet sends now: the version the next
+//! block carries.
+//!
+//! \param with_proof Whether the payload carries an ownership proof.
+//!
+//! \return 4 if the next block is of block version 15. Below it, 3 with an ownership proof and 2 with none.
+//!
+uint32_t BeaconPayloadVersionToSend(const bool with_proof) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+{
+    if (IsV15Enabled(nBestHeight + 1)) {
+        return 4;
+    }
+
+    return with_proof ? 3 : 2;
+}
+
+//!
 //! \brief Sign a new beacon payload with the beacon's private key.
 //!
+//! The signature of a version 4 payload covers the contract's action and the record the contract acts on, which
+//! is the CPID's record as the beacon registry holds it now.
+//!
 //! \param payload The beacon payload to sign.
+//! \param action  The action of the contract that will carry the payload.
 //! \param access  A staking path's access, with which the key is reached while
 //! the wallet is unlocked for staking only. nullptr for any other caller, which
 //! then needs a full unlock of an encrypted wallet.
 //!
 //! \return \c false if the key doesn't exist or fails to sign the payload.
 //!
-bool SignBeaconPayload(BeaconPayload& payload, const StakingKeyAccess* access)
+bool SignBeaconPayload(BeaconPayload& payload, const ContractAction action, const StakingKeyAccess* access)
+    EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     CKey out_key;
 
@@ -707,7 +763,7 @@ bool SignBeaconPayload(BeaconPayload& payload, const StakingKeyAccess* access)
         return error("%s: Key not found", __func__);
     }
 
-    if (!payload.Sign(out_key)) {
+    if (!payload.Sign(out_key, action, GetBeaconRegistry().CurrentRecordHash(payload.m_cpid))) {
         return error("%s: Failed to sign payload", __func__);
     }
 
@@ -816,8 +872,9 @@ AdvertiseBeaconResult SendBeaconContract(
     }
 
     BeaconPayload payload(cpid, beacon);
+    payload.m_version = BeaconPayloadVersionToSend(/* with_proof */ false);
 
-    if (!SignBeaconPayload(payload, renewal_access)) {
+    if (!SignBeaconPayload(payload, action, renewal_access)) {
         return BeaconError::MISSING_KEY;
     }
 
@@ -1049,9 +1106,15 @@ AdvertiseBeaconResult GRC::SendBeaconContractV3(
         return error;
     }
 
-    BeaconPayload payload(cpid, beacon, std::move(proof));
+    // The key is the one the project signed in the proof, so no other can be taken in its place.
+    if (KeyKnownForAnotherCpid(cpid, beacon.m_public_key)) {
+        return BeaconError::KEY_HELD_BY_ANOTHER_CPID;
+    }
 
-    if (!SignBeaconPayload(payload, nullptr)) {
+    BeaconPayload payload(cpid, beacon, std::move(proof));
+    payload.m_version = BeaconPayloadVersionToSend(/* with_proof */ true);
+
+    if (!SignBeaconPayload(payload, ContractAction::ADD, nullptr)) {
         return BeaconError::MISSING_KEY;
     }
 
@@ -1102,34 +1165,43 @@ AdvertiseBeaconResult SendNewBeaconFromKeyPool(const Cpid& cpid, const StakingKe
 
     LogPrintf("%s: Reserving a key from the key pool for %s...", __func__, cpid.ToString());
 
-    // Returns the key to the pool when it goes out of scope, unless it is kept.
-    CReserveKey reservation(pwalletMain);
-    CPubKey public_key;
+    // A key that the beacon registry knows under another CPID is passed over,
+    // which takes it out of the pool, and the next is reserved (KeyKnownForAnotherCpid()).
+    for (;;) {
+        // Returns the key to the pool when it goes out of scope, unless it is kept.
+        CReserveKey reservation(pwalletMain);
+        CPubKey public_key;
 
-    if (!reservation.GetReservedKeyWithoutTopUp(public_key)) {
-        LogPrintf("ERROR: %s: No key in the key pool for a new beacon", __func__);
-        return BeaconError::MISSING_KEY;
-    }
+        if (!reservation.GetReservedKeyWithoutTopUp(public_key)) {
+            LogPrintf("ERROR: %s: No key in the key pool for a new beacon", __func__);
+            return BeaconError::MISSING_KEY;
+        }
 
-    if (!CheckBeaconPrivateKey(pwalletMain, public_key, &renewal_access)) {
-        LogPrintf("ERROR: %s: Failed to verify new beacon key", __func__);
-        return BeaconError::MISSING_KEY;
-    }
+        if (!CheckBeaconPrivateKey(pwalletMain, public_key, &renewal_access)) {
+            LogPrintf("ERROR: %s: Failed to verify new beacon key", __func__);
+            return BeaconError::MISSING_KEY;
+        }
 
-    AdvertiseBeaconResult result = SendBeaconContract(cpid, public_key, ContractAction::ADD, &renewal_access);
+        if (KeyKnownForAnotherCpid(cpid, public_key)) {
+            reservation.KeepKey();
+            continue;
+        }
 
-    if (!result.TryPublicKey()) {
+        AdvertiseBeaconResult result = SendBeaconContract(cpid, public_key, ContractAction::ADD, &renewal_access);
+
+        if (!result.TryPublicKey()) {
+            return result;
+        }
+
+        reservation.KeepKey();
+        LabelBeaconKey(cpid, public_key);
+
+        if (!BackupWallet(*pwalletMain, GetBackupFilename("wallet.dat"))) {
+            LogPrintf("WARNING: %s: Failed to backup wallet file", __func__);
+        }
+
         return result;
     }
-
-    reservation.KeepKey();
-    LabelBeaconKey(cpid, public_key);
-
-    if (!BackupWallet(*pwalletMain, GetBackupFilename("wallet.dat"))) {
-        LogPrintf("WARNING: %s: Failed to backup wallet file", __func__);
-    }
-
-    return result;
 }
 
 //!
@@ -1488,6 +1560,16 @@ Researcher::Researcher(
 
 void Researcher::Initialize()
 {
+    if (NoncruncherSwitchesOffAnEmail()) {
+        LogPrintf(
+            "WARNING: noncruncher is set and switches off the email that is "
+            "also set, so this node does not claim research rewards. Earlier "
+            "releases, from 5.3.2.0, did not read a noncruncher line in "
+            "gridcoinresearch.conf. Remove the noncruncher setting to claim "
+            "research rewards, or remove the email setting to decline them "
+            "without this warning.");
+    }
+
     LOCK2(cs_main, pwalletMain->cs_wallet);
     Reload();
 }
@@ -1579,6 +1661,21 @@ bool Researcher::ConfiguredForNoncruncherMode(bool log)
     }
 
     return false;
+}
+
+bool Researcher::NoncruncherSwitchesOffAnEmail()
+{
+    if (!gArgs.GetBoolArg("-noncruncher", false)) return false;
+
+    // The settings file was read by its key all along, and so was the legacy
+    // investor flag. Neither is new to a node that sets it.
+    if (!getRwSetting("noncruncher").isNull()) return false;
+    if (gArgs.GetBoolArg("-investor", false)) return false;
+
+    // Email() is empty in non-cruncher mode, so this reads the setting itself.
+    const std::string email = ToLower(gArgs.GetArg("-email", ""));
+
+    return !email.empty() && email != "noncruncher" && email != "investor";
 }
 
 ResearcherPtr Researcher::Get()
