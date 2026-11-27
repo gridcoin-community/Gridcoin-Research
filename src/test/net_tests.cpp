@@ -1332,7 +1332,7 @@ BOOST_AUTO_TEST_CASE(caddrdb_19534_compatibility)
         const AddrInfo* info = restored.Find(service);
         BOOST_REQUIRE(info);
         BOOST_CHECK_EQUAL(info->ToString(), service.ToString());
-        BOOST_CHECK_EQUAL(info->nTime, 1700000000);
+        BOOST_CHECK_EQUAL(info->nTime, 1700000000U);
     }
     BOOST_REQUIRE(db.Write(restored));
     const auto upgraded = ReadLegacyFile(path);
