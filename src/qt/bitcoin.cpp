@@ -1915,7 +1915,16 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
                 // WM_CLOSE via WinShutdownMonitor; the monolith uses the core's.)
                 if (multiprocess) InstallGuiTerminationHandler(app);
 #endif
-                app.exec();
+                // A stop asked for after the check above (an RPC stop, the end of a Windows
+                // session) posted its quit, and a message or dialog shown since then may have
+                // run it before exec(). In no Qt version does such a quit end the exec() that
+                // follows. StartShutdown() also sets the request flag, so look at it once more.
+                // A quit posted after this point waits in the queue for exec(), which handles it.
+                if (ShutdownRequested()) {
+                    GUILogPrintf("A shutdown was requested while the GUI started; closing it.");
+                } else {
+                    app.exec();
+                }
 
                 // Give SIGTERM/SIGINT their teeth back immediately. The notifier
                 // that consumed the self-pipe only runs inside the event loop, so
@@ -1989,6 +1998,11 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
             // main(), so it and the interfaces built from it outlive this call).
             if (!multiprocess)
             {
+                // Messages from here on go to the log only. A worker that showed a modal box
+                // would wait on this thread while Shutdown() waits for that worker. The window
+                // path above has cleared guiref already; a stop during startup skips that path.
+                guiref = nullptr;
+
                 GUILogPrintf("Main calling Shutdown...");
                 Shutdown(nullptr);
             }

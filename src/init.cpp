@@ -225,15 +225,17 @@ static void ShutdownNotify(const ArgsManager& args)
 
 void StartShutdown()
 {
-
     LogPrintf("Calling start shutdown...");
 
-    if(fQtActive)
-        // ensure we leave the Qt main loop for a clean GUI exit (Shutdown() is called in bitcoin.cpp afterwards)
-        uiInterface.QueueShutdown();
-    else
-        // Without UI, shutdown is initiated and shutdown() is called in AppInit
-        SetShutdownRequested();
+    // Set the request flag in every build. Init's stages and the GUI's startup read it, and
+    // the daemon's main loop then calls Shutdown().
+    SetShutdownRequested();
+
+    // In the GUI, also leave the Qt main loop for a clean exit (Shutdown() is called in
+    // bitcoin.cpp afterwards). The posted quit alone does not carry a stop that arrives while
+    // the GUI starts. The GUI's startup wait runs posted events, and in no Qt version does a
+    // quit run before exec() starts end the exec() that follows.
+    if (fQtActive) uiInterface.QueueShutdown();
 }
 
 void Shutdown(void* parg)

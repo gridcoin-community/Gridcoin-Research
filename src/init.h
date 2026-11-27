@@ -42,6 +42,8 @@ CKey GetRegtestPremineKey();
 //! Callers must NOT hold cs_main or pwallet->cs_wallet; both are taken here.
 void PlantRegtestPremineKey(CWallet* pwallet);
 
+//! Request a shutdown, from any thread except a signal handler. Sets the request flag
+//! (SetShutdownRequested()) in every build, and in the GUI also posts the GUI's quit.
 void StartShutdown();
 
 //! Appends a generated rpcuser and rpcpassword, whichever is missing, to the existing
