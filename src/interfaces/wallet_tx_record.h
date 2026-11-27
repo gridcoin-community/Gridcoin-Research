@@ -12,9 +12,6 @@
 #include <type_traits>
 #include <vector>
 
-class CWallet;
-class CWalletTx;
-
 /** UI model for transaction status. The transaction status is the part of a transaction that will change over time.
  */
 class TransactionStatus
@@ -126,11 +123,6 @@ public:
     {
     }
 
-    /** Decompose CWallet transaction to model transaction records.
-     */
-    static bool showTransaction(const CWalletTx &wtx, bool datetime_limit_flag = false, const int64_t &datetime_limit = 0);
-    static std::vector<TransactionRecord> decomposeTransaction(const CWallet *wallet, const CWalletTx &wtx);
-
     /** @name Immutable transaction attributes
       @{*/
     uint256 hash;
@@ -153,20 +145,9 @@ public:
     /** Return the unique identifier for this transaction (part) */
     std::string getTxID() const;
 
-    /** Update status from core wallet tx.
-     */
-    void updateStatus(const CWalletTx &wtx);
-
-    /** Populate `label` from the wallet address book (Qt-free; caller must hold
-     *  cs_wallet). Called producer-side at the fill points after updateStatus()
-     *  so the off-cs_wallet cursor can sort the Address column and filter by
-     *  label without re-touching the wallet (windowed-model PR4).
-     */
-    void populateDisplayLabel(const CWallet& wallet);
-
-    /** Return whether a status update is needed.
-     */
-    bool statusUpdateNeeded();
+    // The functions that fill a record from the wallet (showTransaction,
+    // decomposeTransaction, updateStatus, populateDisplayLabel) are node-side and
+    // are declared in wallet/transactionrecord.h.
 
     /** Cached address-book label for `address`, snapshotted producer-side at fill
      *  time (windowed-model PR4). Empty if `address` has no address-book entry.

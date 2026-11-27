@@ -6,6 +6,7 @@
 
 #include "interfaces/handler.h"
 #include "node/ui_interface.h"
+#include "wallet/transactionrecord.h"
 #include "wallet/wallet.h"
 #include "wallet/wallet_event_queue.h"
 #include "wallet/wallettxstore.h"
@@ -121,22 +122,20 @@ private:
     //! Runs on the emitting core thread under the locks it already holds;
     //! decomposes and status-stamps in place, then enqueues to the store worker
     //! (O(1)). Body hoisted unchanged from the former WalletModel free function.
-    //! Dispatched through a weak_ptr-locking lambda (see subscribe()), so the
-    //! Clang analyzer cannot see the locks the emitter holds across the
-    //! signals2 boundary; NO_THREAD_SAFETY_ANALYSIS suppresses the false
-    //! positive, and the AssertLockHeld() calls inside enforce the contract at
-    //! runtime (DEBUG_LOCKORDER) exactly as before.
+    //! Every emitter holds cs_main. Dispatched through a weak_ptr-locking
+    //! lambda (see subscribe()); the analyzer cannot follow the signals2
+    //! dispatch, so that lambda alone is exempt from the analysis.
     void onTransactionChanged(CWallet* wallet, const uint256& hash, ChangeType status)
-        NO_THREAD_SAFETY_ANALYSIS;
+        EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //! Producer: the chain tip advanced (connect/disconnect/reorg). Pushes a
     //! ChainTipChanged marker and runs the bounded per-tip status refresh inline
     //! under cs_main. Body hoisted unchanged from the former WalletModel free
-    //! function. NO_THREAD_SAFETY_ANALYSIS for the same signals2-dispatch reason
-    //! as onTransactionChanged; the inline applyChainTipRefresh still requires
-    //! cs_main, held by the SetBestChain emitter.
+    //! function. cs_main is held by the SetBestChain emitter; as for
+    //! onTransactionChanged, only the subscribe() lambda is exempt from the
+    //! analysis.
     void onBlocksChanged(bool syncing, int height, int64_t best_time, uint32_t target_bits)
-        NO_THREAD_SAFETY_ANALYSIS;
+        EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     CWallet* const m_wallet;
 
@@ -180,13 +179,17 @@ void WalletTxSourceImpl::subscribe()
     std::weak_ptr<WalletTxSourceImpl> weak_self = weak_from_this();
 
     m_handlers.emplace_back(m_wallet->NotifyTransactionChanged.connect(
-        interfaces::GuardNotify([weak_self](CWallet* wallet, const uint256& hash, ChangeType status) {
+        interfaces::GuardNotify([weak_self](CWallet* wallet, const uint256& hash, ChangeType status)
+                                    NO_THREAD_SAFETY_ANALYSIS {
+            // The emitter holds cs_main, which the analysis cannot see across the dispatch.
             if (auto self = weak_self.lock()) {
                 self->onTransactionChanged(wallet, hash, status);
             }
         })));
     m_handlers.emplace_back(uiInterface.NotifyBlocksChanged_connect(
-        interfaces::GuardNotify([weak_self](bool syncing, int height, int64_t best_time, uint32_t target_bits) {
+        interfaces::GuardNotify([weak_self](bool syncing, int height, int64_t best_time, uint32_t target_bits)
+                                    NO_THREAD_SAFETY_ANALYSIS {
+            // The emitter holds cs_main, which the analysis cannot see across the dispatch.
             if (auto self = weak_self.lock()) {
                 self->onBlocksChanged(syncing, height, best_time, target_bits);
             }
@@ -194,14 +197,10 @@ void WalletTxSourceImpl::subscribe()
 }
 
 void WalletTxSourceImpl::onTransactionChanged(CWallet* wallet, const uint256& hash, ChangeType status)
-    NO_THREAD_SAFETY_ANALYSIS
 {
     // Invoked via the weak_ptr-locking lambda in subscribe(), on the emitting
     // core thread, with cs_main always held and, for CT_NEW/CT_UPDATED,
-    // cs_wallet as well. The analyzer cannot see those locks across the
-    // signals2 dispatch, hence NO_THREAD_SAFETY_ANALYSIS; the AssertLockHeld() calls below
-    // enforce the contract at runtime under DEBUG_LOCKORDER, exactly as the prior
-    // EXCLUSIVE_LOCKS_REQUIRED annotation did for the analyzer.
+    // cs_wallet as well.
     LogPrint(BCLog::LogFlags::VERBOSE, "NotifyTransactionChanged %s status=%i", hash.GetHex(), status);
 
     // CT_NEW and CT_UPDATED are handled identically: look up the wtx, apply the
@@ -216,8 +215,8 @@ void WalletTxSourceImpl::onTransactionChanged(CWallet* wallet, const uint256& ha
     // The CT_NEW / CT_UPDATED / CT_UPDATING branch needs BOTH cs_main (for
     // showTransaction -> IsInMainChain) and cs_wallet (for mapWallet + the
     // recursive IsMine in decomposeTransaction). Every CT_NEW/CT_UPDATED
-    // emitter holds both locks, and the AssertLockHeld()s in that branch check this at runtime
-    // in DEBUG_LOCKORDER builds. Every CT_DELETED callsite holds cs_main (the
+    // emitter holds both locks, so the branch's own lock on cs_wallet is a
+    // recursive re-lock that states the need. Every CT_DELETED callsite holds cs_main (the
     // producer exclusion WalletTxStore::prime relies on), and the CT_DELETED
     // branch touches only the hash, so it needs no wallet lock whatever else
     // the emitter holds.
@@ -225,8 +224,7 @@ void WalletTxSourceImpl::onTransactionChanged(CWallet* wallet, const uint256& ha
     case CT_NEW:
     case CT_UPDATED:
     case CT_UPDATING: {
-        AssertLockHeld(cs_main);
-        AssertLockHeld(wallet->cs_wallet);
+        LOCK(wallet->cs_wallet);
         auto it = wallet->mapWallet.find(hash);
         if (it == wallet->mapWallet.end()) {
             // Tx isn't in mapWallet — only happens if the notification raced
@@ -240,7 +238,7 @@ void WalletTxSourceImpl::onTransactionChanged(CWallet* wallet, const uint256& ha
         }
         const CWalletTx& wtx = it->second;
 
-        bool visible = TransactionRecord::showTransaction(wtx, false, 0);
+        bool visible = showTransaction(wtx, false, 0);
 
         // showTransaction() hides a generated (coinstake/coinbase) tx whose block
         // is not yet in the main chain. This handler runs synchronously inside
@@ -271,11 +269,11 @@ void WalletTxSourceImpl::onTransactionChanged(CWallet* wallet, const uint256& ha
             // events off the core locks. Status is computed here so the off-lock
             // cursors can filter/sort by it without re-touching the wallet.
             std::vector<TransactionRecord> recs =
-                TransactionRecord::decomposeTransaction(wallet, wtx);
+                decomposeTransaction(wallet, wtx);
             if (!recs.empty()) {
                 for (TransactionRecord& rec : recs) {
-                    rec.updateStatus(wtx);
-                    rec.populateDisplayLabel(*wallet);  // address-book label snapshot (PR4)
+                    updateStatus(rec, wtx);
+                    populateDisplayLabel(rec, *wallet);  // address-book label snapshot (PR4)
                 }
                 // CT_NEW is a fresh insert; CT_UPDATED / CT_UPDATING is an upsert
                 // of an existing tx (e.g. a confirmation).
@@ -312,7 +310,6 @@ void WalletTxSourceImpl::onTransactionChanged(CWallet* wallet, const uint256& ha
 
 void WalletTxSourceImpl::onBlocksChanged(bool /*syncing*/, int height, int64_t best_time,
                                          uint32_t /*target_bits*/)
-    NO_THREAD_SAFETY_ANALYSIS
 {
     // Fired under cs_main after every chain-tip advance, via the synchronous
     // validation-interface bridge (SetBestChain -> UpdatedBlockTip ->

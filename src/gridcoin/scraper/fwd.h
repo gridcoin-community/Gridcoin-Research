@@ -195,7 +195,7 @@ struct ConvergedManifest
     std::vector<std::pair<std::string, GRC::ProjectEntryStatus>> vGreylistedProjects;
 
     /** Populates the part pointers map in the convergence */
-    bool PopulateConvergedManifestPartPtrsMap();
+    bool PopulateConvergedManifestPartPtrsMap() EXCLUSIVE_LOCKS_REQUIRED(CScraperConvergedManifest_ptr->cs_manifest);
 
     /** Computes the converged content hash */
     void ComputeConvergedContentHash();

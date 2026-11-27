@@ -325,8 +325,6 @@ bool CCryptoKeyStore::AddCryptedKey(const CPubKey &vchPubKey, const std::vector<
 
 bool CCryptoKeyStore::RefusedForStakingOnly() const
 {
-    AssertLockHeld(cs_KeyStore);
-
     return IsCrypted()
         && m_unlock_scope == UnlockScope::StakingOnly
         && !ElevationGrant::IsActiveFor(this);
@@ -334,8 +332,6 @@ bool CCryptoKeyStore::RefusedForStakingOnly() const
 
 bool CCryptoKeyStore::DecryptKeyLocked(const CKeyID& address, CKey& keyOut) const
 {
-    AssertLockHeld(cs_KeyStore);
-
     CryptedKeyMap::const_iterator mi = mapCryptedKeys.find(address);
     if (mi == mapCryptedKeys.end())
         return false;

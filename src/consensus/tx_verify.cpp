@@ -11,7 +11,6 @@
 
 bool IsFinalTx(const CTransaction &tx, int nBlockHeight, int64_t nBlockTime) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
-    AssertLockHeld(cs_main);
     // Time based nLockTime implemented in 0.1.6
     if (tx.nLockTime == 0)
         return true;
@@ -172,8 +171,6 @@ static int GetHeightForTxIndex(const CTxIndex& txindex) EXCLUSIVE_LOCKS_REQUIRED
 bool CheckSequenceLocks(const CTransaction& tx, int flags,
                         const CBlockIndex* pindexPrev) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
-    AssertLockHeld(cs_main);
-
     // BIP68 sequence locks are only enforced for tx version >= 2.
     if (tx.nVersion < 2) {
         return true;

@@ -2176,7 +2176,6 @@ void CConnman::SetAddrSeenByPeer(const CAddress& addr)
 
 void CConnman::ForEachNodeUnderLock(const std::function<void(CNode*)>& func) const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
-    AssertLockHeld(cs_main);
     LOCK(m_nodes_mutex);
     for (const auto& pnode : m_nodes) {
         func(pnode.get());

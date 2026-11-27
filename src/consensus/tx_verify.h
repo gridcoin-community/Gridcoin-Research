@@ -32,7 +32,7 @@ unsigned int GetP2SHSigOpCount(const CTransaction& tx, const MapPrevTx& inputs);
  * Check if transaction is final and can be included in a block with the
  * specified height and time. Consensus critical.
  */
-bool IsFinalTx(const CTransaction &tx, int nBlockHeight = 0, int64_t nBlockTime = 0);
+bool IsFinalTx(const CTransaction &tx, int nBlockHeight = 0, int64_t nBlockTime = 0) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
 /**
  * Calculates the block height and time at which the transaction's sequence
@@ -61,6 +61,6 @@ bool EvaluateSequenceLocks(const CBlockIndex& block,
  * Requires cs_main.
  */
 bool CheckSequenceLocks(const CTransaction& tx, int flags,
-                        const CBlockIndex* pindexPrev);
+                        const CBlockIndex* pindexPrev) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
 #endif // BITCOIN_CONSENSUS_TX_VERIFY_H

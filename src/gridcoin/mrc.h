@@ -454,7 +454,7 @@ bool BlockMayPayMRCs(bool carries_superblock);
 //! \return
 //!
 void CreateMRC(CBlockIndex* pindex, MRC& mrc, CAmount &nReward, CAmount &fee, CWallet* pwallet, bool no_sign = false,
-               bool quiet = false);
+               bool quiet = false) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
 //!
 //! \brief Whether the claim as rebuilt now still meets the terms the user confirmed: the user pays no more than

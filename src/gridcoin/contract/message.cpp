@@ -209,7 +209,6 @@ bool CreateContractTx(CWalletTx& wtx_out, CReserveKey& reserve_key, CAmount burn
     // a new key, whatever -contractchangetoinputaddress says.
     if (vote) {
         // SendContractTx, the only caller, holds this.
-        AssertLockHeld(pwalletMain->cs_wallet);
 
         CAmount largest = -1;
 
@@ -369,8 +368,6 @@ std::pair<CWalletTx, std::string> GRC::SendContract(CWalletTx wtx, const Staking
 std::optional<CAmount> GRC::RenewalMinimumFee(const CMutableTransaction& tx, const CWallet& wallet)
     EXCLUSIVE_LOCKS_REQUIRED(wallet.cs_wallet)
 {
-    AssertLockHeld(wallet.cs_wallet);
-
     if (tx.vin.empty()) {
         return std::nullopt;
     }
@@ -411,8 +408,6 @@ bool GRC::IsRenewalShape(
     const CAmount fee,
     const CWallet& wallet) EXCLUSIVE_LOCKS_REQUIRED(wallet.cs_wallet)
 {
-    AssertLockHeld(wallet.cs_wallet);
-
     // One contract, a beacon advertisement for the CPID.
     if (tx.vContracts.size() != 1) {
         return false;

@@ -102,13 +102,13 @@ public:
 
     // public methods
     /** Boolean that returns whether all parts for the split object have been received. */
-    bool isComplete() const;
+    bool isComplete() const EXCLUSIVE_LOCKS_REQUIRED(CSplitBlob::cs_manifest);
 
     /** Notification that this Split object is fully received. */
     virtual void Complete() = 0;
 
     /** Use the node as download source for this Split object. */
-    void UseAsSource(CNode* pnode);
+    void UseAsSource(CNode* pnode) EXCLUSIVE_LOCKS_REQUIRED(CSplitBlob::cs_manifest, CSplitBlob::cs_mapParts);
 
     /** Add a part reference to vParts. Creates a CPart if necessary.
      *
@@ -196,19 +196,19 @@ public: /* static methods */
      * Additionally sender node is used as fetch source if needed
      * A part is needed as PartNeeded() says.
      */
-    static bool AlreadyHave(CNode* pfrom, const CInv& inv);
+    static bool AlreadyHave(CNode* pfrom, const CInv& inv) EXCLUSIVE_LOCKS_REQUIRED(CScraperManifest::cs_mapManifest);
 
     /** Send Inv to that node about the manifests we have with all of their parts.
      * Called when a node connects.
      */
-    static void PushInvTo(CNode* pto);
+    static void PushInvTo(CNode* pto) EXCLUSIVE_LOCKS_REQUIRED(CScraperManifest::cs_mapManifest, CSplitBlob::cs_mapParts);
 
     /** Serialize the manifest pointed to by the provided smart pointer for sending.
      *
      * The caller sends the result after it has released the scraper locks, for the reason given at
      * CSplitBlob::CopyPart. Takes the manifest's cs_manifest.
      */
-    static CDataStream SerializeForSend(const std::shared_ptr<CScraperManifest>& manifest);
+    static CDataStream SerializeForSend(const std::shared_ptr<CScraperManifest>& manifest) EXCLUSIVE_LOCKS_REQUIRED(CSplitBlob::cs_mapParts);
 
     /** Add new manifest object into list of known manifests
      *
@@ -217,20 +217,20 @@ public: /* static methods */
      * takes cs_mapParts in ~CSplitBlob. When this returns true the caller marks the cache dirty after it has
      * released cs_mapParts and while it still holds cs_mapManifest, as ScraperSendFileManifestContents does.
      */
-    static bool addManifest(std::shared_ptr<CScraperManifest> m, CKey& keySign);
+    static bool addManifest(std::shared_ptr<CScraperManifest> m, CKey& keySign) EXCLUSIVE_LOCKS_REQUIRED(CScraperManifest::cs_mapManifest, CSplitBlob::cs_mapParts);
 
     /** Validate whether received manifest is authorized */
-    static bool IsManifestAuthorized(int64_t& nTime, CPubKey& PubKey, unsigned int& banscore_out);
+    static bool IsManifestAuthorized(int64_t& nTime, CPubKey& PubKey, unsigned int& banscore_out) EXCLUSIVE_LOCKS_REQUIRED(CScraperManifest::cs_mapManifest);
 
     /** Delete Manifest (key version) */
-    static bool DeleteManifest(const uint256& nHash, const bool& fImmediate = false);
+    static bool DeleteManifest(const uint256& nHash, const bool& fImmediate = false) EXCLUSIVE_LOCKS_REQUIRED(CScraperManifest::cs_mapManifest);
 
     /** Delete Manifest (iterator version) */
     static std::map<uint256, std::shared_ptr<CScraperManifest>>::iterator
-        DeleteManifest(std::map<uint256, std::shared_ptr<CScraperManifest>>::iterator& iter, const bool& fImmediate = false);
+        DeleteManifest(std::map<uint256, std::shared_ptr<CScraperManifest>>::iterator& iter, const bool& fImmediate = false) EXCLUSIVE_LOCKS_REQUIRED(CScraperManifest::cs_mapManifest);
 
     /** Delete PendingDeletedManifests */
-    static unsigned int DeletePendingDeletedManifests();
+    static unsigned int DeletePendingDeletedManifests() EXCLUSIVE_LOCKS_REQUIRED(CScraperManifest::cs_mapManifest);
 
 
 public: /*==== fields ====*/
@@ -286,16 +286,16 @@ public: /*==== fields ====*/
 public: /* public methods */
 
     /** Hook called when all parts are available */
-    void Complete() override;
+    void Complete() override EXCLUSIVE_LOCKS_REQUIRED(CSplitBlob::cs_manifest, CSplitBlob::cs_mapParts);
 
     /** Serialize this object for sending over the network. This includes the signature as well as the payload. */
-    void Serialize(CDataStream& s) const;
+    void Serialize(CDataStream& s) const EXCLUSIVE_LOCKS_REQUIRED(CSplitBlob::cs_manifest, CSplitBlob::cs_mapParts);
     /** Serialize without the signature. We need this to generate the (inner) content for the hash to sign with the key. */
-    void SerializeWithoutSignature(CDataStream& s) const;
+    void SerializeWithoutSignature(CDataStream& s) const EXCLUSIVE_LOCKS_REQUIRED(CSplitBlob::cs_manifest, CSplitBlob::cs_mapParts);
     /** Serialize the contents (vParts vector) for purposes of content comparison. This is used to fill out the nContentHash,
      *  which is then included in SerializeWithoutSignature.
      */
-    void SerializeForManifestCompare(CDataStream& ss) const;
+    void SerializeForManifestCompare(CDataStream& ss) const EXCLUSIVE_LOCKS_REQUIRED(CSplitBlob::cs_manifest, CSplitBlob::cs_mapParts);
     /** A combination of unserialization and integrity checking, which includes hash checks, authorization checks, and
      *  signature checks.
      */
@@ -307,13 +307,13 @@ public: /* public methods */
     //! Defaults to false, with which the project-count rule is in its pre-v15
     //! form and the form of the signature is not tested.
     [[nodiscard]] bool UnserializeCheck(CDataStream& s, unsigned int& banscore_out,
-                                        bool v15_enabled = false);
+                                        bool v15_enabled = false) EXCLUSIVE_LOCKS_REQUIRED(CScraperManifest::cs_mapManifest, CSplitBlob::cs_manifest);
 
     /** Checks to see whether manifest age is current according to the SCRAPER_CMANIFEST_RETENTION_TIME network setting. */
-    bool IsManifestCurrent() const;
+    bool IsManifestCurrent() const EXCLUSIVE_LOCKS_REQUIRED(CSplitBlob::cs_manifest);
 
     /** Outputs manifest in JSON format. */
-    UniValue ToJson() const;
+    UniValue ToJson() const EXCLUSIVE_LOCKS_REQUIRED(CSplitBlob::cs_manifest, CSplitBlob::cs_mapParts);
 };
 
 #endif // GRIDCOIN_SCRAPER_SCRAPER_NET_H

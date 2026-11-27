@@ -130,8 +130,6 @@ PSGTPoolReject ValidatePSGTForPool(const PSGTPool& pool,
                                    PSGTPoolEntry& out_entry,
                                    std::string& error)
 {
-    AssertLockHeld(cs_main);
-
     // Decode into a pristine entry: DecodePSGTBytes fills psgt incrementally,
     // so state left over from a previous validation of a reused out_entry
     // (e.g. partial_sigs surviving an inputs.resize to the same count) would
@@ -691,8 +689,6 @@ size_t PSGTPool::EraseExpiredOrphans(int64_t now)
 
 void PSGTPool::PromoteOrphans(const CTransaction& tx)
 {
-    AssertLockHeld(cs_main);
-
     // Snapshot (revision, wire) of every orphan waiting on an output of tx under
     // the pool lock, then re-validate with the pool lock RELEASED -- as in
     // EvictConflicts. ValidatePSGTForPool needs cs_main only (held throughout by

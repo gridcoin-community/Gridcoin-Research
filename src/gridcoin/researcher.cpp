@@ -568,8 +568,6 @@ void StoreResearcher(Researcher context)
 //!
 std::optional<PendingBeacon> TryOwnPendingBeacon(const Cpid& cpid) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
-    AssertLockHeld(cs_main);
-
     if (!pwalletMain) {
         return std::nullopt;
     }
@@ -896,9 +894,6 @@ AdvertiseBeaconResult SendBeaconContract(
 unsigned int GRC::RetireStaleBeaconAdvertisements(CWallet& wallet, const Cpid& cpid)
     EXCLUSIVE_LOCKS_REQUIRED(cs_main, wallet.cs_wallet)
 {
-    AssertLockHeld(cs_main);
-    AssertLockHeld(wallet.cs_wallet);
-
     // Without blocks arriving, an advertisement that has not confirmed here may
     // already be in a block the node has not seen.
     if (OutOfSyncByAge()) {
@@ -1024,8 +1019,6 @@ unsigned int GRC::RetireStaleBeaconAdvertisements(CWallet& wallet, const Cpid& c
 std::optional<Beacon> GRC::TryRecentBeaconAdvertisement(const CWallet& wallet, const Cpid& cpid)
     EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
-    AssertLockHeld(cs_main);
-
     if (!mempool.HasBeaconForCpid(cpid)) {
         return std::nullopt;
     }

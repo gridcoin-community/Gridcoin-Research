@@ -168,7 +168,7 @@ public:
     //!
     //! \return block number if begun or std::nullopt (if skeleton reference - this should never happen).
     //!
-    std::optional<int> GetStartingHeight() const;
+    std::optional<int> GetStartingHeight() const EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
     //! \brief Get the magnitude weight factor at the poll start.
@@ -817,28 +817,28 @@ private:
     //!
     //! \param ctx References the poll contract and associated context.
     //!
-    void AddPoll(const ContractContext& ctx);
+    void AddPoll(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIRED(cs_main, PollRegistry::cs_poll_registry);
 
     //!
     //! \brief Register a vote from contract data.
     //!
     //! \param ctx References the vote contract and associated context.
     //!
-    void AddVote(const ContractContext& ctx);
+    void AddVote(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIRED(cs_main, PollRegistry::cs_poll_registry);
 
     //!
     //! \brief Deregister the poll specified by contract data.
     //!
     //! \param ctx References the poll contract and associated context.
     //!
-    void DeletePoll(const ContractContext& ctx);
+    void DeletePoll(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIRED(cs_main, PollRegistry::cs_poll_registry);
 
     //!
     //! \brief Deregister the vote specified by contract data.
     //!
     //! \param ctx References the vote contract and associated context.
     //!
-    void DeleteVote(const ContractContext& ctx);
+    void DeleteVote(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIRED(cs_main, PollRegistry::cs_poll_registry);
 }; // PollRegistry
 
 //!

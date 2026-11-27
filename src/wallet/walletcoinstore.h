@@ -7,6 +7,7 @@
 
 #include "interfaces/wallet_coin_channel.h"
 #include "wallet/coinviews.h"
+#include "wallet/wallet.h"
 #include "wallet/wallet_event_queue.h"
 #include "sync.h"
 #include "uint256.h"
@@ -22,15 +23,6 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
-
-class CWallet;
-class CWalletTx;
-
-//! Forward declaration so applyChainTipRefresh() can carry an
-//! EXCLUSIVE_LOCKS_REQUIRED(cs_main) annotation without pulling in the heavy
-//! chain.h here (the WalletTxStore precedent). CCriticalSection comes from
-//! sync.h, included above.
-extern CCriticalSection cs_main;
 
 namespace GRC {
 
@@ -180,11 +172,10 @@ public:
     //! input value) plus the change-walk group key and label snapshot.
     //! \p pending_out reports a depth/time-dependent exclusion.
     //! \p walk_memo optionally memoizes the change-walk across a bulk scan
-    //! (txid -> group address). Requires cs_main + wallet->cs_wallet — the
-    //! lock annotation lives on the definition, where CWallet is complete.
+    //! (txid -> group address).
     static std::vector<CoinRecord> DecomposeCoins(
         CWallet* wallet, const CWalletTx& wtx, bool& pending_out,
-        std::map<uint256, std::string>* walk_memo = nullptr);
+        std::map<uint256, std::string>* walk_memo = nullptr) EXCLUSIVE_LOCKS_REQUIRED(cs_main, wallet->cs_wallet);
 
 private:
     //! One unit of deferred maintenance handed from a producer to the worker.

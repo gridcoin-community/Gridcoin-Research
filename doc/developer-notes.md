@@ -1222,28 +1222,47 @@ Threads and synchronization
 - Prefer `Mutex` type to `RecursiveMutex` one
 
 - Consistently use [Clang Thread Safety Analysis](https://clang.llvm.org/docs/ThreadSafetyAnalysis.html) annotations to
-  get compile-time warnings about potential race conditions in code. Combine annotations in function declarations with
-  run-time asserts in function definitions:
+  get compile-time warnings about potential race conditions in code. A function states the locks it needs with an
+  annotation on its declaration, not with a run-time assert:
 
   - In functions that are declared separately from where they are defined, the
-    thread safety annotations should be added exclusively to the function
-    declaration. Annotations on the definition could lead to false positives
-    (lack of compile failure) at call sites between the two.
+    annotation goes on the declaration, in the header or the class. The
+    analysis checks a call only against the annotations it can see at that
+    call, so an annotation that is only on the definition in a .cpp file leaves
+    every caller in another file, and every caller above the definition,
+    unchecked. The definition may repeat it.
+
+  - Do not use `AssertLockHeld`. It checks only at run time, only in a
+    `-DENABLE_DEBUG_LOCKORDER=ON` build and only on the paths a test happens to
+    run, and it aborts the node when it fires; the annotation is checked by
+    every Clang build.
+
+  - Where the analysis cannot follow a call, as through `std::function` or a
+    boost::signals2 dispatch, annotate the callee (the lambda or the handler)
+    and exempt only the shim that dispatches to it with
+    `NO_THREAD_SAFETY_ANALYSIS`.
+
+  - Where a function needs a lock on only some of its paths, take the lock on
+    those paths. Taking a recursive lock the caller already holds does not
+    block and adds no lock order.
+
+  `test/lint/lint-lock-annotations.sh` checks the first two rules.
 
 ```C++
 // miner.h
-bool CreateGridcoinReward(CBlock& blocknew,
-                          CBlockIndex* pindexPrev,
-                          int64_t& nReward,
+bool CreateGridcoinReward(CMutableTransaction& mtxCoinbase, CMutableTransaction& mtxCoinstake,
+                          CBlock &blocknew, CBlockIndex* pindexPrev, int64_t &nReward,
                           GRC::Claim& claim) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
 // miner.cpp
-bool CreateGridcoinReward(CBlock& blocknew,
-                          CBlockIndex* pindexPrev,
-                          int64_t& nReward,
-                          GRC::Claim& claim)
+bool CreateGridcoinReward(
+        CMutableTransaction& mtxCoinbase,
+        CMutableTransaction& mtxCoinstake,
+        CBlock &blocknew,
+        CBlockIndex* pindexPrev,
+        int64_t &nReward,
+        GRC::Claim& claim)
 {
-    AssertLockHeld(cs_main);
     ...
 }
 ```

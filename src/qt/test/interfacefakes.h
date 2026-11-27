@@ -734,6 +734,12 @@ public:
     //! The thread the last passphrase call ran on, written before m_waiting.
     std::atomic<std::thread::id> m_call_thread{};
 
+    //! What getUnbookedReceiveAddresses() answers. Set before the call.
+    std::vector<std::string> m_unbooked;
+    std::atomic<int> m_unbooked_calls{0};
+    //! The thread the last getUnbookedReceiveAddresses() ran on.
+    std::atomic<std::thread::id> m_unbooked_thread{};
+
     bool beginElevation(const SecureString& /*passphrase*/, CapabilityKind /*kind*/) override { return Wait(); }
 
     void endElevation() override { ++m_end_elevation_calls; }
@@ -840,7 +846,12 @@ public:
     {
         return false;
     }
-    std::vector<std::string> getUnbookedReceiveAddresses() override { return {}; }
+    std::vector<std::string> getUnbookedReceiveAddresses() override
+    {
+        m_unbooked_thread = std::this_thread::get_id();
+        ++m_unbooked_calls;
+        return m_unbooked;
+    }
 
     // Notification delivery is not exercised here; see the note on
     // FakeSideStakeManager's handlers.

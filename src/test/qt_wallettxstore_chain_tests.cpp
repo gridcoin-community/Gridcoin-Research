@@ -36,6 +36,7 @@
 #include "test/test_gridcoin.h"
 #include "tinyformat.h"
 #include "validation.h"
+#include "wallet/transactionrecord.h"
 #include "wallet/wallet.h"
 
 #include <interfaces/wallet_tx_filter.h>
@@ -221,10 +222,10 @@ std::vector<TransactionRecord> producerRecordsFor(const uint256& hash)
     const CWalletTx& wtx = it->second;
 
     std::vector<TransactionRecord> recs =
-        TransactionRecord::decomposeTransaction(pwalletMain, wtx);
+        decomposeTransaction(pwalletMain, wtx);
     for (TransactionRecord& rec : recs) {
-        rec.updateStatus(wtx);
-        rec.populateDisplayLabel(*pwalletMain);
+        updateStatus(rec, wtx);
+        populateDisplayLabel(rec, *pwalletMain);
     }
     return recs;
 }
@@ -641,7 +642,7 @@ BOOST_AUTO_TEST_CASE(oneUnrefreshableTxDoesNotFreezeTheRestOfTheWallet)
         TransactionRecord probe(poison_hash, pwtx.GetTxTime());
         probe.type = TransactionRecord::Generated;
         probe.vout = 1;
-        BOOST_CHECK_THROW(probe.updateStatus(pwtx), std::runtime_error);
+        BOOST_CHECK_THROW(updateStatus(probe, pwtx), std::runtime_error);
     }
 
     {

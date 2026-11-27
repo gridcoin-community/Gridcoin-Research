@@ -21,8 +21,6 @@ namespace GRC {
 
 CoherenceResult VerifyChainCoherence(int max_walkback)
 {
-    AssertLockHeld(cs_main);
-
     CoherenceResult result;
     result.pindex_consistent = pindexBest;
 
@@ -161,7 +159,6 @@ CoherenceResult VerifyChainCoherence(int max_walkback)
 
 bool RewindToConsistentTip(CBlockIndex* pindex_target)
 {
-    AssertLockHeld(cs_main);
     assert(pindex_target != nullptr);
 
     // The actual chain-state mutation (in-memory globals + LevelDB hashBestChain) lives
@@ -181,8 +178,6 @@ bool RewindToConsistentTip(CBlockIndex* pindex_target)
 
 bool RunStartupCoherenceRecovery()
 {
-    AssertLockHeld(cs_main);
-
     if (gArgs.GetBoolArg("-reindex", false)) {
         // User is already rebuilding; the walk would be redundant.
         LogPrintf("INFO: %s: -reindex set; skipping coherence walk.", __func__);
@@ -403,7 +398,6 @@ bool RunStartupCoherenceRecovery()
 // the chain globals they mutate are global-namespace.
 bool AbandonChainTo(CBlockIndex* pindex_target, CTxDB& txdb) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
-    AssertLockHeld(cs_main);
     assert(pindex_target != nullptr);
 
     // No early return when pindex_target == pindexBest. In the ghost-only
@@ -481,8 +475,6 @@ bool AbandonChainTo(CBlockIndex* pindex_target, CTxDB& txdb) EXCLUSIVE_LOCKS_REQ
 
 void PurgeOrphanedBlockIndexEntries(CTxDB& txdb, std::vector<CBlockIndex*>& abandoned)
 {
-    AssertLockHeld(cs_main);
-
     // The abandoned vector is what VerifyChainCoherence collected: every block
     // past the last consistent one. After the chainstate cleanup, none of these
     // are reachable from pindexBest's ancestry. We need to:

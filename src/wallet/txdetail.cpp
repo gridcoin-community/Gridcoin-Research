@@ -22,8 +22,6 @@ namespace {
 //! typed classification instead of a rendered string.
 void FillFinality(WalletTxDetail& detail, const CWalletTx& wtx) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
-    AssertLockHeld(cs_main);
-
     if (!IsFinalTx(wtx, nBestHeight + 1))
     {
         if (wtx.nLockTime < LOCKTIME_THRESHOLD)

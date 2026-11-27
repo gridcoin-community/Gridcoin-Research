@@ -15,6 +15,7 @@
 
 #include "sync.h"
 #include "uint256.h"
+#include "wallet/transactionrecord.h"
 #include "wallet/wallet.h"
 
 #include <boost/test/unit_test.hpp>
@@ -68,7 +69,7 @@ BOOST_AUTO_TEST_CASE(decompose_empty_transaction_degenerate_path)
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
     const std::vector<TransactionRecord> parts =
-        TransactionRecord::decomposeTransaction(pwalletMain, wtx);
+        decomposeTransaction(pwalletMain, wtx);
     BOOST_REQUIRE_EQUAL(parts.size(), 1U);
     BOOST_CHECK(parts[0].type == TransactionRecord::SendToSelf);
     BOOST_CHECK_EQUAL(parts[0].debit, 0);

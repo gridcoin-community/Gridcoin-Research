@@ -15,7 +15,8 @@
 
 //! WalletModel's coin list load over fakes (qt_test::FakeCoinSource): where the
 //! wallet scan runs, what a scan that throws leads to, and the model's
-//! destruction while a scan runs.
+//! destruction while a scan runs. Also where the "Add existing" dialog's list of
+//! receiving addresses is read.
 class WalletModelTests : public QObject
 {
     Q_OBJECT
@@ -32,6 +33,7 @@ private slots:
     void failureWithAForcedReloadOwedRunsItOnce();
     void coinSelectionModelReportsAFailedLoad();
     void anOlderContextDoesNotEndALaterOperationsCapability();
+    void addExistingListIsReadOnTheModalWorker();
 
 private:
     // The QSettings redirect OptionsModel needs (as in OptionsModelTests), and

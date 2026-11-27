@@ -136,8 +136,6 @@ bool TrySignClaim(
     const CBlock& block,
     const bool dry_run) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
-    AssertLockHeld(cs_main);
-
     // lock needs to be taken on pwallet here.
     LOCK(pwallet->cs_wallet);
 

@@ -107,7 +107,7 @@ public:
     //! Quorum::LoadSuperblockIndex, and from GRC::Initialize once the contract registries have loaded
     //! (the LoadSuperblockIndex call runs before the project whitelist is loaded).
     //!
-    void Refresh();
+    void Refresh() EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
     //! \brief Refresh against a specific superblock. Test seam; forwards to the walker
@@ -115,7 +115,7 @@ public:
     //!
     void RefreshWithSuperblock(SuperblockPtr superblock_ptr_in,
                                std::shared_ptr<std::map<int, std::pair<CBlockIndex*, SuperblockPtr>>>
-                                   unit_test_blocks = nullptr);
+                                   unit_test_blocks = nullptr) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
     //! \brief Refresh against a candidate superblock built from a convergence (the pending
@@ -252,7 +252,7 @@ public:
     //!
     //! Requires cs_main (reads the current superblock and, above the gate, walks the chain).
     //!
-    GreylistComputation ComputeReport() const;
+    GreylistComputation ComputeReport() const EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     // ---------- transitional V1 pass-throughs -------------------------------------------
 

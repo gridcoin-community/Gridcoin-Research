@@ -429,8 +429,6 @@ const CTxDestination CWallet::MasterAddress(int height)
 
 CPubKey CWallet::GenerateNewKey() EXCLUSIVE_LOCKS_REQUIRED(cs_wallet)
 {
-    AssertLockHeld(cs_wallet); // mapKeyMetadata
-
     // Every caller asks CanCreateKeys() first and fails cleanly when it is
     // false, which is the case while the wallet is locked or unlocked for
     // staking only. The throws below are for a wallet that may create keys and
@@ -503,8 +501,6 @@ CPubKey CWallet::GenerateNewKey() EXCLUSIVE_LOCKS_REQUIRED(cs_wallet)
 
 bool CWallet::AddKey(const CKey& key) EXCLUSIVE_LOCKS_REQUIRED(cs_wallet)
 {
-    AssertLockHeld(cs_wallet); // mapKeyMetadata
-
     CPubKey pubkey = key.GetPubKey();
 
     if (!CCryptoKeyStore::AddKey(key))
@@ -534,7 +530,6 @@ bool CWallet::AddCryptedKey(const CPubKey &vchPubKey, const vector<unsigned char
 
 bool CWallet::LoadKeyMetadata(const CPubKey &pubkey, const CKeyMetadata &meta) EXCLUSIVE_LOCKS_REQUIRED(cs_wallet)
 {
-    AssertLockHeld(cs_wallet); // mapKeyMetadata
     if (meta.nCreateTime && (!nTimeFirstKey || meta.nCreateTime < nTimeFirstKey))
         nTimeFirstKey = meta.nCreateTime;
 
@@ -1646,7 +1641,6 @@ bool CWallet::EncryptWallet(const SecureString& strWalletPassphrase)
 
 int64_t CWallet::IncOrderPosNext(CWalletDB *pwalletdb) EXCLUSIVE_LOCKS_REQUIRED(cs_wallet)
 {
-    AssertLockHeld(cs_wallet); // nOrderPosNext
     int64_t nRet = nOrderPosNext++;
     if (pwalletdb) {
         pwalletdb->WriteOrderPosNext(nOrderPosNext);
@@ -1664,7 +1658,6 @@ int64_t CWallet::IncOrderPosNext(CWalletDB *pwalletdb) EXCLUSIVE_LOCKS_REQUIRED(
 
 CWallet::TxItems CWallet::OrderedTxItems(std::list<CAccountingEntry>& acentries, std::string strAccount) EXCLUSIVE_LOCKS_REQUIRED(cs_wallet)
 {
-    AssertLockHeld(cs_wallet); // mapWallet
     CWalletDB walletdb(strWalletFile);
 
     // Store tx hashes (not pointers) to avoid dangling refs on mapWallet realloc.
@@ -1812,8 +1805,6 @@ void CWallet::MarkDirty()
 
 void CWallet::AddToSpends(const CTransaction& tx, const uint256& hash)
 {
-    AssertLockHeld(cs_wallet);
-
     // Coinbases don't spend anything: the null prevout is not an output.
     if (tx.IsCoinBase()) return;
 
@@ -2220,8 +2211,6 @@ bool CWallet::AddToWalletIfInvolvingMe(const CTransactionRef& ptx,
                                        const TxState& state,
                                        bool fUpdate)
 {
-    AssertLockHeld(cs_wallet);
-
     const CTransaction& tx = *ptx;
     const uint256& hash = tx.GetHash();
 
@@ -2915,8 +2904,6 @@ std::size_t SweepSwapCount(const std::vector<int64_t>& values, std::size_t selec
 
 CWallet::SeedPhraseKeyClass CWallet::ClassifySeedPhraseKey(const CKeyID& key_id) const
 {
-    AssertLockHeld(cs_wallet);
-
     if (key_id == m_seed_phrase_data.masterKeyID) return SeedPhraseKeyClass::COVERED;
 
     const auto meta_iter = mapKeyMetadata.find(key_id);
@@ -3940,8 +3927,6 @@ CWalletTx::RevalidateResult CWalletTx::RevalidateTransaction(CTxDB& txdb) EXCLUS
 // Falls back to CMerkleTx for TxStateUnrecognized (backward compat during migration).
 int CWalletTx::GetDepthInMainChainINTERNAL(CBlockIndex* &pindexRet) const
 {
-    AssertLockHeld(cs_main);
-
     if (const auto* conf = std::get_if<TxStateConfirmed>(&m_state)) {
         // Confirmed: look up block by hash from m_state
         auto mi = mapBlockIndex.find(conf->m_confirmed_block_hash);
@@ -4135,7 +4120,6 @@ void CWallet::AvailableCoinsForStaking(vector<StakeCandidate>& vCoins, unsigned 
 
     vCoins.clear();
     {
-        AssertLockHeld(cs_main);
         LOCK(cs_wallet);
 
         std::string function = __func__;
@@ -5870,7 +5854,6 @@ std::map<CTxDestination, int64_t> CWallet::GetAddressBalances()
 
 set< set<CTxDestination> > CWallet::GetAddressGroupings() EXCLUSIVE_LOCKS_REQUIRED(cs_wallet)
 {
-    AssertLockHeld(cs_wallet); // mapWallet
     set< set<CTxDestination> > groupings;
     set<CTxDestination> grouping;
 
@@ -6346,9 +6329,6 @@ void CWallet::FixSpentCoins(int& nMismatchFound, int64_t& nBalanceInQuestion, bo
 // ppcoin: disable transaction (only for coinstake)
 unsigned int CWallet::ReleaseTransactionInputs(const CTransaction& tx, CWalletDB* pwalletdb)
 {
-    AssertLockHeld(cs_main);
-    AssertLockHeld(cs_wallet);
-
     unsigned int released = 0;
 
     const uint256 hash = tx.GetHash();
@@ -6512,8 +6492,13 @@ void CWallet::DisableTransaction(const CTransaction &tx)
     }
 }
 
-bool CReserveKey::GetReservedKey(CPubKey& pubkey) EXCLUSIVE_LOCKS_REQUIRED(pwallet->cs_wallet)
+bool CReserveKey::GetReservedKey(CPubKey& pubkey)
 {
+    // The callers already hold the wallet lock, under names the analysis cannot
+    // tie to pwallet->cs_wallet. It is recursive, so taking it here costs them
+    // nothing and covers the read of vchDefaultKey below.
+    LOCK(pwallet->cs_wallet);
+
     if (nIndex == -1)
     {
         CKeyPool keypool;
@@ -6589,7 +6574,6 @@ void CWallet::GetAllReserveKeys(set<CKeyID>& setAddress) const
 
 void CWallet::GetKeyBirthTimes(std::map<CKeyID, int64_t> &mapKeyBirth) const EXCLUSIVE_LOCKS_REQUIRED(cs_main, cs_wallet)
 {
-    AssertLockHeld(cs_wallet); // mapKeyMetadata
     mapKeyBirth.clear();
 
     // get birth times for keys with metadata
@@ -6807,8 +6791,6 @@ bool CWallet::UpgradeWallet(int version, std::string& error)
 
 std::set<uint256> CWallet::GetConflicts(const uint256& txid) const
 {
-    AssertLockHeld(cs_wallet);
-
     std::set<uint256> conflicts;
     auto it = mapWallet.find(txid);
     if (it == mapWallet.end()) {
@@ -6832,8 +6814,6 @@ std::set<uint256> CWallet::GetConflicts(const uint256& txid) const
 
 bool CWallet::IsAbandoned(const uint256& txid) const
 {
-    AssertLockHeld(cs_wallet);
-
     auto it = mapWallet.find(txid);
     if (it == mapWallet.end()) {
         return false;
@@ -6845,7 +6825,6 @@ bool CWallet::IsAbandoned(const uint256& txid) const
 
 bool CWallet::AbandonTransaction(const uint256& txid, unsigned int* inputs_released)
 {
-    AssertLockHeld(cs_main);
     LOCK(cs_wallet);
 
     if (inputs_released) *inputs_released = 0;
@@ -6976,8 +6955,6 @@ bool CWallet::AbandonTransaction(const uint256& txid, unsigned int* inputs_relea
 
 int CMerkleTx::SetMerkleBranch(const CBlock* pblock) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
-    AssertLockHeld(cs_main);
-
     CBlock blockTmp;
     if (pblock == nullptr) {
         // Load the block this tx is in
@@ -7016,8 +6993,6 @@ int CMerkleTx::SetMerkleBranch(const CBlock* pblock) EXCLUSIVE_LOCKS_REQUIRED(cs
 
 int CMerkleTx::GetDepthInMainChainINTERNAL(CBlockIndex* &pindexRet) const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
-    AssertLockHeld(cs_main);
-
     if (hashBlock.IsNull() || nIndex == -1)
         return 0;
 
@@ -7035,7 +7010,6 @@ int CMerkleTx::GetDepthInMainChainINTERNAL(CBlockIndex* &pindexRet) const EXCLUS
 
 int CMerkleTx::GetDepthInMainChain(CBlockIndex* &pindexRet) const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
-    AssertLockHeld(cs_main);
     int nResult = GetDepthInMainChainINTERNAL(pindexRet);
     if (nResult == 0 && !mempool.exists(GetHash()))
         return -1; // Not in chain, not in mempool

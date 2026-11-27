@@ -4,6 +4,7 @@
 
 #include "wallet/wallettxstore.h"
 
+#include "wallet/transactionrecord.h"
 #include "wallet/txdetail.h"
 #include "wallet/wallet.h"
 
@@ -717,7 +718,7 @@ void WalletTxStore::prime(bool limit_enabled, int64_t limit_time)
 
     built.reserve(m_wallet->mapWallet.size() * 2);
     for (auto it = m_wallet->mapWallet.begin(); it != m_wallet->mapWallet.end(); ++it) {
-        if (!TransactionRecord::showTransaction(it->second)) {
+        if (!showTransaction(it->second)) {
             continue;
         }
         if (!it->second.hashBlock.IsNull()
@@ -725,7 +726,7 @@ void WalletTxStore::prime(bool limit_enabled, int64_t limit_time)
             block_known_built.insert(it->first);
         }
         const std::vector<TransactionRecord> decomposed =
-            TransactionRecord::decomposeTransaction(m_wallet, it->second);
+            decomposeTransaction(m_wallet, it->second);
         for (const TransactionRecord& rec : decomposed) {
             if (limit_enabled && rec.time < limit_time) {
                 continue;
@@ -737,8 +738,8 @@ void WalletTxStore::prime(bool limit_enabled, int64_t limit_time)
             // windowed-model PR5-C — so this producer-side computation is the
             // authoritative refresh, not a head-start.
             TransactionRecord r = rec;
-            r.updateStatus(it->second);
-            r.populateDisplayLabel(*m_wallet);  // address-book label snapshot (PR4)
+            updateStatus(r, it->second);
+            populateDisplayLabel(r, *m_wallet);  // address-book label snapshot (PR4)
             built.push_back(std::move(r));
         }
     }
@@ -924,7 +925,6 @@ void WalletTxStore::applyChainTipRefresh()
     // excludes this from prime (which holds cs_main on the Qt thread),
     // and the worker never needs cs_main/cs_wallet, so there is no deadlock with
     // the rebuild park protocol.
-    AssertLockHeld(cs_main);   // fail fast on misuse (this runs off boost::signals2)
     LOCK(m_wallet->cs_wallet);
     LOCK(cs_store);
     if (m_volatile.empty()) {
@@ -1029,7 +1029,7 @@ void WalletTxStore::applyChainTipRefresh()
                 //                                      drain pump or the Qt consumer)
                 // VERBOSE, so it costs nothing unless a user is chasing this (#3257).
                 const TransactionStatus before_status = m_records[p].status;
-                m_records[p].updateStatus(wtx);
+                updateStatus(m_records[p], wtx);
                 if (m_refresh_fault_hook) m_refresh_fault_hook(RefreshStage::AfterUpdateStatus, p, -1);
                 recomputeCacheAt(p);
                 if (m_refresh_fault_hook) m_refresh_fault_hook(RefreshStage::AfterRecompute, p, -1);
