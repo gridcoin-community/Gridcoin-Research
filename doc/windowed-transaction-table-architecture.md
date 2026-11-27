@@ -74,7 +74,7 @@ Canonical order: **`cs_main` → `cs_wallet` → `cs_store` (leaf)**. `cs_store`
 | The store-worker NEVER takes `cs_main`/`cs_wallet` | `insert/remove/updateTransaction` take only `cs_store`; this is what makes `prime`'s park-while-holding-both-wallet-locks deadlock-free |
 
 Thread placement:
-- **Validation/msghand threads** (producers): `WalletTxSourceImpl::onTransactionChanged` (the `NotifyTransactionChanged` handler, marked `NO_THREAD_SAFETY_ANALYSIS`; its AssertLockHeld()s check the CT_NEW/CT_UPDATED branch's locks at runtime in DEBUG_LOCKORDER builds (Debug, or ENABLE_DEBUG_LOCKORDER)) and `WalletTxSourceImpl::onBlocksChanged` (the `uiInterface.NotifyBlocksChanged` handler, under `cs_main`). They decompose + status-stamp under the locks they already hold, then `enqueue*` (O(1)).
+- **Validation/msghand threads** (producers): `WalletTxSourceImpl::onTransactionChanged` (the `NotifyTransactionChanged` handler, annotated `EXCLUSIVE_LOCKS_REQUIRED(cs_main)`, with only its signals2 dispatch lambda exempt from the analysis; its CT_NEW/CT_UPDATED branch takes `cs_wallet`, which those emitters already hold) and `WalletTxSourceImpl::onBlocksChanged` (the `uiInterface.NotifyBlocksChanged` handler, under `cs_main`). They decompose + status-stamp under the locks they already hold, then `enqueue*` (O(1)).
 - **Store-worker thread** (`m_worker`, `wallettxstore.h:375`): drains the intake FIFO, runs the O(N) maintenance under `cs_store`, pushes events.
 - **Validation thread, inline**: `applyChainTipRefresh` runs on the caller's thread (NOT the worker) so it can take `cs_wallet` under `cs_main`.
 - **Qt main thread**: `drainEventQueue`, all view models, `registerView`/`setView*`/`getRows`/`getAllRows`/`rowForKey`/`getRowDetail`.
