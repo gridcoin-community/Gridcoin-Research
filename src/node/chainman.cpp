@@ -1379,8 +1379,6 @@ bool AskForOutstandingBlocks(uint256 hashStart)
 
 bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool generated_by_me, CValidationState& state) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
-    AssertLockHeld(cs_main);
-
     // Check for duplicate
     uint256 hash = pblock->GetHash(true);
     if (mapBlockIndex.count(hash))

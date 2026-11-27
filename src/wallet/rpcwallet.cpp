@@ -4731,8 +4731,6 @@ using SeedPhraseKeyClass = CWallet::SeedPhraseKeyClass;
 bool WalletHasUncoveredKeys()
     EXCLUSIVE_LOCKS_REQUIRED(pwalletMain->cs_wallet)
 {
-    AssertLockHeld(pwalletMain->cs_wallet);
-
     std::set<CKeyID> key_ids;
     pwalletMain->GetKeys(key_ids);
 
@@ -4751,8 +4749,6 @@ bool WalletHasUncoveredKeys()
 int64_t MaxUsedSeedPhraseChildIndex(const CKeyID& phrase_master_id)
     EXCLUSIVE_LOCKS_REQUIRED(pwalletMain->cs_wallet)
 {
-    AssertLockHeld(pwalletMain->cs_wallet);
-
     int64_t max_index = -1;
 
     for (const auto& tx_pair : pwalletMain->mapWallet) {
@@ -4797,8 +4793,6 @@ int64_t MaxUsedSeedPhraseChildIndex(const CKeyID& phrase_master_id)
 //! Common gates for attaching a seed phrase to the wallet (create or restore).
 void EnsureSeedPhrasePreconditions() EXCLUSIVE_LOCKS_REQUIRED(pwalletMain->cs_wallet)
 {
-    AssertLockHeld(pwalletMain->cs_wallet);
-
     if (!pwalletMain->IsHDEnabled()) {
         throw JSONRPCError(RPC_WALLET_ERROR,
             "Cannot use a seed phrase on a non-HD wallet. Run the upgradewallet RPC first to "

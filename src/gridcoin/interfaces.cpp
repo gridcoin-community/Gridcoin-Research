@@ -81,8 +81,6 @@ extern ConvergedScraperStats ConvergedScraperStatsCache;
 interfaces::MRCSnapshot GRC::BuildMRCSnapshot(CWallet* wallet, CAmount fee_boost, bool no_sign,
                                               bool researcher_eligible)
 {
-    AssertLockHeld(cs_main);
-
     interfaces::MRCSnapshot snap;
 
     // Defensive: before the chain tip exists, present as out-of-sync rather

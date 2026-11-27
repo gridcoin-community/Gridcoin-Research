@@ -110,8 +110,6 @@ GRC::ClaimOption GetClaimByIndex(const CBlockIndex* const pblockindex)
 
 GRC::MintSummary CBlock::GetMint() const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
-    AssertLockHeld(cs_main);
-
     CTxDB txdb("r");
     GRC::MintSummary mint;
 

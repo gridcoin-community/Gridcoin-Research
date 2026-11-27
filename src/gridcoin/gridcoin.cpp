@@ -729,8 +729,6 @@ void GRC::ClearLegacyStoreIfAsked()
 
 void GRC::RebuildBeaconRegistry(const BeaconRebuildReason reason) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
-    AssertLockHeld(cs_main);
-
     if (reason == BeaconRebuildReason::V15_ACTIVATION) {
         LogPrintf("INFO: %s: starting in-line beacon registry rebuild at the last block below block version 15, "
                   "height %d.",

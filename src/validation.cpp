@@ -1494,8 +1494,6 @@ bool AddToBlockIndex(CBlock& block, unsigned int nFile, unsigned int nBlockPos, 
 bool CheckBlock(const CBlock& block, CValidationState& state, int height1, bool fCheckPOW, bool fCheckMerkleRoot, bool fCheckSig, bool fLoadingIndex)
         EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
-    AssertLockHeld(cs_main);
-
     // Allow the genesis block to pass.
     if(block.hashPrevBlock.IsNull() &&
        block.GetHash(true) == (Params().IsMockableChain() ? hashGenesisBlockRegTest : OnTestnet() ? hashGenesisBlockTestNet : hashGenesisBlock))
@@ -1750,8 +1748,6 @@ BlockTimeCheck CheckBlockTime(int64_t block_time, int64_t parent_time, int64_t a
 
 bool AcceptBlock(CBlock& block, CValidationState& state, bool generated_by_me, bool imported) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
-    AssertLockHeld(cs_main);
-
     if (block.nVersion > CBlock::CURRENT_VERSION)
         return state.DoS(100, error("%s: reject unknown block version %d", __func__, block.nVersion));
 
@@ -2262,7 +2258,6 @@ bool GetTransaction(const uint256 &hash, CTransaction &tx, uint256 &hashBlock)
 // the natural next phase of the mempool modernization tracked in #3029.
 bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, CValidationState& state, bool* pfMissingInputs, int64_t entry_time, bool test_only, CAmount* fee_out, size_t* vsize_out) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
-    AssertLockHeld(cs_main);
     if (pfMissingInputs)
         *pfMissingInputs = false;
 

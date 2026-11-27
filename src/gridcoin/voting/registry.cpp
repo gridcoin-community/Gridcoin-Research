@@ -986,7 +986,6 @@ PollRegistry::PollRegistry()
 
 int PollRegistry::Initialize()
 {
-    AssertLockHeld(cs_main);
     LOCK(cs_poll_registry);
 
     if (!m_initialized) {

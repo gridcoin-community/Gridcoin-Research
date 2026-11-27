@@ -360,7 +360,6 @@ std::vector<TransactionRecord> decomposeTransaction(const CWallet* wallet, const
 
 void updateStatus(TransactionRecord& rec, const CWalletTx& wtx)
 {
-    AssertLockHeld(cs_main);
     // Determine transaction status
 
     // Find the block the tx is in

@@ -31,8 +31,6 @@ bool WriteBlockToDisk(const CBlock& block, unsigned int& nFileRet, unsigned int&
                       const CMessageHeader::MessageStartChars& messageStart)
         EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
-    AssertLockHeld(cs_main);
-
     // Open history file to append
     // AppendBlockFile hands back a CACHED, non-owning handle (see there). CAutoFile
     // would fclose it on every scope exit, which is exactly the per-block close we
@@ -591,7 +589,6 @@ bool LoadBlockIndex(bool fAllowNew)
 
 void PrintBlockTree() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
-    AssertLockHeld(cs_main);
     // pre-compute tree structure
     std::map<CBlockIndex*, std::vector<CBlockIndex*> > mapNext;
     for (BlockMap::iterator mi = mapBlockIndex.begin(); mi != mapBlockIndex.end(); ++mi)

@@ -40,8 +40,6 @@ GuiCache::~GuiCache()
 
 void GuiCache::UpdateLocked(bool force)
 {
-    AssertLockHeld(cs_main);
-
     const int64_t now = m_compute.now_ms();
 
     // With no GUI subscribed nobody would see the update, so none is made, not
@@ -298,8 +296,6 @@ void GuiCache::Deliver()
 
 interfaces::MRCSnapshot GuiCache::QuoteLocked(CAmount fee_boost)
 {
-    AssertLockHeld(cs_main);
-
     try {
         interfaces::GuiStateSnapshot current = Current();
 

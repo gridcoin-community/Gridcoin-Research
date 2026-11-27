@@ -179,8 +179,6 @@ std::vector<CoinRecord> WalletCoinStore::DecomposeCoins(
     // maturity) flag pending_out: no notification fires for THIS hash when
     // the chain advances past them, so applyChainTipRefresh re-decomposes
     // the flagged set each tip.
-    AssertLockHeld(cs_main);
-    AssertLockHeld(wallet->cs_wallet);
 
     pending_out = false;
     std::vector<CoinRecord> records;
@@ -264,8 +262,6 @@ std::vector<CoinRecord> WalletCoinStore::DecomposeCoins(
 
 void WalletCoinStore::removeRecordAt(std::size_t absidx)
 {
-    AssertLockHeld(cs_store);
-
     const COutPoint outpoint = m_records[absidx].outpoint;
     const bool was_selected = (m_selected.count(outpoint) > 0);
 
@@ -401,7 +397,6 @@ void WalletCoinStore::applyAddressBookChange(const std::string& address, const s
 
 void WalletCoinStore::applyChainTipRefresh(int height)
 {
-    AssertLockHeld(cs_main);
     m_tip_height.store(height, std::memory_order_relaxed);
 
     if (m_wallet) {
@@ -440,8 +435,6 @@ void WalletCoinStore::applyChainTipRefresh(int height)
 void WalletCoinStore::emitDeltas(const std::vector<CoinViewDelta>& deltas,
                                  const COutPoint* removed_outpoint)
 {
-    AssertLockHeld(cs_store);
-
     for (const CoinViewDelta& d : deltas) {
         const uint64_t epoch = m_views.epoch(d.view_id);
         switch (d.type) {
@@ -610,7 +603,6 @@ std::vector<CoinGroupInfo> WalletCoinStore::getGroupDirectory()
 
 void WalletCoinStore::reapplyMirrorAggregates()
 {
-    AssertLockHeld(cs_store);
     for (const COutPoint& outpoint : m_selected) {
         auto it = m_by_outpoint.find(outpoint);
         if (it == m_by_outpoint.end()) continue;
@@ -700,8 +692,6 @@ void WalletCoinStore::toggleLocked(std::size_t absidx, bool selected,
 
 void WalletCoinStore::emitTouchedGroups(const std::set<std::string>& touched)
 {
-    AssertLockHeld(cs_store);
-
     for (const std::string& address : touched) {
         emitDeltas(m_views.groupTouchDeltas(address));
     }

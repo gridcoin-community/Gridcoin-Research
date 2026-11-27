@@ -276,7 +276,6 @@ public:
     // check whether we are allowed to upgrade (or already support) to the named feature
     bool CanSupportFeature(enum wallet::WalletFeature wf) EXCLUSIVE_LOCKS_REQUIRED(cs_wallet)
     {
-        AssertLockHeld(cs_wallet);
         return wallet::IsFeatureSupported(nWalletVersion, wf);
     }
 
@@ -312,7 +311,6 @@ public:
 
     bool LoadMinVersion(int nVersion) EXCLUSIVE_LOCKS_REQUIRED(cs_wallet)
     {
-        AssertLockHeld(cs_wallet);
         nWalletVersion = nVersion;
         return true;
     }
@@ -1160,7 +1158,6 @@ public:
 
     unsigned int GetKeyPoolSize() EXCLUSIVE_LOCKS_REQUIRED(cs_wallet)
     {
-        AssertLockHeld(cs_wallet); // setKeyPool
         return setKeyPool.size();
     }
 

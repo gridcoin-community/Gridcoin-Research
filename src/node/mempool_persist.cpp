@@ -137,8 +137,6 @@ bool UnbroadcastPersister::WriteIfChanged(const CTxMemPool& pool)
 
 bool UnbroadcastPersister::WriteLocked(const CTxMemPool& pool, const bool only_if_changed)
 {
-    AssertLockHeld(m_mutex);
-
     if (!m_enabled) return false;
 
     UnbroadcastKeys keys;

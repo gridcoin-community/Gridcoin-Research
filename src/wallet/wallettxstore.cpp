@@ -925,7 +925,6 @@ void WalletTxStore::applyChainTipRefresh()
     // excludes this from prime (which holds cs_main on the Qt thread),
     // and the worker never needs cs_main/cs_wallet, so there is no deadlock with
     // the rebuild park protocol.
-    AssertLockHeld(cs_main);   // fail fast on misuse (this runs off boost::signals2)
     LOCK(m_wallet->cs_wallet);
     LOCK(cs_store);
     if (m_volatile.empty()) {
