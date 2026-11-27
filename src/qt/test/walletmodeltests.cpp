@@ -6,13 +6,16 @@
 
 #include "interfaces/wallet_coin_channel.h"
 #include "interfaces/wallet_coin_source.h"
+#include "qt/addresstablemodel.h"
 #include "qt/coinselectionmodel.h"
+#include "qt/editaddressdialog.h"
 #include "qt/guiipcworker.h"
 #include "qt/optionsmodel.h"
 #include "qt/test/interfacefakes.h"
 #include "qt/walletmodel.h"
 #include "util.h"
 
+#include <QComboBox>
 #include <QCoreApplication>
 #include <QSignalSpy>
 #include <QTest>
@@ -270,4 +273,30 @@ void WalletModelTests::anOlderContextDoesNotEndALaterOperationsCapability()
 
     // The second ends its own.
     QCOMPARE(wallet.m_end_elevation_calls, 1);
+}
+
+// The wallet reads its unbooked receiving addresses under cs_main, so the "Add
+// existing" dialog asks for them on the modal worker, never on the GUI thread,
+// and fills its list, sorted, when they arrive.
+void WalletModelTests::addExistingListIsReadOnTheModalWorker()
+{
+    GuiIpcWorker worker(GuiIpcWorker::Role::Modal);
+
+    const std::thread::id worker_thread = ThreadOf(worker);
+    QVERIFY(worker_thread != std::thread::id{});
+    QVERIFY(worker_thread != std::this_thread::get_id());
+
+    ModelOverFakeCoins fixture;
+    fixture.wallet.m_unbooked = {"address b", "address a"};
+
+    EditAddressDialog dialog(EditAddressDialog::AddExistingReceivingAddress);
+    dialog.setModel(fixture.model->getAddressTableModel());
+
+    auto* const list = dialog.findChild<QComboBox*>();
+    QVERIFY(list);
+    QTRY_COMPARE_WITH_TIMEOUT(list->count(), 2, 10000);
+    QCOMPARE(list->itemText(0), QStringLiteral("address a"));
+    QCOMPARE(list->itemText(1), QStringLiteral("address b"));
+    QCOMPARE(fixture.wallet.m_unbooked_calls.load(), 1);
+    QVERIFY(fixture.wallet.m_unbooked_thread.load() == worker_thread);
 }

@@ -50,7 +50,7 @@ constexpr int VIEW_DETAILED = 2;   //!< the detailed history view (PR4)
 //! view at a producer-computed position.
 //!
 //! Windowed-model PR2 moved the ORDERING to the producer-side GRC::WalletTxStore:
-//! the producer runs TransactionRecord::decomposeTransaction under the locks it
+//! the producer runs decomposeTransaction (wallet/transactionrecord.h) under the locks it
 //! already holds, the store computes the TxOrderLess insert position, and this
 //! payload carries that position plus the records. The consumer inserts the
 //! records into its replica at exactly \p position inside a single

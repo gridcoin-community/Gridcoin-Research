@@ -12,7 +12,9 @@ is internally consistent:
   - getblock returns the matching hash/height with a tx list;
   - getblockchaininfo exposes Gridcoin's field set
     {blocks, in_sync, moneysupply, difficulty, testnet, errors};
-  - getdifficulty returns the {current, target} pair.
+  - getdifficulty returns the {current, target} pair;
+  - getblockstats walks the chain from the tip to genesis, reading each
+    block's mint.
 """
 
 from test_framework.test_framework import GridcoinTestFramework
@@ -59,6 +61,13 @@ class RpcBlockchainTest(GridcoinTestFramework):
         difficulty = node.getdifficulty()
         assert "current" in difficulty and "target" in difficulty, difficulty
         self.log.info("getdifficulty returns {current, target}")
+
+        # --- getblockstats over the whole chain ---
+        stats = node.getblockstats(1)
+        assert_equal(stats["general"]["blocks"], height + 1)
+        assert_equal(stats["general"]["first_height"], 0)
+        assert_equal(stats["general"]["last_height"], height)
+        self.log.info("getblockstats covers heights 0 to %d", height)
 
 
 if __name__ == "__main__":

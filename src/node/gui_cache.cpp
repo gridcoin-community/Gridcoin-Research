@@ -422,11 +422,10 @@ void GuiCache::TimerLoop()
         interfaces::MRCSnapshot answer;
 
         try {
-            // run_under_cs_main holds cs_main around this lambda, which the
-            // thread-safety analyzer cannot see through std::function.
-            m_compute.run_under_cs_main([&]() NO_THREAD_SAFETY_ANALYSIS {
-                AssertLockHeld(cs_main);
-
+            // run_under_cs_main holds cs_main around this lambda. The analysis
+            // checks the lambda's body against its annotation but cannot follow
+            // the call through std::function.
+            m_compute.run_under_cs_main([&]() EXCLUSIVE_LOCKS_REQUIRED(cs_main) {
                 try {
                     UpdateLocked(request || (quote && Current().sequence == 0));
                 } catch (const std::exception& e) {
@@ -475,9 +474,7 @@ GuiCache::Compute MakeProductionCompute()
     // Node::getNumBlocks, getLastBlockTime, getDifficulty, isInitialBlockDownload
     // and getNumBlocksOfPeers, StakingStatus::getNetworkWeight, and
     // PSGTPoolContext::poolStatus with the cache's out-of-sync reading.
-    compute.chain = [](interfaces::GuiStateSnapshot& snap) NO_THREAD_SAFETY_ANALYSIS {
-        AssertLockHeld(cs_main);
-
+    compute.chain = [](interfaces::GuiStateSnapshot& snap) EXCLUSIVE_LOCKS_REQUIRED(cs_main) {
         snap.height = nBestHeight;
         snap.tip_time = pindexBest ? pindexBest->GetBlockTime() : 0;
         snap.difficulty = GRC::GetCurrentDifficulty();
@@ -491,9 +488,7 @@ GuiCache::Compute MakeProductionCompute()
     };
 
     // Wallet::tryGetBalances, without the try: one pass over the wallet.
-    compute.balances = [](interfaces::GuiStateSnapshot& snap) NO_THREAD_SAFETY_ANALYSIS {
-        AssertLockHeld(cs_main);
-
+    compute.balances = [](interfaces::GuiStateSnapshot& snap) EXCLUSIVE_LOCKS_REQUIRED(cs_main) {
         if (!pwalletMain) {
             snap.has_balances = false;
             snap.balances = {};
@@ -517,9 +512,7 @@ GuiCache::Compute MakeProductionCompute()
     };
 
     // ResearcherContext::snapshot itself; its cs_main re-enters the one held.
-    compute.researcher = [](interfaces::GuiStateSnapshot& snap) NO_THREAD_SAFETY_ANALYSIS {
-        AssertLockHeld(cs_main);
-
+    compute.researcher = [](interfaces::GuiStateSnapshot& snap) EXCLUSIVE_LOCKS_REQUIRED(cs_main) {
         if (!pwalletMain) {
             snap.has_researcher = false;
             snap.researcher = {};
@@ -534,9 +527,7 @@ GuiCache::Compute MakeProductionCompute()
     // signature, and a submit builds and signs its own claim. Researcher
     // eligibility is derived as MRCModel::refresh derives it, from the researcher
     // part, which the cache runs first.
-    compute.mrc = [](interfaces::GuiStateSnapshot& snap) NO_THREAD_SAFETY_ANALYSIS {
-        AssertLockHeld(cs_main);
-
+    compute.mrc = [](interfaces::GuiStateSnapshot& snap) EXCLUSIVE_LOCKS_REQUIRED(cs_main) {
         if (!pwalletMain) {
             snap.has_mrc = false;
             snap.mrc = {};
@@ -551,18 +542,14 @@ GuiCache::Compute MakeProductionCompute()
     // unsigned and quiet as the MRC part's. Eligibility comes from the cache's
     // researcher part, as the MRC page takes it from its researcher model. Out of
     // sync, BuildMRCSnapshot says so and computes nothing more.
-    compute.mrc_quote = [](CAmount fee_boost, const interfaces::GuiStateSnapshot& current) NO_THREAD_SAFETY_ANALYSIS {
-        AssertLockHeld(cs_main);
-
+    compute.mrc_quote = [](CAmount fee_boost, const interfaces::GuiStateSnapshot& current) EXCLUSIVE_LOCKS_REQUIRED(cs_main) {
         if (!pwalletMain) return interfaces::MRCSnapshot{};
 
         return GRC::BuildMRCSnapshot(pwalletMain, fee_boost, /*no_sign=*/true, ResearcherEligible(current));
     };
 
     // StakingStatus::tryGetEstimatedTimeToStake, without the try. Seconds.
-    compute.etts = [](interfaces::GuiStateSnapshot& snap) NO_THREAD_SAFETY_ANALYSIS {
-        AssertLockHeld(cs_main);
-
+    compute.etts = [](interfaces::GuiStateSnapshot& snap) EXCLUSIVE_LOCKS_REQUIRED(cs_main) {
         if (!pwalletMain) {
             snap.has_etts = false;
             snap.etts_seconds = 0;

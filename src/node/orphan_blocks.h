@@ -111,7 +111,7 @@ private:
     std::unique_ptr<CBlock> EraseInternal(const uint256& hash);
 
     //! Evict one random orphan to make room. Calls EraseInternal.
-    void EvictRandom();
+    void EvictRandom() EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //! Walk back through m_orphans to find the root of the chain containing
     //! \p hash. Bounded by m_orphans.size() to prevent infinite loops.

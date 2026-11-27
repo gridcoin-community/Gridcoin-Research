@@ -302,13 +302,13 @@ public:
 
     // keystore implementation
     // Generate a new key
-    CPubKey GenerateNewKey();
+    CPubKey GenerateNewKey() EXCLUSIVE_LOCKS_REQUIRED(cs_wallet);
     // Adds a key to the store, and saves it to disk.
-    bool AddKey(const CKey& key) override;
+    bool AddKey(const CKey& key) override EXCLUSIVE_LOCKS_REQUIRED(cs_wallet);
     // Adds a key to the store, without saving it to disk (used by LoadWallet)
     bool LoadKey(const CKey& key) { return CCryptoKeyStore::AddKey(key); }
     // Load metadata (used by LoadWallet)
-    bool LoadKeyMetadata(const CPubKey &pubkey, const CKeyMetadata &metadata);
+    bool LoadKeyMetadata(const CPubKey &pubkey, const CKeyMetadata &metadata) EXCLUSIVE_LOCKS_REQUIRED(cs_wallet);
 
     bool LoadMinVersion(int nVersion) EXCLUSIVE_LOCKS_REQUIRED(cs_wallet)
     {
@@ -787,7 +787,7 @@ public:
     /** Increment the next transaction order id
         @return next transaction order id
      */
-    int64_t IncOrderPosNext(CWalletDB* pwalletdb = nullptr);
+    int64_t IncOrderPosNext(CWalletDB* pwalletdb = nullptr) EXCLUSIVE_LOCKS_REQUIRED(cs_wallet);
 
     // Use hash-based lookup and value-based storage to avoid dangling pointers
     // when mapWallet reallocates or acentries goes out of scope.
@@ -799,7 +799,7 @@ public:
         @return multimap of ordered transactions and accounting entries
         @warning Transaction hashes must be looked up in mapWallet before use
      */
-    TxItems OrderedTxItems(std::list<CAccountingEntry>& acentries, std::string strAccount = "");
+    TxItems OrderedTxItems(std::list<CAccountingEntry>& acentries, std::string strAccount = "") EXCLUSIVE_LOCKS_REQUIRED(cs_wallet);
 
     void MarkDirty();
     bool AddToWallet(const CWalletTx& wtxIn, CWalletDB *pwalletdb) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
@@ -927,7 +927,7 @@ private:
                                   bool fUpdate) EXCLUSIVE_LOCKS_REQUIRED(cs_main, cs_wallet);
 
 public:
-    void WalletUpdateSpent(const CTransaction &tx, bool fBlock, CWalletDB* pwalletdb);
+    void WalletUpdateSpent(const CTransaction &tx, bool fBlock, CWalletDB* pwalletdb) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
     //! \p progress_height, when given, is set to the height of each block as the scan
     //! reaches it (relaxed), for a caller that reports the scan's progress from another
     //! thread without a lock.
@@ -1069,8 +1069,9 @@ public:
     void GetAllReserveKeys(std::set<CKeyID>& setAddress) const;
 
 
-    std::set< std::set<CTxDestination> > GetAddressGroupings();
-    std::map<CTxDestination, int64_t> GetAddressBalances();
+    std::set< std::set<CTxDestination> > GetAddressGroupings() EXCLUSIVE_LOCKS_REQUIRED(cs_wallet);
+    //! Needs cs_main: it reads each transaction's finality and depth.
+    std::map<CTxDestination, int64_t> GetAddressBalances() EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     isminetype IsMine(const CTxIn& txin) const;
     int64_t GetDebit(const CTxIn& txin, const isminefilter& filter=(ISMINE_SPENDABLE|ISMINE_WATCH_ONLY)) const;
@@ -1165,7 +1166,7 @@ public:
 
     bool GetTransaction(const uint256 &hashTx, CWalletTx& wtx);
 
-    bool SetDefaultKey(const CPubKey &vchPubKey);
+    bool SetDefaultKey(const CPubKey &vchPubKey) EXCLUSIVE_LOCKS_REQUIRED(cs_wallet);
 
     // signify that a particular wallet feature is now used.
     bool SetMinVersion(enum wallet::WalletFeature, CWalletDB* pwalletdbIn = nullptr);
@@ -1421,7 +1422,7 @@ struct COutputEntry
 class CMerkleTx : public CTransaction
 {
 protected:
-    virtual int GetDepthInMainChainINTERNAL(CBlockIndex* &pindexRet) const;
+    virtual int GetDepthInMainChainINTERNAL(CBlockIndex* &pindexRet) const EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 public:
     uint256 hashBlock;
     int nIndex;
@@ -1456,19 +1457,19 @@ public:
         READWRITE(nIndex);
     }
 
-    int SetMerkleBranch(const CBlock* pblock = nullptr);
+    int SetMerkleBranch(const CBlock* pblock = nullptr) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     // Return depth of transaction in blockchain:
     // -1  : not in blockchain, and not in memory pool (conflicted transaction)
     //  0  : in memory pool, waiting to be included in a block
     // >=1 : this many blocks deep in the main chain
-    int GetDepthInMainChain(CBlockIndex* &pindexRet) const;
-    int GetDepthInMainChain() const { CBlockIndex *pindexRet; return GetDepthInMainChain(pindexRet); }
-    bool IsInMainChain() const { CBlockIndex *pindexRet; return GetDepthInMainChainINTERNAL(pindexRet) > 0; }
-    int GetBlocksToMaturity() const;
+    int GetDepthInMainChain(CBlockIndex* &pindexRet) const EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+    int GetDepthInMainChain() const EXCLUSIVE_LOCKS_REQUIRED(cs_main) { CBlockIndex *pindexRet; return GetDepthInMainChain(pindexRet); }
+    bool IsInMainChain() const EXCLUSIVE_LOCKS_REQUIRED(cs_main) { CBlockIndex *pindexRet; return GetDepthInMainChainINTERNAL(pindexRet) > 0; }
+    int GetBlocksToMaturity() const EXCLUSIVE_LOCKS_REQUIRED(cs_main);
     //! GetBlocksToMaturity() for a depth the caller has already looked up.
     int GetBlocksToMaturity(int depth) const;
-    bool AcceptToMemoryPool();
+    bool AcceptToMemoryPool() EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 };
 
 /** A transaction with a bunch of additional info that only the owner cares about.
@@ -1786,7 +1787,7 @@ public:
 
     }
 
-    int64_t GetCredit(bool fUseCache=true) const
+    int64_t GetCredit(bool fUseCache=true) const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     {
         // Must wait until coinbase is safely deep enough in the chain before valuing it
         if ((IsCoinBase() || IsCoinStake()) && GetBlocksToMaturity() > 0)
@@ -1800,7 +1801,7 @@ public:
         return nCreditCached;
     }
 
-    int64_t GetAvailableCredit(bool fUseCache=true) const
+    int64_t GetAvailableCredit(bool fUseCache=true) const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     {
         return GetAvailableCredit(GetBlocksToMaturity(), fUseCache);
     }
@@ -1857,12 +1858,12 @@ public:
     {
         return (GetDebit(filter) > 0);
     }
-    bool IsConfirmed() const
+    bool IsConfirmed() const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     {
         return GetDepthInMainChain() >= 10;
     }
 
-    bool AreDependenciesConfirmed() const
+    bool AreDependenciesConfirmed() const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     {
         // If no confirmations but it's from us, we can still
         // consider it confirmed if all dependencies are confirmed
@@ -1901,7 +1902,7 @@ public:
         return true;
     }
 
-    bool IsTrusted() const
+    bool IsTrusted() const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     {
         // Quick answer in most cases
         if (!IsFinalTx(*this))
@@ -1910,7 +1911,7 @@ public:
     }
 
     //! IsTrusted() for a GetDepthInMainChain() the caller has already looked up.
-    bool IsTrusted(int nDepth) const
+    bool IsTrusted(int nDepth) const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     {
         int nMinConfirmsRequiredToSendGRC = 3;
         if (!IsFinalTx(*this))
@@ -1933,10 +1934,10 @@ public:
     int64_t GetTxTime() const;
     int GetRequestCount() const;
 
-    void AddSupportingTransactions(CTxDB& txdb);
+    void AddSupportingTransactions(CTxDB& txdb) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
-    bool AcceptWalletTransaction(CTxDB& txdb);
-    bool AcceptWalletTransaction();
+    bool AcceptWalletTransaction(CTxDB& txdb) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+    bool AcceptWalletTransaction() EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //! Queue this transaction (and its unindexed parents) for announcement.
     //! Touches no network state. Returns false when the transaction is inactive

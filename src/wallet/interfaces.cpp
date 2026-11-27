@@ -947,9 +947,10 @@ public:
     {
         std::vector<std::string> result;
 
-        // cs_wallet is recursive, so it covers both GetAddressBalances (which
-        // re-locks internally) and the mapAddressBook membership test below.
-        LOCK(m_wallet->cs_wallet);
+        // GetAddressBalances reads each transaction's finality and depth, which
+        // need cs_main. cs_wallet is recursive, so one hold covers
+        // GetAddressBalances' own lock and the address-book test below.
+        LOCK2(cs_main, m_wallet->cs_wallet);
         const std::map<CTxDestination, int64_t> balances = m_wallet->GetAddressBalances();
         for (const auto& [dest, balance] : balances) {
             if (balance > 0 && m_wallet->mapAddressBook.count(dest) == 0) {

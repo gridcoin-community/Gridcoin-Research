@@ -6512,8 +6512,13 @@ void CWallet::DisableTransaction(const CTransaction &tx)
     }
 }
 
-bool CReserveKey::GetReservedKey(CPubKey& pubkey) EXCLUSIVE_LOCKS_REQUIRED(pwallet->cs_wallet)
+bool CReserveKey::GetReservedKey(CPubKey& pubkey)
 {
+    // The callers already hold the wallet lock, under names the analysis cannot
+    // tie to pwallet->cs_wallet. It is recursive, so taking it here costs them
+    // nothing and covers the read of vchDefaultKey below.
+    LOCK(pwallet->cs_wallet);
+
     if (nIndex == -1)
     {
         CKeyPool keypool;

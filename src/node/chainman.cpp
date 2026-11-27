@@ -1479,11 +1479,10 @@ bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool generated_by_me, CValidatio
 
     // Recursively process any orphan blocks that depended on this one.
     // ProcessQueue handles BFS traversal and SeenStakes cleanup internally.
-    // ProcessQueue is EXCLUSIVE_LOCKS_REQUIRED(cs_main) so the lambda runs
-    // with cs_main held, but TSA cannot propagate that into the lambda
-    // body — suppress the analyzer here rather than tag every chain-state
-    // access AcceptBlock makes downstream.
-    g_orphan_blocks.ProcessQueue(hash, [&](CBlock& orphan) NO_THREAD_SAFETY_ANALYSIS -> bool {
+    // ProcessQueue is EXCLUSIVE_LOCKS_REQUIRED(cs_main), so the lambda runs
+    // with cs_main held. The analysis checks the lambda's body against its
+    // annotation but cannot follow the call through std::function.
+    g_orphan_blocks.ProcessQueue(hash, [&](CBlock& orphan) EXCLUSIVE_LOCKS_REQUIRED(cs_main) -> bool {
         CValidationState orphan_state;
         // Only a block from a peer is held as an orphan.
         return AcceptBlock(orphan, orphan_state, generated_by_me, /*imported=*/false);

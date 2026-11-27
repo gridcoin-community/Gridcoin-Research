@@ -4,6 +4,8 @@
 #include <QAbstractTableModel>
 #include <QStringList>
 
+#include <future>
+
 class AddressTablePriv;
 class WalletModel;
 
@@ -62,9 +64,11 @@ public:
      */
     QString addRow(const QString &type, const QString &label, const QString &address);
 
-    /* Return list of owned addresses not yet in the address book.
+    /* Ask for the owned addresses not yet in the address book. They arrive,
+       sorted, in unbookedReceiveAddressesReady. The wallet reads them under
+       cs_main, so they are read on the modal worker, not on the GUI thread.
      */
-    QStringList unbookedReceiveAddresses() const;
+    void requestUnbookedReceiveAddresses();
 
     /* Look up label for address in address book, if not found return empty string.
      */
@@ -82,12 +86,19 @@ private:
     AddressTablePriv *priv;
     QStringList columns;
     EditStatus editStatus;
+    //! The last request for the unbooked addresses. It reports to this model,
+    //! so the destructor waits for it. The requests run one at a time, in
+    //! order, so an earlier one has ended by then too.
+    std::future<void> m_unbooked_done;
 
     /** Notify listeners that data changed. */
     void emitDataChanged(int index);
 
 signals:
     void defaultAddressChanged(const QString &address);
+    //! The answer to requestUnbookedReceiveAddresses(), on the GUI thread. Empty
+    //! when the addresses could not be read.
+    void unbookedReceiveAddressesReady(const QStringList& addresses);
 
 public slots:
     /* Update address list from core.

@@ -40,10 +40,11 @@ EditAddressDialog::EditAddressDialog(Mode mode, QWidget* parent)
         break;
     case AddExistingReceivingAddress:
         setWindowTitle(tr("Add existing receiving address"));
-        // Replace the address line edit with a combo box of unbooked addresses
+        // Replace the address line edit with a combo box of unbooked addresses.
+        // The caller owns the layout item that replaceWidget() returns.
         addressCombo = new QComboBox(this);
         addressCombo->setFont(GUIUtil::bitcoinAddressFont());
-        ui->formLayout->replaceWidget(ui->addressEdit, addressCombo);
+        delete ui->formLayout->replaceWidget(ui->addressEdit, addressCombo);
         ui->addressEdit->hide();
         break;
     }
@@ -69,7 +70,15 @@ void EditAddressDialog::setModel(AddressTableModel *model)
 
     if(mode == AddExistingReceivingAddress && addressCombo)
     {
-        addressCombo->addItems(model->unbookedReceiveAddresses());
+        // The list is read off the GUI thread. Until it arrives the box is
+        // empty and disabled.
+        addressCombo->setEnabled(false);
+        connect(model, &AddressTableModel::unbookedReceiveAddressesReady, this, [this](const QStringList& addresses) {
+            addressCombo->clear();
+            addressCombo->addItems(addresses);
+            addressCombo->setEnabled(true);
+        });
+        model->requestUnbookedReceiveAddresses();
     }
 }
 

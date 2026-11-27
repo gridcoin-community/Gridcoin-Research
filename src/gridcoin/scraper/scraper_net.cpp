@@ -37,7 +37,7 @@ extern std::atomic<int64_t> g_nTimeBestReceived;
 extern ConvergedScraperStats ConvergedScraperStatsCache;
 extern CCriticalSection cs_ConvergedScraperStatsCache;
 extern AppCacheSectionExt GetExtendedScrapersCache();
-extern bool IsScraperMaximumManifestPublishingRateExceeded(int64_t& nTime, CPubKey& PubKey);
+extern bool IsScraperMaximumManifestPublishingRateExceeded(int64_t& nTime, CPubKey& PubKey) EXCLUSIVE_LOCKS_REQUIRED(CScraperManifest::cs_mapManifest);
 
 namespace {
 //! \brief Maximum number of part hashes a manifest may declare.
@@ -1319,7 +1319,7 @@ bool CScraperManifest::RecvManifest(CNode* pfrom, CDataStream& vRecv)
 }
 
 bool CScraperManifest::addManifest(std::shared_ptr<CScraperManifest> m, CKey& keySign)
-EXCLUSIVE_LOCKS_REQUIRED(CScraperManifest::cs_mapManifest, cs_mapParts)
+EXCLUSIVE_LOCKS_REQUIRED(CScraperManifest::cs_mapManifest, CSplitBlob::cs_mapParts)
 {
     uint256 hash;
 
@@ -1484,7 +1484,7 @@ UniValue CScraperManifest::ToJson() const EXCLUSIVE_LOCKS_REQUIRED(CSplitBlob::c
     return r;
 }
 
-UniValue CScraperManifest::dentry::ToJson() const EXCLUSIVE_LOCKS_REQUIRED(CSplitBlob::cs_manifest)
+UniValue CScraperManifest::dentry::ToJson() const
 {
     UniValue r(UniValue::VOBJ);
 

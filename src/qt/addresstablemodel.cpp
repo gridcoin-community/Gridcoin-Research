@@ -1,4 +1,5 @@
 #include "addresstablemodel.h"
+#include "qt/guiipcworker.h"
 #include "qt/guilog.h"
 #include "guiutil.h"
 #include "walletmodel.h"
@@ -145,6 +146,9 @@ AddressTableModel::AddressTableModel(WalletModel* parent)
 
 AddressTableModel::~AddressTableModel()
 {
+    if (m_unbooked_done.valid()) {
+        m_unbooked_done.wait();
+    }
     delete priv;
 }
 
@@ -422,14 +426,44 @@ bool AddressTableModel::removeRows(int row, int count, const QModelIndex &parent
     return true;
 }
 
-QStringList AddressTableModel::unbookedReceiveAddresses() const
+void AddressTableModel::requestUnbookedReceiveAddresses()
 {
-    QStringList result;
-    for (const std::string& address : walletModel->wallet().getUnbookedReceiveAddresses()) {
-        result.append(QString::fromStdString(address));
+    // The wallet reads each transaction's finality and depth for these, under
+    // cs_main, so they are read on the process's modal worker: the GUI thread
+    // never waits for a core lock. The job reports to this model, queued, so
+    // Qt drops the report if the model is gone first, and the model's
+    // destructor waits for the job. A read that throws, as one across IPC does
+    // when the core drops the connection, reports an empty list.
+    interfaces::Wallet* const wallet = &walletModel->wallet();
+    GuiIpcWorker* const worker = GuiIpcWorker::Current(GuiIpcWorker::Role::Modal);
+
+    std::future<void> done = worker ? worker->Post([this, wallet] {
+        QStringList result;
+
+        try {
+            for (const std::string& address : wallet->getUnbookedReceiveAddresses()) {
+                result.append(QString::fromStdString(address));
+            }
+        } catch (const std::exception& e) {
+            GUILogPrintf("WARN: AddressTableModel: the unbooked receiving addresses could not be read: %s", e.what());
+            result.clear();
+        } catch (...) {
+            GUILogPrintf("WARN: AddressTableModel: the unbooked receiving addresses could not be read");
+            result.clear();
+        }
+
+        result.sort();
+        QMetaObject::invokeMethod(this, [this, result] { emit unbookedReceiveAddressesReady(result); },
+                                  Qt::QueuedConnection);
+    }) : std::future<void>();
+
+    if (!done.valid()) {
+        GUILogPrintf("ERROR: AddressTableModel: no thread is running to read the unbooked receiving addresses");
+        QMetaObject::invokeMethod(this, [this] { emit unbookedReceiveAddressesReady({}); }, Qt::QueuedConnection);
+        return;
     }
-    result.sort();
-    return result;
+
+    m_unbooked_done = std::move(done);
 }
 
 /* Look up label for address in address book, if not found return empty string.

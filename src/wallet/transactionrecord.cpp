@@ -1,9 +1,7 @@
-#include "interfaces/wallet_tx_record.h"
-#include "wallet/wallet.h"
+#include "wallet/transactionrecord.h"
 #include <key_io.h>
 
-/* Return positive answer if transaction should be shown in list. */
-bool TransactionRecord::showTransaction(const CWalletTx &wtx, bool datetime_limit_flag, const int64_t &datetime_limit)
+bool showTransaction(const CWalletTx& wtx, bool datetime_limit_flag, const int64_t& datetime_limit)
 {
     // Do not show transactions earlier than the datetime_limit if the flag is set.
     if (datetime_limit_flag && (int64_t) wtx.nTime < datetime_limit)
@@ -48,10 +46,7 @@ bool TransactionRecord::showTransaction(const CWalletTx &wtx, bool datetime_limi
     return true;
 }
 
-/*
- * Decompose CWallet transaction to model transaction records.
- */
-std::vector<TransactionRecord> TransactionRecord::decomposeTransaction(const CWallet *wallet, const CWalletTx &wtx)
+std::vector<TransactionRecord> decomposeTransaction(const CWallet* wallet, const CWalletTx& wtx)
 {
     std::vector<TransactionRecord> parts;
     int64_t nTime = wtx.GetTxTime();
@@ -363,7 +358,7 @@ std::vector<TransactionRecord> TransactionRecord::decomposeTransaction(const CWa
     return parts;
 }
 
-void TransactionRecord::updateStatus(const CWalletTx &wtx) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+void updateStatus(TransactionRecord& rec, const CWalletTx& wtx)
 {
     AssertLockHeld(cs_main);
     // Determine transaction status
@@ -377,96 +372,90 @@ void TransactionRecord::updateStatus(const CWalletTx &wtx) EXCLUSIVE_LOCKS_REQUI
     }
 
     // Sort order, unrecorded transactions sort to the top
-    status.sortKey = strprintf("%010d-%01d-%010u-%03d",
+    rec.status.sortKey = strprintf("%010d-%01d-%010u-%03d",
         (pindex ? pindex->nHeight : std::numeric_limits<int>::max()),
         (wtx.IsCoinBase() ? 1 : 0),
         wtx.nTimeReceived,
-        idx);
-    status.countsForBalance = wtx.IsTrusted() && !(wtx.GetBlocksToMaturity() > 0);
-    status.depth = wtx.GetDepthInMainChain();
-    status.cur_num_blocks = nBestHeight;
+        rec.idx);
+    rec.status.countsForBalance = wtx.IsTrusted() && !(wtx.GetBlocksToMaturity() > 0);
+    rec.status.depth = wtx.GetDepthInMainChain();
+    rec.status.cur_num_blocks = nBestHeight;
 
     if (!IsFinalTx(wtx, nBestHeight + 1))
     {
         if (wtx.nLockTime < LOCKTIME_THRESHOLD)
         {
-            status.status = TransactionStatus::OpenUntilBlock;
-            status.open_for = wtx.nLockTime - nBestHeight;
+            rec.status.status = TransactionStatus::OpenUntilBlock;
+            rec.status.open_for = wtx.nLockTime - nBestHeight;
         }
         else
         {
-            status.status = TransactionStatus::OpenUntilDate;
-            status.open_for = wtx.nLockTime;
+            rec.status.status = TransactionStatus::OpenUntilDate;
+            rec.status.open_for = wtx.nLockTime;
         }
     }
 
     // For generated transactions, determine maturity
-    else if(type == TransactionRecord::Generated)
+    else if(rec.type == TransactionRecord::Generated)
     {
         if (wtx.GetBlocksToMaturity() > 0)
         {
-            status.status = TransactionStatus::Immature;
+            rec.status.status = TransactionStatus::Immature;
 
             if (wtx.IsInMainChain())
             {
-                status.matures_in = wtx.GetBlocksToMaturity();
+                rec.status.matures_in = wtx.GetBlocksToMaturity();
 
                 // Check if the block was requested by anyone
                 if (GetAdjustedTime() - wtx.nTimeReceived > 2 * 60 && wtx.GetRequestCount() == 0)
-                    status.status = TransactionStatus::MaturesWarning;
+                    rec.status.status = TransactionStatus::MaturesWarning;
             }
             else
             {
-                status.status = TransactionStatus::NotAccepted;
+                rec.status.status = TransactionStatus::NotAccepted;
             }
         }
         else
         {
-            status.status = TransactionStatus::Confirmed;
+            rec.status.status = TransactionStatus::Confirmed;
         }
 
-        status.generated_type = wtx.GetGeneratedType(vout);
+        rec.status.generated_type = wtx.GetGeneratedType(rec.vout);
     }
     else
     {
-        if (status.depth < 0)
+        if (rec.status.depth < 0)
         {
-            status.status = TransactionStatus::Conflicted;
+            rec.status.status = TransactionStatus::Conflicted;
         }
         else if (GetAdjustedTime() - wtx.nTimeReceived > 2 * 60 && wtx.GetRequestCount() == 0)
         {
-            status.status = TransactionStatus::Offline;
+            rec.status.status = TransactionStatus::Offline;
         }
-        else if (status.depth == 0)
+        else if (rec.status.depth == 0)
         {
-            status.status = TransactionStatus::Unconfirmed;
+            rec.status.status = TransactionStatus::Unconfirmed;
         }
-        else if (status.depth < RecommendedNumConfirmations)
+        else if (rec.status.depth < TransactionRecord::RecommendedNumConfirmations)
         {
-            status.status = TransactionStatus::Confirming;
+            rec.status.status = TransactionStatus::Confirming;
         }
         else
         {
-            status.status = TransactionStatus::Confirmed;
+            rec.status.status = TransactionStatus::Confirmed;
         }
     }
 }
 
-void TransactionRecord::populateDisplayLabel(const CWallet& wallet) EXCLUSIVE_LOCKS_REQUIRED(wallet.cs_wallet)
+void populateDisplayLabel(TransactionRecord& rec, const CWallet& wallet)
 {
-    // Qt-free address-book lookup (caller holds cs_wallet): snapshot the label for
-    // `address` so the off-cs_wallet cursor can sort/filter without the wallet.
-    label.clear();
-    const auto mi = wallet.mapAddressBook.find(DecodeDestination(address));
+    // Qt-free address-book lookup: snapshot the label for `address` so the
+    // off-cs_wallet cursor can sort/filter without the wallet.
+    rec.label.clear();
+    const auto mi = wallet.mapAddressBook.find(DecodeDestination(rec.address));
     if (mi != wallet.mapAddressBook.end()) {
-        label = mi->second.name;
+        rec.label = mi->second.name;
     }
-}
-
-bool TransactionRecord::statusUpdateNeeded() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
-{
-    AssertLockHeld(cs_main);
-    return status.cur_num_blocks != nBestHeight;
 }
 
 std::string TransactionRecord::getTxID() const

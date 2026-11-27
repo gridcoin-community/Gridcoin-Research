@@ -832,7 +832,7 @@ public:
     //!
     //! \brief This refreshes the AutoGreylist object from the last superblock in the chain.
     //!
-    void Refresh();
+    void Refresh() EXCLUSIVE_LOCKS_REQUIRED (cs_main);
 
     //!
     //! \brief This refreshes the AutoGreylist object from an input Superblock pointer.
@@ -847,7 +847,7 @@ public:
     //! passed as the first parameter.
     //!
     void RefreshWithSuperblock(SuperblockPtr superblock_ptr_in,
-                               std::shared_ptr<std::map<int, std::pair<CBlockIndex*, SuperblockPtr>>> unit_test_blocks = nullptr);
+                               std::shared_ptr<std::map<int, std::pair<CBlockIndex*, SuperblockPtr>>> unit_test_blocks = nullptr) EXCLUSIVE_LOCKS_REQUIRED (cs_main);
 
     //!
     //! \brief This refreshes the AutoGreylist object from an input Superblock that is going to be associated
@@ -863,7 +863,7 @@ public:
     //! from a scraper convergence, and is used in the call chain from the miner loop. The superblock object project status
     //! will be updated.
     //!
-    void RefreshWithAndUpdateSuperblock(Superblock& superblock);
+    void RefreshWithAndUpdateSuperblock(Superblock& superblock) EXCLUSIVE_LOCKS_REQUIRED (cs_main);
 
     //!
     //! \brief Resets the AutoGreylist object. This is called by the Whitelist Reset().

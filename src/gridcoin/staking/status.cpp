@@ -109,7 +109,7 @@ std::optional<CWalletTx> MinerStatus::GetLastStake(CWallet& wallet)
         }
     }
 
-    const auto is_my_confirmed_stake = [](const CWalletTx& tx) {
+    const auto is_my_confirmed_stake = [](const CWalletTx& tx) EXCLUSIVE_LOCKS_REQUIRED(cs_main) {
         return tx.IsCoinStake() && tx.IsFromMe() && tx.GetDepthInMainChain() > 0;
     };
 

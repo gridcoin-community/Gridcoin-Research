@@ -1153,7 +1153,7 @@ private:
     //! up-front balance check with the wrong source produces false-negative
     //! rejections on borderline wallets, so the per-walk checks above are the
     //! authoritative ones.
-    PollEligibilityClaim BuildV1Claim(const Poll& poll) const
+    PollEligibilityClaim BuildV1Claim(const Poll& poll) const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     {
         std::vector<COutput> outputs;
         m_wallet.AvailableCoins(outputs, true, nullptr, true);

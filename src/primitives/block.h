@@ -257,8 +257,8 @@ public:
     GRC::Claim PullClaim();
     GRC::SuperblockPtr GetSuperblock() const;
     GRC::SuperblockPtr GetSuperblock(const CBlockIndex* const pindex) const;
-    GRC::MintSummary GetMint() const;
-    GRC::MRCFees GetMRCFees() const;
+    GRC::MintSummary GetMint() const EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+    GRC::MRCFees GetMRCFees() const EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     // entropy bit for stake modifier if chosen by modifier
     unsigned int GetStakeEntropyBit() const

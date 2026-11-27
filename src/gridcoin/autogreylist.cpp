@@ -219,6 +219,11 @@ void AutoGreylistService::RefreshWithAndUpdateSuperblock(
 
     ClearV2Slots();
 
+    // Below the gate the V1 call reads pindexBest, which needs cs_main. Its callers
+    // already hold it, so this lock is a recursive re-lock that lets the thread-safety
+    // analysis check the call.
+    LOCK(cs_main);
+
     m_v1->RefreshWithAndUpdateSuperblock(superblock);
 }
 

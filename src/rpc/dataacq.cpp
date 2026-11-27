@@ -194,7 +194,7 @@ UniValue rpc_getblockstats(const UniValue& params)
             }
         }
 
-        const GRC::MintSummary mint = block.GetMint();
+        const GRC::MintSummary mint = WITH_LOCK(cs_main, return block.GetMint());
 
         transactioncount += txcountinblock;
         emptyblockscount += (txcountinblock == 0);

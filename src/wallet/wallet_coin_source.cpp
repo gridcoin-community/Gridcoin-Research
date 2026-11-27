@@ -151,17 +151,17 @@ private:
     //! on the emitting core thread under the locks it already holds
     //! (CT_NEW/CT_UPDATED sites hold cs_main + cs_wallet; CT_DELETED sites
     //! hold cs_main, and that branch touches only the hash, so it needs no
-    //! wallet lock). NO_THREAD_SAFETY_ANALYSIS for the signals2 dispatch, with
-    //! AssertLockHeld checking at runtime in DEBUG_LOCKORDER builds — the
-    //! WalletTxSourceImpl::onTransactionChanged discipline.
+    //! wallet lock). The subscribe() lambda alone is exempt from the analysis,
+    //! which cannot follow the signals2 dispatch, as in
+    //! WalletTxSourceImpl::onTransactionChanged.
     void onTransactionChanged(CWallet* wallet, const uint256& hash, ChangeType status)
-        NO_THREAD_SAFETY_ANALYSIS;
+        EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //! Producer: the chain tip advanced. Runs the bounded pending-availability
     //! recheck inline under the emitter's cs_main and pushes the depth-refresh
     //! marker.
     void onBlocksChanged(bool syncing, int height, int64_t best_time, uint32_t target_bits)
-        NO_THREAD_SAFETY_ANALYSIS;
+        EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     CWallet* const m_wallet;
 
@@ -178,7 +178,8 @@ void WalletCoinSourceImpl::subscribe()
     std::weak_ptr<WalletCoinSourceImpl> weak_self = weak_from_this();
 
     m_handlers.emplace_back(m_wallet->NotifyTransactionChanged.connect(
-        [weak_self](CWallet* wallet, const uint256& hash, ChangeType status) {
+        [weak_self](CWallet* wallet, const uint256& hash, ChangeType status) NO_THREAD_SAFETY_ANALYSIS {
+            // The emitter holds cs_main, which the analysis cannot see across the dispatch.
             if (auto self = weak_self.lock()) {
                 self->onTransactionChanged(wallet, hash, status);
             }
@@ -194,7 +195,8 @@ void WalletCoinSourceImpl::subscribe()
             }
         }));
     m_handlers.emplace_back(uiInterface.NotifyBlocksChanged_connect(
-        [weak_self](bool syncing, int height, int64_t best_time, uint32_t target_bits) {
+        [weak_self](bool syncing, int height, int64_t best_time, uint32_t target_bits) NO_THREAD_SAFETY_ANALYSIS {
+            // The emitter holds cs_main, which the analysis cannot see across the dispatch.
             if (auto self = weak_self.lock()) {
                 self->onBlocksChanged(syncing, height, best_time, target_bits);
             }
@@ -203,14 +205,14 @@ void WalletCoinSourceImpl::subscribe()
 
 void WalletCoinSourceImpl::onTransactionChanged(CWallet* wallet, const uint256& hash,
                                                 ChangeType status)
-    NO_THREAD_SAFETY_ANALYSIS
 {
     switch (status) {
     case CT_NEW:
     case CT_UPDATED:
     case CT_UPDATING: {
-        AssertLockHeld(cs_main);
-        AssertLockHeld(wallet->cs_wallet);
+        // These sites hold cs_wallet too, so this is a recursive re-lock that
+        // states the need.
+        LOCK(wallet->cs_wallet);
         auto it = wallet->mapWallet.find(hash);
         if (it == wallet->mapWallet.end()) {
             // Raced an erasure — drop whatever the store holds for the hash.
@@ -237,7 +239,6 @@ void WalletCoinSourceImpl::onTransactionChanged(CWallet* wallet, const uint256& 
 
 void WalletCoinSourceImpl::onBlocksChanged(bool /*syncing*/, int height, int64_t /*best_time*/,
                                            uint32_t /*target_bits*/)
-    NO_THREAD_SAFETY_ANALYSIS
 {
     // Fired under cs_main after every tip advance (the synchronous
     // SetBestChain -> UpdatedBlockTip -> uiInterface bridge). The store

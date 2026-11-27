@@ -63,9 +63,6 @@ bool StopNode();
 //! stateless. Set once from init.
 bool IsListenDisabled();
 void SetListenDisabled(bool disabled);
-// Declared below CNode (the EXCLUSIVE_LOCKS_REQUIRED annotation references
-// pnode->cs_vSend and needs the complete CNode type).
-void SocketSendData(CNode *pnode);
 
 struct LocalServiceInfo {
     int nScore;
@@ -476,39 +473,7 @@ public:
         LogPrint(BCLog::LogFlags::NOISY, "(aborted)");
     }
 
-    void EndMessage() EXCLUSIVE_LOCKS_REQUIRED(cs_vSend)
-    {
-        if (ssSend.size() == 0)
-            return;
-
-        // Set the size
-        unsigned int nSize = ssSend.size() - CMessageHeader::HEADER_SIZE;
-        memcpy((char*)&ssSend[CMessageHeader::MESSAGE_SIZE_OFFSET], &nSize, sizeof(nSize));
-
-        // Set the checksum
-        uint256 hash = Hash(Span{ssSend}.subspan(CMessageHeader::HEADER_SIZE));
-        unsigned int nChecksum = 0;
-        memcpy(&nChecksum, &hash, sizeof(nChecksum));
-        // Invariant: a non-empty ssSend starts with the header BeginMessage()
-        // wrote. Guards against a change that ends a message BeginMessage() did
-        // not begin.
-        assert(ssSend.size () >= CMessageHeader::CHECKSUM_OFFSET + sizeof(nChecksum));
-        memcpy((char*)&ssSend[CMessageHeader::CHECKSUM_OFFSET], &nChecksum, sizeof(nChecksum));
-
-        LogPrint(BCLog::LogFlags::NOISY, "(%d bytes)", nSize);
-
-        // Copy the message before queueing it, so that a failed allocation
-        // leaves the queue as it was rather than holding an empty message
-        // (PushMessage() aborts the message and rethrows).
-        SerializeData data(ssSend.begin(), ssSend.end());
-        std::deque<SerializeData>::iterator it = vSendMsg.insert(vSendMsg.end(), std::move(data));
-        ssSend.clear();
-        nSendSize += it->size();
-
-        // If write queue empty, attempt "optimistic write"
-        if (it == vSendMsg.begin())
-            SocketSendData(this);
-    }
+    void EndMessage() EXCLUSIVE_LOCKS_REQUIRED(cs_vSend);
 
     void PushVersion();
 
@@ -620,9 +585,44 @@ public:
 
 };
 
-// Re-declared here (was forward-declared above CNode) so the
-// EXCLUSIVE_LOCKS_REQUIRED lock-expression can reference pnode->cs_vSend.
+// Declared after CNode because the lock expression of its annotation needs the
+// complete CNode type. CNode::EndMessage(), which calls it, is defined below so
+// that the call is checked against the annotation.
 void SocketSendData(CNode *pnode) EXCLUSIVE_LOCKS_REQUIRED(pnode->cs_vSend);
+
+inline void CNode::EndMessage()
+{
+    if (ssSend.size() == 0)
+        return;
+
+    // Set the size
+    unsigned int nSize = ssSend.size() - CMessageHeader::HEADER_SIZE;
+    memcpy((char*)&ssSend[CMessageHeader::MESSAGE_SIZE_OFFSET], &nSize, sizeof(nSize));
+
+    // Set the checksum
+    uint256 hash = Hash(Span{ssSend}.subspan(CMessageHeader::HEADER_SIZE));
+    unsigned int nChecksum = 0;
+    memcpy(&nChecksum, &hash, sizeof(nChecksum));
+    // Invariant: a non-empty ssSend starts with the header BeginMessage()
+    // wrote. Guards against a change that ends a message BeginMessage() did
+    // not begin.
+    assert(ssSend.size () >= CMessageHeader::CHECKSUM_OFFSET + sizeof(nChecksum)); // LINT-OK-ASSERT: moved unchanged from the class body; an EndMessage() without its BeginMessage() is a programming error
+    memcpy((char*)&ssSend[CMessageHeader::CHECKSUM_OFFSET], &nChecksum, sizeof(nChecksum));
+
+    LogPrint(BCLog::LogFlags::NOISY, "(%d bytes)", nSize);
+
+    // Copy the message before queueing it, so that a failed allocation
+    // leaves the queue as it was rather than holding an empty message
+    // (PushMessage() aborts the message and rethrows).
+    SerializeData data(ssSend.begin(), ssSend.end());
+    std::deque<SerializeData>::iterator it = vSendMsg.insert(vSendMsg.end(), std::move(data));
+    ssSend.clear();
+    nSendSize += it->size();
+
+    // If write queue empty, attempt "optimistic write"
+    if (it == vSendMsg.begin())
+        SocketSendData(this);
+}
 
 //! Interface for message-processing callbacks driven by the connection manager
 //! (issue #2558 PR 8a). PeerManagerImpl implements it; CConnman drives it via
