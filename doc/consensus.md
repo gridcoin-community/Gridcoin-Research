@@ -56,29 +56,28 @@ in `src/chainparams.h`.
 | `BlockV12Height` | 2,671,700 | 1,871,830 | `IsV12Enabled()` (>= height) |
 | `BlockV13Height` | 3,989,800 | 2,870,000 | `IsV13Enabled()` (>= height) |
 | `BlockV14Height` | 3,990,000 | 3,126,500 | `IsV14Enabled()` (>= height) |
-| `BlockV15Height` | _not yet activated_ | _not yet activated_ | `IsV15Enabled()` (>= height) |
+| `BlockV15Height` | _not yet activated_ | 3,355,000 | `IsV15Enabled()` (>= height) |
 | `PollV3Height` | 2,671,700 | 1,944,820 | `IsPollV3Enabled()` (>= height) |
 | `ProjectV2Height` | 2,671,700 | 1,944,820 | `IsProjectV2Enabled()` (>= height) |
 | `ProjectV4Height` | 3,989,800 | 2,870,000 | `IsProjectV4Enabled()` (>= height) |
 | `SuperblockV3Height` | 3,989,800 | 2,870,000 | `IsSuperblockV3Enabled()` (>= height) |
 | `AutoGreylistAuditHeight` | 3,989,800 | 3,111,000 | `IsAutoGreylistAuditEnabled()` (>= height) |
-| `AutoGreylistDeepCopyHeight` | _not yet activated_ | _not yet activated_ | `IsAutoGreylistDeepCopyEnabled()` (>= height) |
-| `AutoGreylistTotalCreditFixHeight` | _not yet activated_ | _not yet activated_ | `IsAutoGreylistTotalCreditFixEnabled()` (>= height) |
-| `AutoGreylistRedesignHeight` | _not yet activated_ | _not yet activated_ | `IsAutoGreylistRedesignEnabled()` (>= height) |
-| `PollMultiAddressHeight` | _not yet activated_ | _not yet activated_ | `IsPollMultiAddressEnabled()` (>= height) |
-| `MessageContractDisableHeight` | _not yet activated_ | _not yet activated_ | `IsMessageContractEnabled()` (< height) |
+| `AutoGreylistDeepCopyHeight` | _not yet activated_ | 3,355,000 | `IsAutoGreylistDeepCopyEnabled()` (>= height) |
+| `AutoGreylistTotalCreditFixHeight` | _not yet activated_ | 3,355,000 | `IsAutoGreylistTotalCreditFixEnabled()` (>= height) |
+| `AutoGreylistRedesignHeight` | _not yet activated_ | 3,355,000 | `IsAutoGreylistRedesignEnabled()` (>= height) |
+| `PollMultiAddressHeight` | _not yet activated_ | 3,355,000 | `IsPollMultiAddressEnabled()` (>= height) |
+| `MessageContractDisableHeight` | _not yet activated_ | 3,355,000 | `IsMessageContractEnabled()` (< height) |
 
 > **Note:** "not yet activated" means that network's chain parameters set the
 > height to `std::numeric_limits<int>::max()`, so the gate never opens there.
-> Every row currently marked that way is inactive on **both** mainnet and
-> testnet. The feature is present in code. Where a hidden height override
-> exists, regtest can set the height with it. The overrides are ignored on
-> mainnet and testnet.
+> Every row marked that way is on mainnet. The feature is present in code.
+> Where a hidden height override exists, regtest can set the height with it.
+> The overrides are ignored on mainnet and testnet.
 >
 > `BlockV15Height`, `PollMultiAddressHeight`, `MessageContractDisableHeight`
-> and the three `AutoGreylist...Height` rows marked that way are set together,
-> to one height, by the release that schedules block version 15 (see
-> [Section 11](#11-block-version-15)).
+> and the three `AutoGreylist...Height` rows are set together, to one height,
+> by the release that schedules block version 15 on a network (see
+> [Section 11](#11-block-version-15)). On testnet that height is 3,355,000.
 
 ### Non-Height Parameters
 
@@ -708,12 +707,12 @@ for trustless atomic operations.
 
 ## 11. Block Version 15 — Block Spacing, Stricter Validation and On-Chain Pool Registration
 
-**Activation:** Mainnet _not yet activated_, Testnet _not yet activated_
+**Activation:** Mainnet _not yet activated_, Testnet 3,355,000
 
 Block version 15 carries the rules in the table below. All of them are in the
-code and inactive: `BlockV15Height` and the five heights set with it are
-`std::numeric_limits<int>::max()` on mainnet and testnet until a mandatory
-release sets them.
+code. On testnet `BlockV15Height` and the five heights set with it are
+3,355,000. On mainnet they are `std::numeric_limits<int>::max()`, and the rules
+are inactive, until a mandatory release sets them.
 
 | Rule from the activation height | Gate | Section |
 |---|---|---|
@@ -781,7 +780,7 @@ blocks unless `-blockv15height` is given.
 
 ### On-Chain Pool Registration (§11.1 to §11.5)
 
-Issue [#1783](https://github.com/gridcoin-community/Gridcoin-Research/issues/1783) replaces the hardcoded `MiningPools` list with an on-chain registry so pool operators can self-register without a binary release. The V15 hard-fork machinery is present in code from the time of this PR; the activation height itself is a follow-up consensus decision and defaults to `std::numeric_limits<int>::max()` in `CMainParams` / `CTestNetParams` until pinned.
+Issue [#1783](https://github.com/gridcoin-community/Gridcoin-Research/issues/1783) replaces the hardcoded `MiningPools` list with an on-chain registry so pool operators can self-register without a binary release. The V15 hard-fork machinery is present in code from the time of this PR; the activation height is 3,355,000 in `CTestNetParams` and `std::numeric_limits<int>::max()` in `CMainParams` until pinned.
 
 ### 11.1 New Contract Types
 

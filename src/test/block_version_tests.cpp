@@ -20,6 +20,8 @@
 #include <miner.h>
 #include <primitives/block.h>
 
+#include <limits>
+
 namespace {
 //! Mirror of the V12..V15 rungs of the two-sided block-version band enforced in
 //! AcceptBlock (src/validation.cpp): a block at \p height is accepted only when
@@ -129,6 +131,23 @@ BOOST_AUTO_TEST_CASE(current_version_tracks_v15_lower_bound)
 
     BOOST_CHECK_GE(current_version, 15);
     BOOST_CHECK_GE(ComputeBlockVersion(GetBlockV15Height()), 15);
+}
+
+// The release that schedules block version 15 on a network sets BlockV15Height and the five heights set with it to
+// one height. Testnet's are scheduled.
+BOOST_AUTO_TEST_CASE(testnet_v15_heights_are_one_height)
+{
+    const auto testnet = CreateChainParams(CBaseChainParams::TESTNET);
+    const Consensus::Params& consensus = testnet->GetConsensus();
+    const int v15 = consensus.BlockV15Height;
+
+    BOOST_CHECK_LT(consensus.BlockV14Height, v15);
+    BOOST_CHECK_LT(v15, std::numeric_limits<int>::max());
+    BOOST_CHECK_EQUAL(consensus.PollMultiAddressHeight, v15);
+    BOOST_CHECK_EQUAL(consensus.MessageContractDisableHeight, v15);
+    BOOST_CHECK_EQUAL(consensus.AutoGreylistDeepCopyHeight, v15);
+    BOOST_CHECK_EQUAL(consensus.AutoGreylistTotalCreditFixHeight, v15);
+    BOOST_CHECK_EQUAL(consensus.AutoGreylistRedesignHeight, v15);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
