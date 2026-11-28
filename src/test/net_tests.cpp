@@ -377,6 +377,74 @@ static std::vector<std::pair<std::string, SerializeData>> TakeSent(CNode& node)
     return sent;
 }
 
+namespace {
+// A payload that counts the copies made of it. It declares no move
+// constructor, so a move is a counted copy too.
+struct CopyCounted {
+    uint32_t value;
+    inline static int copies = 0;
+
+    explicit CopyCounted(uint32_t v) : value(v) {}
+    CopyCounted(const CopyCounted& other) : value(other.value) { ++copies; }
+    CopyCounted& operator=(const CopyCounted& other)
+    {
+        value = other.value;
+        ++copies;
+        return *this;
+    }
+
+    template <typename Stream>
+    void Serialize(Stream& s) const
+    {
+        s << value;
+    }
+};
+} // namespace
+
+// PushMessage() serializes its arguments into the send buffer without
+// copying them first, whether an argument is the only one, one of several,
+// or moved in.
+BOOST_AUTO_TEST_CASE(push_message_does_not_copy_its_arguments)
+{
+    CNode node(INVALID_SOCKET, CAddress(CService(LookupNumeric("127.0.0.1", 0)), NODE_NONE), "", true);
+    // With the socket closed, SocketSendData() returns at once and each
+    // message stays on the send queue.
+    node.CloseSocketDisconnect();
+
+    const CopyCounted a{1};
+    const CopyCounted b{2};
+    CopyCounted c{9};
+
+    CopyCounted::copies = 0;
+    node.PushMessage("copytest", a);
+    BOOST_CHECK_EQUAL(CopyCounted::copies, 0);
+
+    CopyCounted::copies = 0;
+    node.PushMessage("copytest", a, uint32_t{7}, b);
+    BOOST_CHECK_EQUAL(CopyCounted::copies, 0);
+
+    CopyCounted::copies = 0;
+    node.PushMessage("copytest", std::move(c));
+    BOOST_CHECK_EQUAL(CopyCounted::copies, 0);
+
+    // The payloads are the serialized values, as without the counting type.
+    CDataStream one(SER_NETWORK, PROTOCOL_VERSION);
+    one << uint32_t{1};
+    CDataStream three(SER_NETWORK, PROTOCOL_VERSION);
+    three << uint32_t{1} << uint32_t{7} << uint32_t{2};
+    CDataStream moved(SER_NETWORK, PROTOCOL_VERSION);
+    moved << uint32_t{9};
+
+    const std::vector<std::pair<std::string, SerializeData>> sent = TakeSent(node);
+    BOOST_REQUIRE_EQUAL(sent.size(), 3U);
+    for (const auto& message : sent) {
+        BOOST_CHECK_EQUAL(message.first, "copytest");
+    }
+    BOOST_CHECK(sent[0].second == SerializeData(one.begin(), one.end()));
+    BOOST_CHECK(sent[1].second == SerializeData(three.begin(), three.end()));
+    BOOST_CHECK(sent[2].second == SerializeData(moved.begin(), moved.end()));
+}
+
 // The entries of a getdata are served while the peer's send queue is under
 // -maxsendbuffer. The rest stay on the peer and are served, in the order asked,
 // as the queue is taken, and a message that came after the getdata is not

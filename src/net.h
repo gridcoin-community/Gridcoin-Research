@@ -478,13 +478,13 @@ public:
     void PushVersion();
 
     template<typename T>
-    void PushFields(T field) EXCLUSIVE_LOCKS_REQUIRED(cs_vSend)
+    void PushFields(const T& field) EXCLUSIVE_LOCKS_REQUIRED(cs_vSend)
     {
         ssSend << field;
     }
 
     template<typename T, typename... Tfields>
-    void PushFields(T field, Tfields... fields) EXCLUSIVE_LOCKS_REQUIRED(cs_vSend)
+    void PushFields(const T& field, const Tfields&... fields) EXCLUSIVE_LOCKS_REQUIRED(cs_vSend)
     {
         ssSend << field;
         PushFields(fields...);
@@ -507,7 +507,7 @@ public:
     }
 
     template<typename... Args>
-    void PushMessage(const char* pszCommand, Args... args)
+    void PushMessage(const char* pszCommand, const Args&... args)
     {
         LOCK(cs_vSend);
 
