@@ -222,10 +222,7 @@ public:
         nDefaultPort = 32749;
         m_assumed_blockchain_size = 4;
 
-     /* genesis = CreateGenesisBlock(1413033777, 130208, 0x1e0fffff, 1);
-        consensus.hashGenesisBlock = genesis.GetHash();
-        assert(consensus.hashGenesisBlock == uint256S("0x000005a247b397eadfefa58e872bc967c2614797bdc8d4d0e6b09fea5c191599"));
-        assert(genesis.hashMerkleRoot == uint256S("0x5109d5782a26e6a5a5eb76c7867f3e8ddae2bff026632c36afec5dc32ed8ce9f")); */
+        consensus.hashGenesisBlock = hashGenesisBlock;
 
 
         base58Prefixes[PUBKEY_ADDRESS] = std::vector<unsigned char>(1,62);
@@ -351,10 +348,7 @@ public:
         nDefaultPort = 32748;
         m_assumed_blockchain_size = 2;
 
-     /* genesis = CreateGenesisBlock(1406674534, 22436, 0x1f00ffff, 1);
-        consensus.hashGenesisBlock = genesis.GetHash();
-        assert(consensus.hashGenesisBlock == uint256S("0x00006e037d7b84104208ecf2a8638d23149d712ea810da604ee2f2cb39bae713"));
-        assert(genesis.hashMerkleRoot == uint256S("0x5109d5782a26e6a5a5eb76c7867f3e8ddae2bff026632c36afec5dc32ed8ce9f")); */
+        consensus.hashGenesisBlock = hashGenesisBlockTestNet;
 
         base58Prefixes[PUBKEY_ADDRESS] = std::vector<unsigned char>(1,111);
         base58Prefixes[SCRIPT_ADDRESS] = std::vector<unsigned char>(1,196);
@@ -450,6 +444,7 @@ public:
         consensus.StandardContractReplayLookback = 180 * 24 * 60 * 60;
         consensus.ContractReplayFloorHeight = 0;
         consensus.powLimit = uint256S("7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
+        consensus.hashGenesisBlock = hashGenesisBlockRegTest;
 
         pchMessageStart[0] = 0xfa;
         pchMessageStart[1] = 0xbf;

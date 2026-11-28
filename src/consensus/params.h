@@ -16,6 +16,14 @@ namespace Consensus {
  * Parameters that influence chain consensus.
  */
 struct Params {
+    /**
+     * Hash of this network's genesis block. Each CChainParams constructor sets
+     * it from the matching chainparams.h constant (hashGenesisBlock,
+     * hashGenesisBlockTestNet or hashGenesisBlockRegTest), the constant that
+     * CreateGenesisBlock() asserts the block it builds against. It is not
+     * always the genesis block's hashProof: on testnet, LoadBlockIndex sets
+     * that to the mainnet constant.
+     */
     uint256 hashGenesisBlock;
 
     /** Block height at which protocol v2 becomes active */
