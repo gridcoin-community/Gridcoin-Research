@@ -191,12 +191,20 @@ CTransaction Fund(const COutPoint& out, const std::vector<std::pair<CScript, CAm
     const CTransaction tx(mtx);
     grc_test::AddToMempool(tx, funding_fee);
 
-    // The fixture wallet owns the premine, so it must see the spend: otherwise
-    // the staker can pick the same output as its kernel.
+    // The fixture wallet owns the premine, so it must see the spend, or the
+    // staker can draw the same output as its kernel and the block is rejected
+    // as a double spend. The staker treats an output as spent only when the
+    // wallet's spent flag for it is set, and AddToWalletIfInvolvingMe does not
+    // set it. The hook a node's mempool signal calls does, and nothing
+    // delivers that signal in the test binary (see CreateAndProcessBlock), so
+    // the transaction is handed to it directly.
     {
-        LOCK2(cs_main, pwalletMain->cs_wallet);
-        pwalletMain->AddToWalletIfInvolvingMe(tx, nullptr, true);
+        LOCK(cs_main);
+        pwalletMain->TransactionAddedToMempool(MakeTransactionRef(tx));
     }
+
+    BOOST_REQUIRE_MESSAGE(WITH_LOCK(pwalletMain->cs_wallet, return pwalletMain->mapWallet.at(out.hash).IsSpent(out.n)),
+                          "the funded premine output is still offered to the staker");
 
     return tx;
 }
