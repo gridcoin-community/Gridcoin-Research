@@ -1,6 +1,6 @@
 app-id: us.gridcoin.GridcoinResearch
 runtime: org.kde.Platform
-runtime-version: '6.9'
+runtime-version: '6.11'
 sdk: org.kde.Sdk
 command: gridcoinresearch
 
@@ -75,6 +75,10 @@ modules:
       - -DWITH_TOOLS=OFF
       - -DWITH_TESTS=OFF
       - -DBUILD_SHARED_LIBS=ON
+      # libqrencode 4.1.1 declares cmake_minimum_required(VERSION 3.1.0). The SDK of
+      # this runtime ships CMake 4, which refuses to configure a project that asks for
+      # compatibility with CMake older than 3.5.
+      - -DCMAKE_POLICY_VERSION_MINIMUM=3.5
     sources:
       - type: archive
         url: https://github.com/fukuchi/libqrencode/archive/refs/tags/v4.1.1.tar.gz

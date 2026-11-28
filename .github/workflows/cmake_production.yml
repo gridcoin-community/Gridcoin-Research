@@ -1685,9 +1685,9 @@ jobs:
         run: |
           sudo flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
 
-      - name: Install KDE 6.9 SDK and Runtime
+      - name: Install KDE 6.11 SDK and Runtime
         run: |
-          sudo flatpak install -y --noninteractive flathub org.kde.Platform//6.9 org.kde.Sdk//6.9
+          sudo flatpak install -y --noninteractive flathub org.kde.Platform//6.11 org.kde.Sdk//6.11
 
       - name: Cache flatpak-builder
         uses: actions/cache@v5
