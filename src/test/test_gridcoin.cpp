@@ -17,13 +17,16 @@
 #include "dbwrapper.h"
 #include "wallet/db.h"
 #include "random.h"
+#include "hash.h"
 #include "wallet/wallet.h"
 #include "util/tls_libraries.h"
 
 #include <cerrno>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <iostream>
+#include <string>
 #include <system_error>
 #include <typeinfo>
 
@@ -38,6 +41,61 @@ extern CClientUIInterface uiInterface;
 extern bool g_mock_deterministic_tests;
 
 FastRandomContext g_insecure_rand_ctx;
+
+//! The data directory's name comes from its own context, which
+//! RANDOM_CTX_SEED never seeds, so two runs given the same seed do not
+//! share a data directory.
+static FastRandomContext g_rng_temp_path;
+
+namespace {
+uint256 g_test_rng_seed;
+} // namespace
+
+uint256 grc_test::SeedFromEnv(const char* value)
+{
+    if (value != nullptr) {
+        const uint256 seed = uint256S(value);
+        if (!seed.IsNull()) return seed;
+    }
+    return GetRandHash();
+}
+
+const uint256& grc_test::TestRngSeed()
+{
+    return g_test_rng_seed;
+}
+
+uint256 grc_test::CaseRngSeed(const std::string& full_name)
+{
+    return (CHashWriter(SER_GETHASH, 0) << g_test_rng_seed << full_name).GetSHA256();
+}
+
+namespace {
+//! Restarts g_insecure_rand_ctx at the start of every test case and every
+//! suite, from a stream keyed by the run's seed and the unit's full name, so
+//! a case's draws depend on neither the filter nor the cases run before it.
+//! A suite restarts before its fixtures run, so their draws are covered too.
+class RngSeedObserver : public boost::unit_test::test_observer
+{
+public:
+    int priority() override { return 4; }
+
+    void test_unit_start(const boost::unit_test::test_unit& tu) override
+    {
+        if (tu.p_type != boost::unit_test::TUT_CASE && tu.p_type != boost::unit_test::TUT_SUITE) return;
+        g_insecure_rand_ctx = FastRandomContext(grc_test::CaseRngSeed(tu.full_name()));
+    }
+};
+
+void InstallRngSeedObserver()
+{
+    static bool installed = false;
+    if (installed) return;
+    installed = true;
+    static RngSeedObserver observer;
+    boost::unit_test::framework::register_observer(observer);
+}
+} // namespace
 
 extern void SetupEnvironment();
 extern void noui_connect();
@@ -124,8 +182,15 @@ struct TestingSetup {
             g_setup_step = "SetupEnvironment()";
             SetupEnvironment();
 
+            g_setup_step = "RANDOM_CTX_SEED";
+            g_test_rng_seed = grc_test::SeedFromEnv(std::getenv("RANDOM_CTX_SEED"));
+            // On stderr, because the logger does not exist yet.
+            std::cerr << "test_gridcoin: RANDOM_CTX_SEED=" << g_test_rng_seed.GetHex()
+                      << " (set this variable to replay the InsecureRand draws of any case)\n";
+            g_insecure_rand_ctx = FastRandomContext(grc_test::TestRngSeed());
+
             g_setup_step = "fs::temp_directory_path()";
-            m_path_root = fs::temp_directory_path() / "test_common_" PACKAGE_NAME / InsecureRand256().ToString();
+            m_path_root = fs::temp_directory_path() / "test_common_" PACKAGE_NAME / g_rng_temp_path.rand256().ToString();
             fs::create_directories(m_path_root);
             fUseFastIndex = true; // Don't verify block hashes when loading
             g_setup_step = "gArgs -datadir / SelectParams";
@@ -186,6 +251,8 @@ struct TestingSetup {
             return g_peerman ? g_peerman->ClearMisbehaviorForSubnet(sub_net) : 0u;
         });
         g_mock_deterministic_tests = true;
+
+        InstallRngSeedObserver();
 
         // Last, so every global above is in its steady state when the
         // detector takes its first per-suite snapshot. Throws on failure:
