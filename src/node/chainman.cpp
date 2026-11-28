@@ -477,10 +477,11 @@ EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     }
 
     // Publish the fork point (true last common ancestor, pre-tally-rewind) so
-    // SetBestChain can forward it to UpdatedBlockTip subscribers. It is the
-    // previous tip for a trivial single-block extension and the deeper common
-    // ancestor for a multi-block reorg; it is nullptr only when connecting the
-    // genesis block, where there is no fork point (issue #3104).
+    // SetBestChain and ForceReorganizeToHash can forward it to UpdatedBlockTip
+    // subscribers. It is the previous tip for a trivial single-block extension
+    // and the deeper common ancestor for a multi-block reorg; it is nullptr only
+    // when connecting the genesis block, where there is no fork point (issue
+    // #3104).
     if (pfork_out) {
         *pfork_out = fork_point;
     }
@@ -1079,6 +1080,23 @@ public:
 };
 } // anonymous namespace
 
+//!
+//! The work that follows a successful ReorganizeChain: the wallet best-block
+//! locator, the "new best block" log line, -blocknotify, UpdatedBlockTip, the
+//! GUI state cache and GridcoinServices. SetBestChain calls it after each
+//! successful reorganize, a reorg-back included; ForceReorganizeToHash calls
+//! it after a forced reorganize that moved the tip.
+//!
+//! caller names the calling function in the log lines, so that SetBestChain's
+//! lines read as they always have. pfork is the fork point ReorganizeChain
+//! published. reorged_back is true only on SetBestChain's trust-regression
+//! reorg-back path, where the tip did not change and UpdatedBlockTip is not
+//! emitted.
+//!
+//! Returns the result of GridcoinServices().
+//!
+static bool FinishTipChange(const char* caller, const CBlockIndex* pfork, bool reorged_back) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+
 bool SetBestChain(CTxDB& txdb, CBlock &blockNew, CBlockIndex* pindexNew) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     const ReorgInProgressScope reorg_scope;
@@ -1094,10 +1112,10 @@ bool SetBestChain(CTxDB& txdb, CBlock &blockNew, CBlockIndex* pindexNew) EXCLUSI
     // want the flag to be set.
     //
     // pfork captures the fork point of this forward reorg to pindexNew, threaded
-    // out for the UpdatedBlockTip emission below (issue #3104). The reorg-back
-    // call, if it runs, leaves pfork untouched: the tip did not advance on that
-    // path, so the UpdatedBlockTip emission below is skipped entirely (see there)
-    // and pfork is never read.
+    // out for the UpdatedBlockTip emission in FinishTipChange (issue #3104). The
+    // reorg-back call, if it runs, leaves pfork untouched: the tip did not advance
+    // on that path, so FinishTipChange skips the UpdatedBlockTip emission
+    // entirely and pfork is never read.
     const CBlockIndex* pfork = nullptr;
     success = ReorganizeChain(txdb, cnt_dis, cnt_con, blockNew, pindexNew, &pfork);
 
@@ -1121,8 +1139,14 @@ bool SetBestChain(CTxDB& txdb, CBlock &blockNew, CBlockIndex* pindexNew) EXCLUSI
         return false;
     }
 
-    // g_reorg_in_progress is set in ReorganizeChain, but cleared by the caller, because as above it can
-    // be called more than once as part of what is really a single reorg.
+    return FinishTipChange(__func__, pfork, reorged_back);
+}
+
+static bool FinishTipChange(const char* caller, const CBlockIndex* pfork, bool reorged_back) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+{
+    // g_reorg_in_progress is set in ReorganizeChain, but cleared here, in the tail of its caller
+    // (SetBestChain or ForceReorganizeToHash), because SetBestChain can call ReorganizeChain more than once
+    // as part of what is really a single reorg.
     g_reorg_in_progress = false;
 
     /* Fix up after block connecting */
@@ -1138,22 +1162,23 @@ bool SetBestChain(CTxDB& txdb, CBlock &blockNew, CBlockIndex* pindexNew) EXCLUSI
         // pindexBest == pindexNew, so this is equivalent.
         const CBlockLocator locator(pindexBest);
         // Persist the wallet best-block locator. Emitted synchronously under
-        // cs_main (held by SetBestChain), so the CValidationInterface subscriber
-        // (CWallet::ChainStateFlushed) runs in the canonical cs_main -> signals
-        // order -- replacing the legacy cs_setpwalletRegistered wrapper (issue
-        // #3030 setpwalletRegistered retirement).
+        // cs_main (held by the caller, SetBestChain or ForceReorganizeToHash),
+        // so the CValidationInterface subscriber (CWallet::ChainStateFlushed)
+        // runs in the canonical cs_main -> signals order -- replacing the
+        // legacy cs_setpwalletRegistered wrapper (issue #3030
+        // setpwalletRegistered retirement).
         GetMainSignals().ChainStateFlushed(locator);
     }
 
     if (LogInstance().WillLogCategory(BCLog::LogFlags::VERBOSE)) {
         LogPrintf("INFO: %s: new best block {%s %d}, trust=%s, date=%s",
-                  __func__,
+                  caller,
                   hashBestChain.ToString(), nBestHeight,
                   g_chain_trust.Best().ToString(),
                   DateTimeStrFormat("%x %H:%M:%S", pindexBest->GetBlockTime()));
     } else {
         LogPrintf("INFO: %s: new best block {%s %d}",
-                  __func__,
+                  caller,
                   hashBestChain.ToString(),
                   nBestHeight);
     }
@@ -1167,7 +1192,7 @@ bool SetBestChain(CTxDB& txdb, CBlock &blockNew, CBlockIndex* pindexNew) EXCLUSI
     }
     #endif
 
-    // Notify the validation-signal layer that the chain tip advanced, but only
+    // Notify the validation-signal layer that the chain tip changed, but only
     // when it actually did. Two subscribers consume this (issue #3030 B3): the UI
     // bridge in init.cpp, which re-emits uiInterface.NotifyBlocksChanged() from
     // the reported index's height/time for the Qt models; and the PeerManager
@@ -1179,7 +1204,7 @@ bool SetBestChain(CTxDB& txdb, CBlock &blockNew, CBlockIndex* pindexNew) EXCLUSI
     // mis-reporting the GUI height and advertising a non-best block (issues #3145,
     // #3125 C8). On the advance path pindexBest == pindexNew.
     //
-    // Emit only when the tip advanced. On the reorg-back path the tip is
+    // Emit only when the tip changed. On the reorg-back path the tip is
     // unchanged, so there is no update to report: skipping the emission is what
     // suppresses the PeerManager relay there (the behavior AcceptBlock's old
     // best-chain gate provided) and spares the GUI a redundant notification.
@@ -1192,23 +1217,23 @@ bool SetBestChain(CTxDB& txdb, CBlock &blockNew, CBlockIndex* pindexNew) EXCLUSI
         GetMainSignals().UpdatedBlockTip(pindexBest, pfork, fIsInitialDownload);
     }
 
-    // Keep the GUI state cache fresh here, under the cs_main this function
-    // already holds, after the block's effects are applied. The update is a
-    // no-op unless the cache's interval has passed, so during a sync it runs at
-    // most every four seconds, from the latest tip; and while no GUI is
-    // subscribed it is always one. It never delivers: the
-    // cache's timer does that, holding no lock. Unconditional, reorg-back
-    // included, as that path changes the wallet and mempool too. A failure is
-    // logged and never leaves SetBestChain.
+    // Keep the GUI state cache fresh here, under the cs_main the caller
+    // (SetBestChain or ForceReorganizeToHash) already holds, after the block's
+    // effects are applied. The update is a no-op unless the cache's interval
+    // has passed, so during a sync it runs at most every four seconds, from the
+    // latest tip; and while no GUI is subscribed it is always one. It never
+    // delivers: the cache's timer does that, holding no lock. Unconditional,
+    // reorg-back included, as that path changes the wallet and mempool too. A
+    // failure is logged and never leaves this function.
     if (auto* cache = node::GetGuiCache()) {
         try {
             cache->MarkDirty(node::GuiCache::CHAIN | node::GuiCache::BALANCES | node::GuiCache::MRC
                              | node::GuiCache::ETTS | node::GuiCache::RESEARCHER);
             cache->UpdateLocked(false);
         } catch (const std::exception& e) {
-            LogPrintf("ERROR: %s: the GUI state update failed: %s", __func__, e.what());
+            LogPrintf("ERROR: %s: the GUI state update failed: %s", caller, e.what());
         } catch (...) {
-            LogPrintf("ERROR: %s: the GUI state update failed with an unknown exception", __func__);
+            LogPrintf("ERROR: %s: the GUI state update failed with an unknown exception", caller);
         }
     }
 
@@ -1221,9 +1246,9 @@ bool ForceReorganizeToHash(uint256 NewHash)
 
     // Same guard as SetBestChain: the flag clears on EVERY exit -- the two
     // early failure returns below never set it (ReorganizeChain does), so
-    // clearing false there is a no-op, and the returns after ReorganizeChain
-    // are covered without a manual clear that an exception or a future early
-    // return could bypass.
+    // clearing false there is a no-op. The scope covers the failure returns,
+    // and an exception; both success paths also clear the flag explicitly,
+    // before AskForOutstandingBlocks.
     const ReorgInProgressScope reorg_scope;
 
     CTxDB txdb;
@@ -1254,18 +1279,38 @@ bool ForceReorganizeToHash(uint256 NewHash)
     // g_reorg_in_progress is set in ReorganizeChain, because ReorganizeChain determines whether this is a trivial
     // reorg, where we are just adding a new block to the head of the current chain, in which case we do not
     // want the flag to be set.
-    success = ReorganizeChain(txdb, cnt_dis, cnt_con, blockNew, pindexNew);
+    //
+    // pfork receives the fork point of the forced reorganize, for the
+    // UpdatedBlockTip emission in FinishTipChange (issue #3104).
+    const CBlockIndex* pfork = nullptr;
+    success = ReorganizeChain(txdb, cnt_dis, cnt_con, blockNew, pindexNew, &pfork);
 
     if (g_chain_trust.Best() < previous_chain_trust) {
         LogPrintf("WARN: %s: Chain trust is now less than before!", __func__);
     }
 
-    // The flag (set in ReorganizeChain) is cleared by the ReorgInProgressScope
-    // guard at every exit of this function -- unconditionally, and that is the
-    // decision rather than an oversight: once this function returns, no reorg
-    // is in progress, whatever the trust outcome above was.
+    // The flag (set in ReorganizeChain) is cleared at every exit of this
+    // function -- unconditionally, and that is the decision rather than an
+    // oversight: once this function returns, no reorg is in progress, whatever
+    // the trust outcome above was. The ReorgInProgressScope guard clears it on
+    // the failure return below. On success it is cleared before
+    // AskForOutstandingBlocks: by FinishTipChange's first line when the tip
+    // moved, and explicitly when it did not.
     if (!success) {
         return error("%s: Fatal Error while setting best chain.", __func__);
+    }
+
+    if (pindexBest != pindexCur) {
+        // The tip moved: finish as SetBestChain does after a reorganize. A
+        // forced reorganize never reorganizes back. FinishTipChange returns
+        // GridcoinServices()'s result, which is not this function's: the
+        // reorganize succeeded and moved the tip, which is what this function
+        // reports, and GridcoinServices logs its own failure.
+        FinishTipChange(__func__, pfork, /*reorged_back=*/false);
+    } else {
+        // A reorganize to the current tip changed nothing, so there is nothing
+        // to notify. ReorganizeChain still set the flag on that path.
+        g_reorg_in_progress = false;
     }
 
     AskForOutstandingBlocks(uint256());

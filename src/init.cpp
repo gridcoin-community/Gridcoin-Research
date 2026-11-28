@@ -266,7 +266,8 @@ void Shutdown(void* parg)
 
         // Stop the GUI state cache before anything it reads goes: its timer takes
         // cs_main and reads the chain and the wallet. Disconnect its triggers,
-        // unpublish it so SetBestChain stops updating it, and join the timer, not
+        // unpublish it so the tip-change tail (FinishTipChange, from SetBestChain
+        // and ForceReorganizeToHash) stops updating it, and join the timer, not
         // under cs_main, which the timer may be waiting for. A no-op after an
         // early AppInit2 failure that never started it.
         LogPrintf("INFO: %s: Stopping the GUI state cache.", __func__);
@@ -3198,10 +3199,10 @@ bool AppInit2(ThreadHandlerPtr threads)
     // shows that needs cs_main and pushes it, so the GUI never takes cs_main to
     // refresh it. Chain state and the wallet are loaded by here. It makes updates
     // only while a GUI is subscribed (interfaces::GuiState::handleChanged), so a
-    // node with no GUI attached pays nothing for them. SetBestChain keeps it
-    // fresh in its own scope; the timer delivers each new snapshot and each MRC
-    // quote a GUI asks for, and takes cs_main only for what SetBestChain leaves
-    // pending and for those requests.
+    // node with no GUI attached pays nothing for them. SetBestChain or
+    // ForceReorganizeToHash keeps it fresh in its own scope; the timer delivers
+    // each new snapshot and each MRC quote a GUI asks for, and takes cs_main
+    // only for what they leave pending and for those requests.
     node::StartGuiCache(std::make_unique<node::GuiCache>(
         node::MakeProductionCompute(),
         [](const interfaces::GuiStateSnapshot& snapshot) { uiInterface.GuiStateChanged(snapshot); },

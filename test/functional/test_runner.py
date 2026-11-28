@@ -284,6 +284,8 @@ BASE_SCRIPTS = [
     # disconnected returns to the mempool and stays unconfirmed, not
     # conflicted, and is mined again by the next block.
     'feature_reorg_resurrect.py',
+    # feature_reorganize_notify.py: a forced reorganize runs -blocknotify for its new tip.
+    'feature_reorganize_notify.py',
     # wallet_resend_stranded.py: a wallet transaction whose resurrection is
     # refused (here an nLockTime the rolled-back chain has not reached) is
     # offered back by the resend once it can be mined (#3382).

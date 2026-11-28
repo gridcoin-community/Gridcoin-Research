@@ -40,13 +40,14 @@ static constexpr std::chrono::milliseconds GUI_CACHE_TICK{30000};
 //! the GUI, so the GUI never takes cs_main to refresh it.
 //!
 //! The work needs cs_main anyway, so it is done where cs_main is already held:
-//! SetBestChain calls UpdateLocked() in its own scope after every tip change, and
-//! the call is a no-op unless the interval has passed since the last update. A
-//! timer thread catches what that leaves pending (the last block of a burst, a
-//! trigger that is not a block, a GUI request, the out-of-sync test turning) and
-//! takes cs_main for it only then. Every snapshot is delivered from the timer
-//! thread, holding no lock. So during a sync, when SetBestChain keeps the cache
-//! fresh, the timer finds nothing due and never takes cs_main.
+//! SetBestChain or ForceReorganizeToHash calls UpdateLocked() in its own scope
+//! after every tip change, and the call is a no-op unless the interval has
+//! passed since the last update. A timer thread catches what that leaves
+//! pending (the last block of a burst, a trigger that is not a block, a GUI
+//! request, the out-of-sync test turning) and takes cs_main for it only then.
+//! Every snapshot is delivered from the timer thread, holding no lock. So during
+//! a sync, when SetBestChain keeps the cache fresh, the timer finds nothing due
+//! and never takes cs_main.
 //!
 //! Each part of the snapshot is recomputed only when one of its inputs changed
 //! since the last update (MarkDirty); the other parts are kept. MRC, ETTS and
@@ -321,8 +322,9 @@ GuiCache::Compute MakeProductionCompute();
 //! StopGuiCache().
 GuiCache* GetGuiCache();
 
-//! Make \p cache the node's, start its timer and publish it, so SetBestChain
-//! updates it. The node owns it from here.
+//! Make \p cache the node's, start its timer and publish it, so the
+//! tip-change tail (FinishTipChange, from SetBestChain and
+//! ForceReorganizeToHash) updates it. The node owns it from here.
 void StartGuiCache(std::unique_ptr<GuiCache> cache);
 
 //! Unpublish the node's cache and stop its timer. The object stays alive until
