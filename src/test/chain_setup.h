@@ -109,8 +109,11 @@ struct RegtestChainSetup
 //!
 //! \brief Erases the unconfirmed wallet transactions added during its lifetime.
 //!
-//! For a suite that shares one RegtestChainSetup across its cases (see the
-//! LIFETIME note above). Whatever the exit path -- a BOOST_REQUIRE that throws
+//! Written for a suite that shares one RegtestChainSetup across its cases (see
+//! the LIFETIME note above). accounting_tests/acc_orderupgrade also takes it as
+//! its fixture with only the global test fixture behind it; there its
+//! FixSpentCoins pass reads that fixture's in-memory transaction index.
+//! Whatever the exit path -- a BOOST_REQUIRE that throws
 //! mid-case unwinds this object too -- every unconfirmed entry the case ADDED is
 //! gone again, so no case inherits a sibling's resend candidates, and a case's
 //! preconditions on the wallet hold in any order.
@@ -130,10 +133,8 @@ struct RegtestChainSetup
 //! What it does NOT undo: entries the case itself REMOVES. The snapshot holds
 //! keys, not entries, so a pre-existing entry erased during the case stays
 //! erased. The known instance is the forced ResendWalletTransactions in the
-//! resend case, which erases every pre-existing entry that fails revalidation --
-//! accounting_tests' synthetic entries among them. That suite has finished with
-//! them by then, so nothing observes the loss, but the scope does not restore
-//! them and should not be read as if it did.
+//! resend case, which erases every pre-existing entry that fails revalidation.
+//! The scope does not restore such entries and should not be read as if it did.
 //!
 //! Entries in TxStateConfirmed are kept. They belong to the chain the suite-level
 //! fixture still holds (a mined block's coinstake, delivered through

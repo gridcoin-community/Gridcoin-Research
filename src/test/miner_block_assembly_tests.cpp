@@ -884,8 +884,7 @@ struct MaxSizeRestorer {
 //! unconfirmed and depth -1. An inactive one counts only if the resend would
 //! offer it back to the mempool (#3382): not abandoned, not a coinbase or
 //! coinstake, and VALID on revalidation. Anything else inactive never reaches
-//! the count; an earlier suite in this binary (accounting_tests) leaves three
-//! input-less ones in the process wallet, which revalidation rejects.
+//! the count.
 //! Empty when nothing a sibling left could be counted as this case's.
 std::string DescribeRelayableCandidates()
 {

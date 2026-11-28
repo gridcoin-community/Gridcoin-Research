@@ -19,8 +19,9 @@
 namespace grc_test {
 
 //! The mock BDB env backs every wallet file name with one shared in-memory database, so a case
-//! that reloads a wallet sees every record any earlier case wrote (and an earlier case's vin-less
-//! records make LoadWallet fail). This moves those records aside for the life of the scope and puts
+//! that reloads a wallet sees every record any earlier case wrote (and a transaction record left
+//! there that fails CheckTransaction, one with no inputs for example, makes LoadWallet return
+//! DB_NONCRITICAL_ERROR). This moves those records aside for the life of the scope and puts
 //! them back afterwards, in both directions: the case's own records are deleted again before the
 //! put-back. The restore-pin case in wallet_tests pins the second direction.
 class MockWalletDbScope : private CDB
