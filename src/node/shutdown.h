@@ -30,8 +30,8 @@
 //! Request that the node begin shutting down (idempotent). Unlike
 //! StartShutdown() (init.h), this does not perform the Qt marshalling that makes
 //! the GUI leave its event loop; it only sets the request flag. Used by the
-//! POSIX/Windows signal handlers, the init-failure paths, and StartShutdown()'s
-//! non-GUI (daemon) branch.
+//! POSIX/Windows signal handlers, the init-failure paths, and StartShutdown(),
+//! which calls it in every build.
 void SetShutdownRequested();
 
 //! Whether a shutdown has been requested.

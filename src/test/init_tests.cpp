@@ -10,6 +10,7 @@
 #include "init.h"
 #include "logging.h"
 #include "node/shutdown.h"
+#include "node/ui_interface.h"
 #include "policy/fees.h"
 #include "test/state_guard.h"
 #include "test/test_gridcoin.h"
@@ -133,6 +134,45 @@ BOOST_AUTO_TEST_CASE(a_requested_stop_is_marked_apart_from_a_shutdown_request)
     BOOST_CHECK(!ShutdownRequested());
     AbortShutdown();
     BOOST_CHECK(!StopWasRequested());
+}
+
+// StartShutdown() sets the request flag in the GUI build too, and there it also posts the
+// GUI's quit. Qt drops a quit run before the GUI's event loop starts, so init and the GUI's
+// startup see a stop asked for meanwhile (an RPC stop, the end of a Windows session) only
+// through the flag.
+BOOST_AUTO_TEST_CASE(start_shutdown_sets_the_request_flag_in_the_gui_build_too)
+{
+    struct Restore {
+        ~Restore()
+        {
+            fQtActive = false;
+            AbortShutdown();
+        }
+    } const restore;
+
+    int quits_posted = 0;
+    bool flag_set_when_posted = false;
+    const boost::signals2::scoped_connection posted{uiInterface.QueueShutdown_connect([&] {
+        ++quits_posted;
+        flag_set_when_posted = ShutdownRequested();
+    })};
+
+    BOOST_REQUIRE(!fQtActive);
+    BOOST_REQUIRE(!ShutdownRequested());
+
+    // The daemon sets the flag and posts nothing.
+    StartShutdown();
+    BOOST_CHECK(ShutdownRequested());
+    BOOST_CHECK_EQUAL(quits_posted, 0);
+    AbortShutdown();
+
+    // The GUI sets the flag as well as posting its quit, and sets it first: a quit run before
+    // exec() then never leaves the GUI's check before exec() reading a clear flag.
+    fQtActive = true;
+    StartShutdown();
+    BOOST_CHECK(ShutdownRequested());
+    BOOST_CHECK_EQUAL(quits_posted, 1);
+    BOOST_CHECK(flag_set_when_posted);
 }
 
 BOOST_AUTO_TEST_CASE(every_registered_argument_has_its_settings_class)
